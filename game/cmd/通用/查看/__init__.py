@@ -10,17 +10,17 @@ from . import reply
 
 @GameCommand.command(
     scope="通用",
-    cmd="查看物品",
+    cmd="查看",
     guard_rule="始终可用",
     help=HelpSpec(
         category="资源",
-        summary="按编号或名称查看正式物品定义与功能",
-        usage=("查看物品 编号", "查看物品 名称"),
+        summary="按编号或名称查看正式编号实体定义",
+        usage=("查看 编号", "查看 名称"),
         side_effect="只读查询，不改变人物、背包或世界状态",
         order=10,
     ),
 )
-async def inspect_item(
+async def inspect_entity(
     *,
     message: str,
     manager,

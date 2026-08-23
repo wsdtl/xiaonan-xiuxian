@@ -39,8 +39,8 @@ from .contracts import (
 from .contracts import (
     StatusResult as StatusResult,
 )
-from .service import CombatService as CombatService
 from .elements import generate_five_elements as generate_five_elements
+from .service import CombatService as CombatService
 
 __all__ = [
     "BattleEvent",
@@ -60,6 +60,6 @@ __all__ = [
     "CombatantReportSpec",
     "CombatantResult",
     "CombatantSpec",
-    "generate_five_elements",
     "StatusResult",
+    "generate_five_elements",
 ]

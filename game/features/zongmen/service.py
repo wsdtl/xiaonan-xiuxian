@@ -6,7 +6,11 @@ import math
 from datetime import datetime, timezone
 
 from game.core.character import CharacterPublicProfile, CharacterService
-from game.core.location import LocationService
+from game.core.location import (
+    LocationConflictError,
+    LocationService,
+    SpaceChangeCommand,
+)
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectConflictError, SectService
 from game.core.sect_progress import SectProgressService
@@ -203,10 +207,32 @@ class SectFeature:
         return SectOperationResult("罢免长老", member.name, await self.page(user_id))
 
     async def disband(self, user_id: str, request_id: str) -> SectOperationResult:
+        member = await self._sect.membership(user_id)
+        if member is None:
+            raise SectFeatureError("not_member")
+        members = await self._sect.members(member.sect_id)
         try:
             await self._sect.disband(user_id, request_id)
         except SectConflictError as exc:
             raise SectFeatureError(exc.code) from exc
+        cave_users = []
+        for value in members:
+            location = await self._location.current(value.user_id)
+            if location.space_type == "宗门洞天":
+                cave_users.append(value.user_id)
+        if cave_users:
+            try:
+                await self._location.change_space(
+                    SpaceChangeCommand(
+                        user_id,
+                        f"{request_id}:清理洞天",
+                        tuple(cave_users),
+                        "地表",
+                        "",
+                    )
+                )
+            except LocationConflictError as exc:
+                raise SectFeatureError("洞天位置清理失败") from exc
         return SectOperationResult("解散", "", await self.page(user_id))
 
     async def _resolve_nearby(self, user_id: str, query: str) -> CharacterPublicProfile:

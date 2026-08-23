@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.core.gift import GiftError, GiftSendCommand
+from game.features.zengsong import GiftError, GiftSendCommand
 from message import M
 
 from ...command import GameCommand, HelpSpec
@@ -17,7 +17,7 @@ async def send(*, user_id: str, message: str, message_context, manager, **_) -> 
         if len(parts) == 3 and parts[1] == "灵石":
             target = await feature.resolve_target(user_id, parts[0])
             value = await feature.send(GiftSendCommand(user_id, target, message_context.request_id, spirit_stones=int(parts[2])))
-            await manager.send(M.document().header(feature.text("标题", "标题")).line(feature.text("", "灵石", 接收者=target, 数量=value.quantity)).build())
+            await manager.send(M.document().header(feature.text("", "标题")).line(feature.text("", "灵石", 接收者=target, 数量=value.quantity)).build())
             return
         if len(parts) != 4:
             raise ValueError(feature.text("命令", "物品格式"))

@@ -12,6 +12,7 @@ from . import reply
 @GameCommand.command(
     scope="通用",
     cmd="队伍",
+    aliases=("组队",),
     guard_rule="已创建",
     help=HelpSpec(
         category="行动",

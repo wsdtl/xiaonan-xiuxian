@@ -11,13 +11,14 @@ from . import reply
 
 @GameCommand.fullmatch(
     scope="通用",
-    cmd="采矿",
+    cmd="开始采矿",
+    aliases=("采矿",),
     guard_rule="自主空闲",
     metadata={"hosting": {"activity": "采矿", "phase": "start"}},
     help=HelpSpec(
         category="行动",
         summary="按当前地形与同行修士共同采集灵矿",
-        usage=("采矿",),
+        usage=("开始采矿", "采矿"),
         side_effect="锁定当前位置与参与者并预先确定六轮采矿结果",
         order=39,
     ),
@@ -38,11 +39,12 @@ async def start_ore_gathering(
 @GameCommand.fullmatch(
     scope="通用",
     cmd="采矿进度",
+    aliases=("查看采矿进度", "矿况"),
     guard_rule="已创建",
     help=HelpSpec(
         category="行动",
         summary="查看当前或最近一次采矿已完成的整轮所得",
-        usage=("采矿进度",),
+        usage=("查看采矿进度", "采矿进度"),
         side_effect="只读查询，不提前写入纳戒",
         order=40,
     ),
@@ -65,13 +67,14 @@ async def ore_gathering_progress(*, user_id: str, manager, **_) -> None:
 
 @GameCommand.command(
     scope="通用",
-    cmd="结束采矿",
+    cmd="采矿结束",
+    aliases=("结束采矿", "收矿"),
     guard_rule="已创建",
     metadata={"hosting": {"activity": "采矿", "phase": "end"}},
     help=HelpSpec(
         category="行动",
         summary="按完整轮次带领同行修士结束采矿",
-        usage=("结束采矿", "结束采矿 页码"),
+        usage=("结束采矿", "结束采矿 页码", "采矿结束 页码"),
         side_effect="首次调用统一发放灵矿并结束全体采矿状态",
         order=41,
     ),

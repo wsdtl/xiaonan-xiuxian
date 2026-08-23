@@ -180,7 +180,7 @@ def test_custom_plan_advances_in_fixed_thirty_minute_slots(tmp_path: Path) -> No
     assert (execution.activity, execution.phase, execution.command) == (
         "探险",
         "执行开始",
-        "探险",
+        "开始探险",
     )
     assert _run(
         hosting.authorize_execution(
@@ -222,7 +222,7 @@ def test_custom_plan_advances_in_fixed_thirty_minute_slots(tmp_path: Path) -> No
         )
     )
     assert ending is not None
-    assert (ending.phase, ending.command) == ("执行结束", "探险结算")
+    assert (ending.phase, ending.command) == ("执行结束", "探险结束")
     _run(state.finish_behavior("qq-1", "finish-explore"))
     advanced = _run(
         hosting.complete_execution(
@@ -321,7 +321,7 @@ def test_local_runtime_dispatches_one_claimed_command_and_schedules_only_the_end
     _run(hosting_runtime.run_hosting_plan(session.session_id))
 
     assert len(dispatched) == 1
-    assert dispatched[0][:2] == ("qq-1", "闭关")
+    assert dispatched[0][:2] == ("qq-1", "开始闭关")
     assert len(scheduled) == 1
     current = _run(hosting.current("qq-1"))
     assert current is not None

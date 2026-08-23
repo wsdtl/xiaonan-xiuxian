@@ -7,7 +7,7 @@ from ...command import GameCommand, HelpSpec
 from . import reply
 
 
-@GameCommand.command(scope="专属", cmd="归元", guard_rule="自主空闲或休息", help=HelpSpec(category="炼制", summary="在归元观重做同行道侣的一类构筑", usage=("归元", "归元 功法", "归元 真意", "归元 气机"), side_effect="消耗一枚万法归元丹并重抽所选类别", order=70))
+@GameCommand.command(scope="专属", cmd="归元", aliases=("归元观归元",), guard_rule="自主空闲或休息", help=HelpSpec(category="炼制", summary="在归元观重做同行道侣的一类构筑", usage=("归元", "归元 功法", "归元 真意", "归元 气机", "归元观归元 功法"), side_effect="消耗一枚万法归元丹并重抽所选类别", order=70))
 async def reset_build(*, user_id: str, message: str, message_context, manager, **_) -> None:
     feature = current_game_services().features.guiyuan
     query = str(message or "").strip()

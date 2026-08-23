@@ -10,7 +10,7 @@ database/                   游戏数据库与运行日志数据库，不进入�
 .runtime/                   历史备份与控制台媒体，不进入版本库
 game/core/data/             正式 JSON 只读快照、实体元数据与资源池索引
 game/core/activity/         异步玩法阶段、剩余时间与结算权限的公共投影
-game/core/item_catalog/     物品编号、名称和类别只读查询索引
+game/core/item_catalog/     正式编号实体的编号、名称和类别只读查询索引
 game/core/combat/           行动条、CD、事件、环境执行与战报
 game/core/pool/             资源池展开与逆权重抽取
 game/core/world/            地点、区域、地形、海拔与只读地图快照

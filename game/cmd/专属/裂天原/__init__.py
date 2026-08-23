@@ -10,6 +10,7 @@ from . import reply
 @GameCommand.command(
     scope="专属",
     cmd="补天",
+    aliases=("裂天原补天",),
     guard_rule="自主空闲或休息",
     help=HelpSpec(
         category="炼制",

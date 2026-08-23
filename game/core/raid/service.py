@@ -9,7 +9,11 @@ from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
-from game.core.activity import ActivityFacts, ActivityLifecycle, ActivityLifecycleService
+from game.core.activity import (
+    ActivityFacts,
+    ActivityLifecycle,
+    ActivityLifecycleService,
+)
 from game.core.asset import AssetService, InventoryAdjustment
 from game.core.character import CharacterService
 from game.core.combat import CombatGroupSpec, CombatRequest, CombatService

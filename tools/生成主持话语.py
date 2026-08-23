@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 WORLD = ROOT / "data" / "内容" / "世界"
 EXPECTED = {"总览", "审材", "齐备", "不足", "完成"}

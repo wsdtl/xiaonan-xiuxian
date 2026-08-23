@@ -17,6 +17,7 @@ from . import reply
 @GameCommand.command(
     scope="通用",
     cmd="创建人物",
+    aliases=("创建角色",),
     guard_rule="仅未创建",
     help=HelpSpec(
         category="角色",
@@ -55,6 +56,7 @@ async def create_character(
 @GameCommand.fullmatch(
     scope="通用",
     cmd="人物",
+    aliases=("角色",),
     guard_rule="已创建",
     help=HelpSpec(
         category="角色",

@@ -11,13 +11,14 @@ from . import reply
 
 @GameCommand.fullmatch(
     scope="通用",
-    cmd="采药",
+    cmd="开始采药",
+    aliases=("采药",),
     guard_rule="自主空闲",
     metadata={"hosting": {"activity": "采药", "phase": "start"}},
     help=HelpSpec(
         category="行动",
         summary="按当前地形与同行修士共同采集灵植",
-        usage=("采药",),
+        usage=("开始采药", "采药"),
         side_effect="锁定当前位置与参与者并预先确定六轮采药结果",
         order=36,
     ),
@@ -38,11 +39,12 @@ async def start_herb_gathering(
 @GameCommand.fullmatch(
     scope="通用",
     cmd="采药进度",
+    aliases=("查看采药进度", "药况"),
     guard_rule="已创建",
     help=HelpSpec(
         category="行动",
         summary="查看当前或最近一次采药已完成的整轮所得",
-        usage=("采药进度",),
+        usage=("查看采药进度", "采药进度"),
         side_effect="只读查询，不提前写入纳戒",
         order=37,
     ),
@@ -65,13 +67,14 @@ async def herb_gathering_progress(*, user_id: str, manager, **_) -> None:
 
 @GameCommand.command(
     scope="通用",
-    cmd="结束采药",
+    cmd="采药结束",
+    aliases=("结束采药", "收药"),
     guard_rule="已创建",
     metadata={"hosting": {"activity": "采药", "phase": "end"}},
     help=HelpSpec(
         category="行动",
         summary="按完整轮次带领同行修士结束采药",
-        usage=("结束采药", "结束采药 页码"),
+        usage=("结束采药", "结束采药 页码", "采药结束 页码"),
         side_effect="首次调用统一发放灵植并结束全体采药状态",
         order=38,
     ),

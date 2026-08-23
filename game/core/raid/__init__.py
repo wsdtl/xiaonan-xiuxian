@@ -2,8 +2,8 @@
 
 from .contracts import (
     RaidDefinition,
-    RaidGroupResult,
     RaidError,
+    RaidGroupResult,
     RaidLeaderRequiredError,
     RaidNotFinishedError,
     RaidProgress,
@@ -14,7 +14,14 @@ from .contracts import (
 from .service import RaidService
 
 __all__ = [
-    "RaidDefinition", "RaidGroupResult", "RaidError", "RaidLeaderRequiredError",
-    "RaidNotFinishedError", "RaidProgress", "RaidSettlement", "RaidStartCommand",
-    "RaidStarted", "RaidService",
+    "RaidDefinition",
+    "RaidError",
+    "RaidGroupResult",
+    "RaidLeaderRequiredError",
+    "RaidNotFinishedError",
+    "RaidProgress",
+    "RaidService",
+    "RaidSettlement",
+    "RaidStartCommand",
+    "RaidStarted",
 ]

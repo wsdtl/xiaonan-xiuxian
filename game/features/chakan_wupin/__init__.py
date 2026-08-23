@@ -1,4 +1,4 @@
-"""查看物品玩法微服务。"""
+"""查看正式编号实体的玩法微服务。"""
 
 from .contracts import ItemInspectionResult
 from .service import ItemInspectionFeature

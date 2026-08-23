@@ -1,4 +1,4 @@
-"""查看物品玩法的公共结果。"""
+"""查看正式编号实体的公共结果。"""
 
 from __future__ import annotations
 

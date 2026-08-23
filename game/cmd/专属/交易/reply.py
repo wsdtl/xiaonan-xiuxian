@@ -43,8 +43,11 @@ def page(feature: TradeFeature, value: TradePage):
     ):
         builder.item(
             index,
-            product.grade_name,
-            product.name,
+            M.command(
+                f"{product.grade_name}{product.name}",
+                f"购买 {product.content_id} {product.grade_id}",
+                submit=False,
+            ),
             f" · {product.content_id} · {product.unit_price}灵石",
         )
     actions: list[Action] = []

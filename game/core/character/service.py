@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import math
-import re
 import random
+import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 

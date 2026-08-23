@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from launch.message_events import snapshot_from_message
 from message import Action, M, RenderedMessage, render_local_message
 from message.renderers.markdown import render_markdown
 from message.renderers.plain_text import render_plain_text
@@ -66,6 +67,26 @@ def test_message_builders_freeze_and_reject_duplicate_actions() -> None:
     assert rendered.content == "> 状态\n> > 正常"
     sentinel = object()
     assert render_local_message(sentinel) is sentinel
+
+
+def test_inline_command_is_a_text_link_and_cannot_duplicate_bottom_button() -> None:
+    message = M.document().section("资源").line(
+        M.command("小还丹", "查看 100001", submit=False)
+    ).build()
+
+    rendered = render_local_message(message)
+    assert isinstance(rendered, RenderedMessage)
+    assert rendered.content == "> 资源\n> > 小还丹"
+    snapshot = snapshot_from_message(message)
+    assert tuple(
+        (value.kind, value.data, value.behavior, value.style)
+        for value in snapshot.interactions
+    ) == (("command_link", "查看 100001", "fill", "link"),)
+
+    with pytest.raises(ValueError, match="正文联动不能与底部按钮重复"):
+        M.document().section("资源").line(
+            M.command("查看", "查看 100001")
+        ).action(Action("view", "查看", "查看 100001")).build()
 
 
 def test_markdown_renderer_escapes_inline_style_characters() -> None:

@@ -11,13 +11,14 @@ from . import reply
 
 @GameCommand.fullmatch(
     scope="专属",
-    cmd="探险",
+    cmd="开始探险",
+    aliases=("探险",),
     guard_rule="自主空闲",
     metadata={"hosting": {"activity": "探险", "phase": "start"}},
     help=HelpSpec(
         category="行动",
         summary="在当前地点开始一次普通探险",
-        usage=("探险",),
+        usage=("开始探险", "探险"),
         side_effect="预先完成全部战斗，扣除预计丹药并进入探险中",
         order=30,
     ),
@@ -36,11 +37,12 @@ async def start_exploration(*, user_id: str, message_context, manager, **_) -> N
 @GameCommand.fullmatch(
     scope="专属",
     cmd="探险进度",
+    aliases=("查看探险进度", "探况"),
     guard_rule="已创建",
     help=HelpSpec(
         category="行动",
         summary="查看当前或最近一次探险已经解封的累计进度",
-        usage=("探险进度",),
+        usage=("查看探险进度", "探险进度"),
         side_effect="只读查询，不提前发放奖励",
         order=31,
     ),
@@ -62,13 +64,14 @@ async def exploration_progress(*, user_id: str, manager, **_) -> None:
 
 @GameCommand.command(
     scope="专属",
-    cmd="探险结算",
+    cmd="探险结束",
+    aliases=("结算探险", "探险结算", "结束探险", "探结"),
     guard_rule="已创建",
     metadata={"hosting": {"activity": "探险", "phase": "end"}},
     help=HelpSpec(
         category="行动",
         summary="探险结束后结算全部结果并按页查看",
-        usage=("探险结算", "探险结算 页码"),
+        usage=("结算探险", "结算探险 页码", "探险结算 页码", "结束探险 页码", "探险结束 页码"),
         side_effect="首次调用发放全部奖励并结束探险状态",
         order=32,
     ),

@@ -94,6 +94,7 @@ def _request() -> CombatRequest:
             CombatMedicineSpec("验收回血丹:01", "验收回血丹", "01", "血气", 25),
             CombatMedicineSpec("验收回神丹:01", "验收回神丹", "01", "精神", 25),
         ),
+        medicine_selection_strategy="缺口优先",
         report=CombatReportSpec(
             participants=participants,
             scene="丘陵验收场",

@@ -15,7 +15,7 @@ class GiftFeature:
         self._copy: Mapping[str, object] | None = None
 
     def initialize(self) -> None:
-        copy = self._data.dataset("赠送展示")
+        copy = self._data.dataset("赠送展示").get("文本")
         if not isinstance(copy, Mapping):
             raise JsonDataError("展示/赠送/文本.json 必须是对象")
         self._copy = copy

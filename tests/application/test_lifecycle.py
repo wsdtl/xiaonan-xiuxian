@@ -65,6 +65,9 @@ def test_failed_guard_validation_releases_built_services(monkeypatch) -> None:
             hosting=_StateOwner("hosting_latest"),
             injury=_StateOwner("injury"),
             innate_treasure=_StateOwner("innate_treasure"),
+            raid=_StateOwner("raid_session", "raid_battle", "raid_settlement"),
+            duel=_StateOwner("duel_challenge"),
+            gift=_StateOwner("gift_transaction"),
         )
     )
     monkeypatch.setattr(game_app, "_services", None)

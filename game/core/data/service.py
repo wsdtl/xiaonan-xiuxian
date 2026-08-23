@@ -97,6 +97,18 @@ class JsonDataService:
             raise JsonDataError(f"实体不存在：{section_name} {entity_id or '<空>'}")
         return record
 
+    def numbered_entities(self) -> tuple[JsonEntity, ...]:
+        """返回全部正式编号实体，不包含命名实体、资源池和运行时对象。"""
+
+        loaded = self._require_loaded()
+        values = [
+            record
+            for records in loaded.entity_records.values()
+            for record in records.values()
+            if record.number_category
+        ]
+        return tuple(sorted(values, key=lambda item: (item.entity_id, item.section)))
+
     def entity_fields(
         self,
         section: str,

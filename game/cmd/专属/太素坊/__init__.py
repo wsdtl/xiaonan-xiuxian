@@ -7,7 +7,7 @@ from ...command import GameCommand, HelpSpec
 from . import reply
 
 
-@GameCommand.command(scope="专属", cmd="易形", guard_rule="自主空闲或休息", help=HelpSpec(category="炼制", summary="在太素坊改变玩家自身性别", usage=("易形",), side_effect="消耗一枚两仪易形丹；已有道侣关系保持不变", order=72))
+@GameCommand.command(scope="专属", cmd="易形", aliases=("太素坊易形",), guard_rule="自主空闲或休息", help=HelpSpec(category="炼制", summary="在太素坊改变玩家自身性别", usage=("易形", "太素坊易形"), side_effect="消耗一枚两仪易形丹；已有道侣关系保持不变", order=72))
 async def change_gender(*, user_id: str, message_context, manager, **_) -> None:
     feature = current_game_services().features.yixing
     try:

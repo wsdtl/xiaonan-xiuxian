@@ -16,6 +16,7 @@ from . import reply
 @GameCommand.command(
     scope="专属",
     cmd="夺元",
+    aliases=("铜雀台夺元",),
     guard_rule="自主空闲或休息",
     help=HelpSpec(
         category="道侣",

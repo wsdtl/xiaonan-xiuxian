@@ -109,7 +109,7 @@ def error(message: str):
 def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
     name: object = entry.name
     if entry.category == "物品":
-        name = M.command(entry.name, f"查看物品 {entry.content_id}")
+        name = M.command(entry.name, f"查看 {entry.content_id}")
     parts: list[object] = [name]
     if entry.grade_name:
         parts.extend((" · ", entry.grade_name))

@@ -16,6 +16,7 @@ from . import reply
 @GameCommand.command(
     scope="通用",
     cmd="去",
+    aliases=("前往",),
     guard_rule="自主空闲",
     help=HelpSpec(
         category="行动",

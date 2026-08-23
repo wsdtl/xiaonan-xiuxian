@@ -13,7 +13,7 @@ class DuelFeature:
         self._copy: Mapping[str, object] | None = None
 
     def initialize(self) -> None:
-        copy = self._data.dataset("切磋展示")
+        copy = self._data.dataset("切磋展示").get("文本")
         if not isinstance(copy, Mapping):
             raise JsonDataError("展示/切磋/文本.json 必须是对象")
         self._copy = copy

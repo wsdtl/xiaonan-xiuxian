@@ -267,7 +267,7 @@ def _validate_five_elements(value: Mapping[str, Any]) -> None:
     multipliers = _mapping(value["倍率"], "五行.倍率")
     for name in ("相生", "相克", "被克", "同属性", "无关", "无相", "团队相生"):
         if not isinstance(multipliers.get(name), (int, float)):
-            raise ValueError(f"五行.倍率.{name}必须是数字")
+            raise TypeError(f"五行.倍率.{name}必须是数字")
     root = _mapping(value["根性倍率"], "五行.根性倍率")
     if any(not isinstance(root.get(name), (int, float)) for name in ("基准", "每点修正", "最低", "最高")):
         raise ValueError("五行.根性倍率字段不完整")

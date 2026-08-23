@@ -153,11 +153,18 @@ class DocumentBuilder:
         return self
 
     def build(self) -> DocumentMessage:
-        """校验动作 ID 并冻结为不可变消息。"""
+        """校验交互不重复并冻结为不可变消息。"""
 
         ids = [action.action_id for action in self._actions]
         if len(ids) != len(set(ids)):
             raise ValueError("消息动作 action_id 不能重复")
+        inline_commands = _inline_commands(self._blocks)
+        bottom_commands = {action.data for action in self._actions}
+        overlap = inline_commands & bottom_commands
+        if overlap:
+            raise ValueError(
+                "正文联动不能与底部按钮重复：" + "、".join(sorted(overlap))
+            )
         return DocumentMessage(Document(tuple(self._blocks), tuple(self._actions)))
 
     def _append_section_line(self, line: RichText) -> None:
@@ -178,6 +185,29 @@ def _assert_semantic_text(value: str) -> None:
             raise ValueError("公共消息文本不能手写 Markdown 引用前缀 >")
         if stripped == "---":
             raise ValueError("公共消息文本不能使用 Markdown 分割线 ---")
+
+
+def _inline_commands(blocks: Iterable[DocumentBlock]) -> set[str]:
+    """收集正文中的命令联动，避免同一命令同时占用两种交互层。"""
+
+    commands: set[str] = set()
+    for block in blocks:
+        values: Iterable[RichText]
+        if isinstance(block, HeaderBlock):
+            values = (block.content,)
+        elif isinstance(block, InlineBlock):
+            values = (block.title, block.content)
+        elif isinstance(block, SectionBlock):
+            values = (block.title, *block.lines)
+        elif isinstance(block, NoteBlock):
+            values = block.lines
+        else:
+            continue
+        for value in values:
+            for span in value:
+                if isinstance(span, CommandLink):
+                    commands.add(span.command)
+    return commands
 
 
 class M:

@@ -42,9 +42,9 @@ class StartupContractError(ValueError):
 def validate_startup_contracts(core: _CoreServices) -> None:
     """在服务装配完成后一次校验全部跨模块运行契约。"""
 
-    from game.cmd.command import registered_commands, registered_guard_rules
+    from game.cmd.command import registered_command_routes, registered_guard_rules
 
-    validate_command_uniqueness(registered_commands())
+    validate_command_uniqueness(registered_command_routes())
     owners = {
         "player_state": core.player_state.state_types,
         "companion": core.companion.state_types,

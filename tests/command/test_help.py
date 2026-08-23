@@ -12,6 +12,7 @@ from game.cmd.command import (
     COMMAND_SCOPES,
     GameCommand,
     HelpSpec,
+    registered_command_routes,
     unregister_command_module,
 )
 from game.cmd.help_registry import help_registry
@@ -74,54 +75,54 @@ def test_loaded_commands_have_one_valid_help_declaration() -> None:
         "道侣覆炼",
         "人物服丹",
         "道侣服丹",
-        "人物自动用药",
-        "道侣自动用药",
+        "人药",
+        "侣药",
         "去",
-        "探险",
+        "开始探险",
         "探险进度",
-        "探险结算",
-        "闭关",
+        "探险结束",
+        "开始闭关",
         "闭关进度",
-        "出关",
+        "闭关结束",
         "队伍",
         "宗门",
         "宗门同行",
-        "讨伐",
-        "采药",
+        "开始讨伐",
+        "开始采药",
         "讨伐战况",
         "采药进度",
-        "结束采药",
-        "讨伐结算",
-        "采矿",
+        "讨伐结束",
+        "采药结束",
+        "开始采矿",
         "采矿进度",
-        "结束采矿",
+        "采矿结束",
         "托管",
         "继续托管",
         "取消托管",
         "入山门",
         "出山门",
         "灵藏",
-        "捐入灵藏",
+        "捐藏",
         "万珍殿",
         "灵脉",
-        "捐入万珍殿",
+        "捐珍",
         "灵田",
-        "发放万珍殿",
+        "发珍",
         "藏经阁",
         "借阅功法",
         "地图",
         "位置",
         "附近",
-        "约战",
-        "应战",
+        "宗门约战",
+        "接战",
         "拒战",
-        "撤回战书",
+        "撤战",
         "锁阵",
         "解阵",
         "开战",
-        "取消宗门战",
-        "宗门战况",
-        "宗门战记录",
+        "停战",
+        "战况",
+        "战录",
         "布阵",
         "切磋",
         "接受切磋",
@@ -139,15 +140,23 @@ def test_loaded_commands_have_one_valid_help_declaration() -> None:
         "丹鼎阁",
         "演阵台",
         "纳戒",
-        "查看物品",
+        "查看",
         "交易",
         "购买",
         "赠送",
     ]
     assert help_registry.find("web") is None
     assert help_registry.find("天道后台") is None
+    assert "查看物品" not in {route for route, _, _ in registered_command_routes()}
     with pytest.raises(TypeError):
         GameCommand.fullmatch("缺少说明", scope="通用")
+    with pytest.raises(ValueError, match="最多四个字"):
+        GameCommand.fullmatch(
+            "超过四字命令",
+            scope="通用",
+            guard_rule="始终可用",
+            help=HelpSpec(category="世界", summary="测试", usage=("超过四字命令",)),
+        )
     with pytest.raises(ValueError, match="不能同时"):
         GameCommand.fullmatch(
             "重复声明",
@@ -158,10 +167,10 @@ def test_loaded_commands_have_one_valid_help_declaration() -> None:
         )
     with pytest.raises(ValueError, match="后台命令必须"):
         GameCommand.fullmatch(
-            "错误后台命令",
+            "后台错",
             scope="后台",
             guard_rule="始终可用",
-            help=HelpSpec("角色", "不应公开", ("错误后台命令",)),
+            help=HelpSpec("角色", "不应公开", ("后台错",)),
         )
 
 
@@ -177,24 +186,42 @@ def test_command_module_can_replace_and_unload_all_driver_registrations() -> Non
     old_callback.__module__ = module_name
     new_callback.__module__ = module_name
     decorator = GameCommand.command(
-        "热重启测试",
+        "热测",
+        aliases=("热重启测试", "重启测试"),
         scope="通用",
         guard_rule="始终可用",
-        help=HelpSpec("行动", "验证模块替换", ("热重启测试",)),
+        help=HelpSpec("行动", "验证模块替换", ("热测", "热重启测试")),
     )
     decorator(old_callback)
     decorator(new_callback)
 
     from launch.adapter.qq.handler import _command_registry
 
+    assert len(LocalEventHandler.command_rules["热测"]) == 1
     assert len(LocalEventHandler.command_rules["热重启测试"]) == 1
+    assert len(LocalEventHandler.command_rules["重启测试"]) == 1
     assert len(_command_registry.match("热重启测试")) == 1
     assert help_registry.find("热重启测试") is not None
+    assert help_registry.find("重启测试").command == "热测"
+
+    _run(LocalEventHandler.run())
+    alias_result = _run(
+        dispatch(
+            user_id="alias-user",
+            raw_message="重启测试 参数",
+            sender_name="测试",
+            event_id="alias-route",
+        )
+    )
+    assert alias_result.matched is True
 
     unregister_command_module(module_name)
 
+    assert "热测" not in LocalEventHandler.command_rules
     assert "热重启测试" not in LocalEventHandler.command_rules
+    assert "重启测试" not in LocalEventHandler.command_rules
     assert _command_registry.match("热重启测试") == []
+    assert _command_registry.match("重启测试") == []
     assert help_registry.find("热重启测试") is None
 
 
@@ -263,7 +290,7 @@ def test_help_home_and_detail_use_real_registered_commands(monkeypatch) -> None:
     item = _run(
         dispatch(
             user_id="help-user",
-            raw_message="查看物品 小还丹",
+            raw_message="查看 小还丹",
             sender_name="问路人",
             event_id="inspect-item",
         )
@@ -275,6 +302,43 @@ def test_help_home_and_detail_use_real_registered_commands(monkeypatch) -> None:
     assert "恢复百分比：15" in item_content
     assert "权重" not in item_content
     assert "参考价" not in item_content
+
+    technique = _run(
+        dispatch(
+            user_id="help-user",
+            raw_message="查看 400541",
+            sender_name="问路人",
+            event_id="inspect-technique",
+        )
+    )
+    technique_content = _content(technique)
+    assert "功法" in technique_content
+    assert "400541" in technique_content
+
+    ambiguous = _run(
+        dispatch(
+            user_id="help-user",
+            raw_message="查看 代劫",
+            sender_name="问路人",
+            event_id="inspect-ambiguous",
+        )
+    )
+    ambiguous_content = _content(ambiguous)
+    assert "名称不唯一" in ambiguous_content
+    assert "机制 · 代劫" in ambiguous_content
+    assert "真意 · 代劫" in ambiguous_content
+    assert "601288" in ambiguous_content
+    assert "410013" in ambiguous_content
+
+    removed_alias = _run(
+        dispatch(
+            user_id="help-user",
+            raw_message="查看物品 小还丹",
+            sender_name="问路人",
+            event_id="inspect-removed-alias",
+        )
+    )
+    assert not removed_alias.matched
 
 
 def test_game_command_guard_uses_player_state_rule(monkeypatch) -> None:

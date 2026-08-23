@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.core.duel import DuelError, DuelStartCommand
+from game.features.qiecuo import DuelError, DuelStartCommand
 from message import M
 
 from ...command import GameCommand, HelpSpec

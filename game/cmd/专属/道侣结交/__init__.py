@@ -18,6 +18,7 @@ from . import reply
 @GameCommand.command(
     scope="专属",
     cmd="查看道侣",
+    aliases=("道侣查看",),
     guard_rule="自主空闲或休息",
     help=HelpSpec(
         category="道侣",
@@ -50,6 +51,7 @@ async def inspect_companion(*, user_id: str, message: str, manager, **_) -> None
 @GameCommand.command(
     scope="专属",
     cmd="交谈",
+    aliases=("道侣交谈",),
     guard_rule="自主空闲或休息",
     help=HelpSpec(
         category="道侣",
@@ -117,6 +119,7 @@ async def gift_companion(
 @GameCommand.command(
     scope="专属",
     cmd="邀约",
+    aliases=("邀约道侣",),
     guard_rule="自主空闲或休息",
     help=HelpSpec(
         category="道侣",
@@ -153,6 +156,7 @@ async def invite_companion(
 @GameCommand.command(
     scope="专属",
     cmd="暂别",
+    aliases=("暂别道侣",),
     guard_rule="自主空闲或休息",
     help=HelpSpec(
         category="道侣",

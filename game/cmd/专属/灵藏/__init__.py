@@ -41,7 +41,8 @@ async def show_lingcang(*, user_id: str, message: str, manager, **_) -> None:
 
 @GameCommand.command(
     scope="专属",
-    cmd="捐入灵藏",
+    cmd="捐藏",
+    aliases=("捐入灵藏",),
     guard_rule="自主空闲或休息",
     help=HelpSpec(
         category="行动",

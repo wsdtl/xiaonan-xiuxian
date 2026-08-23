@@ -6,7 +6,6 @@ import random
 from collections.abc import Mapping
 from typing import Any
 
-
 ELEMENTS = ("木", "火", "土", "金", "水")
 
 

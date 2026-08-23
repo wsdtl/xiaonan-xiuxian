@@ -241,8 +241,8 @@ def test_position_copy_overview_and_buttons_are_json_driven(tmp_path: Path) -> N
         )
     ) == (
         "附近 修士",
-        "探险",
-        "闭关",
+        "开始探险",
+        "开始闭关",
         "附近",
         "地图",
     )
@@ -253,7 +253,7 @@ def test_position_copy_overview_and_buttons_are_json_driven(tmp_path: Path) -> N
     )
     assert tuple(
         action.command for action in _run(position.current_location_actions("qq-1"))
-    ) == ("附近 修士", "探险", "闭关", "采药", "采矿", "附近", "地图")
+    ) == ("附近 修士", "开始探险", "开始闭关", "开始采药", "开始采矿", "附近", "地图")
     assert tuple(action.command for action in position.nearby_overview_actions()) == (
         "附近 修士",
         "附近 地点",

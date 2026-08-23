@@ -41,52 +41,58 @@ COMMAND_INVOCATIONS = {
     "道侣覆炼": "道侣覆炼 太白惊鸿 1",
     "人物服丹": "人物服丹 小还丹 01",
     "道侣服丹": "道侣服丹 小还丹 01",
-    "人物自动用药": "人物自动用药 开",
-    "道侣自动用药": "道侣自动用药 开",
+    "人药": "人药 开",
+    "侣药": "侣药 开",
     "去": "去 丹霞城",
-    "探险": "探险",
+    "开始探险": "开始探险",
     "探险进度": "探险进度",
-    "探险结算": "探险结算 1",
-    "闭关": "闭关",
+    "探险结束": "探险结束 1",
+    "开始闭关": "开始闭关",
     "闭关进度": "闭关进度",
-    "出关": "出关 1",
+    "闭关结束": "闭关结束 1",
+    "开始讨伐": "开始讨伐",
+    "讨伐战况": "讨伐战况",
+    "讨伐结束": "讨伐结束",
     "队伍": "队伍",
     "宗门": "宗门",
     "宗门同行": "宗门同行",
-    "采药": "采药",
+    "开始采药": "开始采药",
     "采药进度": "采药进度",
-    "结束采药": "结束采药 1",
-    "采矿": "采矿",
+    "采药结束": "采药结束 1",
+    "开始采矿": "开始采矿",
     "采矿进度": "采矿进度",
-    "结束采矿": "结束采矿 1",
+    "采矿结束": "采矿结束 1",
     "托管": "托管 探险 闭关",
     "继续托管": "继续托管",
     "取消托管": "取消托管",
     "入山门": "入山门",
     "出山门": "出山门",
     "灵藏": "灵藏 灵植 1",
-    "捐入灵藏": "捐入灵藏 赤阳花 01 1",
+    "捐藏": "捐藏 赤阳花 01 1",
     "万珍殿": "万珍殿 丹药 1",
     "灵脉": "灵脉",
-    "捐入万珍殿": "捐入万珍殿 小还丹 01 1",
+    "捐珍": "捐珍 小还丹 01 1",
     "灵田": "灵田",
-    "发放万珍殿": "发放万珍殿 天道 小还丹 01 1",
+    "发珍": "发珍 天道 小还丹 01 1",
     "藏经阁": "藏经阁 1",
     "借阅功法": "借阅功法 青元诀 01",
     "地图": "地图",
     "位置": "位置",
     "附近": "附近 修士 1",
-    "约战": "约战 赤霄宗 100",
-    "应战": "应战",
+    "宗门约战": "约战 赤霄宗 100",
+    "接战": "接战",
     "拒战": "拒战",
-    "撤回战书": "撤回战书",
+    "撤战": "撤战",
     "锁阵": "锁阵",
     "解阵": "解阵",
     "开战": "开战",
-    "取消宗门战": "取消宗门战",
-    "宗门战况": "宗门战况",
-    "宗门战记录": "宗门战记录 1",
+    "停战": "停战",
+    "战况": "战况",
+    "战录": "战录 1",
     "布阵": "布阵 530001:01",
+    "切磋": "切磋 甲田",
+    "接受切磋": "接受切磋",
+    "拒绝切磋": "拒绝切磋",
     "炼器": "炼器 太白惊鸿",
     "开炉": "开炉 太白惊鸿",
     "炼丹": "炼丹 小还丹",
@@ -100,9 +106,10 @@ COMMAND_INVOCATIONS = {
     "丹鼎阁": "丹鼎阁 恢复丹",
     "演阵台": "演阵台 1",
     "纳戒": "纳戒",
-    "查看物品": "查看物品 小还丹",
+    "查看": "查看 小还丹",
     "交易": "交易 真意 1",
     "购买": "购买 410089 01 1",
+    "赠送": "赠送 甲田 灵石 1",
     "天道后台": "天道后台",
 }
 
@@ -213,7 +220,7 @@ async def _exercise_everything(heavenly_console) -> None:
 
         services = game_app.current_game_services()
         await heavenly("采药", "入山采药", "同行用户: 3")
-        await heavenly("探险", "正在带领同行修士采药", "采药进度")
+        await heavenly("开始采药", "正在带领同行修士采药", "采药进度")
         await local("heavenly-dao-a", "采药进度", "领队")
         await _finish_activity(
             services,
@@ -223,7 +230,7 @@ async def _exercise_everything(heavenly_console) -> None:
             services.features.caiyao,
             "heavenly-settle-herbs",
         )
-        await heavenly("结束采药", "采药总结", "6/6")
+        await heavenly("采药结束", "采药总结", "6/6")
 
         await heavenly("采矿", "勘脉采矿", "同行用户: 3")
         await local("heavenly-dao-b", "采矿进度", "领队")
@@ -235,9 +242,9 @@ async def _exercise_everything(heavenly_console) -> None:
             services.features.caikuang,
             "heavenly-settle-ore",
         )
-        await heavenly("结束采矿", "采矿总结", "6/6")
+        await heavenly("采矿结束", "采矿总结", "6/6")
 
-        await heavenly("闭关", "入定闭关", "同行修士: 3")
+        await heavenly("开始闭关", "入定闭关", "同行修士: 3")
         await local("heavenly-dao-a", "闭关进度", "领队")
         await _finish_activity(
             services,
@@ -247,9 +254,9 @@ async def _exercise_everything(heavenly_console) -> None:
             services.features.biguan,
             "heavenly-settle-retreat",
         )
-        await heavenly("出关", "闭关总结", "6/6")
+        await heavenly("闭关结束", "闭关总结", "6/6")
 
-        await heavenly("探险", "探险启程", "同行修士: 3")
+        await heavenly("开始探险", "探险启程", "同行修士: 3")
         await local("heavenly-dao-b", "探险进度", "探险尚未结束")
         await _finish_activity(
             services,
@@ -335,6 +342,19 @@ async def _exercise_everything(heavenly_console) -> None:
         await heavenly("队伍 解散", "当前未加入队伍")
 
         # 对尚未被成功主流程触达的命令逐条发送有效形态的业务文本。
+        await heavenly("去 镇北军镇", "抵达", "镇北军镇")
+        await heavenly("讨伐", "讨伐启阵")
+        await heavenly("讨伐战况", "讨伐战况")
+        await _finish_activity(
+            services,
+            HEAVENLY_DAO_ID,
+            "raid_session",
+            "结束时间",
+            services.features.taofa,
+            "heavenly-settle-raid",
+        )
+        await heavenly("讨伐结束", "讨伐结算")
+        await heavenly("去 丹霞城", "抵达", "丹霞城")
         for command, invocation in COMMAND_INVOCATIONS.items():
             if command in covered:
                 continue
@@ -389,5 +409,8 @@ def _assert_result(result, raw_message: str, covered: set[str], expected) -> obj
     assert "参数格式错误" not in content, raw_message
     for value in expected:
         assert value in content, (raw_message, content)
-    covered.add(command)
+    from game.cmd.help_registry import help_registry
+
+    entry = help_registry.find(command)
+    covered.add(entry.command if entry is not None else command)
     return message

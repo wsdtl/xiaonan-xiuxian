@@ -111,7 +111,8 @@ async def _setting(
 
 @GameCommand.command(
     scope="通用",
-    cmd="人物自动用药",
+    cmd="人药",
+    aliases=("人物自动用药",),
     guard_rule="已创建",
     help=HelpSpec(
         category="修行",
@@ -135,7 +136,8 @@ async def set_character_automatic(
 
 @GameCommand.command(
     scope="通用",
-    cmd="道侣自动用药",
+    cmd="侣药",
+    aliases=("道侣自动用药",),
     guard_rule="已创建",
     help=HelpSpec(
         category="修行",

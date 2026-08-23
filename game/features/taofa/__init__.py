@@ -31,7 +31,18 @@ class RaidFeature:
         raw = self._data.dataset("讨伐展示")
         if not isinstance(raw, Mapping):
             raise JsonDataError("讨伐展示缺少文本.json")
-        self._text = MappingProxyType({str(section): MappingProxyType({str(k): str(v) for k, v in value.items()}) for section, value in raw.items() if isinstance(value, Mapping)})
+        text = raw.get("文本")
+        if not isinstance(text, Mapping):
+            raise JsonDataError("讨伐展示缺少文本.json")
+        self._text = MappingProxyType(
+            {
+                str(section): MappingProxyType(
+                    {str(k): str(v) for k, v in value.items()}
+                )
+                for section, value in text.items()
+                if isinstance(value, Mapping)
+            }
+        )
 
     def text(self, section: str, key: str, **values: object) -> str:
         return self._text[section][key].format_map(values)
