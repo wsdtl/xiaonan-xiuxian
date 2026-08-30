@@ -10,6 +10,7 @@ from game.features.zongmen_wanzhen import (
 from message import M
 
 from ...actions import message_actions
+from ...presentation import sentence
 
 
 def page(copy: WanzhenCopy, value: WanzhenPage, actions):
@@ -17,21 +18,26 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions):
         M.document()
         .header(_text(copy, "标题"))
         .section(value.category, icon="inventory")
-        .field("条目", value.total_entries)
+        .field("珍物", value.total_entries)
     )
     if not value.entries:
         builder.line(_text(copy, "空"))
     for index, entry in enumerate(value.entries, start=1):
         grade = entry.grade_name or ""
-        builder.item(index, f"{grade}{entry.name} × {entry.quantity}").line(
-            f"条目：{entry.entry_key}"
+        builder.item(
+            index,
+            f"{grade}",
+            M.command(entry.name, f"查看 {entry.content_id}"),
+            f" × {entry.quantity} · ",
+            M.command(entry.content_id, f"查看 {entry.content_id}"),
         )
         if entry.materials:
             builder.line(
                 "实际投入："
                 + "、".join(f"{key}{amount}" for key, amount in entry.materials)
             )
-    builder.line(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
+    if value.page_count > 1:
+        builder.line(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
     return builder.actions(message_actions(actions)).build()
 
 
@@ -43,14 +49,17 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult):
         .header(_text(copy, "标题"))
         .section(value.action, icon="success")
         .line(_text(copy, key, **values))
-        .field("条目", value.entry.entry_key)
+        .field("编号", value.entry.content_id)
         .build()
     )
 
 
 def error(copy: WanzhenCopy, message: str):
     return (
-        M.document().section(_text(copy, "错误"), icon="notice").line(message).build()
+        M.document()
+        .section(_text(copy, "错误"), icon="notice")
+        .line(sentence(message))
+        .build()
     )
 
 

@@ -68,7 +68,7 @@ def _services(tmp_path: Path):
     sect_feature.initialize()
     follow_feature = SectFollowFeature(data, sect, character, location, state, team)
     follow_feature.initialize()
-    travel = TravelFeature(world, character, location, action_group)
+    travel = TravelFeature(world, character, location, action_group, state)
     travel.initialize()
     return (
         create,

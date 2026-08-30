@@ -12,12 +12,13 @@ from . import reply
 @GameCommand.fullmatch(
     scope="通用",
     cmd="位置",
+    aliases=("山门",),
     guard_rule="已创建",
     help=HelpSpec(
         category="世界",
         summary="查看当前地点、地势与此地开放功能",
-        usage=("位置",),
-        side_effect="只读查询，不改变人物状态",
+        usage=("位置", "山门"),
+        side_effect="只查看，不会改变人物状态",
         order=20,
     ),
 )
@@ -26,15 +27,16 @@ async def show_position(*, user_id: str, manager, **_) -> None:
     services = current_game_services()
     result = await feature.current(user_id)
     gate_actions = await services.features.zongmen_shanmen.gate_actions(user_id)
+    position_actions = feature.position_actions(
+        result.location.available_functions,
+        plant_pool=result.location.plant_pool,
+        mineral_pool=result.location.mineral_pool,
+    )
     await manager.send(
         reply.current(
             feature.copy(),
             result,
-            feature.position_actions(
-                result.location.available_functions,
-                plant_pool=result.location.plant_pool,
-                mineral_pool=result.location.mineral_pool,
-            ) + gate_actions,
+            position_actions + gate_actions,
         )
     )
 
@@ -47,7 +49,7 @@ async def show_position(*, user_id: str, manager, **_) -> None:
         category="世界",
         summary="查看附近地点或修士",
         usage=("附近", "附近 地点", "附近 修士", "附近 修士 页码"),
-        side_effect="只读查询，不改变人物状态",
+        side_effect="只查看，不会改变人物状态",
         order=30,
     ),
 )
@@ -61,7 +63,10 @@ async def show_nearby(*, user_id: str, message: str, manager, **_) -> None:
             reply.nearby_overview(
                 copy,
                 result,
-                feature.nearby_overview_actions(result.locations),
+                feature.nearby_overview_actions(
+                    result.locations,
+                    surface=result.current.space_type == "地表",
+                ),
             )
         )
         return
@@ -83,7 +88,11 @@ async def show_nearby(*, user_id: str, message: str, manager, **_) -> None:
                 reply.nearby_cultivators(
                     copy,
                     result,
-                    feature.nearby_cultivator_actions(result.page, result.has_next),
+                    feature.nearby_cultivator_actions(
+                        result.page,
+                        result.has_next,
+                        surface=result.space_type == "地表",
+                    ),
                 )
             )
         except NearbyPageError as exc:

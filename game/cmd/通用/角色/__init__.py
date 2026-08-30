@@ -62,7 +62,7 @@ async def create_character(
         category="角色",
         summary="查看当前人物的修为、状态、位置与已有构筑",
         usage=("人物",),
-        side_effect="只读查询，不改变人物状态",
+        side_effect="只查看，不会改变人物状态",
         order=20,
     ),
 )

@@ -6,6 +6,7 @@ from game.features.lianzhen import FormationAction, FormationCopy
 from message import M
 
 from ...actions import message_actions
+from ...presentation import sentence
 
 
 def text(copy: FormationCopy, section: str, key: str, **values: object) -> str:
@@ -87,7 +88,7 @@ def completed(copy, value, actions: tuple[FormationAction, ...]):
 
 
 def error(copy, message: str):
-    return M.document().section(text(copy, "错误", "标题"), icon="notice").line(message).build()
+    return M.document().section(text(copy, "错误", "标题"), icon="notice").line(sentence(message)).build()
 
 
 __all__ = ["completed", "error", "overview", "preview", "text"]

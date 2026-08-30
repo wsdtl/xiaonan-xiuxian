@@ -13,7 +13,7 @@ from . import reply
     scope="通用",
     cmd="开始采矿",
     aliases=("采矿",),
-    guard_rule="自主空闲",
+    guard_rule="自主空闲且可行动",
     metadata={"hosting": {"activity": "采矿", "phase": "start"}},
     help=HelpSpec(
         category="行动",

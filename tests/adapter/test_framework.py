@@ -99,6 +99,57 @@ def test_qq_events_normalize_protocol_identity_without_using_display_name() -> N
     assert (interaction.user_id, interaction.group_id) == ("qq-user-1", "group-1")
 
 
+def test_qq_event_strips_the_bots_display_mention_only() -> None:
+    event = parse_message_event(
+        {
+            "t": "GROUP_MESSAGE_CREATE",
+            "id": "event-mention",
+            "d": {
+                "id": "message-mention",
+                "content": "@楠楠 人物",
+                "group_openid": "group-1",
+                "author": {"member_openid": "qq-user-1"},
+                "mentions": [
+                    {
+                        "id": "bot-1",
+                        "username": "楠楠",
+                        "is_you": True,
+                    }
+                ],
+            },
+        },
+        bot_name="楠楠",
+    )
+
+    assert event is not None
+    assert event.content == "人物"
+
+
+def test_qq_event_keeps_another_users_display_mention() -> None:
+    event = parse_message_event(
+        {
+            "t": "GROUP_MESSAGE_CREATE",
+            "id": "event-mention-other",
+            "d": {
+                "id": "message-mention-other",
+                "content": "@顾听澜 赠送 赤阳花 1",
+                "group_openid": "group-1",
+                "author": {"member_openid": "qq-user-1"},
+                "mentions": [
+                    {
+                        "id": "qq-user-2",
+                        "username": "顾听澜",
+                        "is_you": False,
+                    }
+                ],
+            },
+        }
+    )
+
+    assert event is not None
+    assert event.content == "@顾听澜 赠送 赤阳花 1"
+
+
 def test_message_context_rejects_mixed_user_ids() -> None:
     with pytest.raises(ValueError, match="user_id 不一致"):
         MessageContext(

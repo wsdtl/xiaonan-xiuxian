@@ -18,6 +18,7 @@ class NajieEntry:
     category: str
     content_id: str
     name: str
+    grade_id: str
     grade_name: str
     quantity: int
     equipped_slots: tuple[str, ...]

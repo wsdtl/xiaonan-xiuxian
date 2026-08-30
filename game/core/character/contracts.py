@@ -69,6 +69,7 @@ class EquippedContent:
     content_id: str
     name: str
     grade: str = ""
+    grade_name: str = ""
 
 
 @dataclass(frozen=True)

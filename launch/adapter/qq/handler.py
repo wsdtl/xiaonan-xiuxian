@@ -113,7 +113,10 @@ class QqEventHandler(BaseMessageHandler):
         if not isinstance(payload, dict):
             return ACK_RESPONSE
 
-        event = parse_message_event(payload)
+        event = parse_message_event(
+            payload,
+            bot_name=config.get("QQ_BOT_NAME", ""),
+        )
         if event is not None:
             logger.opt(colors=True).debug(
                 C.join(

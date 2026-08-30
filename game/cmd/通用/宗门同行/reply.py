@@ -25,6 +25,7 @@ _ERROR_KEYS = {
     "cannot_remove_leader": "不能请离宗主",
     "not_same_location": "不在同处",
     "actor_busy": "当前忙碌",
+    "fellowship_conflict": "同行状态冲突",
     "sect_changed": "同行变化",
 }
 
@@ -36,32 +37,36 @@ def page(
     *,
     notice: str = "",
 ):
-    builder = M.document().header(_text(copy, "查看", "标题"))
+    title = f"{value.sect_name} · 同行" if value.sect_name else _text(copy, "查看", "标题")
+    builder = M.document().header(title)
     if notice:
         builder.inline_section(
             _text(copy, "查看", "状态"), notice, icon=_text(copy, "图标", "结果")
         )
-    builder.section(
-        _text(copy, "查看", "状态"), icon=_text(copy, "图标", "同行")
-    ).field(_text(copy, "查看", "宗门"), value.sect_name).field(
-        _text(copy, "查看", "当前"), _text(copy, "查看", value.page)
+    builder.inline_section(
+        _text(copy, "查看", "当前"),
+        _text(copy, "查看", value.page),
+        icon=_text(copy, "图标", "同行"),
     )
     if value.members:
+        leader = next(
+            (member.name for member in value.members if member.role == "宗主"),
+            value.leader_name,
+        )
         builder.section(
             _text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员")
-        ).field(
-            _text(copy, "查看", "人数"),
-            _text(copy, "格式", "人数").format(
-                当前=len(value.members), 上限=value.maximum_members
-            ),
-        )
-        for index, member in enumerate(value.members, start=1):
-            builder.item(
-                index,
-                _text(copy, "格式", "成员").format(
-                    姓名=member.name, 身份=member.role
+        ).row(
+            (
+                _text(copy, "查看", "人数"),
+                _text(copy, "格式", "人数").format(
+                    当前=len(value.members), 上限=value.maximum_members
                 ),
-            )
+            ),
+            ("领队", leader),
+        )
+        names = tuple(member.name for member in value.members if member.name != leader)
+        if names:
+            builder.field(f"同行（{len(names)}）", "、".join(names))
     return builder.actions(message_actions(actions)).build()
 
 

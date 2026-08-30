@@ -41,6 +41,14 @@ def _run(awaitable):
     return asyncio.run(awaitable)
 
 
+class _HostingStub:
+    def status(self):
+        return SimpleNamespace(initialized=True)
+
+    async def current(self, _user_id: str):
+        return None
+
+
 def _features(
     tmp_path: Path,
 ) -> tuple[
@@ -67,7 +75,9 @@ def _features(
     location.initialize()
     asset = AssetService(data, database)
     asset.initialize()
-    forging = ForgingService(data, database, asset, world, location, innate_treasure_service(data, database))
+    forging = ForgingService(
+        data, database, asset, world, location, innate_treasure_service(data, database)
+    )
     forging.initialize()
     character = CharacterService(
         data, database, player_state, location, asset, growth, forging
@@ -84,6 +94,7 @@ def _features(
         location,
         injury,
         innate_treasure_service(data, database),
+        _HostingStub(),
     )
     overview.initialize()
     return feature, overview, character, location, database
@@ -98,7 +109,7 @@ def test_create_character_commits_all_initial_states(tmp_path: Path) -> None:
 
     assert result.realm_id == "510001"
     assert result.location_name == "溪隐台"
-    assert result.initial_items == (("小还丹", "01", 3), ("养神丹", "01", 2))
+    assert result.initial_items == (("小还丹", "黄品", 3), ("养神丹", "黄品", 2))
     snapshots = _run(database.list_for_user("qq-1"))
     assert {
         (item.address.state_type, item.address.state_key) for item in snapshots
@@ -204,7 +215,8 @@ def test_character_overview_combines_owned_service_results(
     assert "灵动" in content
     assert "溪隐台" in content
     assert "功法: 0/6" in content
-    assert "先天灵宝: 0/1" in content
+    assert "先天灵宝" in content
+    assert "先天灵宝: 未执掌" in content
     assert "无名器胚" in content
     assert "攻击: 10" in content
     assert "宗门贡献: 0" in content

@@ -43,7 +43,7 @@ async def hosting_command(
 @GameCommand.fullmatch(
     scope="通用",
     cmd="继续托管",
-    guard_rule="可取消托管",
+    guard_rule="已创建",
     help=HelpSpec(
         category="行动",
         summary="由原队长或宗主恢复暂停的托管计划",
@@ -66,7 +66,7 @@ async def resume_hosting(*, user_id: str, message_context, manager) -> None:
 @GameCommand.fullmatch(
     scope="通用",
     cmd="取消托管",
-    guard_rule="可取消托管",
+    guard_rule="已创建",
     help=HelpSpec(
         category="行动",
         summary="结束本人或当前同行的托管",

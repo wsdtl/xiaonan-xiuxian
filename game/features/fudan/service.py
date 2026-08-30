@@ -92,7 +92,10 @@ class MedicineFeature:
         request_id = _text(request.request_id, "request_id")
         query = _text(request.medicine, "丹药编号或名称")
         requested_grade = str(request.grade or "").strip()
-        medicine_id = self._medicine.resolve(query)
+        try:
+            medicine_id = self._medicine.resolve(query)
+        except MedicineError as exc:
+            raise MedicineFeatureError(str(exc)) from exc
         committed = await self._database.committed_transaction(user_id, request_id)
         if committed is not None:
             if committed.receipt.business_type != "服丹":

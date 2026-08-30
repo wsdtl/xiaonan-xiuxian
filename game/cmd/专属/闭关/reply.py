@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from game.features.biguan import (
     RetreatAction,
     RetreatCopy,
@@ -16,6 +14,7 @@ from game.features.biguan import (
 from message import M
 
 from ...actions import message_actions
+from ...presentation import duration, natural_deadline
 
 
 def text(copy: RetreatCopy, section: str, key: str, **values: object) -> str:
@@ -40,14 +39,13 @@ def started(
         M.document()
         .header(text(copy, "开始", "标题"))
         .section(value.location_name, icon="player")
-        .field(text(copy, "开始", "地点"), value.location_name)
         .row(
             (text(copy, "开始", "同行用户"), value.participant_count),
             (text(copy, "开始", "正式角色"), value.formal_character_count),
         )
         .row(
             (text(copy, "开始", "轮次"), value.maximum_rounds),
-            (text(copy, "开始", "最晚出关"), _time(value.maximum_ends_at)),
+            (text(copy, "开始", "最晚出关"), natural_deadline(value.maximum_ends_at)),
         )
         .line(text(copy, "开始", "说明"))
         .actions(message_actions(actions))
@@ -61,17 +59,26 @@ def progress(
     value: RetreatProgress,
     actions: tuple[RetreatAction, ...],
 ):
+    if value.completed_rounds >= value.maximum_rounds:
+        progress_tail = (
+            "状态",
+            "已出关" if value.settled else "可以出关",
+        )
+    else:
+        progress_tail = (
+            text(copy, "进度", "剩余时间"),
+            duration(value.remaining_seconds),
+        )
     builder = (
         M.document()
         .header(text(copy, "进度", "标题"))
         .section(value.location_name, icon="status")
-        .field(text(copy, "进度", "地点"), value.location_name)
         .row(
             (
                 text(copy, "进度", "轮次"),
                 f"{value.completed_rounds}/{value.maximum_rounds}轮",
             ),
-            (text(copy, "进度", "剩余时间"), _duration(value.remaining_seconds)),
+            progress_tail,
         )
         .row(
             (text(copy, "进度", "同行用户"), value.participant_count),
@@ -89,12 +96,14 @@ def progress(
     else:
         builder.line(text(copy, "进度", "没有感悟"))
     if value.settled:
-        note = text(copy, "进度", "已经出关")
+        note = ""
     elif value.can_end:
         note = text(copy, "进度", "可以出关")
     else:
         note = text(copy, "进度", "等待领队")
-    return builder.line(note).actions(message_actions(actions)).build()
+    if note:
+        builder.line(note)
+    return builder.actions(message_actions(actions)).build()
 
 
 def settlement_page(
@@ -111,7 +120,6 @@ def settlement_page(
             M.document()
             .header(text(copy, "总结", "标题"))
             .section(value.location_name, icon="status")
-            .field(text(copy, "总结", "地点"), value.location_name)
             .row(
                 (
                     text(copy, "总结", "轮次"),
@@ -142,11 +150,16 @@ def _user_page(
         )
     for character in value.characters:
         title = text(copy, "用户", "道侣" if character.companion else "人物")
+        level = (
+            str(character.level_after)
+            if character.level_before == character.level_after
+            else f"{character.level_before} → {character.level_after}"
+        )
         builder.section(f"{title} · {character.name}", icon="player").row(
             (text(copy, "用户", "经验"), f"+{character.experience_gained}"),
             (
                 text(copy, "用户", "等级"),
-                f"{character.level_before} → {character.level_after}",
+                level,
             ),
         ).row(
             (text(copy, "用户", "血气"), _resource(character.health)),
@@ -177,15 +190,6 @@ def _user_page(
     else:
         builder.line(text(copy, "用户", "无"))
     return builder.line(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
-
-
-def _time(value: datetime) -> str:
-    return value.astimezone().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def _duration(seconds: int) -> str:
-    minutes, remainder = divmod(max(0, seconds), 60)
-    return f"{minutes}分{remainder}秒" if minutes else f"{remainder}秒"
 
 
 def _resource(value: float) -> str:

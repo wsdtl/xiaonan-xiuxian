@@ -206,7 +206,7 @@ class SectFacilityService:
             SectFacilityEntry(
                 law.law_id,
                 law.name,
-                f"{law.stage} · {law.method}",
+                law.method,
                 self._forging.assess(law.law_id, entries).can_forge,
             )
             for law in selected

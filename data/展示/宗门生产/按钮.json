@@ -1,0 +1,42 @@
+[
+  {
+    "页面": "查看",
+    "设施": "灵脉",
+    "条件": "尚未开始",
+    "编号": "sect-production.lingmai.start",
+    "名称": "开启",
+    "命令": "灵脉 开启",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "页面": "查看",
+    "设施": "灵脉",
+    "条件": "已经开始",
+    "编号": "sect-production.lingmai.collect",
+    "名称": "收取",
+    "命令": "灵脉 收取",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "页面": "查看",
+    "设施": "灵田",
+    "条件": "尚未开始",
+    "编号": "sect-production.lingtian.start",
+    "名称": "开启",
+    "命令": "灵田 开启",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "页面": "查看",
+    "设施": "灵田",
+    "条件": "已经开始",
+    "编号": "sect-production.lingtian.collect",
+    "名称": "收取",
+    "命令": "灵田 收取",
+    "行为": "callback",
+    "样式": "primary"
+  }
+]

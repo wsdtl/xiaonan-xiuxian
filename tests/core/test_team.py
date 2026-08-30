@@ -68,7 +68,7 @@ def _services(tmp_path: Path):
     create.initialize()
     feature = TeamFeature(data, team, character, location, player_state)
     feature.initialize()
-    travel = TravelFeature(world, character, location, action_group)
+    travel = TravelFeature(world, character, location, action_group, player_state)
     travel.initialize()
     return database, player_state, team, location, create, feature, travel
 
@@ -108,11 +108,12 @@ def test_team_invitation_order_public_count_and_group_travel(tmp_path: Path) -> 
     page = _run(feature.page("qq-1"))
     reply = import_module("game.cmd.通用.队伍.reply")
     rendered = render_local_message(
-        reply.page(feature.copy(), page, feature.page_actions(page.page))
+        reply.page(feature.copy(), page, feature.page_actions(page))
     )
     assert "人数: 3/3" in rendered.content
     assert "林远 · 队长" in rendered.content
     assert "白川 · 队员" in rendered.content
+    assert all(action.data != "队伍 邀请 " for action in rendered.actions)
 
     result = _run(travel.travel(TravelRequest("qq-1", "travel-team", "天衡城")))
     assert result.participant_user_ids == ("qq-1", "qq-2", "qq-3")

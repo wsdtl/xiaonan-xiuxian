@@ -52,9 +52,12 @@ class TeamFeature:
             raise RuntimeError("队伍玩法微服务尚未初始化")
         return self._copy
 
-    def page_actions(self, page: str) -> tuple[TeamAction, ...]:
+    def page_actions(self, value: TeamPage) -> tuple[TeamAction, ...]:
         self.copy()
-        return actions(self._buttons, page)
+        result = actions(self._buttons, value.page)
+        if len(value.members) >= value.maximum_players:
+            return tuple(action for action in result if "invite" not in action.action_id)
+        return result
 
     async def page(self, user_id: str, *, now: datetime | None = None) -> TeamPage:
         self.copy()

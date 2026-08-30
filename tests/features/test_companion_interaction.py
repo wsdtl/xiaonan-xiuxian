@@ -295,11 +295,11 @@ def test_same_meridian_plant_is_accepted_with_lower_affection(tmp_path: Path) ->
     assert result.view.relation.gift_totals[f"{item_id}:01"] == 1
 
 
-def test_companion_command_repeats_current_location_actions(
+def test_companion_command_only_keeps_companion_actions(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _, companion, _, _, create, interaction, position = _services(tmp_path)
+    _, companion, _, _, create, interaction, _ = _services(tmp_path)
     _create(create)
     definition = _local_female(companion)
 
@@ -316,7 +316,6 @@ def test_companion_command_repeats_current_location_actions(
         lambda: SimpleNamespace(
             features=SimpleNamespace(
                 daolv_jiejiao=interaction,
-                weizhi=position,
             )
         ),
     )
@@ -332,16 +331,7 @@ def test_companion_command_repeats_current_location_actions(
 
     assert manager.message is not None
     commands = tuple(action.data for action in manager.message.document.actions)
-    assert commands[:2] == (
+    assert commands == (
         f"交谈 {definition.companion_id}",
         f"赠予 {definition.companion_id}",
-    )
-    assert commands[-7:] == (
-        "附近 修士",
-        "开始探险",
-        "开始闭关",
-        "开始采药",
-        "开始采矿",
-        "附近",
-        "地图",
     )

@@ -39,7 +39,8 @@ _ERROR_KEYS = {
 
 
 def page(copy: SectCopy, value: SectPage, actions: tuple[SectAction, ...], *, notice: str = ""):
-    builder = M.document().header(_text(copy, "查看", "标题"))
+    title = value.name if value.page not in {"未加入", "待处理邀请"} else _text(copy, "查看", "标题")
+    builder = M.document().header(title)
     if notice:
         builder.inline_section(_text(copy, "查看", "状态"), notice, icon=_text(copy, "图标", "结果"))
     if value.page == "未加入":
@@ -47,15 +48,23 @@ def page(copy: SectCopy, value: SectPage, actions: tuple[SectAction, ...], *, no
     elif value.page == "待处理邀请":
         builder.section(_text(copy, "查看", "待处理邀请"), icon=_text(copy, "图标", "邀请")).line(_text(copy, "格式", "邀请来源").format(姓名=value.invitation_inviter_name, 宗门=value.invitation_name)).line(_text(copy, "格式", "邀请时限").format(分钟=value.invitation_minutes))
     else:
-        builder.section(_text(copy, "查看", "状态"), icon=_text(copy, "图标", "宗门")).field(_text(copy, "查看", "名称"), value.name).field(_text(copy, "查看", "入口"), value.entrance).field(_text(copy, "查看", "洞天"), _text(copy, "格式", "洞天").format(洞天编号=value.cave_id))
+        builder.section("山门", icon=_text(copy, "图标", "宗门")).field(_text(copy, "查看", "入口"), value.entrance).field(_text(copy, "查看", "洞天"), _text(copy, "格式", "洞天"))
         builder.section(_text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员"))
-        for index, member in enumerate(value.members, start=1):
-            builder.item(index, _text(copy, "格式", "成员").format(姓名=member.name, 身份=member.role))
-        builder.section(_text(copy, "查看", "进境")).field(_text(copy, "查看", "等级"), f"{value.sect_level} / {value.maximum_sect_level}").field(_text(copy, "查看", "总贡献"), str(value.total_contribution))
+        for role in ("宗主", "长老", "弟子"):
+            names = tuple(member.name for member in value.members if member.role == role)
+            if names:
+                label = role if role == "宗主" else f"{role}（{len(names)}）"
+                builder.field(label, "、".join(names))
+        builder.section(_text(copy, "查看", "进境"), icon="status").row(
+            (_text(copy, "查看", "等级"), f"{value.sect_level}/{value.maximum_sect_level}"),
+            (_text(copy, "查看", "总贡献"), str(value.total_contribution)),
+        )
         if value.next_level_contribution is not None:
             builder.field(_text(copy, "查看", "距下级"), str(value.next_level_contribution - value.total_contribution))
-        builder.field(_text(copy, "查看", "资源增益"), f"生产 x{value.production_multiplier:g}；采集 x{value.gathering_multiplier:g}")
-        builder.field(_text(copy, "查看", "炼制消耗"), f"灵石 x{value.facility_cost_multiplier:g}")
+        builder.row(
+            (_text(copy, "查看", "资源增益"), f"生产/采集 ×{value.production_multiplier:g}"),
+            (_text(copy, "查看", "炼制消耗"), f"灵石 ×{value.facility_cost_multiplier:g}"),
+        )
     return builder.actions(message_actions(actions)).build()
 
 

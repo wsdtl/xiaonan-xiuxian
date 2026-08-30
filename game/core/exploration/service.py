@@ -215,10 +215,19 @@ class ExplorationService:
         player_group_members: dict[str, list[str]] = {}
         treasure_snapshots: dict[str, dict[str, object] | None] = {}
         medicine_ratios: dict[str, float] = {}
+        public_profiles = {
+            value.user_id: value
+            for value in await self._character.public_profiles(participants)
+        }
         for user_id in participants:
-            guard = await self._player_state.authorize(user_id, "空闲或托管")
+            guard = await self._player_state.authorize(
+                user_id, "空闲或托管且可行动"
+            )
             if not guard.allowed:
-                raise ExplorationConflictError(f"{user_id}无法开始探险：{guard.reason}")
+                name = public_profiles.get(user_id)
+                raise ExplorationConflictError(
+                    f"{name.name if name else '有同行修士'}无法开始探险：{guard.reason}"
+                )
             transition_plans.append(
                 await self._player_state.plan_transition(
                     StateTransitionCommand(

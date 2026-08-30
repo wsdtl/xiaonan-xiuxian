@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
@@ -209,14 +210,16 @@ class HostingService:
             "当前阶段": WAIT_START,
             "下次触发时间": started_at.isoformat(),
             "开始时间": started_at.isoformat(),
-            "到期时间": (started_at + timedelta(seconds=self._maximum_seconds)).isoformat(),
+            "到期时间": (
+                started_at + timedelta(seconds=self._maximum_seconds)
+            ).isoformat(),
             "完成循环": 0,
             "执行次数": 0,
             "运行状态": RUNNING,
             "当前命令": None,
             "当前请求": None,
             "最近错误": None,
-            "最近提示": "等待本地驱动开始第一项活动。",
+            "最近提示": "首项活动将在片刻后自动开始。",
         }
         operations = [
             SharedEntityMutation(PLAN_ENTITY_TYPE, session_id, value, 0),
@@ -253,8 +256,7 @@ class HostingService:
         snapshot = await self._player_state.current(normalized)
         if (
             snapshot is None
-            or snapshot.states[CONTROL_TYPE].state_id
-            != self._control_states["托管中"]
+            or snapshot.states[CONTROL_TYPE].state_id != self._control_states["托管中"]
         ):
             return None
         session_id = str(
@@ -281,51 +283,61 @@ class HostingService:
         self._require_initialized()
         normalized_user = _text(user_id, "user_id")
         normalized_request = _text(request_id, "request_id")
-        committed = await self._database.committed_transaction(
-            normalized_user, normalized_request
-        )
-        if committed is not None:
-            if committed.receipt.business_type != "托管:取消":
-                raise HostingError("request_conflict")
-            return _session_from_payload(committed.payload)
-        session = await self.current(normalized_user)
-        if session is None:
-            raise HostingError("not_hosting")
-        if normalized_user != session.leader_user_id:
-            raise HostingError("member_cannot_cancel")
-        record = await self._database.get_shared_entity(
-            PLAN_ENTITY_TYPE, session.session_id
-        )
-        if record is None:
-            raise HostingError("session_invalid")
-        finished = materialize(record.value)
-        finished.update(
-            {
-                "运行状态": "已取消",
-                "下次触发时间": None,
-                "当前命令": None,
-                "当前请求": None,
-                "最近错误": None,
-                "最近提示": "托管已经取消，当前活动保留并等待手动结束。",
-            }
-        )
-        operations = await self._release_operations(session)
-        operations.extend(await self._latest_operations(session, finished))
-        operations.append(
-            SharedEntityMutation(
-                PLAN_ENTITY_TYPE, session.session_id, None, record.version
+        # 取消可能与本地驱动器认领/完成同一时间发生。每次冲突都重新读取
+        # 计划和参与者状态，最多短重试三次；不持有进程锁，避免阻塞其他玩家。
+        for attempt in range(3):
+            committed = await self._database.committed_transaction(
+                normalized_user, normalized_request
             )
-        )
-        await self._database.commit(
-            TransactionCommand(
-                user_id=normalized_user,
-                request_id=normalized_request,
-                business_type="托管:取消",
-                operations=tuple(operations),
-                payload={"计划": finished},
+            if committed is not None:
+                if committed.receipt.business_type != "托管:取消":
+                    raise HostingError("request_conflict")
+                return _session_from_payload(committed.payload)
+            session = await self.current(normalized_user)
+            if session is None:
+                raise HostingError("not_hosting")
+            if normalized_user != session.leader_user_id:
+                raise HostingError("member_cannot_cancel")
+            record = await self._database.get_shared_entity(
+                PLAN_ENTITY_TYPE, session.session_id
             )
-        )
-        return _session_from_value(finished)
+            if record is None:
+                raise HostingError("session_invalid")
+            finished = materialize(record.value)
+            finished.update(
+                {
+                    "运行状态": "已取消",
+                    "下次触发时间": None,
+                    "当前命令": None,
+                    "当前请求": None,
+                    "最近错误": None,
+                    "最近提示": "托管已经取消；如有活动已经开始，仍需手动查看或结束。",
+                }
+            )
+            operations = await self._release_operations(session)
+            operations.extend(await self._latest_operations(session, finished))
+            operations.append(
+                SharedEntityMutation(
+                    PLAN_ENTITY_TYPE, session.session_id, None, record.version
+                )
+            )
+            try:
+                await self._database.commit(
+                    TransactionCommand(
+                        user_id=normalized_user,
+                        request_id=normalized_request,
+                        business_type="托管:取消",
+                        operations=tuple(operations),
+                        payload={"计划": finished},
+                    )
+                )
+            except StateConflictError:
+                if attempt < 2:
+                    await asyncio.sleep(0)
+                    continue
+                raise HostingError("cancel_conflict") from None
+            return _session_from_value(finished)
+        raise HostingError("cancel_conflict")
 
     async def resume(
         self, user_id: str, request_id: str, *, now: datetime | None = None
@@ -433,7 +445,7 @@ class HostingService:
                 "当前请求": request_id,
                 "下次触发时间": current.isoformat(),
                 "最近错误": None,
-                "最近提示": f"正在通过本地驱动执行“{command}”。",
+                "最近提示": f"正在自动执行“{command}”。",
             }
         )
         try:
@@ -479,8 +491,7 @@ class HostingService:
         snapshot = await self._player_state.current(str(user_id or "").strip())
         if (
             snapshot is None
-            or snapshot.states[CONTROL_TYPE].state_id
-            != self._control_states["托管中"]
+            or snapshot.states[CONTROL_TYPE].state_id != self._control_states["托管中"]
         ):
             return False
         session_id = str(
@@ -513,7 +524,9 @@ class HostingService:
             if execution.phase == EXECUTE_START
             else activity.end_state_id
         )
-        return all(snapshot.states["行为"].state_id == expected for snapshot in snapshots)
+        return all(
+            snapshot.states["行为"].state_id == expected for snapshot in snapshots
+        )
 
     async def complete_execution(
         self,
@@ -536,7 +549,7 @@ class HostingService:
             return await self._pause_record(
                 record,
                 session,
-                _clean_error(error) or f"“{execution.command}”未完成状态转换。",
+                _clean_error(error) or f"“{execution.command}”没有完成。",
             )
 
         current = _utc(now)
@@ -631,7 +644,9 @@ class HostingService:
             raise JsonDataError("托管必须至少定义一个活动")
         return result
 
-    def _control_context(self, group, user_id: str, session_id: str) -> dict[str, object]:
+    def _control_context(
+        self, group, user_id: str, session_id: str
+    ) -> dict[str, object]:
         role = (
             self._role_names["personal"]
             if group.mode == "personal"
@@ -831,7 +846,9 @@ def _session_from_value(value: Mapping[str, object]) -> HostingSession:
     if status not in {RUNNING, PAUSED, "已取消", "已到期"}:
         raise HostingError("transaction_invalid")
     raw_next = value.get("下次触发时间")
-    next_trigger_at = _parse_time(raw_next, "托管计划.下次触发时间") if raw_next else None
+    next_trigger_at = (
+        _parse_time(raw_next, "托管计划.下次触发时间") if raw_next else None
+    )
     return HostingSession(
         _text(value.get("托管编号"), "托管计划.托管编号"),
         _mode(value.get("同行类型")),

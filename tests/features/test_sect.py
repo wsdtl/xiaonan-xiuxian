@@ -82,6 +82,7 @@ def test_create_invite_accept_transfer_leave_and_disband(tmp_path: Path) -> None
     assert pending.page == "待处理邀请"
     assert pending.invitation_name == "青云宗"
     joined = _run(feature.accept("qq-2", "sect-accept-2"))
+    assert joined.target_name == "青云宗"
     assert [value.name for value in joined.page.members] == ["林远", "白川"]
 
     _run(feature.invite("qq-1", "顾山", "sect-invite-3"))

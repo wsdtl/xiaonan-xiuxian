@@ -65,8 +65,12 @@ class NajieFeature:
         if subcategory_name not in {
             subcategory.name for subcategory in category.subcategories
         }:
+            available = "、".join(
+                subcategory.name for subcategory in category.subcategories
+            )
             raise NajieQueryError(
-                f"{category.name}中没有小类：{subcategory_name or '<空>'}"
+                f"{category.name}中没有“{subcategory_name or '<空>'}”。"
+                f"可选分项：{available}"
             )
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
             raise NajieQueryError("纳戒页码必须是正整数")
@@ -80,14 +84,17 @@ class NajieFeature:
             snapshot.sort_rules,
         )
         total_pages = max(1, ceil(len(entries) / snapshot.page_limit))
-        current_page = min(page, total_pages)
-        offset = (current_page - 1) * snapshot.page_limit
+        if page > total_pages:
+            raise NajieQueryError(
+                f"{subcategory_name}没有第{page}页，共{total_pages}页"
+            )
+        offset = (page - 1) * snapshot.page_limit
         page_entries = entries[offset : offset + snapshot.page_limit]
         return NajiePage(
             category=category.name,
             subcategory=subcategory_name,
             icon=category.icon,
-            page=current_page,
+            page=page,
             total_pages=total_pages,
             entry_count=len(entries),
             total_quantity=sum(entry.quantity for entry in entries),
@@ -112,7 +119,10 @@ def _category(snapshot: AssetSnapshot, name: str) -> AssetCategory:
             category for category in snapshot.categories if category.name == normalized
         )
     except StopIteration as exc:
-        raise NajieQueryError(f"纳戒中没有大类：{normalized or '<空>'}") from exc
+        available = "、".join(category.name for category in snapshot.categories)
+        raise NajieQueryError(
+            f"纳戒中没有“{normalized or '<空>'}”这一类。可选大类：{available}"
+        ) from exc
 
 
 def _category_summary(
@@ -173,6 +183,7 @@ def _entry_view(entry: AssetEntry) -> NajieEntry:
         category=entry.category,
         content_id=entry.content_id,
         name=entry.name,
+        grade_id=entry.grade_id,
         grade_name=entry.grade_name,
         quantity=entry.quantity,
         equipped_slots=entry.equipped_slots,

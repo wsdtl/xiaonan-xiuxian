@@ -12,7 +12,7 @@ from . import reply
     guard_rule="始终可用",
     help=HelpSpec(
         category="角色",
-        summary="查看当前已经开放的命令分类、写法和影响",
+        summary="查看当前已经开放的命令分类、用法和结果",
         usage=("帮助", "帮助 分类", "帮助 命令"),
         order=0,
     ),

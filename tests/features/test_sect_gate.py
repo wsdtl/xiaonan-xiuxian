@@ -71,7 +71,7 @@ def _services(tmp_path: Path):
     follow.initialize()
     gate = GateFeature(data, sect, location, state, action_group)
     gate.initialize()
-    travel = TravelFeature(world, character, location, action_group)
+    travel = TravelFeature(world, character, location, action_group, state)
     travel.initialize()
     return create, team, sect, sect_feature, follow, gate, location, travel
 

@@ -176,7 +176,10 @@ class TradeService:
             or not 1 <= command.quantity <= self._maximum_quantity
         ):
             raise TradeError(f"单次购买数量必须在1到{self._maximum_quantity}之间")
-        grade_id = self._asset.grade(command.grade_id).grade_id
+        try:
+            grade_id = self._asset.grade(command.grade_id).grade_id
+        except AssetStateError as exc:
+            raise TradeError(str(exc)) from exc
         committed = await self._database.committed_transaction(user_id, request_id)
         if committed is not None:
             if committed.receipt.business_type != "购买修行资粮":

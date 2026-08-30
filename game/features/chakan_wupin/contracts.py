@@ -12,6 +12,7 @@ class ItemInspectionResult:
     query: str
     detail: ItemDetail | None = None
     candidates: tuple[ItemSummary, ...] = ()
+    related_details: tuple[ItemDetail, ...] = ()
 
 
 __all__ = ["ItemInspectionResult"]

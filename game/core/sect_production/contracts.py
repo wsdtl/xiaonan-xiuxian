@@ -42,6 +42,7 @@ class SectProductionOutput:
 class SectProductionView:
     facility: SectProductionFacility
     role: str
+    can_collect: bool
     started: bool
     last_settled_at: datetime | None
     pending_cycles: int
@@ -51,6 +52,7 @@ class SectProductionView:
 @dataclass(frozen=True)
 class SectProductionResult:
     view: SectProductionView
+    newly_started: bool
     settled_cycles: int
     outputs: tuple[SectProductionOutput, ...]
     spirit_stones: int

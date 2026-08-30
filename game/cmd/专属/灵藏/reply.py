@@ -6,6 +6,7 @@ from game.features.zongmen_lingcang import LingcangCopy, LingcangPage
 from message import M
 
 from ...actions import message_actions
+from ...presentation import sentence
 
 
 def page(copy: LingcangCopy, value: LingcangPage, actions):
@@ -13,7 +14,7 @@ def page(copy: LingcangCopy, value: LingcangPage, actions):
         M.document()
         .header(_text(copy, "标题"))
         .section(value.category, icon="inventory")
-        .row((_text(copy, "灵石"), value.spirit_stones), ("条目", value.total_entries))
+        .row((_text(copy, "灵石"), value.spirit_stones), ("材料", value.total_entries))
     )
     if not value.entries:
         builder.line(_text(copy, "空"))
@@ -22,7 +23,8 @@ def page(copy: LingcangCopy, value: LingcangPage, actions):
             index,
             f"{entry.grade_name}{entry.name} × {entry.quantity}",
         ).line(f"{entry.category} · {entry.content_id}")
-    builder.line(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
+    if value.page_count > 1:
+        builder.line(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
     return builder.actions(message_actions(actions)).build()
 
 
@@ -73,7 +75,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result):
 
 def error(copy: LingcangCopy, message: str):
     return (
-        M.document().section(_text(copy, "错误"), icon="notice").line(message).build()
+        M.document().section(_text(copy, "错误"), icon="notice").line(sentence(message)).build()
     )
 
 

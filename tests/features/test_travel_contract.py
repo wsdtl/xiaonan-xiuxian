@@ -69,7 +69,7 @@ def _features(
     character.initialize()
     create = CreateCharacterFeature(data, world, character)
     create.initialize()
-    travel = TravelFeature(world, character, location, action_group)
+    travel = TravelFeature(world, character, location, action_group, player_state)
     travel.initialize()
     return create, travel, database
 
@@ -147,9 +147,7 @@ def test_travel_command_renders_journey_destination_and_available_functions(
     assert "行路 · 引息轻行" in content
     assert "地点: 天衡城" in content
     assert "区域: 天衡州" in content
-    assert "可用功能" in content
-    assert "修士" in content
-    assert "闭关" not in content
+    assert "可用功能" not in content
     assert tuple(action.data for action in manager.message.document.actions) == (
         "附近 修士",
     )

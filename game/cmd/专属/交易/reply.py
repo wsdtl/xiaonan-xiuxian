@@ -10,6 +10,8 @@ from game.features.jiaoyi import (
 )
 from message import Action, M
 
+from ...presentation import sentence
+
 
 def overview(feature: TradeFeature, value: TradeOverview):
     builder = (
@@ -109,7 +111,7 @@ def error(feature: TradeFeature, message: str):
     return (
         M.document()
         .section(feature.copy("错误", "标题"), icon="notice")
-        .line(message)
+        .line(sentence(message))
         .line(feature.copy("错误", "格式"))
         .build()
     )

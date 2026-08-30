@@ -232,10 +232,19 @@ class RaidService:
         allies = []
         ally_groups = []
         user_character_ids: dict[str, list[str]] = {}
+        public_profiles = {
+            value.user_id: value
+            for value in await self._character.public_profiles(participants)
+        }
         for user_id in participants:
-            guard = await self._player_state.authorize(user_id, "自主空闲")
+            guard = await self._player_state.authorize(
+                user_id, "自主空闲且可行动"
+            )
             if not guard.allowed:
-                raise RaidError(f"{user_id}无法参加讨伐：{guard.reason}")
+                name = public_profiles.get(user_id)
+                raise RaidError(
+                    f"{name.name if name else '有同行修士'}无法参加讨伐：{guard.reason}"
+                )
             transition_operations.append(
                 (await self._player_state.plan_transition(StateTransitionCommand(
                     user_id=user_id,

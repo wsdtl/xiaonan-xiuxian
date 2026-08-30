@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from game.core.character import (
     CharacterAlreadyExistsError,
@@ -34,6 +34,7 @@ class CreateCharacterFeature:
         self._world = world
         self._character = character
         self._birthplace = ""
+        self._grade_names: dict[str, str] = {}
 
     def initialize(self) -> str:
         role_rule = self._data.dataset("角色规则").get("人物")
@@ -54,6 +55,14 @@ class CreateCharacterFeature:
             raise JsonDataError("人物初始出生地引用没有得到地点名")
         self._world.locate(LocationQuery(location_name=birthplace))
         self._birthplace = birthplace
+        grades = self._data.dataset("基础定义").get("品级")
+        if not isinstance(grades, Sequence) or isinstance(grades, (str, bytes)):
+            raise JsonDataError("基础定义缺少品级.json")
+        self._grade_names = {
+            str(item.get("编号") or "").strip(): str(item.get("名称") or "").strip()
+            for item in grades
+            if isinstance(item, Mapping)
+        }
         return birthplace
 
     async def create(self, request: CreateCharacterRequest) -> CreateCharacterResult:
@@ -77,7 +86,7 @@ class CreateCharacterFeature:
         item_names = tuple(
             (
                 str(self._data.entity("物品", item_id).get("名称") or item_id),
-                grade,
+                self._grade_names.get(grade, grade),
                 quantity,
             )
             for item_id, grade, quantity in created.initial_items

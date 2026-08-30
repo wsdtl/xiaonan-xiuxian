@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from game.features.tanxian import (
     ExplorationAction,
     ExplorationCopy,
@@ -16,6 +14,7 @@ from game.features.tanxian import (
 from message import M
 
 from ...actions import message_actions
+from ...presentation import duration, natural_deadline
 
 
 def text(copy: ExplorationCopy, section: str, key: str, **values: object) -> str:
@@ -40,14 +39,13 @@ def started(
         M.document()
         .header(text(copy, "开始", "标题"))
         .section(value.location_name, icon="navigation")
-        .field(text(copy, "开始", "地点"), value.location_name)
         .row(
             (text(copy, "开始", "同行用户"), value.participant_count),
             (text(copy, "开始", "正式单位"), value.formal_unit_count),
         )
         .row(
             (text(copy, "开始", "预计场数"), value.battle_count),
-            (text(copy, "开始", "结束时间"), _time(value.ends_at)),
+            (text(copy, "开始", "结束时间"), natural_deadline(value.ends_at)),
         )
         .line(text(copy, "开始", "说明"))
         .actions(message_actions(actions))
@@ -64,7 +62,6 @@ def progress(
         M.document()
         .header(text(copy, "进度", "标题"))
         .section(value.location_name, icon="status")
-        .field(text(copy, "进度", "地点"), value.location_name)
         .row(
             (
                 text(copy, "进度", "进度"),
@@ -72,7 +69,7 @@ def progress(
             ),
             (
                 text(copy, "进度", "剩余时间"),
-                _duration(value.remaining_seconds),
+                duration(value.remaining_seconds),
             ),
         )
         .row(
@@ -112,7 +109,6 @@ def settlement_page(
             M.document()
             .header(text(copy, "总结", "标题"))
             .section(value.location_name, icon="status")
-            .field(text(copy, "总结", "地点"), value.location_name)
             .row(
                 (text(copy, "总结", "战斗"), f"{value.battle_count}场"),
                 (text(copy, "总结", "战败敌人"), value.defeated_enemies),
@@ -126,8 +122,10 @@ def settlement_page(
                 (text(copy, "总结", "总灵石"), value.total_spirit_stones),
             )
             .field(text(copy, "总结", "总物品"), value.total_item_quantity)
-            .line(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
         )
+        if not survived:
+            builder.line(text(copy, "总结", "战败处理"))
+        builder.line(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
     else:
         builder = _user_page(copy, feature, value.users[page - 2], page, total_pages)
     return builder.actions(message_actions(actions)).build()
@@ -183,15 +181,6 @@ def _user_page(
     else:
         builder.line(text(copy, "用户", "无"))
     return builder.line(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
-
-
-def _time(value: datetime) -> str:
-    return value.astimezone().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def _duration(seconds: int) -> str:
-    minutes, remainder = divmod(max(0, seconds), 60)
-    return f"{minutes}分{remainder}秒" if minutes else f"{remainder}秒"
 
 
 def _resource(value: float) -> str:

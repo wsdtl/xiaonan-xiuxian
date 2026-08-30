@@ -4,6 +4,8 @@ import asyncio
 from importlib import import_module
 from pathlib import Path
 
+import pytest
+
 from game.core.asset import AssetService
 from game.core.character import CharacterService
 from game.core.data import JsonDataService
@@ -18,7 +20,8 @@ from game.features.chuangjian_renwu import (
     CreateCharacterFeature,
     CreateCharacterRequest,
 )
-from game.features.najie import NajieFeature
+from game.features.najie import NajieFeature, NajieQueryError
+from launch.message_events import snapshot_from_message
 from message import RenderedMessage, render_local_message
 from tests.support import innate_treasure_service
 
@@ -47,7 +50,9 @@ def _services(tmp_path: Path):
     location.initialize()
     assets = AssetService(data, database)
     assets.initialize()
-    forging = ForgingService(data, database, assets, world, location, innate_treasure_service(data, database))
+    forging = ForgingService(
+        data, database, assets, world, location, innate_treasure_service(data, database)
+    )
     forging.initialize()
     character = CharacterService(
         data, database, player_state, location, assets, growth, forging
@@ -90,7 +95,7 @@ def test_initial_assets_form_json_driven_najie_home(tmp_path: Path) -> None:
         ("恢复丹", "100002", "01", 2),
         ("恢复丹", "100005", "01", 3),
     }
-    assert "晓楠修仙 · 纳戒" in rendered.content
+    assert rendered.content.startswith("纳戒")
     assert "恢复丹 2" in rendered.content
 
 
@@ -157,6 +162,21 @@ def test_owned_cultivation_stays_in_library_and_obeys_json_sorting(
         "400003",
     ]
     assert page.entries[0].equipped_slots == ("功法1",)
+    links = [
+        item
+        for item in snapshot_from_message(najie_reply.page(page)).interactions
+        if item.kind == "command_link"
+    ]
+    assert (links[0].label, links[0].behavior, links[0].data) == (
+        page.entries[0].name,
+        "send",
+        "查看 400002",
+    )
+    assert (links[1].label, links[1].behavior, links[1].data) == (
+        "装配",
+        "fill",
+        "人物装配 功法 400002 01",
+    )
 
 
 def test_holy_formation_keeps_its_independent_material_investment(
@@ -225,12 +245,12 @@ def test_each_subcategory_pages_by_fifty_with_complete_navigation(
 
     first = _run(najie.page("qq-1", "物品", "灵植", 1))
     second = _run(najie.page("qq-1", "物品", "灵植", 2))
-    overflow = _run(najie.page("qq-1", "物品", "灵植", 99))
+    with pytest.raises(NajieQueryError, match="灵植没有第99页，共2页"):
+        _run(najie.page("qq-1", "物品", "灵植", 99))
     first_message = _render(najie_reply.page(first))
     second_message = _render(najie_reply.page(second))
 
     assert (len(first.entries), len(second.entries)) == (50, 1)
-    assert overflow.page == 2
     assert tuple(action.data for action in first_message.actions) == (
         "纳戒 物品 灵植 2",
         "纳戒 物品",
@@ -241,3 +261,14 @@ def test_each_subcategory_pages_by_fifty_with_complete_navigation(
         "纳戒 物品",
         "纳戒",
     )
+
+
+def test_invalid_najie_path_lists_the_available_categories(tmp_path: Path) -> None:
+    _, database, _, _, najie = _services(tmp_path)
+    try:
+        with pytest.raises(NajieQueryError, match="可选大类：物品、道藏、修行资粮"):
+            _run(najie.category("qq-1", "修行"))
+        with pytest.raises(NajieQueryError, match="可选分项：功法"):
+            _run(najie.page("qq-1", "道藏", "真意"))
+    finally:
+        database.close()

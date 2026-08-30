@@ -168,20 +168,29 @@ class PositionFeature:
         )
 
     def nearby_overview_actions(
-        self, locations: Sequence[NearbyWorldLocation] = ()
+        self,
+        locations: Sequence[NearbyWorldLocation] = (),
+        *,
+        surface: bool = True,
     ) -> tuple[PositionAction, ...]:
         self._require_initialized()
-        return self._location_entry_actions(locations) + self._actions_for("概览")
+        return self._location_entry_actions(locations) + self._actions_for(
+            "概览", surface=surface
+        )
 
     def nearby_cultivator_actions(
-        self, page: int, has_next: bool
+        self, page: int, has_next: bool, *, surface: bool = True
     ) -> tuple[PositionAction, ...]:
         self._require_initialized()
         result: list[PositionAction] = []
         for template in self._buttons:
             if template.page != "修士":
                 continue
-            if template.condition == "有上一页":
+            if template.condition == "地表":
+                if not surface:
+                    continue
+                variables = {}
+            elif template.condition == "有上一页":
                 if page <= 1:
                     continue
                 variables = {"页码": page - 1}
@@ -228,10 +237,21 @@ class PositionFeature:
             if location.companion_pool and current.space_type == "地表"
             else ()
         )
+        space_name = ""
+        if current.space_type != "地表":
+            member = await self._sect.membership(user_id)
+            sect = await self._sect.sect(member.sect_id) if member is not None else None
+            space_name = (
+                f"{sect.name}洞天"
+                if sect is not None and sect.cave_id == current.space_id
+                else current.space_type
+            )
         return CurrentPositionView(
             location,
             local,
             self._active_summary(active.companion_id) if active is not None else None,
+            current.space_type,
+            space_name,
         )
 
     async def nearby_overview(self, user_id: str) -> NearbyOverview:
@@ -338,6 +358,7 @@ class PositionFeature:
             has_next=stop < len(visible),
             truncated=truncated,
             visible_count=len(visible),
+            space_type=candidates.origin.space_type,
         )
 
     def _active_summary(self, companion_id: str) -> LocalCultivator:
@@ -419,11 +440,17 @@ class PositionFeature:
         if not self._initialized:
             raise RuntimeError("位置查看玩法微服务尚未初始化")
 
-    def _actions_for(self, page: str) -> tuple[PositionAction, ...]:
+    def _actions_for(
+        self, page: str, *, surface: bool = True
+    ) -> tuple[PositionAction, ...]:
         return tuple(
             render_action(template, {})
             for template in self._buttons
-            if template.page == page and not template.condition
+            if template.page == page
+            and (
+                not template.condition
+                or (template.condition == "地表" and surface)
+            )
         )
 
     def _location_entry_actions(

@@ -90,7 +90,9 @@ class SectProductionService:
                 catch_up,
                 multiplier,
                 _range(output.get(primary_key), f"宗门生产.产出.{kind}.{primary_key}"),
-                _range(output.get(material_key), f"宗门生产.产出.{kind}.{material_key}"),
+                _range(
+                    output.get(material_key), f"宗门生产.产出.{kind}.{material_key}"
+                ),
             )
         self._facilities = MappingProxyType(loaded)
         self._validate_outputs(raw, loaded)
@@ -123,21 +125,45 @@ class SectProductionService:
         entity_type = _ENTITY_TYPES[facility.kind]
         record = await self._database.get_shared_entity(entity_type, member.sect_id)
         if record is None:
-            baseline = _state_value(member.sect_id, facility.kind, current, self._rule_version)
+            baseline = _state_value(
+                member.sect_id, facility.kind, current, self._rule_version
+            )
             try:
                 receipt = await self._database.commit(
                     TransactionCommand(
                         user_id,
                         _request(request_id),
                         f"{facility.kind}初始化",
-                        (SharedEntityMutation(entity_type, member.sect_id, baseline, 0),),
-                        {"宗门编号": member.sect_id, "设施": facility.kind, "初始化": True},
+                        (
+                            SharedEntityMutation(
+                                entity_type, member.sect_id, baseline, 0
+                            ),
+                        ),
+                        {
+                            "宗门编号": member.sect_id,
+                            "设施": facility.kind,
+                            "初始化": True,
+                        },
                     )
                 )
-            except (SharedConstraintError, StateConflictError, IdempotencyConflictError) as exc:
-                raise SectProductionError("宗门资源生产状态刚刚发生变化，请重试") from exc
-            view = SectProductionView(facility, member.role, True, current, 0, facility.period_seconds)
-            return SectProductionResult(view, 0, (), 0, 0, receipt.replayed)
+            except (
+                SharedConstraintError,
+                StateConflictError,
+                IdempotencyConflictError,
+            ) as exc:
+                raise SectProductionError(
+                    "宗门资源生产状态刚刚发生变化，请重试"
+                ) from exc
+            view = SectProductionView(
+                facility,
+                member.role,
+                self._sect.is_officer(member.role),
+                True,
+                current,
+                0,
+                facility.period_seconds,
+            )
+            return SectProductionResult(view, True, 0, (), 0, 0, receipt.replayed)
         value = _mapping(record.value, entity_type)
         last = _time(value.get("上次结算时间"), f"{entity_type}.上次结算时间")
         sequence = _nonnegative_int(value.get("结算序号"), f"{entity_type}.结算序号")
@@ -147,16 +173,22 @@ class SectProductionService:
         )
         if cycles == 0:
             view = self._view_from_record(facility, member.role, record, current)
-            return SectProductionResult(view, 0, (), 0, 0, False)
+            return SectProductionResult(view, False, 0, (), 0, 0, False)
         multiplier = 1.0
         if self._progress is not None:
-            multiplier = (await self._progress.snapshot(member.sect_id)).production_multiplier
-        outputs, spirit_stones = self._roll(facility, member.sect_id, sequence, cycles, multiplier)
+            multiplier = (
+                await self._progress.snapshot(member.sect_id)
+            ).production_multiplier
+        outputs, spirit_stones = self._roll(
+            facility, member.sect_id, sequence, cycles, multiplier
+        )
         gain = await self._assets.plan_resource_gain(
             member.sect_id,
             spirit_stones,
             tuple(
-                SectMaterialCost(item.category, item.content_id, item.grade_id, item.quantity)
+                SectMaterialCost(
+                    item.category, item.content_id, item.grade_id, item.quantity
+                )
                 for item in outputs
                 if item.category != "灵石"
             ),
@@ -169,7 +201,12 @@ class SectProductionService:
             self._rule_version,
             sequence=sequence + cycles,
         )
-        operations = (*gain.operations, SharedEntityMutation(entity_type, member.sect_id, next_value, record.version))
+        operations = (
+            *gain.operations,
+            SharedEntityMutation(
+                entity_type, member.sect_id, next_value, record.version
+            ),
+        )
         payload = {
             "宗门编号": member.sect_id,
             "设施": facility.kind,
@@ -202,7 +239,15 @@ class SectProductionService:
         except (StateConflictError, SharedConstraintError, SectAssetError) as exc:
             raise SectProductionError("宗门资源刚刚发生变化，请重新收取") from exc
         after = self._view_from_values(facility, member.role, next_value, current)
-        return SectProductionResult(after, cycles, outputs, spirit_stones, gain.spirit_stones_after, receipt.replayed)
+        return SectProductionResult(
+            after,
+            False,
+            cycles,
+            outputs,
+            spirit_stones,
+            gain.spirit_stones_after,
+            receipt.replayed,
+        )
 
     async def _context(self, kind: str, user_id: str, *, officer: bool):
         self._require()
@@ -217,12 +262,21 @@ class SectProductionService:
             raise SectProductionError("只有宗主和长老可以收取宗门资源")
         sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
-        if sect is None or current.space_type != "宗门洞天" or current.space_id != sect.cave_id:
+        if (
+            sect is None
+            or current.space_type != "宗门洞天"
+            or current.space_id != sect.cave_id
+        ):
             raise SectProductionError("只有身处本宗洞天时才能使用资源设施")
         return member, facility
 
     def _roll(
-        self, facility: SectProductionFacility, sect_id: str, sequence: int, cycles: int, multiplier: float = 1.0
+        self,
+        facility: SectProductionFacility,
+        sect_id: str,
+        sequence: int,
+        cycles: int,
+        multiplier: float = 1.0,
     ) -> tuple[tuple[SectProductionOutput, ...], int]:
         totals: dict[tuple[str, str, str], int] = {}
         stones = 0
@@ -268,23 +322,46 @@ class SectProductionService:
 
     def _view_from_record(self, facility, role, record, current):
         if record is None:
-            return SectProductionView(facility, role, False, None, 0, facility.period_seconds)
+            return SectProductionView(
+                facility,
+                role,
+                self._sect.is_officer(role),
+                False,
+                None,
+                0,
+                facility.period_seconds,
+            )
         return self._view_from_values(facility, role, record.value, current)
 
     def _view_from_values(self, facility, role, value, current):
         last = _time(value.get("上次结算时间"), f"{facility.kind}.上次结算时间")
-        pending = min(facility.catch_up_limit, max(0, int((current - last).total_seconds() // facility.period_seconds)))
+        pending = min(
+            facility.catch_up_limit,
+            max(0, int((current - last).total_seconds() // facility.period_seconds)),
+        )
         elapsed = max(0, int((current - last).total_seconds()))
         remaining = facility.period_seconds - (elapsed % facility.period_seconds)
-        return SectProductionView(facility, role, True, last, pending, remaining)
+        return SectProductionView(
+            facility,
+            role,
+            self._sect.is_officer(role),
+            True,
+            last,
+            pending,
+            remaining,
+        )
 
     def _validate_outputs(self, raw, facilities) -> None:
         outputs = _mapping(raw.get("产出"), "宗门生产.产出")
         for kind in _FACILITY_TYPES:
             value = _mapping(outputs.get(kind), f"宗门生产.产出.{kind}")
-            if kind == "灵脉" and _texts(value.get("类别"), f"宗门生产.产出.{kind}.类别") != ("灵石", "灵矿"):
+            if kind == "灵脉" and _texts(
+                value.get("类别"), f"宗门生产.产出.{kind}.类别"
+            ) != ("灵石", "灵矿"):
                 raise JsonDataError("灵脉产出必须是灵石和灵矿")
-            if kind == "灵田" and _texts(value.get("类别"), f"宗门生产.产出.{kind}.类别") != ("灵植",):
+            if kind == "灵田" and _texts(
+                value.get("类别"), f"宗门生产.产出.{kind}.类别"
+            ) != ("灵植",):
                 raise JsonDataError("灵田产出必须是灵植")
 
     def _require(self):

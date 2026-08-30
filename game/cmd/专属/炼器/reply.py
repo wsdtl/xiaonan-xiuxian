@@ -13,6 +13,7 @@ from game.features.lianqi import (
 from message import M
 
 from ...actions import message_actions
+from ...presentation import sentence
 
 
 def text(copy: ForgingCopy, section: str, key: str, **values: object) -> str:
@@ -135,7 +136,7 @@ def error(copy: ForgingCopy, message: str):
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
-        .line(message)
+        .line(sentence(message))
         .build()
     )
 

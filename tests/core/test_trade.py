@@ -47,6 +47,12 @@ def test_trade_purchase_and_cultivation_equip_share_one_consumable_reserve(
     overview = _run(services.core.trade.overview("qq-1"))
     page = _run(services.core.trade.page("qq-1", "真意"))
     product = next(value for value in page.products if value.grade_id == "01")
+    with pytest.raises(TradeError, match="未知物品品级"):
+        _run(
+            services.core.trade.purchase(
+                TradePurchaseCommand("qq-1", "bad-grade", product.content_id, "不存在", 1)
+            )
+        )
     with pytest.raises(TradeError, match="灵石"):
         _run(
             services.core.trade.purchase(

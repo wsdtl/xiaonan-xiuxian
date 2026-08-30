@@ -178,8 +178,6 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
             "地形",
             "坐标",
             "海拔",
-            "可用功能",
-            "没有可用功能",
             "本地修士",
             "同行道侣",
             "人数",
@@ -193,6 +191,7 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
             "修士",
             "本地修士",
             "来往修士",
+            "附近修士",
             "山河",
             "没有地点",
             "当前位置",
@@ -207,6 +206,7 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
             "本地修士",
             "同行道侣",
             "来往修士",
+            "洞天修士",
             "没有来往修士",
             "页次",
             "当前",
@@ -220,13 +220,12 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
     _require_keys(command, {"格式错误"}, "位置文本.命令")
     _require_keys(
         icons,
-        {"错误", "地点", "功能", "修士", "行止", "页次"},
+        {"错误", "地点", "修士", "行止", "页次"},
         "位置图标",
     )
     return PositionCopy(
         error_icon=_text(icons.get("错误"), "位置图标.错误"),
         location_icon=_text(icons.get("地点"), "位置图标.地点"),
-        function_icon=_text(icons.get("功能"), "位置图标.功能"),
         cultivator_icon=_text(icons.get("修士"), "位置图标.修士"),
         navigation_icon=_text(icons.get("行止"), "位置图标.行止"),
         page_icon=_text(icons.get("页次"), "位置图标.页次"),
@@ -291,12 +290,6 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
         terrain_label=_text(current.get("地形"), "位置文本.位置.地形"),
         coordinate_label=_text(current.get("坐标"), "位置文本.位置.坐标"),
         altitude_label=_text(current.get("海拔"), "位置文本.位置.海拔"),
-        available_functions_section=_text(
-            current.get("可用功能"), "位置文本.位置.可用功能"
-        ),
-        no_available_functions=_text(
-            current.get("没有可用功能"), "位置文本.位置.没有可用功能"
-        ),
         local_cultivators_section=_text(
             current.get("本地修士"), "位置文本.位置.本地修士"
         ),
@@ -315,6 +308,9 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
         ),
         overview_visiting_label=_text(
             overview.get("来往修士"), "位置文本.附近概览.来往修士"
+        ),
+        overview_nearby_label=_text(
+            overview.get("附近修士"), "位置文本.附近概览.附近修士"
         ),
         overview_locations_section=_text(
             overview.get("山河"), "位置文本.附近概览.山河"
@@ -335,6 +331,9 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
         ),
         cultivators_visiting_section=_text(
             cultivators.get("来往修士"), "位置文本.附近修士.来往修士"
+        ),
+        cultivators_inside_section=_text(
+            cultivators.get("洞天修士"), "位置文本.附近修士.洞天修士"
         ),
         cultivators_empty=_text(
             cultivators.get("没有来往修士"), "位置文本.附近修士.没有来往修士"
@@ -400,7 +399,7 @@ def _button_templates(
             "地点条目",
         }:
             raise JsonDataError(f"{label}[{index}].页面无效：{page}")
-        if condition not in {"", "有上一页", "有下一页"}:
+        if condition not in {"", "有上一页", "有下一页", "地表"}:
             raise JsonDataError(f"{label}[{index}].条件无效：{condition}")
         expected_fields = (
             {"页码"}

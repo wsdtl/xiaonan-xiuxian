@@ -179,6 +179,18 @@ def test_recovery_rejects_full_resource_without_consuming_and_replays_once(
     assert _run(asset.inventory_stacks("qq-1", "100005"))[0].quantity == 2
 
 
+def test_unknown_medicine_is_reported_as_feature_error(tmp_path: Path) -> None:
+    _, _, _, _, create, feature = _services(tmp_path)
+    _create(create)
+
+    with pytest.raises(MedicineFeatureError, match="未找到唯一丹药"):
+        _run(
+            feature.use(
+                MedicineUseRequest("qq-1", "unknown-medicine", "人物", "不存在的丹药")
+            )
+        )
+
+
 def test_character_and_companion_have_independent_settings_and_battle_medicine(
     tmp_path: Path,
 ) -> None:

@@ -8,6 +8,7 @@ import game.app as game_app
 from game.config import GameConfig, GameDatabaseConfig
 from game.core.database import TransactionCommand
 from launch.adapter.local import LocalEventHandler, dispatch
+from launch.runtime_guard import runtime_guard
 from main import create_app
 
 
@@ -31,6 +32,7 @@ def test_command_driven_gameplay_flow_survives_settlement_and_restart(
             )
         ),
     )
+    monkeypatch.setattr(runtime_guard, "lock_file", tmp_path / "server.lock")
     _run(_exercise_flow())
 
 
@@ -42,9 +44,10 @@ async def _exercise_flow() -> None:
 
         await _command(user_id, "flow-001", "创建人物 林远 男", "人物创建完成")
         await _command(user_id, "flow-002", "人物", "当前状态")
-        await _command(user_id, "flow-003", "位置", "可用功能")
+        await _command(user_id, "flow-003", "位置", "所在之地")
         await _command(user_id, "flow-004", "去 丹霞城", "抵达")
-        await _command(user_id, "flow-005", "位置", "交易")
+        position = await _command(user_id, "flow-005", "位置", "丹霞城")
+        assert any(action.data == "交易" for action in position.actions)
         await _command(user_id, "flow-006", "交易", "修行资粮")
         await _command(user_id, "flow-007", "交易 真意", "猎春")
         await _command(user_id, "flow-008", "购买 410089 01", "交易完成")
@@ -76,6 +79,17 @@ async def _exercise_flow() -> None:
         exploration_end = _stored_time(exploration_session.value, "结束时间")
         await services.features.tanxian.settle(user_id, "flow-014", now=exploration_end)
         await _command(user_id, "flow-015", "探险结算", "探险总结")
+
+        # 探险可能耗尽血气；按玩家实际流程完成闭关恢复后再采集。
+        await _command(user_id, "flow-015a", "开始闭关", "入定闭关")
+        retreat_session = (
+            await database.list_for_user(user_id, state_type="retreat_session")
+        )[-1]
+        retreat_end = _stored_time(retreat_session.value, "最晚出关时间")
+        await services.features.biguan.settle(
+            user_id, "flow-015b", now=retreat_end
+        )
+        await _command(user_id, "flow-015c", "闭关结束", "闭关总结")
 
         await _command(user_id, "flow-016", "采药", "入山采药")
         await _command(user_id, "flow-017", "采药进度", "采药进度")

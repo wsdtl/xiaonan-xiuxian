@@ -39,7 +39,13 @@ def _service(tmp_path: Path) -> tuple[PlayerStateService, DatabaseService]:
                 request_id="create-1",
                 business_type="创建人物",
                 operations=(
-                    StateMutation("qq-1", "character", "main", {"姓名": "林远"}, 0),
+                    StateMutation(
+                        "qq-1",
+                        "character",
+                        "main",
+                        {"姓名": "林远", "资源": {"血气": 100, "精神": 100}},
+                        0,
+                    ),
                     player_state.initial_mutation("qq-1"),
                 ),
                 payload={},
@@ -55,7 +61,7 @@ def test_initial_snapshot_contains_three_independent_slots(tmp_path: Path) -> No
     current = _run(player_state.current("qq-1"))
 
     assert player_state.status().state_count == 13
-    assert player_state.status().guard_rule_count == 13
+    assert player_state.status().guard_rule_count == 15
     assert current is not None
     assert {key: value.state_id for key, value in current.states.items()} == {
         "行为": "520001",
@@ -92,6 +98,38 @@ def test_guard_requires_all_declared_types_but_ors_within_type(tmp_path: Path) -
     blocked = _run(player_state.authorize("qq-1", "自主空闲或休息"))
     assert blocked.allowed is False
     assert blocked.reason == "正在闭关。当前不能执行该行动，可使用“闭关进度”查看进度"
+
+
+def test_action_guard_blocks_zero_health_but_keeps_retreat_entry_open(
+    tmp_path: Path,
+) -> None:
+    player_state, database = _service(tmp_path)
+    character = _run(database.get(StateAddress("qq-1", "character", "main")))
+    assert character is not None
+    _run(
+        database.commit(
+            TransactionCommand(
+                user_id="qq-1",
+                request_id="defeated-1",
+                business_type="测试战败",
+                operations=(
+                    StateMutation(
+                        "qq-1",
+                        "character",
+                        "main",
+                        {"姓名": "林远", "资源": {"血气": 0, "精神": 0}},
+                        character.version,
+                    ),
+                ),
+                payload={},
+            )
+        )
+    )
+
+    blocked = _run(player_state.authorize("qq-1", "自主空闲且可行动"))
+    assert blocked.allowed is False
+    assert blocked.reason == "血气已经耗尽，请先闭关恢复后再行动"
+    assert _run(player_state.authorize("qq-1", "自主空闲")).allowed is True
 
 
 def test_state_transition_uses_json_edges_and_versions(tmp_path: Path) -> None:

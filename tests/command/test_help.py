@@ -269,10 +269,18 @@ def test_help_home_and_detail_use_real_registered_commands(monkeypatch) -> None:
     )
     assert "建立当前账号的唯一修士人物" in _content(detail)
     assert "创建人物 姓名 性别" in _content(detail)
+    assert _content(detail).startswith("**创建人物**")
+    assert "**晓楠修仙**" not in _content(detail)
+    assert "说明" in _content(detail)
+    assert "发送: 创建人物 姓名 性别" in _content(detail)
+    assert "也可发送:" in _content(detail)
+    assert "结果:" in _content(detail)
     assert tuple(action.data for action in detail.replies[0].message.actions) == (
-        "创建人物",
+        "创建人物 ",
         "帮助 角色",
     )
+    assert detail.replies[0].message.actions[0].behavior == "fill"
+    assert detail.replies[0].message.actions[0].label == "填写命令"
 
     root = Path(__file__).resolve().parents[2]
     data = JsonDataService(root / "data")
@@ -299,21 +307,40 @@ def test_help_home_and_detail_use_real_registered_commands(monkeypatch) -> None:
     assert "小还丹" in item_content
     assert "丹药" in item_content
     assert "100005" in item_content
-    assert "恢复百分比：15" in item_content
+    assert "恢复：15%" in item_content
     assert "权重" not in item_content
     assert "参考价" not in item_content
 
     technique = _run(
         dispatch(
             user_id="help-user",
-            raw_message="查看 400541",
+            raw_message="查看 400265",
             sender_name="问路人",
             event_id="inspect-technique",
         )
     )
     technique_content = _content(technique)
     assert "功法" in technique_content
-    assert "400541" in technique_content
+    assert "400265" in technique_content
+    assert "星辰借法" in technique_content
+    assert "与当前目标建立“寄诀”关联" in technique_content
+    assert "任意敌方行动决策前" in technique_content
+    assert "保存结果" not in technique_content
+
+    battle_medicine = _run(
+        dispatch(
+            user_id="help-user",
+            raw_message="查看 120013",
+            sender_name="问路人",
+            event_id="inspect-battle-medicine",
+        )
+    )
+    battle_medicine_content = _content(battle_medicine)
+    assert "仅下一场正式战斗生效" in battle_medicine_content
+    assert "暴追：" in battle_medicine_content
+    assert "600013" not in battle_medicine_content
+    assert "mappingproxy" not in battle_medicine_content
+    assert "{'" not in battle_medicine_content
 
     ambiguous = _run(
         dispatch(

@@ -61,7 +61,9 @@ def _services(tmp_path: Path):
     location.initialize()
     asset = AssetService(data, database)
     asset.initialize()
-    forging = ForgingService(data, database, asset, world, location, innate_treasure_service(data, database))
+    forging = ForgingService(
+        data, database, asset, world, location, innate_treasure_service(data, database)
+    )
     forging.initialize()
     character = CharacterService(
         data, database, state, location, asset, growth, forging
@@ -96,6 +98,7 @@ def test_personal_hosting_is_persisted_replayed_and_cancelled(tmp_path: Path) ->
     assert started.session.mode == "personal"
     assert started.session.participant_user_ids == ("qq-1",)
     assert started.session.activities == ("探险", "闭关")
+    assert started.session.last_message == "首项活动将在片刻后自动开始。"
     snapshot = _run(state.current("qq-1"))
     assert snapshot is not None
     assert snapshot.states["控制"].state_id == "520010"
@@ -120,7 +123,7 @@ def test_personal_hosting_is_persisted_replayed_and_cancelled(tmp_path: Path) ->
     assert latest.active is False
     assert latest.session is not None
     assert latest.session.status == "已取消"
-    assert "当前活动保留" in latest.session.last_message
+    assert "如有活动已经开始" in latest.session.last_message
 
 
 def test_team_leader_hosts_and_cancels_every_member_atomically(tmp_path: Path) -> None:
@@ -201,9 +204,7 @@ def test_custom_plan_advances_in_fixed_thirty_minute_slots(tmp_path: Path) -> No
 
     _run(state.transition(StateTransitionCommand("qq-1", "explore", "行为", "520005")))
     assert _run(hosting.verify_execution(execution))
-    waiting = _run(
-        hosting.complete_execution(execution, success=True, now=started_at)
-    )
+    waiting = _run(hosting.complete_execution(execution, success=True, now=started_at))
     assert waiting is not None
     assert waiting.phase == "待结束"
     assert waiting.next_trigger_at == started_at + timedelta(minutes=30)
@@ -267,15 +268,27 @@ def test_failed_step_pauses_until_the_leader_resumes(tmp_path: Path) -> None:
     assert resumed.next_trigger_at == started_at
 
 
+def test_hosting_runtime_extracts_the_player_error_text() -> None:
+    replies = (
+        SimpleNamespace(
+            message=SimpleNamespace(
+                content="> 📌 探险\n> > 血气已经耗尽，请先闭关恢复后再行动"
+            )
+        ),
+    )
+
+    assert hosting_runtime._reply_error(replies) == (
+        "📌 探险 血气已经耗尽，请先闭关恢复后再行动"
+    )
+
+
 def test_twenty_four_hour_limit_releases_every_participant(tmp_path: Path) -> None:
     state, create, team, hosting, _ = _services(tmp_path)
     _create(create, "qq-1", "林远")
     _create(create, "qq-2", "白川")
     _join(team)
     started_at = datetime(2026, 8, 21, 4, 0, tzinfo=timezone.utc)
-    session = _run(
-        hosting.start("qq-1", "expiry-plan", ("闭关",), now=started_at)
-    )
+    session = _run(hosting.start("qq-1", "expiry-plan", ("闭关",), now=started_at))
 
     assert (
         _run(

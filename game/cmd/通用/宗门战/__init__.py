@@ -182,7 +182,7 @@ def _reply(value):
 
 def _history(value):
     feature = _feature()
-    builder = M.document().header(feature.text("查看", "记录标题")).field(feature.text("查看", "总数"), value.total)
+    builder = M.document().header(feature.text("查看", "记录标题")).section("历史战录", icon="combat").field(feature.text("查看", "总数"), value.total)
     if not value.entries:
         builder.line(feature.text("结果", "记录为空"))
     for index, entry in enumerate(value.entries, start=1):

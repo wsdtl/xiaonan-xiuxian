@@ -205,7 +205,9 @@ class CharacterService:
             level=_state_positive_int(character.get("等级"), "人物.等级"),
             experience=_state_nonnegative_int(character.get("经验"), "人物.经验"),
             spirit_stones=_state_nonnegative_int(character.get("灵石"), "人物.灵石"),
-            sect_contribution=_state_nonnegative_int(character.get("宗门贡献", 0), "人物.宗门贡献"),
+            sect_contribution=_state_nonnegative_int(
+                character.get("宗门贡献", 0), "人物.宗门贡献"
+            ),
             automatic_medicine=_state_bool(character.get("自动用药"), "人物.自动用药"),
             prepared_battle_medicine=_prepared_battle_medicine(
                 character.get("待战战丹"), "人物.待战战丹"
@@ -746,6 +748,17 @@ class CharacterService:
             raise CharacterCultivationError(
                 f"{normalized_category}槽位只有{len(slots)}个"
             )
+        for equipped_slot, raw in enumerate(slots, start=1):
+            if raw is None or equipped_slot == slot:
+                continue
+            equipped = _state_mapping(raw, f"{normalized_category}槽[{equipped_slot}]")
+            if (
+                _state_text(equipped.get("编号"), f"{normalized_category}槽.编号")
+                == normalized_content_id
+            ):
+                raise CharacterCultivationError(
+                    f"该{normalized_category}已装配在{equipped_slot}号槽"
+                )
         replaced = slots[slot - 1]
         if replaced is not None:
             replaced_value = _state_mapping(replaced, "原修行槽")
@@ -857,9 +870,10 @@ class CharacterService:
             )
         character["灵石"] = after
         if gained_contribution:
-            character["宗门贡献"] = _state_nonnegative_int(
-                character.get("宗门贡献", 0), "人物.宗门贡献"
-            ) + gained_contribution
+            character["宗门贡献"] = (
+                _state_nonnegative_int(character.get("宗门贡献", 0), "人物.宗门贡献")
+                + gained_contribution
+            )
         return CharacterSpiritStonePlan(
             before,
             after,
@@ -1006,8 +1020,7 @@ class CharacterService:
             raise CharacterCultivationError("突破永久属性倍率不能为负数")
         if permanent and permanent_attribute_ratio:
             permanent = {
-                key: value
-                + max(1, math.ceil(float(value) * permanent_attribute_ratio))
+                key: value + max(1, math.ceil(float(value) * permanent_attribute_ratio))
                 for key, value in permanent.items()
             }
         records = [
@@ -1266,7 +1279,14 @@ class CharacterService:
                     f"{category} {content_id}.名称",
                 )
                 equipped.append(
-                    EquippedContent(category, slot, content_id, name, grade)
+                    EquippedContent(
+                        category,
+                        slot,
+                        content_id,
+                        name,
+                        grade,
+                        self._asset.grade(grade).name,
+                    )
                 )
         return tuple(slot_counts), tuple(equipped)
 
@@ -1325,7 +1345,8 @@ class CharacterService:
         if re.fullmatch(pattern, name) is None:
             raise CharacterInputError("姓名只能使用中文、字母或数字")
         if command.gender not in self._gender_values:
-            raise CharacterInputError("性别只能从正式定义中选择")
+            choices = "或".join(self._gender_values)
+            raise CharacterInputError(f"性别只能填写{choices}")
 
     def _character_state(
         self, command: CharacterCreateCommand, realm_id: str
@@ -1555,7 +1576,10 @@ def _state_five_elements(value: object) -> dict[str, float]:
     if set(value) != expected:
         raise CharacterStateError("人物.五行根性必须完整包含木火土金水")
     result = {str(key): float(raw) for key, raw in value.items()}
-    if any(raw < 0 or raw > 100 for raw in result.values()) or abs(sum(result.values()) - 100) > 1e-6:
+    if (
+        any(raw < 0 or raw > 100 for raw in result.values())
+        or abs(sum(result.values()) - 100) > 1e-6
+    ):
         raise CharacterStateError("人物.五行根性每项须在0到100且总和为100")
     return result
 

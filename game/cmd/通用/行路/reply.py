@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from game.features.xinglu import TravelResult
 from message import M
 
@@ -35,7 +33,6 @@ def conflict():
 
 def success(
     result: TravelResult,
-    functions: Sequence[str],
     actions: tuple[CommandAction, ...],
 ):
     plan = result.plan
@@ -54,12 +51,6 @@ def success(
         ("坐标", f"{destination.xy[0]}, {destination.xy[1]}"),
         ("海拔", f"{destination.altitude}米"),
     )
-    reply.section("可用功能", icon="guide")
-    if functions:
-        for index, function in enumerate(functions, start=1):
-            reply.item(index, function)
-    else:
-        reply.line("此处没有已经开放的地点功能。")
     return reply.actions(message_actions(actions)).build()
 
 

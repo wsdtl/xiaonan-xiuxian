@@ -269,7 +269,10 @@ class PlayerStateService:
         state_requirements = _mapping(
             rule["状态要求"], f"状态守卫.{normalized_rule}.状态要求"
         )
-        if character_requirement == "不限" and not state_requirements:
+        resource_requirements = _mapping(
+            rule.get("资源要求", {}), f"状态守卫.{normalized_rule}.资源要求"
+        )
+        if character_requirement == "不限" and not state_requirements and not resource_requirements:
             return StateGuardResult(True)
 
         character = await self._database.get(
@@ -308,6 +311,28 @@ class PlayerStateService:
                     allowed_names,
                 )
             )
+        if character is not None:
+            resources = _mapping(
+                character.value.get("资源", {}), "人物.资源"
+            )
+            for resource_name, raw_requirement in resource_requirements.items():
+                requirement = _mapping(
+                    raw_requirement,
+                    f"状态守卫.{normalized_rule}.资源要求.{resource_name}",
+                )
+                threshold = _nonnegative_number(
+                    requirement.get("大于"),
+                    f"状态守卫.{normalized_rule}.资源要求.{resource_name}.大于",
+                )
+                current = _nonnegative_number(
+                    resources.get(resource_name), f"人物.资源.{resource_name}"
+                )
+                if current <= threshold:
+                    failures.append(
+                        "血气已经耗尽，请先闭关恢复后再行动"
+                        if resource_name == "血气"
+                        else f"{resource_name}不足，当前无法行动"
+                    )
         if failures:
             return StateGuardResult(False, "；".join(failures), current_names)
         return StateGuardResult(True, current_states=current_names)
@@ -556,6 +581,11 @@ class PlayerStateService:
                 raise PlayerStateRuleError(f"{state_type}初始状态不存在：{initial}")
 
         for name, rule in guard_rules.items():
+            unknown_fields = set(rule) - {"名称", "人物要求", "状态要求", "资源要求"}
+            if unknown_fields:
+                raise PlayerStateRuleError(
+                    f"状态守卫{name}包含未知字段：{'、'.join(sorted(unknown_fields))}"
+                )
             requirement = _text(rule.get("人物要求"), f"状态守卫.{name}.人物要求")
             if requirement not in CHARACTER_REQUIREMENTS:
                 raise PlayerStateRuleError(
@@ -578,6 +608,25 @@ class PlayerStateService:
                     raise PlayerStateRuleError(
                         f"状态守卫{name}.{normalized_type}包含未知状态：{'、'.join(sorted(unknown))}"
                     )
+            resources = _mapping(
+                rule.get("资源要求", {}), f"状态守卫.{name}.资源要求"
+            )
+            for resource_name, raw_requirement in resources.items():
+                if resource_name not in {"血气", "精神"}:
+                    raise PlayerStateRuleError(
+                        f"状态守卫{name}使用未知人物资源：{resource_name}"
+                    )
+                resource_rule = _mapping(
+                    raw_requirement, f"状态守卫.{name}.资源要求.{resource_name}"
+                )
+                if set(resource_rule) != {"大于"}:
+                    raise PlayerStateRuleError(
+                        f"状态守卫{name}.{resource_name}必须只定义大于"
+                    )
+                _nonnegative_number(
+                    resource_rule.get("大于"),
+                    f"状态守卫.{name}.资源要求.{resource_name}.大于",
+                )
 
     def _parse_snapshot(self, value: Mapping[str, Any]) -> dict[str, StateSlot]:
         if set(value) != set(STATE_TYPES):
@@ -659,6 +708,15 @@ def _text(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise PlayerStateRuleError(f"{label}必须是非空字符串")
     return value.strip()
+
+
+def _nonnegative_number(value: object, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise PlayerStateRuleError(f"{label}必须是非负数")
+    result = float(value)
+    if result < 0:
+        raise PlayerStateRuleError(f"{label}必须是非负数")
+    return result
 
 
 def _strings(value: object, label: str) -> tuple[str, ...]:

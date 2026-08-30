@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from game.features.caikuang import (
     GatheringProgress,
     GatheringSettlement,
@@ -16,6 +14,7 @@ from game.features.caikuang import (
 from message import M
 
 from ...actions import message_actions
+from ...presentation import duration, natural_deadline
 
 
 def text(copy: OreGatheringCopy, section: str, key: str, **values: object) -> str:
@@ -42,7 +41,7 @@ def started(
         )
         .row(
             (text(copy, "开始", "轮次"), value.maximum_rounds),
-            (text(copy, "开始", "最晚结束"), _time(value.maximum_ends_at)),
+            (text(copy, "开始", "最晚结束"), natural_deadline(value.maximum_ends_at)),
         )
         .line(text(copy, "开始", "说明"))
         .actions(message_actions(actions))
@@ -66,7 +65,7 @@ def progress(
                 text(copy, "进度", "轮次"),
                 f"{value.completed_rounds}/{value.maximum_rounds}轮",
             ),
-            (text(copy, "进度", "剩余时间"), _duration(value.remaining_seconds)),
+            (text(copy, "进度", "剩余时间"), duration(value.remaining_seconds)),
         )
         .row(
             (text(copy, "进度", "同行用户"), value.participant_count),
@@ -146,15 +145,6 @@ def _user_page(
     else:
         builder.line(text(copy, "用户", "无"))
     return builder.line(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
-
-
-def _time(value: datetime) -> str:
-    return value.astimezone().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def _duration(seconds: int) -> str:
-    minutes, remainder = divmod(max(0, seconds), 60)
-    return f"{minutes}分{remainder}秒" if minutes else f"{remainder}秒"
 
 
 __all__ = ["error", "progress", "settlement_page", "started", "text"]

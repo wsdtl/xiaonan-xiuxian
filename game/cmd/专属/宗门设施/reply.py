@@ -14,15 +14,33 @@ def page(copy: Mapping[str, Mapping[str, str]], value: Any):
     builder = (
         M.document()
         .header(value.facility.name)
-        .section(text["总览"], icon="location")
+        .section(text["场景"], icon="location")
+        .line(text["总览"])
         .row((common["职位"], value.role), (common["材料来源"], value.material_source))
         .field(common["宗门灵石"], value.spirit_stones)
         .section(value.section, icon="item")
     )
     for index, entry in enumerate(value.entries, start=1):
-        builder.item(index, f"{entry.name} · {common['可炼'] if entry.available else common['缺材']}").line(
-            f"编号：{entry.content_id} · {entry.detail}"
+        state = (
+            common["已开放"]
+            if value.section == "总览"
+            else common["可推演"]
+            if value.facility.facility_type == "炼阵"
+            else common["可炼"]
+            if entry.available
+            else common["缺材"]
         )
+        parts: list[object] = [entry.name]
+        if value.facility.facility_type == "炼阵":
+            parts.extend((" · ", entry.detail))
+        else:
+            parts.extend((" · ", state, " · ", entry.detail))
+        if entry.content_id.isdigit() and len(entry.content_id) == 6:
+            parts[0] = M.command(entry.name, f"查看 {entry.content_id}")
+            parts.extend(
+                (" · ", M.command(entry.content_id, f"查看 {entry.content_id}"))
+            )
+        builder.item(index, *parts)
     if value.page_count > 1:
         builder.line(common["页码"].format(当前页=value.page, 总页数=value.page_count))
     return builder.build()
@@ -101,7 +119,12 @@ def completed(copy: Mapping[str, Mapping[str, str]], value: Any):
 
 
 def error(copy: Mapping[str, Mapping[str, str]], message: str):
-    return M.document().header("宗门设施").section(copy["错误"].get("标题", "宗门设施"), icon="notice").line(message).build()
+    return (
+        M.document()
+        .section(copy["错误"].get("标题", "宗门洞天"), icon="notice")
+        .line(message)
+        .build()
+    )
 
 
 __all__ = ["completed", "error", "page", "preview"]

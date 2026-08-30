@@ -14,7 +14,7 @@ from . import reply
     guard_rule="始终可用",
     help=HelpSpec(
         category="资源",
-        summary="按编号或名称查看正式编号实体定义",
+        summary="按编号或名称查看物品、功法、道侣等详细资料",
         usage=("查看 编号", "查看 名称"),
         side_effect="只读查询，不改变人物、背包或世界状态",
         order=10,

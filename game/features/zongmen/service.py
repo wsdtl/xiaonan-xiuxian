@@ -141,12 +141,11 @@ class SectFeature:
         if invitation is None:
             raise SectFeatureError("invitation_missing")
         await self._require_same_location_target(user_id, invitation.inviter_user_id)
-        inviter = await self._profile(invitation.inviter_user_id)
         try:
             await self._sect.accept(user_id, request_id)
         except SectConflictError as exc:
             raise SectFeatureError(exc.code) from exc
-        return SectOperationResult("接受", inviter.name, await self.page(user_id))
+        return SectOperationResult("接受", invitation.sect_name, await self.page(user_id))
 
     async def reject(self, user_id: str, request_id: str) -> SectOperationResult:
         invitation = await self._sect.pending_invitation(user_id)

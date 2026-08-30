@@ -50,8 +50,6 @@ def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction
             (text(copy, "查看", "等级"), definition.level),
         )
         .line(definition.description)
-        .section(text(copy, "查看", "性情"), icon=copy.icons["性情"])
-        .line(definition.personality)
         .section(text(copy, "查看", "喜好"), icon=copy.icons["喜好"])
         .line(
             "、".join(
@@ -210,7 +208,7 @@ def farewell(
 
 
 def _affection(value: Decimal) -> str:
-    return f"{value:.1f}"
+    return format(value, "f").rstrip("0").rstrip(".") or "0"
 
 
 __all__ = ["conversation", "error", "farewell", "gift", "invitation", "text", "view"]

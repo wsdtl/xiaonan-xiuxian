@@ -23,7 +23,7 @@ from . import reply
         category="修行",
         summary="查看人物修为、修行槽与本命武器培养状态",
         usage=("人物培养",),
-        side_effect="只读查询，不改变人物状态",
+        side_effect="只查看，不会改变人物状态",
         order=10,
     ),
 )

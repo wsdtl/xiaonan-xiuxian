@@ -19,12 +19,12 @@ from . import reply
         summary="查看和管理玩家队伍",
         usage=(
             "队伍",
-            "队伍 邀请 角色名或user_id",
+            "队伍 邀请 角色名或编号",
             "队伍 接受",
             "队伍 拒绝",
             "队伍 离开",
-            "队伍 请离 角色名或user_id",
-            "队伍 移交 角色名或user_id",
+            "队伍 请离 角色名或编号",
+            "队伍 移交 角色名或编号",
             "队伍 解散",
         ),
         side_effect="队伍成员将由队长带领行路和探险",
@@ -44,7 +44,7 @@ async def team_command(
         if not parts:
             value = await feature.page(user_id)
             await manager.send(
-                reply.page(feature.copy(), value, feature.page_actions(value.page))
+                reply.page(feature.copy(), value, feature.page_actions(value))
             )
             return
         action = parts[0]
@@ -71,7 +71,7 @@ async def team_command(
             reply.operation(
                 feature.copy(),
                 result,
-                feature.page_actions(result.page.page),
+                feature.page_actions(result.page),
             )
         )
     except TeamFeatureError as exc:

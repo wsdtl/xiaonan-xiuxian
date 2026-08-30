@@ -28,6 +28,7 @@ _ERROR_KEYS = {
     "session_invalid": "同行变化",
     "transaction_invalid": "同行变化",
     "request_conflict": "执行冲突",
+    "cancel_conflict": "取消冲突",
     "unknown_activity": "活动未知",
     "too_few_activities": "活动过少",
     "too_many_activities": "活动过多",
@@ -55,36 +56,35 @@ def result(copy: HostingCopy, value: HostingResult):
         ),
         icon=_text(copy, "图标", "结果"),
     )
-    document.section(
-        _text(copy, "结果", "范围"), icon=_text(copy, "图标", "状态")
-    )
-    document.field(_text(copy, "结果", "范围"), _text(copy, "结果", mode_key))
-    document.field(
-        _text(copy, "结果", "人数"), len(session.participant_user_ids)
-    )
+    document.section(_text(copy, "结果", mode_key), icon=_text(copy, "图标", "状态"))
+    document.field(_text(copy, "结果", "人数"), len(session.participant_user_ids))
     document.field(_text(copy, "结果", "计划"), " → ".join(session.activities))
-    document.field(_text(copy, "结果", "当前活动"), session.current_activity)
-    phase_key = _PHASE_KEYS.get(session.phase, "等待开始")
-    document.field(
-        _text(copy, "结果", "当前阶段"),
-        f"{session.status} · {_text(copy, '结果', phase_key)}",
+    activity_label = (
+        "最后活动"
+        if session.status in {"已取消", "已到期"}
+        else _text(copy, "结果", "当前活动")
     )
-    if session.next_trigger_at is not None:
+    document.field(activity_label, session.current_activity)
+    if session.status in {"已取消", "已到期"}:
+        document.field(_text(copy, "结果", "当前阶段"), session.status)
+    else:
+        phase_key = _PHASE_KEYS.get(session.phase, "等待开始")
         document.field(
-            _text(copy, "结果", "下次触发"), _time(session.next_trigger_at)
+            _text(copy, "结果", "当前阶段"),
+            f"{session.status} · {_text(copy, '结果', phase_key)}",
         )
+    if session.next_trigger_at is not None:
+        document.field(_text(copy, "结果", "下次触发"), _time(session.next_trigger_at))
     if session.expires_at is not None:
         document.field(_text(copy, "结果", "到期时间"), _time(session.expires_at))
     document.field(
         _text(copy, "结果", "完成循环"),
         f"{session.cycle_count}{_text(copy, '结果', '循环单位')}",
     )
-    if session.last_message:
-        document.section(_text(copy, "结果", "最近提示")).line(
-            session.last_message
-        )
     if session.last_error:
-        document.line(session.last_error)
+        document.section(_text(copy, "结果", "暂停原因")).line(session.last_error)
+    elif session.last_message:
+        document.section(_text(copy, "结果", "最近提示")).line(session.last_message)
     return document.build()
 
 

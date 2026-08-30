@@ -20,7 +20,6 @@ class NearbyPageError(PositionViewError, ValueError):
 class PositionCopy:
     error_icon: str
     location_icon: str
-    function_icon: str
     cultivator_icon: str
     navigation_icon: str
     page_icon: str
@@ -45,8 +44,6 @@ class PositionCopy:
     terrain_label: str
     coordinate_label: str
     altitude_label: str
-    available_functions_section: str
-    no_available_functions: str
     local_cultivators_section: str
     active_companion_section: str
     count_label: str
@@ -54,6 +51,7 @@ class PositionCopy:
     overview_cultivators_section: str
     overview_local_label: str
     overview_visiting_label: str
+    overview_nearby_label: str
     overview_locations_section: str
     overview_no_locations: str
     overview_current_section: str
@@ -62,6 +60,7 @@ class PositionCopy:
     cultivators_local_section: str
     cultivators_active_section: str
     cultivators_visiting_section: str
+    cultivators_inside_section: str
     cultivators_empty: str
     cultivators_page_section: str
     cultivators_current_label: str
@@ -88,6 +87,8 @@ class CurrentPositionView:
     location: LocationView
     local_cultivators: tuple[LocalCultivator, ...]
     active_companion: LocalCultivator | None
+    space_type: str = "地表"
+    space_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -112,6 +113,7 @@ class NearbyCultivatorPage:
     has_next: bool
     truncated: bool
     visible_count: int
+    space_type: str = "地表"
 
 
 @dataclass(frozen=True)

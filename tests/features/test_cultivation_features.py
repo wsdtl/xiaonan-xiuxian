@@ -4,6 +4,8 @@ import asyncio
 import random
 from pathlib import Path
 
+import pytest
+
 from game.core.asset import AssetService, CultivationAcquisition, InventoryAdjustment
 from game.core.character import CharacterService
 from game.core.companion import CompanionService
@@ -29,6 +31,7 @@ from game.features.daolv_peiyang import CompanionCultivationFeature
 from game.features.renwu_peiyang import (
     CharacterBreakthroughRequest,
     CharacterCultivationFeature,
+    CharacterCultivationFeatureError,
     CharacterEquipRequest,
     CharacterLawRequest,
 )
@@ -355,3 +358,54 @@ def test_character_equip_and_law_forging_use_shared_reserves(tmp_path: Path) -> 
     )
     assert upgraded is not None and upgraded.value["品级"] == "02"
     assert _run(database.get(StateAddress("qq-1", "law_reserve", law_id))) is None
+
+
+def test_character_cannot_equip_one_technique_in_two_slots(tmp_path: Path) -> None:
+    (
+        data,
+        database,
+        assets,
+        _,
+        _,
+        _,
+        create,
+        feature,
+        _,
+    ) = _services(tmp_path)
+    _run(create.create(CreateCharacterRequest("qq-1", "create-1", "林远", "男")))
+    technique = data.entity("功法", "400265")
+    acquisition = _run(
+        assets.plan_cultivation_acquisitions(
+            "qq-1", (CultivationAcquisition("功法", "400265", "02"),)
+        )
+    )
+    _run(
+        database.commit(
+            TransactionCommand(
+                "qq-1",
+                "gain-technique",
+                "测试取得功法",
+                acquisition.operations,
+                {},
+            )
+        )
+    )
+    _run(
+        feature.equip(
+            CharacterEquipRequest("qq-1", "equip-1", "功法", "400265", "02", 1)
+        )
+    )
+
+    with pytest.raises(CharacterCultivationFeatureError, match="已装配在1号槽"):
+        _run(
+            feature.equip(
+                CharacterEquipRequest(
+                    "qq-1", "equip-2", "功法", technique["名称"], "02", 2
+                )
+            )
+        )
+
+    profile = _run(feature.inspect("qq-1")).profile
+    assert [(entry.slot, entry.content_id) for entry in profile.equipped_content] == [
+        (1, "400265")
+    ]

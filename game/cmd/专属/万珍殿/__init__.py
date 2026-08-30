@@ -103,8 +103,8 @@ async def donate_wanzhen(
         category="行动",
         summary="由宗主向本宗成员发放万珍殿成品",
         usage=(
-            "发放万珍殿 角色名或user_id 条目编号",
-            "发放万珍殿 角色名或user_id 条目编号 数量",
+            "发放万珍殿 角色名或编号 条目编号",
+            "发放万珍殿 角色名或编号 条目编号 数量",
         ),
         side_effect="原子扣除宗门成品并写入目标成员的对应个人藏库",
         order=84,

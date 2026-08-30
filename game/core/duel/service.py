@@ -207,10 +207,19 @@ class DuelService:
         locations = await asyncio.gather(*(self._location.current(user) for user in users))
         if len({(v.space_type, v.space_id, v.xy) for v in locations}) != 1:
             raise DuelError("切磋双方必须处于同一位置")
+        profiles = {
+            value.user_id: value
+            for value in await self._character.public_profiles(users)
+        }
         for user_id in users:
-            guard = await self._player_state.authorize(user_id, "自主空闲或休息")
+            guard = await self._player_state.authorize(
+                user_id, "自主空闲或休息且可行动"
+            )
             if not guard.allowed:
-                raise DuelError(f"{user_id}当前不能切磋：{guard.reason}")
+                profile = profiles.get(user_id)
+                raise DuelError(
+                    f"{profile.name if profile else '有同行修士'}当前不能切磋：{guard.reason}"
+                )
 
     async def _combat_side(self, users: tuple[str, ...], challenge_id: str, side: str):
         combatants = []

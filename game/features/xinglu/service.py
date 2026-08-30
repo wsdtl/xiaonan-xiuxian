@@ -10,6 +10,7 @@ from game.core.location import (
     LocationConflictError,
     LocationService,
 )
+from game.core.player_state import PlayerStateService
 from game.core.world import JourneyQuery, LocationQuery, WorldService
 
 from .contracts import (
@@ -29,11 +30,13 @@ class TravelFeature:
         character: CharacterService,
         location: LocationService,
         action_group: ActionGroupService,
+        player_state: PlayerStateService,
     ) -> None:
         self._world = world
         self._character = character
         self._location = location
         self._action_group = action_group
+        self._player_state = player_state
         self._initialized = False
 
     def initialize(self) -> None:
@@ -47,6 +50,8 @@ class TravelFeature:
             raise RuntimeError("玩家位置核心必须先于行路玩法启动")
         if not self._action_group.status().initialized:
             raise RuntimeError("行动编排核心必须先于行路玩法启动")
+        if not self._player_state.status().initialized:
+            raise RuntimeError("人物状态核心必须先于行路玩法启动")
         self._initialized = True
 
     async def travel(self, request: TravelRequest) -> TravelResult:
@@ -65,6 +70,19 @@ class TravelFeature:
         if not public_profiles:
             raise TravelQueryError("尚未创建人物")
         character = public_profiles[0]
+        participant_profiles = {
+            value.user_id: value
+            for value in await self._character.public_profiles(participants)
+        }
+        for user_id in participants:
+            guard = await self._player_state.authorize(
+                user_id, "自主空闲且可行动"
+            )
+            if not guard.allowed:
+                profile = participant_profiles.get(user_id)
+                raise TravelQueryError(
+                    f"{profile.name if profile else '有同行修士'}当前不能行路：{guard.reason}"
+                )
         current = await self._location.current(request.user_id)
         if current.space_type != "地表":
             raise TravelQueryError("当前身处宗门洞天，必须先出山门才能行路")

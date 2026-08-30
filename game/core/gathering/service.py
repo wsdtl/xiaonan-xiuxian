@@ -176,11 +176,18 @@ class GatheringService:
         total_units = 0
         user_results: dict[str, dict[str, object]] = {}
         source = random.Random(seed)
+        public_profiles = {
+            value.user_id: value
+            for value in await self._character.public_profiles(participants)
+        }
         for user_id in participants:
-            guard = await self._player_state.authorize(user_id, "空闲或托管")
+            guard = await self._player_state.authorize(
+                user_id, "空闲或托管且可行动"
+            )
             if not guard.allowed:
+                name = public_profiles.get(user_id)
                 raise GatheringConflictError(
-                    f"{user_id}无法开始{mode.kind}：{guard.reason}"
+                    f"{name.name if name else '有同行修士'}无法开始{mode.kind}：{guard.reason}"
                 )
             transitions.append(
                 await self._player_state.plan_transition(

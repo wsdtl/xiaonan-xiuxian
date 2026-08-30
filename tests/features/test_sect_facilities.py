@@ -15,6 +15,7 @@ from game.core.sect_assets import SectAssetError
 from game.core.sect_facilities import SectFacilityError
 from game.features.chuangjian_renwu import CreateCharacterRequest
 from game.features.zongmen import SectFeatureError
+from game.features.zongmen_shengchan import SectProductionFeatureError
 from game.features.zongmen_sheshi import SectFacilityFeatureError
 
 
@@ -185,9 +186,7 @@ def test_contribution_is_personal_and_sect_level_uses_current_members(services) 
     grade = services.core.asset.grade("03")
     expected = int(
         (
-            Decimal(str(herb["参考价"]))
-            * grade.price_multiplier
-            / Decimal(100)
+            Decimal(str(herb["参考价"])) * grade.price_multiplier / Decimal(100)
         ).to_integral_value(rounding=ROUND_FLOOR)
     )
     inventory = _run(
@@ -242,7 +241,9 @@ def test_failed_material_donation_changes_no_asset_or_contribution(services) -> 
     assert _run(services.core.sect_assets.lingcang("qq-1")).entries == ()
 
 
-def test_resource_multipliers_reach_production_and_gathering_snapshots(services) -> None:
+def test_resource_multipliers_reach_production_and_gathering_snapshots(
+    services,
+) -> None:
     _create_sect(services)
     _seed_facility_resources(services)
     member = _run(services.core.sect.membership("qq-1"))
@@ -303,6 +304,38 @@ def test_resource_multipliers_reach_production_and_gathering_snapshots(services)
         session.value["用户结果"]["qq-1"]["宗门采集倍率"]
         == progress.gathering_multiplier
     )
+
+
+def test_production_start_and_collect_actions_match_the_real_commands(services) -> None:
+    _create_sect(services)
+    feature = services.features.zongmen_shengchan
+
+    unopened = _run(feature.view("灵脉", "qq-1"))
+    assert [(action.label, action.command) for action in feature.actions(unopened)] == [
+        ("开启", "灵脉 开启")
+    ]
+    assert feature.actions(_run(feature.view("灵脉", "qq-2"))) == ()
+
+    started = _run(feature.start("灵脉", "qq-1", "start-lingmai"))
+    assert started.newly_started is True
+    assert feature.actions(started.view) == ()
+    assert started.view.last_settled_at is not None
+    mature = _run(
+        services.core.sect_production.view(
+            "灵脉",
+            "qq-1",
+            now=started.view.last_settled_at
+            + timedelta(seconds=started.view.facility.period_seconds),
+        )
+    )
+    assert [(action.label, action.command) for action in feature.actions(mature)] == [
+        ("收取", "灵脉 收取")
+    ]
+    with pytest.raises(SectProductionFeatureError, match="已经开启"):
+        _run(feature.start("灵脉", "qq-1", "start-lingmai-again"))
+
+    with pytest.raises(SectProductionFeatureError, match="请先发送：灵田 开启"):
+        _run(feature.collect("灵田", "qq-1", "collect-unopened-field"))
 
 
 def test_cangjing_uses_highest_grade_and_invalidates_borrowing_after_kick(
@@ -379,9 +412,7 @@ def test_sect_alchemy_keeps_personal_and_sect_outputs_separate(services) -> None
         )
     )
     result = _run(
-        facilities.craft(
-            "炼丹", "qq-1", "personal-alchemy", "个人", recipe.content_id
-        )
+        facilities.craft("炼丹", "qq-1", "personal-alchemy", "个人", recipe.content_id)
     )
     after = _run(
         services.core.asset.inventory_stacks(
@@ -389,13 +420,12 @@ def test_sect_alchemy_keeps_personal_and_sect_outputs_separate(services) -> None
         )
     )
     assert result.destination == "纳戒"
-    assert sum(value.quantity for value in after) == sum(
-        value.quantity for value in before
-    ) + 1
-
-    sect_preview = _run(
-        facilities.preview("炼丹", "qq-1", "个人", recipe.content_id)
+    assert (
+        sum(value.quantity for value in after)
+        == sum(value.quantity for value in before) + 1
     )
+
+    sect_preview = _run(facilities.preview("炼丹", "qq-1", "个人", recipe.content_id))
     materials = (
         (sect_preview.assessment.beast_material, "兽宝"),
         *((value, "灵植") for value in sect_preview.assessment.herb_materials),
@@ -415,17 +445,13 @@ def test_sect_alchemy_keeps_personal_and_sect_outputs_separate(services) -> None
     member = _run(services.core.sect.membership("qq-1"))
     assert member is not None
     progress = _run(services.core.sect_progress.snapshot(member.sect_id))
-    discounted = _run(
-        facilities.preview("炼丹", "qq-1", "宗门", recipe.content_id)
-    )
+    discounted = _run(facilities.preview("炼丹", "qq-1", "宗门", recipe.content_id))
     assert discounted.spirit_stone_cost == max(
         1, int(sect_preview.spirit_stone_cost * progress.facility_cost_multiplier)
     )
     stones_before = _run(services.core.sect_assets.lingcang("qq-1")).spirit_stones
     sect_result = _run(
-        facilities.craft(
-            "炼丹", "qq-1", "sect-alchemy", "宗门", recipe.content_id
-        )
+        facilities.craft("炼丹", "qq-1", "sect-alchemy", "宗门", recipe.content_id)
     )
     vault = _run(services.core.sect_assets.wanzhen("qq-1"))
     assert sect_result.destination == "万珍殿"
@@ -434,7 +460,9 @@ def test_sect_alchemy_keeps_personal_and_sect_outputs_separate(services) -> None
         and entry.content_id == sect_preview.assessment.recipe.medicine_id
         for entry in vault.entries
     )
-    assert sect_result.spirit_stones_after == stones_before - sect_result.spirit_stone_cost
+    assert (
+        sect_result.spirit_stones_after == stones_before - sect_result.spirit_stone_cost
+    )
 
 
 def test_sect_forging_keeps_personal_and_sect_outputs_separate(services) -> None:
@@ -448,7 +476,10 @@ def test_sect_forging_keeps_personal_and_sect_outputs_separate(services) -> None
         facilities.craft("炼器", "qq-1", "personal-forging", "个人", law.content_id)
     )
     assert personal.destination == "器藏"
-    assert _run(services.core.asset.law_reserve_stack("qq-1", law.content_id)).quantity == 1
+    assert (
+        _run(services.core.asset.law_reserve_stack("qq-1", law.content_id)).quantity
+        == 1
+    )
 
     preview = _run(facilities.preview("炼器", "qq-1", "个人", law.content_id))
     materials = (

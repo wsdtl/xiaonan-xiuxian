@@ -2,14 +2,24 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from game.core.character import CharacterService
 from game.core.data import JsonDataError, JsonDataService
-from game.core.duel import DuelChallenge, DuelResult, DuelService, DuelStartCommand
+from game.core.duel import (
+    DuelChallenge,
+    DuelError,
+    DuelResult,
+    DuelService,
+    DuelStartCommand,
+)
 
 
 class DuelFeature:
-    def __init__(self, data: JsonDataService, duel: DuelService) -> None:
+    def __init__(
+        self, data: JsonDataService, duel: DuelService, character: CharacterService
+    ) -> None:
         self._data = data
         self._duel = duel
+        self._character = character
         self._copy: Mapping[str, object] | None = None
 
     def initialize(self) -> None:
@@ -29,6 +39,19 @@ class DuelFeature:
 
     async def resolve_target(self, user_id: str, query: str) -> str:
         return await self._duel.resolve_target(user_id, query)
+
+    async def target_name(self, target_user_id: str) -> str:
+        profiles = await self._character.public_profiles((target_user_id,))
+        if not profiles:
+            raise DuelError("切磋目标的人物信息不存在")
+        return profiles[0].name
+
+    def winner_label(self, winner: str, challenger_name: str, target_name: str) -> str:
+        if winner == "left":
+            return f"{challenger_name}一方"
+        if winner == "right":
+            return f"{target_name}一方"
+        return self.text("结果", "平局")
 
     async def start(self, command: DuelStartCommand) -> DuelChallenge:
         return await self._duel.start(command)

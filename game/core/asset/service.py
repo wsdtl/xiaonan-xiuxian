@@ -1038,9 +1038,15 @@ class AssetService:
             )
             for raw in rows
         }
-        self._grade_names = {
-            _normalize(grade.name): grade_id for grade_id, grade in self._grades.items()
-        }
+        self._grade_names = {}
+        for grade_id, grade in self._grades.items():
+            names = {grade.name, grade.name.removesuffix("品")}
+            for name in names:
+                normalized = _normalize(name)
+                existing = self._grade_names.get(normalized)
+                if existing is not None and existing != grade_id:
+                    raise JsonDataError(f"品级简称重复：{name}")
+                self._grade_names[normalized] = grade_id
         self._grade_drop_weights = {
             _text(_mapping(raw, "品级[]").get("编号"), "品级.编号"): 1.0
             / _positive_int(_mapping(raw, "品级[]").get("权重"), "品级.权重")

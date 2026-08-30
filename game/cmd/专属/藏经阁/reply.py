@@ -6,6 +6,7 @@ from game.features.zongmen_cangjing import CangjingCopy, CangjingPage
 from message import M
 
 from ...actions import message_actions
+from ...presentation import sentence
 
 
 def page(copy: CangjingCopy, value: CangjingPage, actions):
@@ -18,8 +19,18 @@ def page(copy: CangjingCopy, value: CangjingPage, actions):
     if not value.entries:
         builder.line(_text(copy, "空"))
     for index, entry in enumerate(value.entries, start=1):
-        builder.item(index, f"{entry.grade_name}{entry.name}").line(
-            M.command(entry.content_id, f"借阅功法 {entry.content_id} 1")
+        builder.item(
+            index,
+            f"{entry.grade_name} · ",
+            M.command(entry.name, f"查看 {entry.content_id}"),
+            " · ",
+            M.command(entry.content_id, f"查看 {entry.content_id}"),
+            " · ",
+            M.command(
+                "借阅至",
+                f"借阅功法 {entry.content_id}",
+                submit=False,
+            ),
         )
     builder.line(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
     builder.line(_text(copy, "说明"))
@@ -46,7 +57,7 @@ def borrowed(copy: CangjingCopy, value):
 
 def error(copy: CangjingCopy, message: str):
     return (
-        M.document().section(_text(copy, "错误"), icon="notice").line(message).build()
+        M.document().section(_text(copy, "错误"), icon="notice").line(sentence(message)).build()
     )
 
 

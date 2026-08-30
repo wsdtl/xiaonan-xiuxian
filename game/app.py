@@ -298,9 +298,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("page_limit", asset_status.page_limit),
         )
     )
-    forging = ForgingService(
-        data, database, asset, world, location, innate_treasure
-    )
+    forging = ForgingService(data, database, asset, world, location, innate_treasure)
     forging_status = forging.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -350,9 +348,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("medicine", transfer_status.medicine_id),
         )
     )
-    alchemy = AlchemyService(
-        data, database, asset, world, location, innate_treasure
-    )
+    alchemy = AlchemyService(data, database, asset, world, location, innate_treasure)
     alchemy_status = alchemy.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -661,7 +657,13 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     chakan_wupin = ItemInspectionFeature(item_catalog)
     chakan_wupin.initialize()
     chakan_juese = CharacterOverviewFeature(
-        character, player_state, world, location, injury, innate_treasure
+        character,
+        player_state,
+        world,
+        location,
+        injury,
+        innate_treasure,
+        hosting,
     )
     chakan_juese.initialize()
     ditu = WorldMapFeature(world)
@@ -767,7 +769,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         sect,
     )
     weizhi.initialize()
-    xinglu = TravelFeature(world, character, location, action_group)
+    xinglu = TravelFeature(world, character, location, action_group, player_state)
     xinglu.initialize()
     daolv_jiejiao = CompanionInteractionFeature(
         data,
@@ -794,9 +796,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     renwu_peiyang.initialize()
     xiantian_lingbao = InnateTreasureFeature(data, innate_treasure, database)
     xiantian_lingbao.initialize()
-    qiecuo = DuelFeature(data, duel)
+    qiecuo = DuelFeature(data, duel, character)
     qiecuo.initialize()
-    zengsong = GiftFeature(data, gift, item_catalog)
+    zengsong = GiftFeature(data, gift, item_catalog, character)
     zengsong.initialize()
     daolv_peiyang = CompanionCultivationFeature(
         data,

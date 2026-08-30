@@ -13,6 +13,7 @@ from game.features.liandan import (
 from message import M
 
 from ...actions import message_actions
+from ...presentation import sentence
 
 
 def text(copy: AlchemyCopy, section: str, key: str, **values: object) -> str:
@@ -128,7 +129,7 @@ def completed(
 
 
 def error(copy: AlchemyCopy, message: str):
-    return M.document().section(text(copy, "错误", "标题"), icon="notice").line(message).build()
+    return M.document().section(text(copy, "错误", "标题"), icon="notice").line(sentence(message)).build()
 
 
 def _material(builder, index: int, material) -> None:

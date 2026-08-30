@@ -12,6 +12,7 @@ from launch.adapter import (
 from message import M
 
 from .command import GAME_METADATA_KEY
+from .presentation import sentence
 
 GAME_GUARD_NAME = "game.player_state"
 GAME_GUARD_PRIORITY = 1000
@@ -74,7 +75,14 @@ def unregister_game_access_guard() -> None:
 
 
 def _blocked_message(reason: str):
-    return M.document().section("当前状态").line(reason).build()
+    builder = M.document().section("当前状态")
+    if reason == "尚未创建人物":
+        return (
+            builder.line("尚未创建人物，请先发送：")
+            .line(M.command("创建人物 姓名 性别", "创建人物 ", submit=False))
+            .build()
+        )
+    return builder.line(sentence(reason)).build()
 
 
 __all__ = [

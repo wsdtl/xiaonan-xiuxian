@@ -69,5 +69,13 @@ class RaidFeature:
         except RaidError as exc:
             raise RaidFeatureError(str(exc)) from exc
 
+    def result_label(self, winner: str) -> str:
+        key = {"left": "胜利", "right": "失败", "平局": "平局"}.get(winner, "平局")
+        return self.text("结算", key)
+
+    def reward_note(self, winner: str) -> str:
+        key = {"left": "胜利奖励", "right": "失败奖励", "平局": "平局奖励"}.get(winner, "平局奖励")
+        return self.text("结算", key)
+
 
 __all__ = ["RaidFeature", "RaidFeatureError"]

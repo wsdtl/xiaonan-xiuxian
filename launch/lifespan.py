@@ -1,7 +1,8 @@
 """应用生命周期总编排。
 
 启动顺序固定为：获取单实例锁、挂载资源与驱动器、启动驱动器、启动调度器、
-执行业务回调；关闭时按相反职责清理。这里负责顺序，不包含任何业务规则。
+执行业务回调；关闭时先停止调度器，再释放业务服务和驱动器。这里负责顺序，
+不包含任何业务规则。
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     """FastAPI 生命周期。
 
     启动：挂载适配器、启动调度器、按优先级运行启动回调。
-    关闭：按优先级运行关闭回调、关闭适配器、关闭调度器。
+    关闭：关闭调度器、按优先级运行关闭回调、关闭适配器。
     """
 
     cleanup_errors: list[Exception] = []
@@ -58,6 +59,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
                 )
                 await adapter.run()
 
+            disconnect_callbacks = OnEvent.ordered_callbacks(OnEvent.disconnect_list)
+            cleanup.push_async_callback(
+                _capture_callbacks,
+                disconnect_callbacks,
+                cleanup_errors,
+            )
+
+            # AsyncExitStack 逆序清理：调度器必须先停，后台作业才不会在
+            # 数据库等业务服务释放后继续访问它们。
             cleanup.push_async_callback(
                 _capture_cleanup,
                 "调度器",
@@ -67,12 +77,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             await _start_schedulers()
             await _add_scheduler_jobs()
 
-            disconnect_callbacks = OnEvent.ordered_callbacks(OnEvent.disconnect_list)
-            cleanup.push_async_callback(
-                _capture_callbacks,
-                disconnect_callbacks,
-                cleanup_errors,
-            )
             await _run_callbacks(OnEvent.ordered_callbacks(OnEvent.connect_list))
 
             logger.opt(colors=True).success(f"{C.ok('FastAPI 服务启动成功')}")

@@ -16,32 +16,32 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
     profile = result.profile
     builder = (
         M.document()
-        .header(feature.copy("人物", "标题"))
-        .section(profile.name, icon="status")
-        .row(
-            (feature.copy("人物", "境界"), profile.realm_name),
-            (feature.copy("人物", "等级"), profile.level),
-        )
-        .field(
-            feature.copy("人物", "经验"),
-            _progress(profile.experience, result.next_experience),
+        .header(f"{profile.name} · {feature.copy('人物', '标题')}")
+        .inline_section(
+            "修为",
+            f"{profile.realm_name}{profile.level}级 · "
+            f"经验{_progress(profile.experience, result.next_experience)}",
+            icon="status",
         )
         .section(feature.copy("人物", "修行构筑"), icon="skill")
     )
     equipped = {(entry.category, entry.slot): entry for entry in profile.equipped_content}
     for category, total in profile.cultivation_slots:
-        values = [
-            equipped.get((category, slot)).name if (category, slot) in equipped else "空"
-            for slot in range(1, total + 1)
-        ]
-        builder.field(category, "、".join(values))
+        values = [equipped[(category, slot)] for slot in range(1, total + 1) if (category, slot) in equipped]
+        builder.field(category, f"{len(values)}/{total}" + ("" if values else " · 尚未装配"))
+        for value in values:
+            builder.field(
+                f"{category}{value.slot}",
+                M.text(f"{value.grade_name} · " if value.grade_name else "")
+                + (M.command(value.name, f"查看 {value.content_id}"),),
+            )
     weapon = profile.weapon
     builder.section(feature.copy("人物", "本命武器"), icon="weapon")
     builder.row(("名称", weapon.name), ("器阶", weapon.stage))
     builder.row(("等级", weapon.level), ("器律孔", f"{len(weapon.equipped_laws)}/{weapon.open_law_slots}"))
     builder.field("经验", _progress(weapon.experience, result.weapon_next_experience))
     for law in weapon.equipped_laws:
-        builder.item(law.slot, law.name)
+        builder.item(law.slot, M.command(law.name, f"查看 {law.content_id}"))
     return builder.build()
 
 

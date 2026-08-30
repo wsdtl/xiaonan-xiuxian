@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 FIRST_LEADING_MENTION_RE = re.compile(r"^\s*<@([^>]+)>")
+FIRST_LEADING_DISPLAY_MENTION_RE = re.compile(r"^\s*@([^\s]+)")
 MENTION_RE = re.compile(r"<@([^>]+)>")
 GROUP_MESSAGE_EVENT_TYPES = {
     "GROUP_AT_MESSAGE_CREATE",
@@ -43,7 +44,7 @@ class QqMessageEvent:
         return bool(self.group_id)
 
 
-def parse_message_event(payload: dict) -> QqMessageEvent | None:
+def parse_message_event(payload: dict, *, bot_name: str = "") -> QqMessageEvent | None:
     """从 QQ webhook payload 中提取可处理的消息事件。
 
     不属于消息创建的事件返回 None，调用方仍会 ACK；字段不完整的消息
@@ -68,6 +69,7 @@ def parse_message_event(payload: dict) -> QqMessageEvent | None:
         data.get("content"),
         event_type=event_type,
         mentions=data.get("mentions"),
+        bot_name=bot_name,
     )
     message_id = str(data.get("id") or "").strip()
     event_id = str(payload.get("id") or "").strip()
@@ -175,6 +177,7 @@ def normalize_content(
     *,
     event_type: str = "",
     mentions: Any = None,
+    bot_name: str = "",
 ) -> str:
     """清理 QQ 消息正文，并把 QQ at 段转成业务层可识别的入口 ID。
 
@@ -184,7 +187,7 @@ def normalize_content(
     """
 
     text = "" if value is None else str(value)
-    if _should_strip_leading_mentions(text, event_type, mentions):
+    if _should_strip_leading_mentions(text, event_type, mentions, bot_name):
         text = _strip_first_leading_mention(text)
     text = _replace_mentions_with_ids(text, mentions)
     return re.sub(r"\s+", " ", text).strip()
@@ -207,23 +210,32 @@ def _interaction_resolved_data(data: dict) -> dict:
     return {}
 
 
-def _should_strip_leading_mentions(text: str, event_type: str, mentions: Any) -> bool:
+def _should_strip_leading_mentions(
+    text: str, event_type: str, mentions: Any, bot_name: str
+) -> bool:
     """判断开头 at 是否确实是在叫当前机器人。"""
 
     first = FIRST_LEADING_MENTION_RE.search(text)
+    token = ""
+    if first:
+        token = first.group(1).strip().lstrip("!")
+    else:
+        first = FIRST_LEADING_DISPLAY_MENTION_RE.search(text)
+        if first:
+            token = first.group(1).strip()
     if not first:
         return False
 
-    first_mention_id = first.group(1).strip().lstrip("!")
-    you_ids = _you_mention_ids(mentions)
-    if you_ids:
-        return first_mention_id in you_ids
+    if token == str(bot_name or "").strip().lstrip("@"):
+        return True
 
-    item = _mention_item(mentions, first_mention_id)
+    you_ids = _you_mention_ids(mentions)
+    if token in you_ids:
+        return True
+
+    item = _mention_item(mentions, token)
     if item is not None:
-        if _is_explicit_other_mention(item.get("is_you")):
-            return False
-        return event_type in GROUP_MESSAGE_EVENT_TYPES
+        return _is_you_mention(item.get("is_you"))
 
     # 少数 QQ at 机器人事件可能没有 mentions 详情；这种事件本身就代表
     # “用户在叫机器人”，保留兼容处理。
@@ -233,7 +245,9 @@ def _should_strip_leading_mentions(text: str, event_type: str, mentions: Any) ->
 def _strip_first_leading_mention(text: str) -> str:
     """只移除触发机器人的第一个开头 at，保留后续用户 at 作为业务参数。"""
 
-    return FIRST_LEADING_MENTION_RE.sub("", text, count=1)
+    if FIRST_LEADING_MENTION_RE.match(text):
+        return FIRST_LEADING_MENTION_RE.sub("", text, count=1)
+    return FIRST_LEADING_DISPLAY_MENTION_RE.sub("", text, count=1)
 
 
 def _you_mention_ids(mentions: Any) -> set[str]:
@@ -266,7 +280,14 @@ def _mention_item(mentions: Any, token: str) -> dict | None:
     for item in mentions:
         if not isinstance(item, dict):
             continue
-        for key in ("id", "member_openid", "user_openid"):
+        for key in (
+            "id",
+            "member_openid",
+            "user_openid",
+            "username",
+            "nickname",
+            "nick",
+        ):
             value = str(item.get(key) or "").strip().lstrip("!")
             if value and value == normalized:
                 return item

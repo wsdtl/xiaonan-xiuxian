@@ -13,7 +13,7 @@ from . import reply
     scope="专属",
     cmd="开始探险",
     aliases=("探险",),
-    guard_rule="自主空闲",
+    guard_rule="自主空闲且可行动",
     metadata={"hosting": {"activity": "探险", "phase": "start"}},
     help=HelpSpec(
         category="行动",

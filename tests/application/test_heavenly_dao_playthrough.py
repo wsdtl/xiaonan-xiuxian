@@ -9,6 +9,7 @@ import game.app as game_app
 from game.cmd.command import registered_commands
 from game.config import GameConfig, GameDatabaseConfig
 from launch.adapter.local import LocalEventHandler, dispatch
+from launch.runtime_guard import runtime_guard
 from main import create_app
 
 HEAVENLY_DAO_ID = "system.heavenly_dao"
@@ -134,6 +135,7 @@ def test_heavenly_dao_drives_every_command_and_multiplayer_flow(
             )
         ),
     )
+    monkeypatch.setattr(runtime_guard, "lock_file", tmp_path / "server.lock")
     console_module = import_module("game.cmd.后台.天道后台.console")
     console_runtime = import_module("game.cmd.后台.天道后台.runtime")
     console_site = import_module("game.cmd.后台.天道后台.site")
@@ -193,7 +195,7 @@ async def _exercise_everything(heavenly_console) -> None:
         await heavenly("帮助", "当前已经开放的命令")
         await heavenly("人物", "当前状态")
         await heavenly("地图", "全境舆图")
-        await heavenly("位置", "可用功能")
+        await heavenly("位置", "所在之地")
         await heavenly("附近 修士", "附近")
 
         # 主号发起邀请，小号必须各自从普通本地驱动接受。
@@ -219,7 +221,7 @@ async def _exercise_everything(heavenly_console) -> None:
         await local(BRANCH_ACCOUNT[0], "去 丹霞城", "抵达", "丹霞城")
 
         services = game_app.current_game_services()
-        await heavenly("采药", "入山采药", "同行用户: 3")
+        await heavenly("采药", "入山采药", "同行人数: 3", "采集人数: 3")
         await heavenly("开始采药", "正在带领同行修士采药", "采药进度")
         await local("heavenly-dao-a", "采药进度", "领队")
         await _finish_activity(
@@ -232,7 +234,7 @@ async def _exercise_everything(heavenly_console) -> None:
         )
         await heavenly("采药结束", "采药总结", "6/6")
 
-        await heavenly("采矿", "勘脉采矿", "同行用户: 3")
+        await heavenly("采矿", "勘脉采矿", "同行人数: 3", "采集人数: 3")
         await local("heavenly-dao-b", "采矿进度", "领队")
         await _finish_activity(
             services,
@@ -272,6 +274,18 @@ async def _exercise_everything(heavenly_console) -> None:
         await local("heavenly-dao-a", "人物", "托管")
         await heavenly("取消托管", "取消")
 
+        # 探险可能令同行角色血气耗尽；按玩家实际恢复路径闭关后再赶路。
+        await heavenly("开始闭关", "入定闭关")
+        await _finish_activity(
+            services,
+            HEAVENLY_DAO_ID,
+            "retreat_session",
+            "最晚出关时间",
+            services.features.biguan,
+            "heavenly-settle-recovery-retreat",
+        )
+        await heavenly("闭关结束", "闭关总结")
+
         # 完整走过移交、请离、成员主动离开和新队长解散。
         await heavenly("队伍 移交 甲田", "移交")
         await local("heavenly-dao-a", "队伍 请离 乙甲", "已请乙甲离开队伍")
@@ -293,9 +307,9 @@ async def _exercise_everything(heavenly_console) -> None:
         await heavenly("宗门 邀请 丙柳", "邀请")
         await local(BRANCH_ACCOUNT[0], "宗门 拒绝", "拒绝")
         await heavenly("宗门 邀请 甲田", "邀请")
-        await local("heavenly-dao-a", "宗门 接受", "已加入天道")
+        await local("heavenly-dao-a", "宗门 接受", "已加入天道宗")
         await heavenly("宗门 邀请 乙甲", "邀请")
-        await local("heavenly-dao-b", "宗门 接受", "已加入天道")
+        await local("heavenly-dao-b", "宗门 接受", "已加入天道宗")
         await heavenly("宗门", "天道宗", "甲田", "乙甲")
         await heavenly("宗门 邀请 甲田", "对方已经加入其他宗门")
         await local("heavenly-dao-a", "宗门 任命长老 乙甲", "只有宗主可以执行该操作")
@@ -354,6 +368,16 @@ async def _exercise_everything(heavenly_console) -> None:
             "heavenly-settle-raid",
         )
         await heavenly("讨伐结束", "讨伐结算")
+        await heavenly("开始闭关", "入定闭关")
+        await _finish_activity(
+            services,
+            HEAVENLY_DAO_ID,
+            "retreat_session",
+            "最晚出关时间",
+            services.features.biguan,
+            "heavenly-settle-post-raid-retreat",
+        )
+        await heavenly("闭关结束", "闭关总结")
         await heavenly("去 丹霞城", "抵达", "丹霞城")
         for command, invocation in COMMAND_INVOCATIONS.items():
             if command in covered:

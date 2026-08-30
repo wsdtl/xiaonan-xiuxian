@@ -27,13 +27,7 @@ def _home_message() -> DocumentMessage:
         .line("按分类查看当前已经开放的命令。")
     )
     categories = help_registry.categories()
-    for start in range(0, len(categories), 3):
-        parts: list[object] = []
-        for index, category in enumerate(categories[start : start + 3]):
-            if index:
-                parts.append("　")
-            parts.append(M.command(category, f"帮助 {category}"))
-        builder.line(*parts)
+    _category_rows(builder, categories)
     if not categories:
         builder.line("当前还没有登记公开命令。")
     return builder.build()
@@ -54,20 +48,33 @@ def _category_message(category: str) -> DocumentMessage:
 def _detail_message(entry: CommandHelpEntry) -> DocumentMessage:
     builder = (
         M.document()
-        .header(GAME_NAME)
-        .section(entry.command, icon="system")
+        .header(entry.command)
+        .section("说明", icon="guide")
         .line(entry.spec.summary)
-        .section("写法")
     )
     for usage in entry.spec.usage:
-        builder.line(usage)
+        builder.field("发送", usage)
     if entry.aliases:
-        builder.section("别名").line("、".join(entry.aliases))
+        builder.field("也可发送", "、".join(entry.aliases))
     if entry.spec.side_effect:
-        builder.section("影响").line(entry.spec.side_effect)
+        builder.field("结果", entry.spec.side_effect)
+    can_execute_without_arguments = any(
+        usage == entry.command for usage in entry.spec.usage
+    )
+    execute_action = (
+        Action("help.execute", "发送命令", entry.command, behavior="callback")
+        if can_execute_without_arguments
+        else Action(
+            "help.fill",
+            "填写命令",
+            f"{entry.command} ",
+            behavior="fill",
+            style="secondary",
+        )
+    )
     return builder.actions(
         (
-            Action("help.execute", "发送命令", entry.command, behavior="callback"),
+            execute_action,
             Action(
                 "help.category",
                 "返回分类",
@@ -87,9 +94,18 @@ def _not_found_message(query: str) -> DocumentMessage:
         .line(f"未登记分类或命令：{query}")
         .section("可用分类")
     )
-    for category in help_registry.categories():
-        builder.line(M.command(category, f"帮助 {category}"))
+    _category_rows(builder, help_registry.categories())
     return builder.actions((_home_action(),)).build()
+
+
+def _category_rows(builder, categories: tuple[str, ...]) -> None:
+    for start in range(0, len(categories), 3):
+        parts: list[object] = []
+        for index, category in enumerate(categories[start : start + 3]):
+            if index:
+                parts.append("　")
+            parts.append(M.command(category, f"帮助 {category}"))
+        builder.line(*parts)
 
 
 def _home_action() -> Action:

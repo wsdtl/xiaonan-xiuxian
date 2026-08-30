@@ -1628,7 +1628,7 @@ def _affection_json(value: Decimal) -> int | float:
 
 
 def _display_affection(value: Decimal) -> str:
-    return f"{_quantize(value):.1f}"
+    return format(_quantize(value), "f").rstrip("0").rstrip(".") or "0"
 
 
 def _quantize(value: Decimal) -> Decimal:
