@@ -75,14 +75,20 @@ def unregister_game_access_guard() -> None:
 
 
 def _blocked_message(reason: str):
-    builder = M.document().section("当前状态")
     if reason == "尚未创建人物":
         return (
-            builder.line("尚未创建人物，请先发送：")
+            M.document()
+            .section("当前状态", icon="notice")
+            .line(M.status("未创建", tone="warning"), " 请先创建人物：")
             .line(M.command("创建人物 姓名 性别", "创建人物 ", submit=False))
             .build()
         )
-    return builder.line(sentence(reason)).build()
+    return (
+        M.document()
+        .section("当前状态", icon="notice")
+        .line(M.status("不可执行", tone="danger"), " ", sentence(reason))
+        .build()
+    )
 
 
 __all__ = [

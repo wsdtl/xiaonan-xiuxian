@@ -18,35 +18,36 @@ def overview(feature: TradeFeature, value: TradeOverview):
         M.document()
         .header(feature.copy("总览", "标题", 地点=value.location_name))
         .section(feature.copy("总览", "货架"), icon="inventory")
-        .field(feature.copy("总览", "货币"), value.spirit_stones)
+        .field(
+            feature.copy("总览", "货币"),
+            M.text(value.spirit_stones, tone="cultivation"),
+        )
     )
     for category in value.categories:
         builder.line(
             M.command(category.category, f"交易 {category.category}"),
             f" · {category.product_count}项",
         )
-    return builder.line(feature.copy("总览", "说明")).build()
+    return builder.small(feature.copy("总览", "说明")).build()
 
 
 def page(feature: TradeFeature, value: TradePage):
     builder = (
         M.document()
-        .header(feature.copy("列表", "标题", 地点=value.location_name, 类别=value.category))
+        .header(
+            feature.copy("列表", "标题", 地点=value.location_name, 类别=value.category)
+        )
         .section(
-            feature.copy(
-                "列表", "页码", 当前页=value.page, 总页数=value.total_pages
-            ),
+            feature.copy("列表", "页码", 当前页=value.page, 总页数=value.total_pages),
             icon="inventory",
         )
-        .field("商品", value.total_products)
+        .field("商品", M.text(value.total_products, tone="emphasis"))
     )
-    for index, product in enumerate(
-        value.products, start=(value.page - 1) * 50 + 1
-    ):
+    for index, product in enumerate(value.products, start=(value.page - 1) * 50 + 1):
         builder.item(
             index,
             M.command(
-                f"{product.grade_name}{product.name}",
+                M.text(f"{product.grade_name}{product.name}", tone="emphasis"),
                 f"购买 {product.content_id} {product.grade_id}",
                 submit=False,
             ),
@@ -89,6 +90,7 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult):
     return (
         M.document()
         .section(feature.copy("购买", "标题"), icon="inventory")
+        .line(M.status("购买完成", tone="positive"))
         .line(
             feature.copy(
                 "购买",
@@ -99,8 +101,8 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult):
             )
         )
         .row(
-            (feature.copy("购买", "花费"), value.total_price),
-            ("剩余灵石", value.spirit_stones_after),
+            (feature.copy("购买", "花费"), M.text(value.total_price, tone="warning")),
+            ("剩余灵石", M.text(value.spirit_stones_after, tone="cultivation")),
         )
         .field(feature.copy("购买", "余量"), value.reserve_after)
         .build()
@@ -111,8 +113,8 @@ def error(feature: TradeFeature, message: str):
     return (
         M.document()
         .section(feature.copy("错误", "标题"), icon="notice")
-        .line(sentence(message))
-        .line(feature.copy("错误", "格式"))
+        .line(M.status("交易失败", tone="danger"), " ", sentence(message))
+        .small(feature.copy("错误", "格式"))
         .build()
     )
 

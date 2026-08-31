@@ -11,20 +11,25 @@ def invalid_create_format():
     return (
         M.document()
         .section("创建人物")
-        .line("格式：创建人物 姓名 性别（男或女）")
+        .line(M.status("格式有误", tone="warning"), " 创建人物 姓名 性别（男或女）")
         .build()
     )
 
 
 def create_error(message: str):
-    return M.document().section("创建人物").line(message).build()
+    return (
+        M.document()
+        .section("创建人物", icon="notice")
+        .line(M.status("创建失败", tone="danger"), " ", message)
+        .build()
+    )
 
 
 def character_exists():
     return (
         M.document()
         .section("创建人物")
-        .line("你已经创建过人物，不能重复创建。")
+        .line(M.status("已有角色", tone="warning"), " 不能重复创建人物。")
         .build()
     )
 
@@ -33,8 +38,9 @@ def created(result: CreateCharacterResult):
     builder = (
         M.document()
         .header("人物创建完成")
+        .inline_section("创建结果", M.status("成功", tone="positive"), icon="success")
         .section("身份")
-        .row(("姓名", result.name), ("性别", result.gender))
+        .row(("姓名", M.text(result.name, tone="emphasis")), ("性别", result.gender))
         .row(("境界", result.realm_name), ("等级", 1))
         .section("出生地")
         .field("地点", M.command(result.location_name, "位置"))
@@ -58,7 +64,9 @@ def overview_error():
     return (
         M.document()
         .section("人物", icon="notice")
-        .line("人物状态暂时无法读取，请稍后再试。")
+        .line(
+            M.status("读取失败", tone="danger"), " 人物状态暂时无法读取，请稍后再试。"
+        )
         .build()
     )
 
@@ -73,12 +81,25 @@ def overview(result: CharacterOverviewResult):
         .section("身份", icon="status")
         .row(("性别", character.gender), ("身份", character.character_type))
         .row(("境界", character.realm_name), ("等级", character.level))
-        .row(("经验", character.experience), ("灵石", character.spirit_stones))
-        .field("宗门贡献", character.sect_contribution)
+        .row(
+            ("经验", M.text(character.experience, tone="cultivation")),
+            ("灵石", M.text(character.spirit_stones, tone="emphasis")),
+            ("宗门贡献", character.sect_contribution),
+        )
         .section("五行根性", icon="status")
-        .row(*((element, _display_number(value)) for element, value in character.five_elements.items()))
+        .row(
+            *(
+                (element, M.text(_display_number(value), tone=_element_tone(element)))
+                for element, value in character.five_elements.items()
+            )
+        )
         .section("当前状态", icon="status")
-        .row(*result.states)
+        .row(
+            *(
+                (label, M.status(value, tone=_state_tone(value)))
+                for label, value in result.states
+            )
+        )
         .section("所在之地", icon="map")
         .field("地点", result.location_name or "野外")
         .row(("区域", result.region), ("地形", result.terrain))
@@ -87,14 +108,22 @@ def overview(result: CharacterOverviewResult):
             ("海拔", f"{result.altitude}米"),
         )
         .section("当前资源", icon="status")
-        .row(
-            (
-                "血气",
-                _current_and_maximum(resources, attributes, "血气"),
+        .field(
+            "血气",
+            M.progress(
+                resources.get("血气", 0),
+                attributes.get("血气上限", 1),
+                tone="health",
+                display="value",
             ),
-            (
-                "精神",
-                _current_and_maximum(resources, attributes, "精神"),
+        )
+        .field(
+            "精神",
+            M.progress(
+                resources.get("精神", 0),
+                attributes.get("精神上限", 1),
+                tone="spirit",
+                display="value",
             ),
         )
     )
@@ -131,7 +160,7 @@ def overview(result: CharacterOverviewResult):
         for index, (name, stacks) in enumerate(result.injuries, start=1):
             builder.item(index, f"{name} × {stacks}")
     else:
-        builder.inline_section("伤势", "无", icon="status")
+        builder.inline_section("伤势", M.status("无", tone="positive"), icon="status")
     builder.section("修行槽位", icon="skill").row(
         *(
             (category, f"{equipped}/{total}")
@@ -145,7 +174,9 @@ def overview(result: CharacterOverviewResult):
             + (M.command(content.name, f"查看 {content.content_id}"),),
         )
     if result.innate_treasure is None:
-        builder.inline_section("先天灵宝", "未执掌", icon="item")
+        builder.inline_section(
+            "先天灵宝", M.status("未执掌", tone="muted"), icon="item"
+        )
     else:
         builder.section("先天灵宝", icon="item").field(
             "槽位",
@@ -170,7 +201,13 @@ def overview(result: CharacterOverviewResult):
     builder.section("随身物资", icon="inventory").row(
         ("种类", character.inventory.stack_count),
         ("总数", character.inventory.total_quantity),
-        ("自动用药", "开启" if character.automatic_medicine else "关闭"),
+        (
+            "自动用药",
+            M.status(
+                "开启" if character.automatic_medicine else "关闭",
+                tone="positive" if character.automatic_medicine else "muted",
+            ),
+        ),
     )
     return builder.build()
 
@@ -198,14 +235,25 @@ def _display_stat(name: str, value: float) -> str:
     return rendered
 
 
-def _current_and_maximum(
-    resources: dict[str, int | float],
-    attributes: dict[str, int | float],
-    name: str,
-) -> str:
-    current = _display_number(resources.get(name, 0))
-    maximum = _display_number(attributes.get(f"{name}上限", 0))
-    return f"{current}/{maximum}"
+def _element_tone(element: str) -> str:
+    return {
+        "金": "metal",
+        "木": "wood",
+        "水": "water",
+        "火": "fire",
+        "土": "earth",
+        "无相": "formless",
+    }.get(element, "muted")
+
+
+def _state_tone(value: str) -> str:
+    if any(word in value for word in ("重伤", "身死", "失败")):
+        return "danger"
+    if any(word in value for word in ("等待", "跟随", "托管", "进行")):
+        return "warning"
+    if any(word in value for word in ("休息", "空闲", "就绪", "正常")):
+        return "positive"
+    return "info"
 
 
 __all__ = [

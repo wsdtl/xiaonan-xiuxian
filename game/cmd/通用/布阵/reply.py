@@ -12,16 +12,22 @@ def completed(copy, value):
         M.document()
         .header(text["标题"])
         .section(f"{prepared.grade_name}{prepared.name}", icon="combat")
+        .line(M.status("布阵完成", tone="positive"))
         .line(text["过程"])
         .field(text["结果"], "下一场正式战斗")
         .field("阵藏条目", prepared.reserve_key)
-        .line(text["话语"])
+        .small(text["话语"])
         .build()
     )
 
 
 def error(copy, message: str):
-    return M.document().section(copy.text["错误"]["标题"], icon="notice").line(message).build()
+    return (
+        M.document()
+        .section(copy.text["错误"]["标题"], icon="notice")
+        .line(M.status("布阵失败", tone="danger"), " ", message)
+        .build()
+    )
 
 
 __all__ = ["completed", "error"]

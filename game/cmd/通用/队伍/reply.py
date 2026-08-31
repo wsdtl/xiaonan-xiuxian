@@ -47,13 +47,13 @@ def page(
     if notice:
         builder.inline_section(
             _text(copy, "查看", "状态"),
-            notice,
+            (M.status("完成", tone="positive"), *M.text(f" {notice}")),
             icon=_text(copy, "图标", "结果"),
         )
     if not value.members:
         builder.section(
             _text(copy, "查看", "状态"), icon=_text(copy, "图标", "队伍")
-        ).line(_text(copy, "查看", "未组队"))
+        ).line(M.status("独行", tone="muted"), " ", _text(copy, "查看", "未组队"))
     else:
         builder.section(
             _text(copy, "查看", "状态"), icon=_text(copy, "图标", "队伍")
@@ -65,9 +65,7 @@ def page(
         )
         if len(value.members) == 1:
             builder.line(_text(copy, "查看", "单人队伍"))
-        builder.section(
-            _text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员")
-        )
+        builder.section(_text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员"))
         template = _text(copy, "格式", "成员")
         for index, member in enumerate(value.members, start=1):
             builder.item(index, template.format(姓名=member.name, 身份=member.role))
@@ -76,10 +74,8 @@ def page(
             _text(copy, "查看", "待处理邀请"),
             icon=_text(copy, "图标", "邀请"),
         ).line(
-            _text(copy, "格式", "邀请来源").format(
-                姓名=value.invitation.inviter_name
-            )
-        ).line(
+            _text(copy, "格式", "邀请来源").format(姓名=value.invitation.inviter_name)
+        ).small(
             _text(copy, "格式", "邀请时限").format(
                 分钟=value.invitation.remaining_minutes
             )
@@ -101,7 +97,7 @@ def error(copy: TeamCopy, code: str):
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "邀请"))
-        .line(_text(copy, "错误", key))
+        .line(M.status("操作失败", tone="danger"), " ", _text(copy, "错误", key))
         .build()
     )
 
@@ -110,7 +106,7 @@ def format_error(copy: TeamCopy):
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "邀请"))
-        .line(_text(copy, "错误", "格式"))
+        .line(M.status("格式有误", tone="warning"), " ", _text(copy, "错误", "格式"))
         .build()
     )
 

@@ -1,5 +1,16 @@
-from game.core.duel import DuelError, DuelStartCommand
+from game.core.duel import (
+    DuelChallenge,
+    DuelError,
+    DuelResult,
+    DuelStartCommand,
+)
 
 from .service import DuelFeature
 
-__all__ = ["DuelError", "DuelFeature", "DuelStartCommand"]
+__all__ = [
+    "DuelChallenge",
+    "DuelError",
+    "DuelFeature",
+    "DuelResult",
+    "DuelStartCommand",
+]

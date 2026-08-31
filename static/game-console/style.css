@@ -181,7 +181,7 @@ button { cursor: pointer; }
 
 .message-stack {
   width: fit-content;
-  max-width: min(78%, 900px);
+  max-width: min(88%, 960px);
   display: grid;
   gap: 3px;
 }
@@ -217,7 +217,7 @@ button { cursor: pointer; }
 
 .bubble {
   min-width: 44px;
-  padding: 10px 12px;
+  padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
@@ -231,7 +231,7 @@ button { cursor: pointer; }
 
 .message-content {
   font-size: 14px;
-  line-height: 1.62;
+  line-height: 1.5;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -239,7 +239,7 @@ button { cursor: pointer; }
 .message-line.plain { white-space: normal; }
 
 .message-header {
-  margin-bottom: 5px;
+  margin-bottom: 3px;
   font-weight: 750;
 }
 
@@ -247,21 +247,35 @@ button { cursor: pointer; }
 .message-quote + .message-line,
 .message-line + .message-quote { margin-top: 3px; }
 
-.message-space { height: 8px; }
+.message-space { height: 5px; }
 
 .message-quote {
-  padding-left: 9px;
+  padding-left: 8px;
   border-left: 2px solid #8da49a;
   color: #3e4a45;
 }
 
 .message-quote.depth-2,
 .message-quote.depth-3 {
-  margin-left: 8px;
+  margin-left: 6px;
   border-left-color: #b7c2bc;
 }
 
 .message-content strong { font-weight: 800; }
+
+.message-formula {
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+.message-formula[data-display="true"] {
+  display: flex;
+  overflow-x: auto;
+  padding: 2px 0;
+}
+
+.message-formula .katex { font-size: 1em; }
 
 .message-content a {
   color: var(--blue);
@@ -301,8 +315,8 @@ button { cursor: pointer; }
 .message-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px 10px;
-  margin-top: 9px;
+  gap: 6px 8px;
+  margin-top: 7px;
 }
 
 .action-button.primary {
@@ -439,7 +453,7 @@ button { cursor: pointer; }
   .connection-status { font-size: 11px; }
   .message-list { padding-inline: 9px; }
   .message-stack { max-width: 92%; }
-  .message-content { font-size: 13px; line-height: 1.58; }
+  .message-content { font-size: 13px; line-height: 1.5; }
   .command-composer { padding-inline: 9px; }
   .command-composer button { min-width: 64px; }
 }

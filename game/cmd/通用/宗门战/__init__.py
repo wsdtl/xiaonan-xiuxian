@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from game.app import current_game_services
 from game.features.zongmen_zhan import SectWarError
-from message import M
 
-from ...actions import message_actions
 from ...command import GameCommand, HelpSpec
+from . import reply
 
 
 def _feature():
@@ -35,24 +34,57 @@ async def challenge(*, user_id, message, message_context, manager, **_) -> None:
         value = await _feature().challenge(
             user_id, parts[0], int(parts[1]), message_context.request_id
         )
-        await manager.send(_reply(value))
+        await manager.send(reply.view(_feature(), value))
     except ValueError:
-        await manager.send(_error(_feature().text("错误", "challenge_format")))
+        await manager.send(reply.error(_feature().text("错误", "challenge_format")))
     except SectWarError as exc:
-        await manager.send(_error(_feature().error(exc)))
+        await manager.send(reply.error(_feature().error(exc)))
 
 
-@GameCommand.command(scope="通用", cmd="接战", aliases=("应战", "接受宗门战"), guard_rule="宗门战待命", help=HelpSpec(category="战斗", summary="接受本宗当前战书", usage=("接战", "应战", "接受宗门战"), order=2))
+@GameCommand.command(
+    scope="通用",
+    cmd="接战",
+    aliases=("应战", "接受宗门战"),
+    guard_rule="宗门战待命",
+    help=HelpSpec(
+        category="战斗",
+        summary="接受本宗当前战书",
+        usage=("接战", "应战", "接受宗门战"),
+        order=2,
+    ),
+)
 async def accept(*, user_id, message_context, manager, **_) -> None:
     await _run(manager, _feature().accept(user_id, message_context.request_id))
 
 
-@GameCommand.command(scope="通用", cmd="拒战", aliases=("拒绝宗门战",), guard_rule="宗门战待命", help=HelpSpec(category="战斗", summary="拒绝本宗当前战书", usage=("拒战", "拒绝宗门战"), order=3))
+@GameCommand.command(
+    scope="通用",
+    cmd="拒战",
+    aliases=("拒绝宗门战",),
+    guard_rule="宗门战待命",
+    help=HelpSpec(
+        category="战斗",
+        summary="拒绝本宗当前战书",
+        usage=("拒战", "拒绝宗门战"),
+        order=3,
+    ),
+)
 async def reject(*, user_id, message_context, manager, **_) -> None:
     await _run(manager, _feature().reject(user_id, message_context.request_id))
 
 
-@GameCommand.command(scope="通用", cmd="撤战", aliases=("撤回战书", "撤回宗门战书"), guard_rule="宗门战待命", help=HelpSpec(category="战斗", summary="撤回本宗发出的战书", usage=("撤战", "撤回战书", "撤回宗门战书"), order=4))
+@GameCommand.command(
+    scope="通用",
+    cmd="撤战",
+    aliases=("撤回战书", "撤回宗门战书"),
+    guard_rule="宗门战待命",
+    help=HelpSpec(
+        category="战斗",
+        summary="撤回本宗发出的战书",
+        usage=("撤战", "撤回战书", "撤回宗门战书"),
+        order=4,
+    ),
+)
 async def withdraw(*, user_id, message_context, manager, **_) -> None:
     await _run(manager, _feature().withdraw(user_id, message_context.request_id))
 
@@ -65,16 +97,36 @@ async def withdraw(*, user_id, message_context, manager, **_) -> None:
     help=HelpSpec(
         category="战斗",
         summary="锁定宗门同行和可选宗门阵法",
-        usage=("锁定宗门战阵容", "锁定宗门战阵容 万珍殿阵法条目", "锁阵 万珍殿阵法条目"),
+        usage=(
+            "锁定宗门战阵容",
+            "锁定宗门战阵容 万珍殿阵法条目",
+            "锁阵 万珍殿阵法条目",
+        ),
         side_effect="所选宗门阵法在正式开战时消耗",
         order=5,
     ),
 )
 async def lock(*, user_id, message, message_context, manager, **_) -> None:
-    await _run(manager, _feature().lock(user_id, message_context.request_id, str(message or "").strip()))
+    await _run(
+        manager,
+        _feature().lock(
+            user_id, message_context.request_id, str(message or "").strip()
+        ),
+    )
 
 
-@GameCommand.command(scope="通用", cmd="解阵", aliases=("解除宗门战阵容",), guard_rule="宗门战操作", help=HelpSpec(category="战斗", summary="解除本宗已锁定阵容", usage=("解阵", "解除宗门战阵容"), order=6))
+@GameCommand.command(
+    scope="通用",
+    cmd="解阵",
+    aliases=("解除宗门战阵容",),
+    guard_rule="宗门战操作",
+    help=HelpSpec(
+        category="战斗",
+        summary="解除本宗已锁定阵容",
+        usage=("解阵", "解除宗门战阵容"),
+        order=6,
+    ),
+)
 async def unlock(*, user_id, message_context, manager, **_) -> None:
     await _run(manager, _feature().unlock(user_id, message_context.request_id))
 
@@ -128,10 +180,14 @@ async def cancel(*, user_id, message_context, manager, **_) -> None:
 async def current(*, user_id, message, message_context, manager, **_) -> None:
     try:
         war_id = str(message or "").strip()
-        value = await _feature().view(user_id, war_id) if war_id else await _feature().current(user_id, message_context.request_id)
-        await manager.send(_reply(value))
+        value = (
+            await _feature().view(user_id, war_id)
+            if war_id
+            else await _feature().current(user_id, message_context.request_id)
+        )
+        await manager.send(reply.view(_feature(), value))
     except SectWarError as exc:
-        await manager.send(_error(_feature().error(exc)))
+        await manager.send(reply.error(_feature().error(exc)))
 
 
 @GameCommand.command(
@@ -139,68 +195,32 @@ async def current(*, user_id, message, message_context, manager, **_) -> None:
     cmd="战录",
     aliases=("查看宗门战记录", "宗门战记录"),
     guard_rule="已创建",
-    help=HelpSpec(category="战斗", summary="分页查看本宗历史宗门战", usage=("查看宗门战记录", "查看宗门战记录 2", "宗门战记录 2"), order=10),
+    help=HelpSpec(
+        category="战斗",
+        summary="分页查看本宗历史宗门战",
+        usage=("查看宗门战记录", "查看宗门战记录 2", "宗门战记录 2"),
+        order=10,
+    ),
 )
 async def history(*, user_id, message, manager, **_) -> None:
     try:
         raw = str(message or "").strip()
         if raw and (not raw.isdecimal() or int(raw) < 1):
             raise ValueError
-        await manager.send(_history(await _feature().history(user_id, int(raw or 1))))
+        await manager.send(
+            reply.history(_feature(), await _feature().history(user_id, int(raw or 1)))
+        )
     except ValueError:
-        await manager.send(_error(_feature().text("错误", "history_format")))
+        await manager.send(reply.error(_feature().text("错误", "history_format")))
     except SectWarError as exc:
-        await manager.send(_error(_feature().error(exc)))
+        await manager.send(reply.error(_feature().error(exc)))
 
 
 async def _run(manager, operation) -> None:
     try:
-        await manager.send(_reply(await operation))
+        await manager.send(reply.view(_feature(), await operation))
     except SectWarError as exc:
-        await manager.send(_error(_feature().error(exc)))
-
-
-def _reply(value):
-    feature = _feature()
-    builder = (
-        M.document()
-        .header(feature.text("查看", "标题"))
-        .section(feature.text("状态", value.status), icon="status")
-        .field(feature.text("查看", "双方"), feature.text("格式", "双方", 甲=value.attacker_name, 乙=value.defender_name))
-        .field(feature.text("查看", "人数"), feature.text("格式", "人数", 甲=value.attacker_count, 乙=value.defender_count))
-        .field(feature.text("查看", "押注"), feature.text("格式", "押注", 数量=value.wager))
-        .field(feature.text("查看", "锁阵"), feature.text("格式", "锁阵", 甲="已锁定" if value.attacker_locked else "未锁定", 乙="已锁定" if value.defender_locked else "未锁定"))
-    )
-    if value.attacker_formation or value.defender_formation:
-        builder.field(feature.text("查看", "阵法"), feature.text("格式", "阵法", 甲=value.attacker_formation or "无", 乙=value.defender_formation or "无"))
-    if value.winner:
-        builder.field(feature.text("查看", "胜负"), _winner(value))
-    if value.report_id:
-        builder.field(feature.text("查看", "战报"), value.report_id)
-    return builder.actions(message_actions(feature.actions(value.status))).build()
-
-
-def _history(value):
-    feature = _feature()
-    builder = M.document().header(feature.text("查看", "记录标题")).section("历史战录", icon="combat").field(feature.text("查看", "总数"), value.total)
-    if not value.entries:
-        builder.line(feature.text("结果", "记录为空"))
-    for index, entry in enumerate(value.entries, start=1):
-        builder.item(index, feature.text("格式", "记录", 甲=entry.attacker_name, 乙=entry.defender_name, 状态=feature.text("状态", entry.status))).line(f"{feature.text('查看', '战书')}：{entry.war_id}")
-    builder.line(feature.text("格式", "页码", 当前页=value.page, 总页数=value.page_count))
-    return builder.build()
-
-
-def _winner(value):
-    if value.winner == "left":
-        return value.attacker_name
-    if value.winner == "right":
-        return value.defender_name
-    return _feature().text("结果", "平局")
-
-
-def _error(value: str):
-    return M.document().section("宗门战", icon="notice").line(value).build()
+        await manager.send(reply.error(_feature().error(exc)))
 
 
 __all__ = []

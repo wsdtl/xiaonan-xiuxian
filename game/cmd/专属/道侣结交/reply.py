@@ -25,7 +25,7 @@ def error(copy: CompanionCopy, message: str):
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon=copy.icons["错误"])
-        .line(message)
+        .line(M.status("交互失败", tone="danger"), " ", message)
         .build()
     )
 
@@ -57,13 +57,28 @@ def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction
                 for name in definition.favorite_pool_names
             )
         )
-        .line(definition.dialogue.preference)
+        .small(definition.dialogue.preference)
         .section(text(copy, "查看", "关系"), icon=copy.icons["关系"])
-        .field(text(copy, "查看", "当前好感"), relation_text)
+        .field(
+            text(copy, "查看", "当前好感"),
+            M.progress(
+                float(value.relation.current_affection),
+                100,
+                tone="companion",
+                display="value",
+            )
+            if value.has_relation
+            else M.status(relation_text, tone="muted"),
+        )
         .line(
+            M.status(
+                "同行中" if value.is_active else "未同行",
+                tone="positive" if value.is_active else "muted",
+            ),
+            " ",
             text(copy, "查看", "同行中")
             if value.is_active
-            else text(copy, "查看", "未同行")
+            else text(copy, "查看", "未同行"),
         )
         .actions(message_actions(actions))
         .build()
@@ -80,8 +95,8 @@ def conversation(
         M.document()
         .header(text(copy, "交谈", "标题", 名称=definition.name))
         .section(definition.title, icon=copy.icons["交谈"])
-        .line(f"“{result.line}”")
-        .line(definition.dialogue.preference)
+        .small(f"“{result.line}”")
+        .small(definition.dialogue.preference)
         .actions(message_actions(actions))
         .build()
     )
@@ -97,11 +112,12 @@ def gift(
     if not result.accepted:
         return (
             builder.section(definition.title, icon=copy.icons["赠礼"])
+            .line(M.status("婉拒", tone="warning"))
             .line(
                 text(copy, "赠礼", "婉拒", 名称=definition.name, 物品=result.item.name)
             )
-            .line(f"“{result.dialogue}”")
-            .line(text(copy, "赠礼", "物品未消耗"))
+            .small(f"“{result.dialogue}”")
+            .small(text(copy, "赠礼", "物品未消耗"))
             .actions(message_actions(actions))
             .build()
         )
@@ -109,10 +125,12 @@ def gift(
         raise RuntimeError("已接受的道侣赠礼缺少品级结果")
     if result.replayed:
         builder.section(definition.title, icon=copy.icons["赠礼"]).line(
-            text(copy, "赠礼", "已处理")
+            M.status("已处理", tone="info"), " ", text(copy, "赠礼", "已处理")
         )
     else:
         builder.section(definition.title, icon=copy.icons["赠礼"]).line(
+            M.status("已收下", tone="positive"),
+            " ",
             text(
                 copy,
                 "赠礼",
@@ -121,9 +139,12 @@ def gift(
                 数量=result.quantity,
                 品级=result.grade.name,
                 物品=result.item.name,
-            )
-        ).line(f"“{result.dialogue}”").row(
-            (text(copy, "赠礼", "基础好感"), _affection(result.base_affection)),
+            ),
+        ).small(f"“{result.dialogue}”").row(
+            (
+                text(copy, "赠礼", "基础好感"),
+                M.text(_affection(result.base_affection), tone="companion"),
+            ),
             (
                 text(copy, "赠礼", "品级倍率", 品级=result.grade.name),
                 result.grade.ability_multiplier,
@@ -135,21 +156,35 @@ def gift(
                 result.preference_multiplier,
             ),
         ).row(
-            (text(copy, "赠礼", "实际好感"), _affection(result.affection_gain)),
+            (
+                text(copy, "赠礼", "实际好感"),
+                M.text(f"+{_affection(result.affection_gain)}", tone="positive"),
+            ),
             (
                 text(copy, "赠礼", "当前好感"),
-                f"{_affection(result.affection_before)} → {_affection(result.affection_after)}",
+                M.progress(
+                    float(result.affection_after),
+                    100,
+                    tone="companion",
+                    display="value",
+                ),
             ),
         )
     if result.first_full:
-        builder.line(text(copy, "赠礼", "首次圆满")).line(
-            f"“{definition.dialogue.full_affection}”"
-        )
+        builder.line(
+            M.status("好感圆满", tone="positive"), " ", text(copy, "赠礼", "首次圆满")
+        ).small(f"“{definition.dialogue.full_affection}”")
         if result.reward_item is None or result.reward_grade is None:
             raise RuntimeError("道侣首次圆满结果缺少回礼")
         builder.field(
             text(copy, "赠礼", "获得回礼"),
-            f"{result.reward_grade.name}{result.reward_item.name} × {result.reward_quantity}",
+            (
+                M.command(
+                    M.text(result.reward_item.name, tone="companion"),
+                    f"查看 {result.reward_item.item_id}",
+                ),
+                *M.text(f" × {result.reward_quantity}"),
+            ),
         )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
@@ -169,16 +204,24 @@ def invitation(
         M.document()
         .header(text(copy, "邀约", "标题", 名称=definition.name))
         .section(definition.title, icon=copy.icons["邀约"])
-        .line(f"“{result.dialogue}”")
+        .small(f"“{result.dialogue}”")
     )
     if result.already_active:
-        builder.line(text(copy, "邀约", "已经同行", 名称=definition.name))
-    elif result.first_invitation:
-        builder.line(text(copy, "邀约", "首次同行")).row(
-            ("资质", result.instance.qualification), ("同行", definition.name)
+        builder.line(
+            M.status("同行中", tone="info"),
+            " ",
+            text(copy, "邀约", "已经同行", 名称=definition.name),
         )
+    elif result.first_invitation:
+        builder.line(
+            M.status("邀约成功", tone="positive"), " ", text(copy, "邀约", "首次同行")
+        ).row(("资质", result.instance.qualification), ("同行", definition.name))
     else:
-        builder.line(text(copy, "邀约", "再次同行", 名称=definition.name))
+        builder.line(
+            M.status("邀约成功", tone="positive"),
+            " ",
+            text(copy, "邀约", "再次同行", 名称=definition.name),
+        )
     return builder.actions(message_actions(actions)).build()
 
 
@@ -192,8 +235,9 @@ def farewell(
         M.document()
         .header(text(copy, "暂别", "标题", 名称=definition.name))
         .section(definition.title, icon=copy.icons["暂别"])
-        .line(f"“{result.dialogue}”")
-        .line(
+        .line(M.status("已经暂别", tone="muted"))
+        .small(f"“{result.dialogue}”")
+        .small(
             text(
                 copy,
                 "暂别",

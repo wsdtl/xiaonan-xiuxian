@@ -221,7 +221,7 @@ async def _exercise_everything(heavenly_console) -> None:
         await local(BRANCH_ACCOUNT[0], "去 丹霞城", "抵达", "丹霞城")
 
         services = game_app.current_game_services()
-        await heavenly("采药", "入山采药", "同行人数: 3", "采集人数: 3")
+        await heavenly("采药", "入山采药", "同行人数", "采集人数")
         await heavenly("开始采药", "正在带领同行修士采药", "采药进度")
         await local("heavenly-dao-a", "采药进度", "领队")
         await _finish_activity(
@@ -232,9 +232,9 @@ async def _exercise_everything(heavenly_console) -> None:
             services.features.caiyao,
             "heavenly-settle-herbs",
         )
-        await heavenly("采药结束", "采药总结", "6/6")
+        await heavenly("采药结束", "采药总结", "灵植总数")
 
-        await heavenly("采矿", "勘脉采矿", "同行人数: 3", "采集人数: 3")
+        await heavenly("采矿", "勘脉采矿", "同行人数", "采集人数")
         await local("heavenly-dao-b", "采矿进度", "领队")
         await _finish_activity(
             services,
@@ -244,9 +244,9 @@ async def _exercise_everything(heavenly_console) -> None:
             services.features.caikuang,
             "heavenly-settle-ore",
         )
-        await heavenly("采矿结束", "采矿总结", "6/6")
+        await heavenly("采矿结束", "采矿总结", "灵矿总数")
 
-        await heavenly("开始闭关", "入定闭关", "同行修士: 3")
+        await heavenly("开始闭关", "入定闭关", "同行修士")
         await local("heavenly-dao-a", "闭关进度", "领队")
         await _finish_activity(
             services,
@@ -256,9 +256,9 @@ async def _exercise_everything(heavenly_console) -> None:
             services.features.biguan,
             "heavenly-settle-retreat",
         )
-        await heavenly("闭关结束", "闭关总结", "6/6")
+        await heavenly("闭关结束", "闭关总结", "同行修士")
 
-        await heavenly("开始探险", "探险启程", "同行修士: 3")
+        await heavenly("开始探险", "探险启程", "同行修士")
         await local("heavenly-dao-b", "探险进度", "探险尚未结束")
         await _finish_activity(
             services,

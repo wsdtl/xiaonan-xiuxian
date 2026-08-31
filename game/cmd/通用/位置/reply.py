@@ -41,13 +41,16 @@ def current(
     if result.local_cultivators:
         builder.inline_section(
             copy.local_cultivators_section,
-            f"{len(result.local_cultivators)}人",
+            M.text(f"{len(result.local_cultivators)}人", tone="emphasis"),
             icon=copy.cultivator_icon,
         )
     if result.active_companion is not None:
         builder.inline_section(
             copy.active_companion_section,
-            f"{result.active_companion.name} · {result.active_companion.title}",
+            M.command(
+                M.text(result.active_companion.name, tone="companion"),
+                f"查看 {result.active_companion.companion_id}",
+            ),
             icon=copy.cultivator_icon,
         )
     return builder.actions(message_actions(actions)).build()
@@ -59,9 +62,13 @@ def nearby_overview(
     location = result.current.location
     location_name = result.current.space_name or _location_name(copy, location)
     surface = result.current.space_type == "地表"
-    builder = M.document().header(
-        copy.overview_title.format(地点=location_name) if surface else location_name
-    ).section(copy.overview_cultivators_section, icon=copy.cultivator_icon)
+    builder = (
+        M.document()
+        .header(
+            copy.overview_title.format(地点=location_name) if surface else location_name
+        )
+        .section(copy.overview_cultivators_section, icon=copy.cultivator_icon)
+    )
     if surface:
         builder.row(
             (copy.overview_local_label, len(result.current.local_cultivators)),
@@ -120,12 +127,11 @@ def nearby_cultivators(
     if result.cultivators:
         for cultivator in result.cultivators:
             state = copy.state_separator.join(cultivator.states)
-            state_text = f" {copy.state_prefix.format(状态=state)}" if state else ""
             summary = copy.cultivator_summary.format(
                 境界=cultivator.realm_name,
                 等级=cultivator.level,
                 性别=cultivator.gender,
-                状态=state_text,
+                状态="",
             )
             direction = (
                 copy.cultivator_direction.format(
@@ -140,17 +146,18 @@ def nearby_cultivators(
                 cultivator.name,
                 " · ",
                 summary,
+                *(
+                    (" · ", M.status(state, tone=_nearby_state_tone(state)))
+                    if state
+                    else ()
+                ),
                 " · ",
                 direction,
             )
     else:
-        builder.line(copy.cultivators_empty)
+        builder.line(M.status("无人", tone="muted"), " ", copy.cultivators_empty)
     if result.page > 1 or result.has_next:
-        builder.inline_section(
-            copy.cultivators_page_section,
-            result.page,
-            icon=copy.page_icon,
-        )
+        builder.small(f"{copy.cultivators_page_section}：{result.page}")
     if result.truncated:
         builder.note(copy.cultivators_truncated)
     return builder.actions(message_actions(actions)).build()
@@ -167,7 +174,7 @@ def nearby_locations(
         .section(copy.locations_section, icon=copy.location_icon)
     )
     if not result.values:
-        builder.line(copy.locations_empty)
+        builder.line(M.status("空", tone="muted"), " ", copy.locations_empty)
     for index, location in enumerate(result.values, start=1):
         _append_location(builder, copy, index, location)
     return builder.actions(message_actions(actions)).build()
@@ -182,7 +189,7 @@ def error(
     return (
         M.document()
         .section(title, icon=copy.error_icon)
-        .line(message)
+        .line(M.status("查询失败", tone="danger"), " ", message)
         .actions(message_actions(actions))
         .build()
     )
@@ -199,7 +206,7 @@ def _append_location(
         copy.location_summary.format(
             名称=location.name, 方向=location.direction, 距离=location.distance
         ),
-    ).line(
+    ).small(
         copy.location_detail.format(
             区域=location.region, 地形=location.terrain, 功能=functions
         )
@@ -214,6 +221,14 @@ def _location_name(copy: PositionCopy, location) -> str:
 
 def _coordinate(copy: PositionCopy, xy: tuple[int, int]) -> str:
     return copy.coordinate.format(横坐标=xy[0], 纵坐标=xy[1])
+
+
+def _nearby_state_tone(value: str) -> str:
+    if any(word in value for word in ("战斗", "重伤", "身死")):
+        return "danger"
+    if any(word in value for word in ("探险", "闭关", "采集", "托管")):
+        return "warning"
+    return "info"
 
 
 __all__ = [

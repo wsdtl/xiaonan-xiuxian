@@ -18,7 +18,9 @@ def used(feature: MedicineFeature, result: MedicineUseResult):
         资源=result.resource,
         实际恢复=_number(result.recovered),
     )
-    builder = M.document().section(feature.copy("服丹", "标题"), icon="status").line(line)
+    builder = (
+        M.document().section(feature.copy("服丹", "标题"), icon="status").line(line)
+    )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
         builder.section("先天灵宝", icon="item").field(
@@ -37,13 +39,24 @@ def setting(feature: MedicineFeature, result: AutoMedicineResult):
     return (
         M.document()
         .section(feature.copy("自动用药", "标题"), icon="status")
+        .line(
+            M.status(
+                "已开启" if result.enabled else "已关闭",
+                tone="positive" if result.enabled else "muted",
+            )
+        )
         .line(line)
         .build()
     )
 
 
 def error(message: str):
-    return M.document().section("服丹", icon="notice").line(message).build()
+    return (
+        M.document()
+        .section("服丹", icon="notice")
+        .line(M.status("服丹失败", tone="danger"), " ", message)
+        .build()
+    )
 
 
 def _number(value: float) -> str:

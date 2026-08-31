@@ -22,15 +22,29 @@ def render_qq_message(value: object) -> object:
     message = coerce_message(value)
     if isinstance(message, DocumentMessage):
         content = render_markdown(message.document, command_renderer=_command_link)
-        keyboard = _keyboard(message.document.actions) if message.document.actions else None
+        keyboard = (
+            _keyboard(message.document.actions) if message.document.actions else None
+        )
         return qq_payload.markdown(content, keyboard=keyboard)
     if isinstance(message, ImageMessage):
-        return qq_payload.image(message.image, content=render_rich_text(message.caption) or " ")
+        return qq_payload.image(
+            message.image, content=render_rich_text(message.caption) or " "
+        )
     return value
 
 
-def _command_link(command: CommandLink) -> str:
-    label = render_rich_markdown(command.label)
+def _command_link(
+    command: CommandLink,
+    line_size: str = "body",
+    default_tone: str = "",
+    force_formula: bool = False,
+) -> str:
+    label = render_rich_markdown(
+        command.label,
+        line_size=line_size,
+        default_tone=default_tone,
+        force_formula=force_formula,
+    )
     encoded = quote(command.command, safe="")
     submit = "true" if command.submit else "false"
     reply = "true" if command.reply else "false"

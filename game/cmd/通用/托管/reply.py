@@ -43,16 +43,21 @@ def result(copy: HostingCopy, value: HostingResult):
             document.section(
                 _text(copy, "结果", "标题"), icon=_text(copy, "图标", "状态")
             )
-            .line(_text(copy, "结果", "无当前托管"))
+            .line(
+                M.status("未托管", tone="muted"), " ", _text(copy, "结果", "无当前托管")
+            )
             .build()
         )
     mode_key = _MODE_KEYS[session.mode]
     document.inline_section(
         _text(copy, "结果", "标题"),
-        (
-            _text(copy, "结果", "最近托管")
-            if value.action == "查看" and not value.active
-            else _text(copy, "结果", value.action)
+        M.status(
+            (
+                _text(copy, "结果", "最近托管")
+                if value.action == "查看" and not value.active
+                else _text(copy, "结果", value.action)
+            ),
+            tone="info" if value.active else "muted",
         ),
         icon=_text(copy, "图标", "结果"),
     )
@@ -66,12 +71,18 @@ def result(copy: HostingCopy, value: HostingResult):
     )
     document.field(activity_label, session.current_activity)
     if session.status in {"已取消", "已到期"}:
-        document.field(_text(copy, "结果", "当前阶段"), session.status)
+        document.field(
+            _text(copy, "结果", "当前阶段"),
+            M.status(session.status, tone=_status_tone(session.status)),
+        )
     else:
         phase_key = _PHASE_KEYS.get(session.phase, "等待开始")
         document.field(
             _text(copy, "结果", "当前阶段"),
-            f"{session.status} · {_text(copy, '结果', phase_key)}",
+            M.status(
+                f"{session.status} · {_text(copy, '结果', phase_key)}",
+                tone=_status_tone(session.status),
+            ),
         )
     if session.next_trigger_at is not None:
         document.field(_text(copy, "结果", "下次触发"), _time(session.next_trigger_at))
@@ -82,7 +93,9 @@ def result(copy: HostingCopy, value: HostingResult):
         f"{session.cycle_count}{_text(copy, '结果', '循环单位')}",
     )
     if session.last_error:
-        document.section(_text(copy, "结果", "暂停原因")).line(session.last_error)
+        document.section(_text(copy, "结果", "暂停原因")).line(
+            M.status("已暂停", tone="danger"), " ", session.last_error
+        )
     elif session.last_message:
         document.section(_text(copy, "结果", "最近提示")).line(session.last_message)
     return document.build()
@@ -92,7 +105,11 @@ def error(copy: HostingCopy, code: str):
     return (
         M.document()
         .section(_text(copy, "结果", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(_text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")))
+        .line(
+            M.status("托管失败", tone="danger"),
+            " ",
+            _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")),
+        )
         .build()
     )
 
@@ -103,6 +120,14 @@ def format_error(copy: HostingCopy):
 
 def _time(value: datetime) -> str:
     return value.astimezone().strftime("%m-%d %H:%M")
+
+
+def _status_tone(value: str) -> str:
+    if value in {"已取消", "已到期", "已暂停"}:
+        return "warning"
+    if value in {"执行中", "托管中", "正常"}:
+        return "positive"
+    return "info"
 
 
 def _text(copy: HostingCopy, section: str, key: str) -> str:

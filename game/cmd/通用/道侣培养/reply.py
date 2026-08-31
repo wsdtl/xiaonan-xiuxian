@@ -38,7 +38,14 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
         "器律孔",
         f"{sum(law is not None for law in instance.weapon_laws)}/{result.open_law_slots}",
     )
-    builder.field("经验", _progress(instance.weapon_experience, result.weapon_next_experience))
+    builder.field(
+        "经验",
+        _progress(
+            instance.weapon_experience,
+            result.weapon_next_experience,
+            tone="emphasis",
+        ),
+    )
     for slot, law_name in result.weapon_law_names:
         builder.item(slot, law_name)
     return builder.build()
@@ -52,22 +59,39 @@ def breakthrough(
         丹药=result.medicine_name,
         境界=result.view.realm_name,
     )
-    return M.document().section("道侣突破", icon="status").line(text).build()
+    return (
+        M.document()
+        .section("道侣突破", icon="status")
+        .line(M.status("突破完成", tone="positive"), " ", text)
+        .build()
+    )
 
 
 def forged(feature: CompanionCultivationFeature, result: CompanionLawResult):
     text = feature.copy("覆炼", "道侣成功").format(
         名称=result.view.definition.name, 器律=result.law_name, 孔位=result.slot
     )
-    return M.document().section("道侣覆炼", icon="weapon").line(text).build()
+    return (
+        M.document()
+        .section("道侣覆炼", icon="weapon")
+        .line(M.status("覆炼完成", tone="positive"), " ", text)
+        .build()
+    )
 
 
 def error(message: str):
-    return M.document().section("道侣培养", icon="notice").line(message).build()
+    return (
+        M.document()
+        .section("道侣培养", icon="notice")
+        .line(M.status("培养失败", tone="danger"), " ", message)
+        .build()
+    )
 
 
-def _progress(current: int, required: int) -> str:
-    return str(current) if required == 0 else f"{current}/{required}"
+def _progress(current: int, required: int, *, tone: str = "cultivation"):
+    if required <= 0:
+        return M.status("圆满", tone="mystic")
+    return M.progress(current, required, tone=tone, display="both")
 
 
 __all__ = ["breakthrough", "error", "forged", "view"]

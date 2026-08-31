@@ -12,9 +12,8 @@ def missing_query():
     return (
         M.document()
         .section("查看", icon="item")
-        .line("请提供编号或完整名称。")
-        .line("例如：查看 100005")
-        .line("例如：查看 小还丹")
+        .line(M.status("缺少目标", tone="warning"), " 请提供编号或完整名称。")
+        .small("例如：查看 100005 · 查看 小还丹")
         .build()
     )
 
@@ -25,14 +24,20 @@ def inspection(result: ItemInspectionResult):
             M.document()
             .header("查看结果")
             .section("名称不唯一", icon="notice")
-            .line(f"“{result.query}”对应多项资料，请选择编号查看。")
+            .line(
+                M.status("需要选择", tone="warning"),
+                f" “{result.query}”对应多项资料，请选择编号查看。",
+            )
             .section("候选")
         )
         for index, candidate in enumerate(result.candidates, start=1):
             reply.item(
                 index,
                 M.command(
-                    f"{candidate.section} · {candidate.name}",
+                    M.text(
+                        f"{candidate.section} · {candidate.name}",
+                        tone=_category_tone(candidate.section),
+                    ),
                     f"查看 {candidate.item_id}",
                     submit=False,
                 ),
@@ -43,28 +48,34 @@ def inspection(result: ItemInspectionResult):
         return (
             M.document()
             .section("查看", icon="notice")
-            .line(f"没有找到“{result.query}”对应的资料。")
-            .line("请检查编号或完整名称是否正确。")
+            .line(M.status("未找到", tone="danger"), f" “{result.query}”没有对应资料。")
+            .small("请检查编号或完整名称是否正确。")
             .build()
         )
     detail = result.detail
     title, icon = _display_title(detail.category)
     related = {item.item_id: item for item in result.related_details}
     lines = _definition_lines(detail.section, detail.name, detail.fields, related)
-    reply = (
-        M.document()
-        .header(detail.name)
-        .section(title, icon=icon)
-        .field("编号", detail.item_id)
-    )
+    reply = M.document().header(detail.name)
     if detail.description:
+        reply.section(title, icon=icon).field(
+            "编号", detail.item_id
+        )
         reply.line(_description(detail))
+    else:
+        reply.inline_section(
+            title,
+            f"编号 {detail.item_id}",
+            icon=icon,
+        )
     if lines:
         reply.section(_detail_title(detail.category), icon=icon)
         for line in lines:
             reply.line(line)
     elif not detail.description:
-        reply.line("暂无更多记载。")
+        reply.section("详情", icon=icon).line(
+            M.status("暂无", tone="muted"), " 暂无更多记载。"
+        )
     return reply.build()
 
 
@@ -520,11 +531,7 @@ def _combat_lines(
                 if isinstance(effect, Mapping):
                     summaries.extend(_combat_lines(effect, related))
         limit = node.get("每次行动最多触发")
-        cap = (
-            f"，每行动限{limit}次"
-            if isinstance(limit, int) and limit > 0
-            else ""
-        )
+        cap = f"，每行动限{limit}次" if isinstance(limit, int) and limit > 0 else ""
         timing = (
             "的召唤物或构造物入场后"
             if event == "战斗对象入场后"
@@ -693,9 +700,7 @@ def _combat_lines(
         counter = {"分伤": "伤害分担强度"}.get(raw_counter, raw_counter)
         limit = node.get("最高值")
         suffix = (
-            f"，上限{limit}"
-            if isinstance(limit, (int, float)) and limit < 999
-            else ""
+            f"，上限{limit}" if isinstance(limit, (int, float)) and limit < 999 else ""
         )
         target = _target(node.get("目标"))
         prefix = "" if target == "自身" else target
@@ -1152,6 +1157,22 @@ def _detail_title(category: str) -> str:
         "境界": "境界",
         "人物状态": "状态流转",
     }.get(category, "记载")
+
+
+def _category_tone(category: str) -> str:
+    return {
+        "功法": "mystic",
+        "真意": "mystic",
+        "气机": "info",
+        "器律": "metal",
+        "阵法": "mystic",
+        "先天灵宝": "cultivation",
+        "丹药": "positive",
+        "灵植": "wood",
+        "灵矿": "metal",
+        "道侣": "companion",
+        "伤势": "danger",
+    }.get(category, "emphasis")
 
 
 __all__ = ["inspection", "missing_query"]

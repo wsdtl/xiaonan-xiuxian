@@ -272,7 +272,8 @@ def test_help_home_and_detail_use_real_registered_commands(monkeypatch) -> None:
     assert _content(detail).startswith("**创建人物**")
     assert "**晓楠修仙**" not in _content(detail)
     assert "说明" in _content(detail)
-    assert "发送: 创建人物 姓名 性别" in _content(detail)
+    assert "发送:" in _content(detail)
+    assert "创建人物 姓名 性别" in _content(detail)
     assert "也可发送:" in _content(detail)
     assert "结果:" in _content(detail)
     assert tuple(action.data for action in detail.replies[0].message.actions) == (

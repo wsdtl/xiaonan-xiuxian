@@ -37,15 +37,22 @@ def page(
     *,
     notice: str = "",
 ):
-    title = f"{value.sect_name} · 同行" if value.sect_name else _text(copy, "查看", "标题")
+    title = (
+        f"{value.sect_name} · 同行" if value.sect_name else _text(copy, "查看", "标题")
+    )
     builder = M.document().header(title)
     if notice:
         builder.inline_section(
-            _text(copy, "查看", "状态"), notice, icon=_text(copy, "图标", "结果")
+            _text(copy, "查看", "状态"),
+            (M.status("完成", tone="positive"), *M.text(f" {notice}")),
+            icon=_text(copy, "图标", "结果"),
         )
     builder.inline_section(
         _text(copy, "查看", "当前"),
-        _text(copy, "查看", value.page),
+        M.status(
+            _text(copy, "查看", value.page),
+            tone="positive" if value.members else "muted",
+        ),
         icon=_text(copy, "图标", "同行"),
     )
     if value.members:
@@ -83,7 +90,11 @@ def error(copy: SectFollowCopy, code: str):
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(_text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")))
+        .line(
+            M.status("同行失败", tone="danger"),
+            " ",
+            _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")),
+        )
         .build()
     )
 
@@ -92,7 +103,7 @@ def format_error(copy: SectFollowCopy):
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(_text(copy, "错误", "格式"))
+        .line(M.status("格式有误", tone="warning"), " ", _text(copy, "错误", "格式"))
         .build()
     )
 

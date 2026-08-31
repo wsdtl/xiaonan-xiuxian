@@ -179,8 +179,11 @@ class MessageConsoleService:
                     request_id=result.event.event_id,
                     message=(
                         M.document()
-                        .section("命令未识别", icon="notice")
-                        .line("检查输入，或从帮助中选择可用命令。")
+                        .section("命令状态", icon="notice")
+                        .line(
+                            M.status("未识别", tone="warning"),
+                            " 检查输入，或从帮助中选择可用命令。",
+                        )
                         .action(
                             Action(
                                 "heavenly_dao.unmatched.help",

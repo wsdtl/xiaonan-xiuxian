@@ -14,17 +14,24 @@ def page(copy: LingcangCopy, value: LingcangPage, actions):
         M.document()
         .header(_text(copy, "标题"))
         .section(value.category, icon="inventory")
-        .row((_text(copy, "灵石"), value.spirit_stones), ("材料", value.total_entries))
+        .row(
+            (_text(copy, "灵石"), M.text(value.spirit_stones, tone="cultivation")),
+            ("材料", M.text(value.total_entries, tone="emphasis")),
+        )
     )
     if not value.entries:
-        builder.line(_text(copy, "空"))
+        builder.line(M.status("空", tone="muted"), " ", _text(copy, "空"))
     for index, entry in enumerate(value.entries, start=1):
         builder.item(
             index,
-            f"{entry.grade_name}{entry.name} × {entry.quantity}",
-        ).line(f"{entry.category} · {entry.content_id}")
+            M.command(
+                M.text(f"{entry.grade_name}{entry.name}", tone="emphasis"),
+                f"查看 {entry.content_id}",
+            ),
+            f" × {entry.quantity}",
+        ).small(f"{entry.category} · {entry.content_id}")
     if value.page_count > 1:
-        builder.line(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
+        builder.small(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
     return builder.actions(message_actions(actions)).build()
 
 
@@ -36,6 +43,7 @@ def donated_material(copy: LingcangCopy, result):
         M.document()
         .header(_text(copy, "标题"))
         .section("捐入灵藏", icon="success")
+        .line(M.status("捐献完成", tone="positive"))
         .line(
             _text(
                 copy,
@@ -47,7 +55,7 @@ def donated_material(copy: LingcangCopy, result):
         )
     )
     if result.contribution:
-        builder.field("宗门贡献", f"+{result.contribution}")
+        builder.field("宗门贡献", M.text(f"+{result.contribution}", tone="positive"))
     if result.treasure_activation is not None:
         activation = result.treasure_activation
         builder.section("先天灵宝", icon="item").field(
@@ -61,10 +69,11 @@ def donated_stones(copy: LingcangCopy, quantity: int, result):
         M.document()
         .header(_text(copy, "标题"))
         .section("捐入灵藏", icon="success")
+        .line(M.status("捐献完成", tone="positive"))
         .line(_text(copy, "捐入灵石", 数量=quantity, 余额=result.spirit_stones))
     )
     if result.contribution:
-        builder.field("宗门贡献", f"+{result.contribution}")
+        builder.field("宗门贡献", M.text(f"+{result.contribution}", tone="positive"))
     if result.treasure_activation is not None:
         activation = result.treasure_activation
         builder.section("先天灵宝", icon="item").field(
@@ -75,7 +84,10 @@ def donated_stones(copy: LingcangCopy, quantity: int, result):
 
 def error(copy: LingcangCopy, message: str):
     return (
-        M.document().section(_text(copy, "错误"), icon="notice").line(sentence(message)).build()
+        M.document()
+        .section(_text(copy, "错误"), icon="notice")
+        .line(M.status("捐献失败", tone="danger"), " ", sentence(message))
+        .build()
     )
 
 

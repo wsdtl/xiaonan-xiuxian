@@ -41,7 +41,7 @@ def overview(
         .field(text(copy, "总览", "工匠"), artisan.name)
         .field(text(copy, "总览", "流派"), artisan.school)
         .line(text(copy, "总览", "引言", 工匠=artisan.name))
-        .line(value.artisan.speech["总览"].format(主持=value.artisan.name))
+        .small(value.artisan.speech["总览"].format(主持=value.artisan.name))
         .section(text(copy, "总览", "器阶"), icon="item")
     )
     for index, (stage, count) in enumerate(value.stage_counts, start=1):
@@ -59,10 +59,16 @@ def law_list(copy: ForgingCopy, value: ForgingLawList):
     )
     for index, entry in enumerate(value.entries, start=1):
         state = text(copy, "列表", "可炼" if entry.can_forge else "缺材")
-        builder.item(index, f"{entry.law.name} · {state}").line(
-            f"编号：{entry.law.law_id} · 铸法：{entry.law.method}"
-        )
-    builder.line(text(copy, "列表", "页码", 当前页=1, 总页数=1))
+        builder.item(
+            index,
+            M.command(
+                M.text(entry.law.name, tone="metal"),
+                f"查看 {entry.law.law_id}",
+            ),
+            " · ",
+            M.status(state, tone="positive" if entry.can_forge else "warning"),
+        ).small(f"编号：{entry.law.law_id} · 铸法：{entry.law.method}")
+    builder.small(text(copy, "列表", "页码", 当前页=1, 总页数=1))
     return builder.build()
 
 
@@ -85,7 +91,7 @@ def preview(
         )
         .section(artisan.title, icon="weapon")
         .field(text(copy, "预览", "工匠"), artisan.name)
-        .line(artisan.speech["审材"].format(主持=artisan.name))
+        .small(artisan.speech["审材"].format(主持=artisan.name))
         .section(value.law.name, icon="item")
         .row(
             (text(copy, "预览", "器律"), value.law.law_id),
@@ -103,7 +109,14 @@ def preview(
             builder.item(
                 index, f"{missing.category} · {missing.trait} × {missing.quantity}"
             )
-    builder.line(artisan.speech["齐备" if value.can_forge else "不足"].format(主持=artisan.name))
+    builder.line(
+        M.status(
+            "材料齐备" if value.can_forge else "材料不足",
+            tone="positive" if value.can_forge else "danger",
+        )
+    ).small(
+        artisan.speech["齐备" if value.can_forge else "不足"].format(主持=artisan.name)
+    )
     return builder.actions(message_actions(actions)).build()
 
 
@@ -117,12 +130,13 @@ def completed(
     builder = (
         M.document()
         .header(text(copy, "完成", "标题", 地点=preview_value.location_name))
+        .inline_section("炼器结果", M.status("完成", tone="positive"), icon="success")
         .section(artisan.title, icon="weapon")
         .field(text(copy, "完成", "工匠"), artisan.name)
         .line(text(copy, "完成", "过程", 工匠=artisan.name))
         .section(text(copy, "完成", "所得"), icon="item")
         .field(preview_value.law.name, f"器藏数量 {value.quantity_after}")
-        .line(artisan.speech["完成"].format(主持=artisan.name))
+        .small(artisan.speech["完成"].format(主持=artisan.name))
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
@@ -136,20 +150,24 @@ def error(copy: ForgingCopy, message: str):
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
-        .line(sentence(message))
+        .line(M.status("炼器失败", tone="danger"), " ", sentence(message))
         .build()
     )
 
 
 def _materials(builder, materials, *, show_relation: bool) -> None:
     if not materials:
-        builder.line("无")
+        builder.line(M.status("无", tone="muted"))
         return
     for index, material in enumerate(materials, start=1):
         relation = f" · {material.relation}" if show_relation else ""
         builder.item(
             index,
-            f"{material.grade_name}{material.name} × {material.quantity} · {material.trait}{relation}",
+            M.command(
+                M.text(f"{material.grade_name}{material.name}", tone="emphasis"),
+                f"查看 {material.item_id}",
+            ),
+            f" × {material.quantity} · {material.trait}{relation}",
         )
 
 

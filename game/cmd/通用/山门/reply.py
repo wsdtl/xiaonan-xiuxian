@@ -25,7 +25,7 @@ def result(copy: GateCopy, value: GateResult):
         .header(_text(copy, "结果", "标题"))
         .inline_section(
             _text(copy, "结果", "空间"),
-            _text(copy, "结果", key),
+            M.status(_text(copy, "结果", key), tone="positive"),
             icon=_text(copy, "图标", "结果"),
         )
         .section(_text(copy, "结果", "空间"), icon=_text(copy, "图标", "空间"))
@@ -38,7 +38,11 @@ def error(copy: GateCopy, code: str):
     return (
         M.document()
         .section(_text(copy, "结果", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(_text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")))
+        .line(
+            M.status("通行受阻", tone="danger"),
+            " ",
+            _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")),
+        )
         .build()
     )
 

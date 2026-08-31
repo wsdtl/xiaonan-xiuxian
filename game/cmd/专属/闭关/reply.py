@@ -25,7 +25,7 @@ def error(copy: RetreatCopy, message: str):
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
-        .line(message)
+        .line(M.status("闭关失败", tone="danger"), " ", message)
         .build()
     )
 
@@ -38,6 +38,7 @@ def started(
     return (
         M.document()
         .header(text(copy, "开始", "标题"))
+        .inline_section("闭关状态", M.status("进行中", tone="positive"), icon="status")
         .section(value.location_name, icon="player")
         .row(
             (text(copy, "开始", "同行用户"), value.participant_count),
@@ -47,7 +48,7 @@ def started(
             (text(copy, "开始", "轮次"), value.maximum_rounds),
             (text(copy, "开始", "最晚出关"), natural_deadline(value.maximum_ends_at)),
         )
-        .line(text(copy, "开始", "说明"))
+        .small(text(copy, "开始", "说明"))
         .actions(message_actions(actions))
         .build()
     )
@@ -76,7 +77,12 @@ def progress(
         .row(
             (
                 text(copy, "进度", "轮次"),
-                f"{value.completed_rounds}/{value.maximum_rounds}轮",
+                M.progress(
+                    value.completed_rounds,
+                    value.maximum_rounds,
+                    tone="cultivation",
+                    display="value",
+                ),
             ),
             progress_tail,
         )
@@ -94,7 +100,9 @@ def progress(
                 f"{feature.cultivation_label(insight.content_id, insight.grade_id)}",
             )
     else:
-        builder.line(text(copy, "进度", "没有感悟"))
+        builder.line(
+            M.status("暂无", tone="muted"), " ", text(copy, "进度", "没有感悟")
+        )
     if value.settled:
         note = ""
     elif value.can_end:
@@ -102,7 +110,14 @@ def progress(
     else:
         note = text(copy, "进度", "等待领队")
     if note:
-        builder.line(note)
+        builder.line(
+            M.status(
+                "可出关" if value.can_end else "等待中",
+                tone="positive" if value.can_end else "warning",
+            ),
+            " ",
+            note,
+        )
     return builder.actions(message_actions(actions)).build()
 
 
@@ -119,16 +134,24 @@ def settlement_page(
         builder = (
             M.document()
             .header(text(copy, "总结", "标题"))
+            .inline_section(
+                "闭关状态", M.status("已出关", tone="positive"), icon="success"
+            )
             .section(value.location_name, icon="status")
             .row(
                 (
                     text(copy, "总结", "轮次"),
-                    f"{value.completed_rounds}/{value.maximum_rounds}轮",
+                    M.progress(
+                        value.completed_rounds,
+                        value.maximum_rounds,
+                        tone="cultivation",
+                        display="value",
+                    ),
                 ),
                 (text(copy, "总结", "同行用户"), value.participant_count),
             )
             .field(text(copy, "总结", "感悟次数"), insight_count)
-            .line(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
+            .small(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
         )
     else:
         builder = _user_page(copy, feature, value.users[page - 2], page, total_pages)
@@ -156,14 +179,23 @@ def _user_page(
             else f"{character.level_before} → {character.level_after}"
         )
         builder.section(f"{title} · {character.name}", icon="player").row(
-            (text(copy, "用户", "经验"), f"+{character.experience_gained}"),
+            (
+                text(copy, "用户", "经验"),
+                M.text(f"+{character.experience_gained}", tone="positive"),
+            ),
             (
                 text(copy, "用户", "等级"),
                 level,
             ),
         ).row(
-            (text(copy, "用户", "血气"), _resource(character.health)),
-            (text(copy, "用户", "精神"), _resource(character.spirit)),
+            (
+                text(copy, "用户", "血气"),
+                M.text(_resource(character.health), tone="health"),
+            ),
+            (
+                text(copy, "用户", "精神"),
+                M.text(_resource(character.spirit), tone="spirit"),
+            ),
         )
         if character.injury_changes:
             builder.field(
@@ -184,12 +216,18 @@ def _user_page(
             result = text(copy, "用户", insight.outcome or "复悟")
             builder.item(
                 index,
-                f"第{insight.round_number}轮 · {result} · "
-                f"{feature.cultivation_label(insight.content_id, insight.grade_id)}",
+                f"第{insight.round_number}轮 · {result} · ",
+                M.command(
+                    M.text(
+                        feature.cultivation_label(insight.content_id, insight.grade_id),
+                        tone="mystic",
+                    ),
+                    f"查看 {insight.content_id}",
+                ),
             )
     else:
-        builder.line(text(copy, "用户", "无"))
-    return builder.line(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
+        builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "无"))
+    return builder.small(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
 
 
 def _resource(value: float) -> str:

@@ -12,12 +12,12 @@ def entry(overview: WorldMapOverview, url: str) -> DocumentMessage:
         builder.line(overview.description)
     return (
         builder.row(
-            ("范围", f"{overview.width} × {overview.height}"),
-            ("区域", f"{overview.region_count}处"),
+            ("范围", M.text(f"{overview.width} × {overview.height}", tone="emphasis")),
+            ("区域", M.text(f"{overview.region_count}处", tone="emphasis")),
         )
         .row(
-            ("地点", f"{overview.location_count}处"),
-            ("道路", f"{overview.road_count}条"),
+            ("地点", M.text(f"{overview.location_count}处", tone="emphasis")),
+            ("道路", M.text(f"{overview.road_count}条", tone="emphasis")),
         )
         .line(M.link(f"打开{overview.name}地图", url))
         .action(Action("world_map.open", "打开地图", url, behavior="link"))

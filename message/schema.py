@@ -6,16 +6,81 @@ OpenAPI 字段。驱动器必须把它们渲染成自己的输出协议。
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any, Literal, TypeAlias
+
+from .theme import LineSize, normalize_line_size, normalize_tone
 
 
 @dataclass(frozen=True)
 class Text:
-    """不携带任何展示样式的普通文本。"""
+    """普通文本；tone 只表达语义，不接受颜色值。"""
 
     value: str
+    tone: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", str(self.value))
+        object.__setattr__(self, "tone", normalize_tone(self.tone))
+
+
+@dataclass(frozen=True)
+class Status:
+    """使用统一语义色突出一个短状态。"""
+
+    value: str
+    tone: str = "info"
+
+    def __post_init__(self) -> None:
+        value = str(self.value or "").strip()
+        if not value or any(character in value for character in "\r\n"):
+            raise ValueError("消息状态必须是非空单行文本")
+        object.__setattr__(self, "value", value)
+        object.__setattr__(self, "tone", normalize_tone(self.tone, default="info"))
+
+
+@dataclass(frozen=True)
+class Progress:
+    """以固定宽度展示数值进度。"""
+
+    value: float
+    maximum: float
+    tone: str = "info"
+    display: Literal["none", "percent", "value", "both"] = "percent"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.value, bool) or isinstance(self.maximum, bool):
+            raise TypeError("消息进度不接受布尔值")
+        try:
+            value = float(self.value)
+            maximum = float(self.maximum)
+        except (TypeError, ValueError) as exc:
+            raise TypeError("消息进度必须使用数值") from exc
+        if not isfinite(value) or not isfinite(maximum):
+            raise ValueError("消息进度必须使用有限数值")
+        if maximum <= 0:
+            raise ValueError("消息进度上限必须大于 0")
+        if self.display not in {"none", "percent", "value", "both"}:
+            raise ValueError(f"未知消息进度文字：{self.display}")
+        object.__setattr__(self, "value", value)
+        object.__setattr__(self, "maximum", maximum)
+        object.__setattr__(self, "tone", normalize_tone(self.tone, default="info"))
+
+    @property
+    def ratio(self) -> float:
+        return min(1.0, max(0.0, self.value / self.maximum))
+
+    @property
+    def label(self) -> str:
+        percent = f"{round(self.ratio * 100):d}%"
+        value = f"{_number(self.value)} / {_number(self.maximum)}"
+        return {
+            "none": "",
+            "percent": percent,
+            "value": value,
+            "both": f"{value} · {percent}",
+        }[self.display]
 
 
 @dataclass(frozen=True)
@@ -41,8 +106,19 @@ class FieldSeparator:
     """字段组分隔符；具体空白由渲染器决定。"""
 
 
-Span: TypeAlias = Text | Link | CommandLink | FieldSeparator
+Span: TypeAlias = Text | Status | Progress | Link | CommandLink | FieldSeparator
 RichText: TypeAlias = tuple[Span, ...]
+
+
+@dataclass(frozen=True)
+class ContentLine:
+    """一整行正文；字号只能在行级统一指定。"""
+
+    content: RichText
+    size: LineSize = "body"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "size", normalize_line_size(self.size))
 
 
 @dataclass(frozen=True)
@@ -50,7 +126,6 @@ class HeaderBlock:
     """消息顶部的主标题。"""
 
     content: RichText
-    color: str = ""
 
     def __post_init__(self) -> None:
         if not self.content or any(not isinstance(span, Text) for span in self.content):
@@ -59,10 +134,6 @@ class HeaderBlock:
             character in span.value for span in self.content for character in "\r\n"
         ):
             raise ValueError("消息主标题必须保持单行")
-        color = str(self.color or "").strip().upper()
-        if color and re.fullmatch(r"#[0-9A-F]{6}", color) is None:
-            raise ValueError("消息主标题颜色必须是 #RRGGBB")
-        object.__setattr__(self, "color", color)
 
 
 @dataclass(frozen=True)
@@ -79,7 +150,7 @@ class SectionBlock:
     """带标题和归属正文的栏目。"""
 
     title: RichText
-    lines: tuple[RichText, ...]
+    lines: tuple[ContentLine, ...]
     icon: str = ""
 
 
@@ -109,7 +180,7 @@ class ImageBlock:
 class NoteBlock:
     """正文之后、按钮之前的附加说明区。"""
 
-    lines: tuple[RichText, ...]
+    lines: tuple[ContentLine, ...]
 
 
 DocumentBlock: TypeAlias = (
@@ -185,3 +256,9 @@ class RenderedMessage:
     content: str = ""
     image: Any = None
     actions: tuple[Action, ...] = ()
+
+
+def _number(value: float) -> str:
+    if value.is_integer():
+        return f"{int(value):,}"
+    return f"{value:,.2f}".rstrip("0").rstrip(".")

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import replace
-from typing import Any
+from typing import Any, Literal
 
 from .schema import (
     Action,
     CommandLink,
+    ContentLine,
     Document,
     DocumentBlock,
     DocumentMessage,
@@ -19,22 +20,28 @@ from .schema import (
     InlineBlock,
     Link,
     NoteBlock,
+    Progress,
     RichText,
     SectionBlock,
     Span,
+    Status,
     Text,
 )
 
 
-def rich(*parts: object) -> RichText:
+def _rich(*parts: object) -> RichText:
     """把普通值和语义 span 整理为 RichText。"""
 
     result: list[Span] = []
     for part in parts:
-        if isinstance(part, (Text, Link, CommandLink, FieldSeparator)):
+        if isinstance(part, (Text, Status, Progress, Link, CommandLink, FieldSeparator)):
             result.append(part)
         elif isinstance(part, tuple) and all(
-            isinstance(item, (Text, Link, CommandLink, FieldSeparator)) for item in part
+            isinstance(
+                item,
+                (Text, Status, Progress, Link, CommandLink, FieldSeparator),
+            )
+            for item in part
         ):
             result.extend(part)
         elif part is not None:
@@ -52,10 +59,10 @@ class DocumentBuilder:
         self._actions: list[Action] = []
         self._section_index: int | None = None
 
-    def header(self, *parts: object, color: str = "") -> DocumentBuilder:
+    def header(self, *parts: object) -> DocumentBuilder:
         """添加消息主标题。"""
 
-        self._blocks.append(HeaderBlock(rich(*parts), color))
+        self._blocks.append(HeaderBlock(_rich(*parts)))
         self._section_index = None
         return self
 
@@ -69,7 +76,7 @@ class DocumentBuilder:
         """添加标题与内容同一行的短信息。"""
 
         self._blocks.append(
-            InlineBlock(rich(title), rich(content), str(icon or "").strip())
+            InlineBlock(_rich(title), _rich(content), str(icon or "").strip())
         )
         self._section_index = None
         return self
@@ -77,20 +84,26 @@ class DocumentBuilder:
     def section(self, title: object, *, icon: str = "") -> DocumentBuilder:
         """开始一个新栏目；后续正文自动归属于该栏目。"""
 
-        self._blocks.append(SectionBlock(rich(title), (), str(icon or "").strip()))
+        self._blocks.append(SectionBlock(_rich(title), (), str(icon or "").strip()))
         self._section_index = len(self._blocks) - 1
         return self
 
     def line(self, *parts: object) -> DocumentBuilder:
         """向当前栏目添加普通正文。"""
 
-        self._append_section_line(rich(*parts))
+        self._append_section_line(ContentLine(_rich(*parts)))
+        return self
+
+    def small(self, *parts: object) -> DocumentBuilder:
+        """添加整行统一小字说明。"""
+
+        self._append_section_line(ContentLine(_rich(*parts), "caption"))
         return self
 
     def field(self, label: object, value: object) -> DocumentBuilder:
         """添加一个普通文本字段。"""
 
-        return self.line(str(label), ": ", value)
+        return self.line(Text(f"{label}: "), value)
 
     def row(self, *items: tuple[object, object]) -> DocumentBuilder:
         """在同一行添加多个字段，分隔空白由渲染器决定。"""
@@ -99,8 +112,8 @@ class DocumentBuilder:
         for index, (label, value) in enumerate(items):
             if index:
                 parts.append(FieldSeparator())
-            parts.extend((Text(f"{label}: "), *rich(value)))
-        self._append_section_line(tuple(parts))
+            parts.extend((Text(f"{label}: "), *_rich(value)))
+        self._append_section_line(ContentLine(tuple(parts)))
         return self
 
     def item(self, index: int, *parts: object) -> DocumentBuilder:
@@ -108,19 +121,19 @@ class DocumentBuilder:
 
         if isinstance(index, bool) or not isinstance(index, int) or index < 1:
             raise ValueError("消息列表编号必须是正整数，不能使用内部业务标识")
-        self._append_section_line(rich(f"[{index}] ", *parts))
+        self._append_section_line(ContentLine(_rich(Text(f"[{index}] "), *parts)))
         return self
 
     def blank(self) -> DocumentBuilder:
-        """在当前栏目正文内添加空行。"""
+        """在当前栏目正文内添加一行 Markdown 空引用。"""
 
-        self._append_section_line(())
+        self._append_section_line(ContentLine(()))
         return self
 
     def note(self, *lines: object) -> DocumentBuilder:
         """添加正文之后、动作按钮之前的附加说明。"""
 
-        content = tuple(parsed for line in lines if (parsed := rich(line)))
+        content = tuple(ContentLine(parsed) for line in lines if (parsed := _rich(line)))
         if content:
             self._blocks.append(NoteBlock(content))
             self._section_index = None
@@ -167,7 +180,7 @@ class DocumentBuilder:
             )
         return DocumentMessage(Document(tuple(self._blocks), tuple(self._actions)))
 
-    def _append_section_line(self, line: RichText) -> None:
+    def _append_section_line(self, line: ContentLine) -> None:
         if self._section_index is None:
             raise ValueError("line/row/item 必须属于 section")
         block = self._blocks[self._section_index]
@@ -198,9 +211,9 @@ def _inline_commands(blocks: Iterable[DocumentBlock]) -> set[str]:
         elif isinstance(block, InlineBlock):
             values = (block.title, block.content)
         elif isinstance(block, SectionBlock):
-            values = (block.title, *block.lines)
+            values = (block.title, *(line.content for line in block.lines))
         elif isinstance(block, NoteBlock):
-            values = block.lines
+            values = (line.content for line in block.lines)
         else:
             continue
         for value in values:
@@ -219,15 +232,29 @@ class M:
 
     @staticmethod
     def image(image: Any, caption: object = "") -> ImageMessage:
-        return ImageMessage(image=image, caption=rich(caption))
+        return ImageMessage(image=image, caption=_rich(caption))
 
     @staticmethod
-    def text(value: object) -> RichText:
-        return rich(value)
+    def text(value: object, *, tone: str = "") -> RichText:
+        return _rich(Text(str(value), tone))
+
+    @staticmethod
+    def status(value: object, *, tone: str = "info") -> Status:
+        return Status(str(value), tone)
+
+    @staticmethod
+    def progress(
+        value: float,
+        maximum: float,
+        *,
+        tone: str = "info",
+        display: Literal["none", "percent", "value", "both"] = "percent",
+    ) -> Progress:
+        return Progress(value, maximum, tone, display)
 
     @staticmethod
     def link(label: object, url: object) -> Link:
-        return Link(rich(label), str(url or "").strip())
+        return Link(_rich(label), str(url or "").strip())
 
     @staticmethod
     def command(
@@ -238,5 +265,5 @@ class M:
         reply: bool = False,
     ) -> CommandLink:
         return CommandLink(
-            rich(label), str(command or "").strip(), submit=submit, reply=reply
+            _rich(label), str(command or "").strip(), submit=submit, reply=reply
         )

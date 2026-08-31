@@ -172,7 +172,10 @@ def _normalize_decision(decision: object) -> CommandGuardDecision:
 def _guard_error_message() -> Message:
     return (
         M.document()
-        .section("当前状态")
-        .line("命令暂时无法执行，请稍后重试。")
+        .section("当前状态", icon="notice")
+        .line(
+            M.status("暂不可用", tone="danger"),
+            " 命令暂时无法执行，请稍后重试。",
+        )
         .build()
     )

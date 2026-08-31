@@ -298,6 +298,7 @@
     const content = document.createElement("div");
     content.className = "message-content";
     content.innerHTML = record.content_html || escapeHtml(record.content || "");
+    renderFormulas(content);
     bubble.appendChild(content);
     if (record.image && !content.querySelector("img") && isSafeUrl(record.image)) {
       const image = document.createElement("img");
@@ -317,6 +318,27 @@
     stack.append(meta, bubble);
     row.appendChild(stack);
     return row;
+  }
+
+  function renderFormulas(root) {
+    root.querySelectorAll(".message-formula").forEach((node) => {
+      const source = node.dataset.latex || "";
+      if (!source) return;
+      if (!window.katex) {
+        node.textContent = source;
+        return;
+      }
+      try {
+        window.katex.render(source, node, {
+          displayMode: node.dataset.display === "true",
+          throwOnError: false,
+          strict: "ignore",
+          trust: false,
+        });
+      } catch (_) {
+        node.textContent = source;
+      }
+    });
   }
 
   function createActions(record) {

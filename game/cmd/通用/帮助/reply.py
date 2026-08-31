@@ -24,12 +24,12 @@ def _home_message() -> DocumentMessage:
         M.document()
         .header(GAME_NAME)
         .section("帮助", icon="system")
-        .line("按分类查看当前已经开放的命令。")
+        .small("按分类查看当前已经开放的命令。")
     )
     categories = help_registry.categories()
     _category_rows(builder, categories)
     if not categories:
-        builder.line("当前还没有登记公开命令。")
+        builder.line(M.status("暂无命令", tone="muted"))
     return builder.build()
 
 
@@ -41,7 +41,7 @@ def _category_message(category: str) -> DocumentMessage:
             M.command(entry.command, f"帮助 {entry.command}"), " - ", entry.spec.summary
         )
     if not entries:
-        builder.line("当前分类还没有开放命令。")
+        builder.line(M.status("暂未开放", tone="muted"))
     return builder.actions((_home_action(),)).build()
 
 
@@ -91,7 +91,7 @@ def _not_found_message(query: str) -> DocumentMessage:
         M.document()
         .header(GAME_NAME)
         .section("没有找到帮助", icon="notice")
-        .line(f"未登记分类或命令：{query}")
+        .line(M.status("未找到", tone="warning"), " ", query)
         .section("可用分类")
     )
     _category_rows(builder, help_registry.categories())

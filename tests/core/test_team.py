@@ -110,7 +110,8 @@ def test_team_invitation_order_public_count_and_group_travel(tmp_path: Path) -> 
     rendered = render_local_message(
         reply.page(feature.copy(), page, feature.page_actions(page))
     )
-    assert "人数: 3/3" in rendered.content
+    assert "人数" in rendered.content
+    assert "3/3" in rendered.content
     assert "林远 · 队长" in rendered.content
     assert "白川 · 队员" in rendered.content
     assert all(action.data != "队伍 邀请 " for action in rendered.actions)

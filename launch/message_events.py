@@ -112,7 +112,9 @@ def emit_message_event(event: MessageEvent) -> None:
                 task = asyncio.create_task(_await_listener(result))
                 task.add_done_callback(_consume_listener_result)
             except RuntimeError as exc:
-                logger.opt(colors=True, exception=exc).warning(C.warn("消息事件异步订阅调度失败"))
+                logger.opt(colors=True, exception=exc).warning(
+                    C.warn("消息事件异步订阅调度失败")
+                )
 
 
 def event_from_incoming(
@@ -175,9 +177,16 @@ def snapshot_from_message(message: object) -> MessageSnapshot:
 
     semantic = coerce_message(message)
     if isinstance(semantic, DocumentMessage):
-        interactions = [_interaction_from_action(action) for action in semantic.document.actions]
+        interactions = [
+            _interaction_from_action(action) for action in semantic.document.actions
+        ]
 
-        def command_renderer(command: CommandLink) -> str:
+        def command_renderer(
+            command: CommandLink,
+            line_size: str = "body",
+            default_tone: str = "",
+            force_formula: bool = False,
+        ) -> str:
             action_id = f"command-link-{len(interactions) + 1}"
             interactions.append(
                 MessageInteraction(
@@ -191,12 +200,19 @@ def snapshot_from_message(message: object) -> MessageSnapshot:
                     submit=command.submit,
                 )
             )
-            label = render_rich_markdown(command.label)
+            label = render_rich_markdown(
+                command.label,
+                line_size=line_size,
+                default_tone=default_tone,
+                force_formula=force_formula,
+            )
             return f"[{label}](webcmd://{action_id})"
 
         return MessageSnapshot(
             message_type="markdown",
-            content=render_markdown(semantic.document, command_renderer=command_renderer),
+            content=render_markdown(
+                semantic.document, command_renderer=command_renderer
+            ),
             interactions=tuple(interactions),
         )
     if isinstance(semantic, ImageMessage):
@@ -208,7 +224,9 @@ def snapshot_from_message(message: object) -> MessageSnapshot:
 
     message = render_local_message(message)
     if isinstance(message, RenderedMessage):
-        interactions = tuple(_interaction_from_action(action) for action in message.actions)
+        interactions = tuple(
+            _interaction_from_action(action) for action in message.actions
+        )
         if message.kind == "image":
             return MessageSnapshot(
                 "image",
@@ -240,10 +258,17 @@ def snapshot_from_message(message: object) -> MessageSnapshot:
             return MessageSnapshot(kind, body, interactions=interactions)
         if "content" in message:
             return MessageSnapshot("markdown", content, interactions=interactions)
-        return MessageSnapshot("raw", json.dumps(message, ensure_ascii=False, default=str), interactions=interactions)
+        return MessageSnapshot(
+            "raw",
+            json.dumps(message, ensure_ascii=False, default=str),
+            interactions=interactions,
+        )
 
     if isinstance(message, (list, tuple)):
-        return MessageSnapshot("text", "\n".join(_message_text(item) for item in message if _message_text(item)))
+        return MessageSnapshot(
+            "text",
+            "\n".join(_message_text(item) for item in message if _message_text(item)),
+        )
     if message is None:
         return MessageSnapshot("unknown", "")
     return MessageSnapshot("text", str(message).strip())
@@ -267,25 +292,43 @@ def _interaction_from_action(action: Action) -> MessageInteraction:
 def _native_keyboard_interactions(keyboard: object) -> tuple[MessageInteraction, ...]:
     if not isinstance(keyboard, dict):
         return ()
-    content = keyboard.get("content") if isinstance(keyboard.get("content"), dict) else {}
+    content = (
+        keyboard.get("content") if isinstance(keyboard.get("content"), dict) else {}
+    )
     rows = content.get("rows") if isinstance(content.get("rows"), list) else []
     interactions: list[MessageInteraction] = []
     for row in rows:
-        buttons = row.get("buttons") if isinstance(row, dict) and isinstance(row.get("buttons"), list) else []
+        buttons = (
+            row.get("buttons")
+            if isinstance(row, dict) and isinstance(row.get("buttons"), list)
+            else []
+        )
         for button in buttons:
             if not isinstance(button, dict):
                 continue
-            action = button.get("action") if isinstance(button.get("action"), dict) else {}
-            render_data = button.get("render_data") if isinstance(button.get("render_data"), dict) else {}
+            action = (
+                button.get("action") if isinstance(button.get("action"), dict) else {}
+            )
+            render_data = (
+                button.get("render_data")
+                if isinstance(button.get("render_data"), dict)
+                else {}
+            )
             data = str(action.get("data") or "").strip()
             label = str(render_data.get("label") or "").strip()
             if not data or not label:
                 continue
             action_type = _safe_int(action.get("type"), 0)
-            behavior = {0: "link", 1: "callback", 2: "send"}.get(action_type, "callback")
+            behavior = {0: "link", 1: "callback", 2: "send"}.get(
+                action_type, "callback"
+            )
             if action_type == 2 and action.get("enter") is False:
                 behavior = "fill"
-            permission_data = action.get("permission") if isinstance(action.get("permission"), dict) else {}
+            permission_data = (
+                action.get("permission")
+                if isinstance(action.get("permission"), dict)
+                else {}
+            )
             permission = {0: "specified", 1: "admins", 2: "everyone"}.get(
                 _safe_int(permission_data.get("type"), 2),
                 "everyone",
@@ -293,13 +336,20 @@ def _native_keyboard_interactions(keyboard: object) -> tuple[MessageInteraction,
             interactions.append(
                 MessageInteraction(
                     kind="action",
-                    action_id=str(button.get("id") or f"native-{len(interactions) + 1}"),
+                    action_id=str(
+                        button.get("id") or f"native-{len(interactions) + 1}"
+                    ),
                     label=label,
                     data=data,
                     behavior=behavior,
-                    style="primary" if _safe_int(render_data.get("style"), 0) == 1 else "secondary",
+                    style="primary"
+                    if _safe_int(render_data.get("style"), 0) == 1
+                    else "secondary",
                     permission=permission,
-                    specified_user_ids=tuple(str(value) for value in permission_data.get("specify_user_ids", ())),
+                    specified_user_ids=tuple(
+                        str(value)
+                        for value in permission_data.get("specify_user_ids", ())
+                    ),
                     reply=bool(action.get("reply")),
                     submit=behavior not in {"fill", "link"},
                 )
@@ -310,7 +360,9 @@ def _native_keyboard_interactions(keyboard: object) -> tuple[MessageInteraction,
 _NATIVE_COMMAND_LINK_RE = re.compile(r"\[([^\]]+)\]\((mqqapi://aio/inlinecmd\?[^)]+)\)")
 
 
-def _extract_native_command_links(content: str) -> tuple[str, tuple[MessageInteraction, ...]]:
+def _extract_native_command_links(
+    content: str,
+) -> tuple[str, tuple[MessageInteraction, ...]]:
     interactions: list[MessageInteraction] = []
 
     def replace(match: re.Match) -> str:
@@ -401,7 +453,9 @@ def _message_text(message: object) -> str:
             return _message_text(message.get("content"))
         return json.dumps(message, ensure_ascii=False, default=str)
     if isinstance(message, (list, tuple)):
-        return "\n".join(_message_text(item) for item in message if _message_text(item)).strip()
+        return "\n".join(
+            _message_text(item) for item in message if _message_text(item)
+        ).strip()
     if message is None:
         return ""
     return str(message).strip()
@@ -418,7 +472,11 @@ def _clean_content(value: object) -> str:
 
 def _normalize_message_type(value: object) -> str:
     text = str(value or "").strip().lower()
-    return text if text in {"text", "markdown", "image", "media", "ark", "embed", "raw"} else "unknown"
+    return (
+        text
+        if text in {"text", "markdown", "image", "media", "ark", "embed", "raw"}
+        else "unknown"
+    )
 
 
 def _safe_int(value: object, default: int) -> int:

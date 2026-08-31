@@ -23,7 +23,9 @@ class RaidFeatureError(RuntimeError):
 
 
 class RaidFeature:
-    def __init__(self, data: JsonDataService, raid: RaidService, groups: ActionGroupService) -> None:
+    def __init__(
+        self, data: JsonDataService, raid: RaidService, groups: ActionGroupService
+    ) -> None:
         self._data, self._raid, self._groups = data, raid, groups
         self._text: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 
@@ -50,20 +52,30 @@ class RaidFeature:
     async def start(self, user_id: str, request_id: str) -> RaidStarted:
         try:
             participants = await self._groups.participants(user_id)
-            return await self._raid.start(RaidStartCommand(user_id, request_id, participants))
+            return await self._raid.start(
+                RaidStartCommand(user_id, request_id, participants)
+            )
         except ActionGroupError as exc:
-            message = "当前正在跟随领队，只有领队可以发起讨伐" if exc.code == "member_cannot_start" else "同行状态刚刚发生变化"
+            message = (
+                "当前正在跟随领队，只有领队可以发起讨伐"
+                if exc.code == "member_cannot_start"
+                else "同行状态刚刚发生变化"
+            )
             raise RaidFeatureError(message) from exc
         except RaidError as exc:
             raise RaidFeatureError(str(exc)) from exc
 
-    async def progress(self, user_id: str, *, now: datetime | None = None) -> RaidProgress:
+    async def progress(
+        self, user_id: str, *, now: datetime | None = None
+    ) -> RaidProgress:
         try:
             return await self._raid.progress(user_id, now=now)
         except RaidError as exc:
             raise RaidFeatureError(str(exc)) from exc
 
-    async def settle(self, user_id: str, request_id: str, *, now: datetime | None = None) -> RaidSettlement:
+    async def settle(
+        self, user_id: str, request_id: str, *, now: datetime | None = None
+    ) -> RaidSettlement:
         try:
             return await self._raid.settle(user_id, request_id, now=now)
         except RaidError as exc:
@@ -74,8 +86,16 @@ class RaidFeature:
         return self.text("结算", key)
 
     def reward_note(self, winner: str) -> str:
-        key = {"left": "胜利奖励", "right": "失败奖励", "平局": "平局奖励"}.get(winner, "平局奖励")
+        key = {"left": "胜利奖励", "right": "失败奖励", "平局": "平局奖励"}.get(
+            winner, "平局奖励"
+        )
         return self.text("结算", key)
 
 
-__all__ = ["RaidFeature", "RaidFeatureError"]
+__all__ = [
+    "RaidFeature",
+    "RaidFeatureError",
+    "RaidProgress",
+    "RaidSettlement",
+    "RaidStarted",
+]

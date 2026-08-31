@@ -38,47 +38,111 @@ _ERROR_KEYS = {
 }
 
 
-def page(copy: SectCopy, value: SectPage, actions: tuple[SectAction, ...], *, notice: str = ""):
-    title = value.name if value.page not in {"未加入", "待处理邀请"} else _text(copy, "查看", "标题")
+def page(
+    copy: SectCopy,
+    value: SectPage,
+    actions: tuple[SectAction, ...],
+    *,
+    notice: str = "",
+):
+    title = (
+        value.name
+        if value.page not in {"未加入", "待处理邀请"}
+        else _text(copy, "查看", "标题")
+    )
     builder = M.document().header(title)
     if notice:
-        builder.inline_section(_text(copy, "查看", "状态"), notice, icon=_text(copy, "图标", "结果"))
+        builder.inline_section(
+            _text(copy, "查看", "状态"),
+            (M.status("完成", tone="positive"), *M.text(f" {notice}")),
+            icon=_text(copy, "图标", "结果"),
+        )
     if value.page == "未加入":
-        builder.section(_text(copy, "查看", "状态"), icon=_text(copy, "图标", "宗门")).line(_text(copy, "查看", "未加入"))
+        builder.section(
+            _text(copy, "查看", "状态"), icon=_text(copy, "图标", "宗门")
+        ).line(M.status("未加入", tone="muted"), " ", _text(copy, "查看", "未加入"))
     elif value.page == "待处理邀请":
-        builder.section(_text(copy, "查看", "待处理邀请"), icon=_text(copy, "图标", "邀请")).line(_text(copy, "格式", "邀请来源").format(姓名=value.invitation_inviter_name, 宗门=value.invitation_name)).line(_text(copy, "格式", "邀请时限").format(分钟=value.invitation_minutes))
+        builder.section(
+            _text(copy, "查看", "待处理邀请"), icon=_text(copy, "图标", "邀请")
+        ).line(
+            M.status("待处理", tone="warning"),
+            " ",
+            _text(copy, "格式", "邀请来源").format(
+                姓名=value.invitation_inviter_name, 宗门=value.invitation_name
+            ),
+        ).small(_text(copy, "格式", "邀请时限").format(分钟=value.invitation_minutes))
     else:
-        builder.section("山门", icon=_text(copy, "图标", "宗门")).field(_text(copy, "查看", "入口"), value.entrance).field(_text(copy, "查看", "洞天"), _text(copy, "格式", "洞天"))
+        builder.section("山门", icon=_text(copy, "图标", "宗门")).field(
+            _text(copy, "查看", "入口"), value.entrance
+        ).field(_text(copy, "查看", "洞天"), _text(copy, "格式", "洞天"))
         builder.section(_text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员"))
         for role in ("宗主", "长老", "弟子"):
-            names = tuple(member.name for member in value.members if member.role == role)
+            names = tuple(
+                member.name for member in value.members if member.role == role
+            )
             if names:
                 label = role if role == "宗主" else f"{role}（{len(names)}）"
                 builder.field(label, "、".join(names))
         builder.section(_text(copy, "查看", "进境"), icon="status").row(
-            (_text(copy, "查看", "等级"), f"{value.sect_level}/{value.maximum_sect_level}"),
-            (_text(copy, "查看", "总贡献"), str(value.total_contribution)),
+            (
+                _text(copy, "查看", "等级"),
+                M.progress(
+                    value.sect_level,
+                    value.maximum_sect_level,
+                    tone="cultivation",
+                    display="value",
+                ),
+            ),
+            (
+                _text(copy, "查看", "总贡献"),
+                M.text(value.total_contribution, tone="cultivation"),
+            ),
         )
         if value.next_level_contribution is not None:
-            builder.field(_text(copy, "查看", "距下级"), str(value.next_level_contribution - value.total_contribution))
+            builder.field(
+                _text(copy, "查看", "距下级"),
+                str(value.next_level_contribution - value.total_contribution),
+            )
         builder.row(
-            (_text(copy, "查看", "资源增益"), f"生产/采集 ×{value.production_multiplier:g}"),
-            (_text(copy, "查看", "炼制消耗"), f"灵石 ×{value.facility_cost_multiplier:g}"),
+            (
+                _text(copy, "查看", "资源增益"),
+                f"生产/采集 ×{value.production_multiplier:g}",
+            ),
+            (
+                _text(copy, "查看", "炼制消耗"),
+                f"灵石 ×{value.facility_cost_multiplier:g}",
+            ),
         )
     return builder.actions(message_actions(actions)).build()
 
 
-def operation(copy: SectCopy, value: SectOperationResult, actions: tuple[SectAction, ...]):
+def operation(
+    copy: SectCopy, value: SectOperationResult, actions: tuple[SectAction, ...]
+):
     notice = _text(copy, "结果", value.action).format(姓名=value.target_name)
     return page(copy, value.page, actions, notice=notice)
 
 
 def error(copy: SectCopy, code: str):
-    return M.document().section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果")).line(_text(copy, "错误", _ERROR_KEYS.get(code, "宗门变化"))).build()
+    return (
+        M.document()
+        .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
+        .line(
+            M.status("操作失败", tone="danger"),
+            " ",
+            _text(copy, "错误", _ERROR_KEYS.get(code, "宗门变化")),
+        )
+        .build()
+    )
 
 
 def format_error(copy: SectCopy):
-    return M.document().section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果")).line(_text(copy, "错误", "格式")).build()
+    return (
+        M.document()
+        .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
+        .line(M.status("格式有误", tone="warning"), " ", _text(copy, "错误", "格式"))
+        .build()
+    )
 
 
 def _text(copy: SectCopy, section: str, key: str) -> str:

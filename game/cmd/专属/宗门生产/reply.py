@@ -29,14 +29,21 @@ def viewed(
         )
     )
     if not value.started:
-        builder.line(common["未开始"])
+        builder.line(M.status("未开始", tone="muted"), " ", common["未开始"])
     else:
-        builder.field("可收取", common["待结算"].format(轮数=value.pending_cycles))
+        builder.line(M.status("生产中", tone="positive"))
+        builder.field(
+            "可收取",
+            M.text(
+                common["待结算"].format(轮数=value.pending_cycles),
+                tone="emphasis",
+            ),
+        )
         builder.field(
             "下一轮", common["剩余"].format(时长=duration(value.next_cycle_seconds))
         )
         if value.pending_cycles == 0:
-            builder.line(common["无待结算"])
+            builder.small(common["无待结算"])
     return builder.actions(message_actions(actions)).build()
 
 
@@ -51,7 +58,8 @@ def started(
         M.document()
         .header(text["标题"])
         .section(text["开启"], icon="success")
-        .line(
+        .line(M.status("生产已开启", tone="positive"))
+        .small(
             common["开启说明"].format(时长=duration(value.view.facility.period_seconds))
         )
         .actions(message_actions(actions))
@@ -70,22 +78,26 @@ def collected(
         M.document()
         .header(text["标题"])
         .section(text["收取"], icon="success")
+        .line(M.status("收取完成", tone="positive"))
         .field("收取轮次", common["结算轮数"].format(轮数=value.settled_cycles))
     )
     if value.spirit_stones:
-        builder.line(common["灵石"].format(数量=value.spirit_stones))
-    for output in value.outputs:
+        builder.field(
+            "灵石",
+            M.text(value.spirit_stones, tone="cultivation"),
+        )
+    for index, output in enumerate(value.outputs, start=1):
         builder.item(
-            output.content_id,
-            common["产出"].format(
-                品级=output.grade_name,
-                名称=output.name,
-                数量=output.quantity,
+            index,
+            M.command(
+                M.text(f"{output.grade_name}{output.name}", tone="emphasis"),
+                f"查看 {output.content_id}",
             ),
+            f" × {output.quantity}",
         )
     if not value.outputs and not value.spirit_stones:
-        builder.line(common["没有产出"])
-    builder.field("灵藏灵石", value.spirit_stones_after)
+        builder.line(M.status("无产出", tone="muted"), " ", common["没有产出"])
+    builder.field("灵藏灵石", M.text(value.spirit_stones_after, tone="cultivation"))
     return builder.actions(message_actions(actions)).build()
 
 
@@ -93,7 +105,7 @@ def error(copy: Mapping[str, Mapping[str, str]], message: str):
     return (
         M.document()
         .section(copy["通用"]["错误"], icon="notice")
-        .line(sentence(message))
+        .line(M.status("生产失败", tone="danger"), " ", sentence(message))
         .build()
     )
 

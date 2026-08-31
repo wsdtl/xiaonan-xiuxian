@@ -29,11 +29,7 @@ def home(view: NajieHome):
 
 def category(view: NajieCategoryView):
     value = view.category
-    builder = (
-        M.document()
-        .header(value.name)
-        .section("分项", icon=value.icon)
-    )
+    builder = M.document().header(value.name).section("分项", icon=value.icon)
     for subcategory in value.subcategories:
         builder.line(
             M.command(subcategory.name, f"纳戒 {value.name} {subcategory.name}"),
@@ -44,16 +40,26 @@ def category(view: NajieCategoryView):
 
 def page(view: NajiePage):
     current_range = f"{view.start_index}-{view.end_index}" if view.entries else "0"
-    section = "清单" if view.total_pages == 1 else f"清单 · 第{view.page}/{view.total_pages}页"
+    section = (
+        "清单"
+        if view.total_pages == 1
+        else f"清单 · 第{view.page}/{view.total_pages}页"
+    )
     builder = M.document().header(view.subcategory).section(section, icon=view.icon)
     if view.total_pages == 1:
-        builder.field("合计", _subcategory_summary(view.entry_count, view.total_quantity))
+        builder.field(
+            "合计",
+            M.text(
+                _subcategory_summary(view.entry_count, view.total_quantity),
+                tone="emphasis",
+            ),
+        )
     else:
         builder.row(("种类", f"{view.entry_count}种"), ("本页", current_range))
         if view.total_quantity != view.entry_count:
             builder.field("总数", f"{view.total_quantity}份")
     if not view.entries:
-        builder.line(f"尚无{view.subcategory}。")
+        builder.line(M.status("空", tone="muted"), f" 尚无{view.subcategory}。")
     for index, entry in enumerate(view.entries, start=view.start_index):
         builder.item(index, *_entry_parts(entry))
     actions: list[Action] = []
@@ -96,7 +102,7 @@ def error(message: str):
     return (
         M.document()
         .section("纳戒", icon="notice")
-        .line(message)
+        .line(M.status("查询失败", tone="danger"), " ", message)
         .action(_home_action())
         .build()
     )
@@ -105,7 +111,10 @@ def error(message: str):
 def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
     has_stable_id = entry.content_id.isdigit() and len(entry.content_id) == 6
     name: object = (
-        M.command(entry.name, f"查看 {entry.content_id}")
+        M.command(
+            M.text(entry.name, tone=_entry_tone(entry.category)),
+            f"查看 {entry.content_id}",
+        )
         if has_stable_id
         else entry.name
     )
@@ -123,7 +132,7 @@ def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
             (
                 " · ",
                 M.command(
-                    "装配",
+                    M.text("装配", tone="positive"),
                     f"人物装配 功法 {entry.content_id} {entry.grade_id}",
                     submit=False,
                 ),
@@ -146,6 +155,14 @@ def _subcategory_summary(entry_count: int, total_quantity: int) -> str:
     if entry_count == total_quantity:
         return f"{entry_count}种"
     return f"{entry_count}种/{total_quantity}份"
+
+
+def _entry_tone(category: str) -> str:
+    return {
+        "道藏": "mystic",
+        "器藏": "metal",
+        "先天灵宝": "cultivation",
+    }.get(category, "emphasis")
 
 
 __all__ = ["category", "error", "home", "page"]

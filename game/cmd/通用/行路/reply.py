@@ -12,21 +12,27 @@ def missing_destination():
     return (
         M.document()
         .section("行路", icon="navigation")
-        .line("格式：去 地点名，或：去 x y")
+        .line(M.status("缺少地点", tone="warning"), " 去 地点名，或：去 x y")
         .line(M.command("查看全境地图", "地图"))
         .build()
     )
 
 
 def query_error(message: str):
-    return M.document().section("行路", icon="navigation").line(message).build()
+    return (
+        M.document()
+        .section("行路", icon="navigation")
+        .line(M.status("无法抵达", tone="danger"), " ", message)
+        .build()
+    )
 
 
 def conflict():
     return (
         M.document()
         .section("行路", icon="notice")
-        .line("你的位置刚刚发生变化，本次行路没有覆盖新的落脚处，请重新查看人物。")
+        .line(M.status("位置变化", tone="warning"))
+        .small("本次行路没有覆盖新的落脚处，请重新查看人物。")
         .build()
     )
 
@@ -40,6 +46,7 @@ def success(
     reply = (
         M.document()
         .header("抵达 · ", _location_name(destination))
+        .inline_section("行路结果", M.status("已抵达", tone="positive"), icon="success")
         .section(f"行路 · {plan.travel_method}", icon="navigation")
     )
     for line in plan.narrative:

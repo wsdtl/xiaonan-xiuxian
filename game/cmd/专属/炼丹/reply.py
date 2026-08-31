@@ -28,12 +28,20 @@ def overview(
     alchemist = value.alchemist
     builder = (
         M.document()
-        .header(text(copy, "总览", "标题", 地点=value.location_name, 炉名=alchemist.furnace_name))
+        .header(
+            text(
+                copy,
+                "总览",
+                "标题",
+                地点=value.location_name,
+                炉名=alchemist.furnace_name,
+            )
+        )
         .section(alchemist.title, icon="item")
         .field(text(copy, "总览", "丹师"), alchemist.name)
         .field(text(copy, "总览", "丹门"), alchemist.heritage)
         .line(text(copy, "总览", "引言", 丹师=alchemist.name))
-        .line(alchemist.speech["总览"].format(主持=alchemist.name))
+        .small(alchemist.speech["总览"].format(主持=alchemist.name))
         .section(text(copy, "总览", "分类"), icon="inventory")
     )
     for index, (category, count) in enumerate(value.category_counts, start=1):
@@ -48,17 +56,29 @@ def recipe_list(
 ):
     builder = (
         M.document()
-        .header(text(copy, "列表", "标题", 地点=value.location_name, 分类=value.category))
+        .header(
+            text(copy, "列表", "标题", 地点=value.location_name, 分类=value.category)
+        )
         .section(value.alchemist.title, icon="item")
         .field(text(copy, "列表", "丹师"), value.alchemist.name)
         .section(value.category, icon="inventory")
     )
     for index, entry in enumerate(value.entries, start=1):
         state = text(copy, "列表", "可炼" if entry.can_refine else "缺材")
-        builder.item(index, f"{entry.recipe.medicine_name} · {state}").line(
+        builder.item(
+            index,
+            M.command(
+                M.text(entry.recipe.medicine_name, tone="positive"),
+                f"查看 {entry.recipe.recipe_id}",
+            ),
+            " · ",
+            M.status(state, tone="positive" if entry.can_refine else "warning"),
+        ).small(
             f"丹方：{entry.recipe.recipe_id} · 难度：{entry.recipe.difficulty} · 炉法：{entry.recipe.method}"
         )
-    builder.line(text(copy, "列表", "页码", 当前页=value.page, 总页数=value.page_count))
+    builder.small(
+        text(copy, "列表", "页码", 当前页=value.page, 总页数=value.page_count)
+    )
     return builder.actions(message_actions(actions)).build()
 
 
@@ -70,14 +90,25 @@ def preview(
     alchemist = value.alchemist
     builder = (
         M.document()
-        .header(text(copy, "预览", "标题", 地点=value.location_name, 炉名=alchemist.furnace_name))
+        .header(
+            text(
+                copy,
+                "预览",
+                "标题",
+                地点=value.location_name,
+                炉名=alchemist.furnace_name,
+            )
+        )
         .section(alchemist.title, icon="item")
         .field(text(copy, "预览", "丹师"), alchemist.name)
-        .line(alchemist.speech["审材"].format(主持=alchemist.name))
+        .small(alchemist.speech["审材"].format(主持=alchemist.name))
         .section(value.recipe.medicine_name, icon="inventory")
         .row(
             (text(copy, "预览", "丹方"), value.recipe.recipe_id),
-            (text(copy, "预览", "成丹"), f"{value.medicine_grade_name}{value.recipe.medicine_name}"),
+            (
+                text(copy, "预览", "成丹"),
+                f"{value.medicine_grade_name}{value.recipe.medicine_name}",
+            ),
         )
         .row(
             (text(copy, "预览", "难度"), value.recipe.difficulty),
@@ -86,7 +117,7 @@ def preview(
         .section(text(copy, "预览", "药引"), icon="material")
     )
     if value.beast_material is None:
-        builder.line("无")
+        builder.line(M.status("无", tone="muted"))
     else:
         _material(builder, 1, value.beast_material)
     builder.section(text(copy, "预览", "辅材"), icon="material")
@@ -95,8 +126,19 @@ def preview(
     if value.missing_materials:
         builder.section(text(copy, "列表", "缺材"), icon="notice")
         for index, missing in enumerate(value.missing_materials, start=1):
-            builder.item(index, f"{missing.role} · {missing.trait} × {missing.quantity}")
-    builder.line(alchemist.speech["齐备" if value.can_refine else "不足"].format(主持=alchemist.name))
+            builder.item(
+                index, f"{missing.role} · {missing.trait} × {missing.quantity}"
+            )
+    builder.line(
+        M.status(
+            "材料齐备" if value.can_refine else "材料不足",
+            tone="positive" if value.can_refine else "danger",
+        )
+    ).small(
+        alchemist.speech["齐备" if value.can_refine else "不足"].format(
+            主持=alchemist.name
+        )
+    )
     return builder.actions(message_actions(actions)).build()
 
 
@@ -110,6 +152,7 @@ def completed(
     builder = (
         M.document()
         .header(text(copy, "完成", "标题", 地点=preview_value.location_name))
+        .inline_section("炼丹结果", M.status("完成", tone="positive"), icon="success")
         .section(alchemist.title, icon="item")
         .field(text(copy, "完成", "丹师"), alchemist.name)
         .line(text(copy, "完成", "过程", 丹师=alchemist.name))
@@ -118,7 +161,7 @@ def completed(
             f"{preview_value.medicine_grade_name}{preview_value.recipe.medicine_name}",
             f"纳戒数量 {value.quantity_after}",
         )
-        .line(alchemist.speech["完成"].format(主持=alchemist.name))
+        .small(alchemist.speech["完成"].format(主持=alchemist.name))
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
@@ -129,13 +172,22 @@ def completed(
 
 
 def error(copy: AlchemyCopy, message: str):
-    return M.document().section(text(copy, "错误", "标题"), icon="notice").line(sentence(message)).build()
+    return (
+        M.document()
+        .section(text(copy, "错误", "标题"), icon="notice")
+        .line(M.status("炼丹失败", tone="danger"), " ", sentence(message))
+        .build()
+    )
 
 
 def _material(builder, index: int, material) -> None:
     builder.item(
         index,
-        f"{material.grade_name}{material.name} × {material.quantity} · {material.trait} · {material.relation}",
+        M.command(
+            M.text(f"{material.grade_name}{material.name}", tone="emphasis"),
+            f"查看 {material.item_id}",
+        ),
+        f" × {material.quantity} · {material.trait} · {material.relation}",
     )
 
 
