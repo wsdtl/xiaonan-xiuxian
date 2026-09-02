@@ -11,7 +11,6 @@ from launch.adapter import (
 )
 from message import M
 
-from .command import GAME_METADATA_KEY
 from .presentation import sentence
 
 GAME_GUARD_NAME = "game.player_state"
@@ -19,8 +18,8 @@ GAME_GUARD_PRIORITY = 1000
 
 
 async def game_access_guard(context: CommandGuardContext) -> CommandGuardDecision:
-    metadata = context.command_metadata.get(GAME_METADATA_KEY)
-    if not isinstance(metadata, dict):
+    metadata = context.command_metadata
+    if not metadata:
         return CommandGuardDecision.allow()
     rule_name = str(metadata.get("guard_rule") or "").strip()
     if not rule_name:

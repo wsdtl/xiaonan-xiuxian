@@ -9,22 +9,23 @@ from game.features.tongquetai import (
     TongquetaiRequest,
 )
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="专属",
-    cmd="夺元",
-    aliases=("铜雀台夺元",),
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="道侣",
-        summary="在铜雀台预览或执行同行道侣修为归流",
-        usage=("夺元", "夺元 护契", "夺元 离契"),
-        side_effect="护契消耗守真定契丹；离契使好感归零并解除同行",
-        order=60,
-    ),
+    cmd=("夺元", "铜雀台夺元"),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "道侣",
+            "summary": "在铜雀台预览或执行同行道侣修为归流",
+            "usage": ("夺元", "夺元 护契", "夺元 离契"),
+            "side_effect": "护契消耗守真定契丹；离契使好感归零并解除同行",
+            "order": 60,
+        },
+    },
 )
 async def transfer_cultivation(
     *, user_id: str, message: str, message_context, manager, **_

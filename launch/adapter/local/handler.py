@@ -15,7 +15,6 @@ from ..base_handler import BaseMessageHandler
 from ..command_guard import CommandGuardContext, run_command_guards
 from ..context import (
     CONVERSATION_PRIVATE,
-    AdapterCapabilities,
     MessageContext,
     ReplyTarget,
     reset_current_message_context,
@@ -53,17 +52,6 @@ class LocalCommandMatch:
 
 class LocalEventHandler(BaseMessageHandler):
     """本地触发文本驱动器。"""
-
-    CAPABILITIES = AdapterCapabilities(
-        text=True,
-        markdown=True,
-        image=True,
-        buttons=True,
-        mention=False,
-        private_message=True,
-        group_message=False,
-        active_push=False,
-    )
 
     command_rules: ClassVar[dict[str, list[LocalCommandRule]]] = {}
     fullmatch_rules: ClassVar[dict[str, list[LocalCommandRule]]] = {}
@@ -246,29 +234,6 @@ class LocalEventHandler(BaseMessageHandler):
         )
 
     @staticmethod
-    def unregister_module(module_name: str) -> None:
-        """移除一个来源模块的全部旧回调。"""
-
-        owner = str(module_name or "").strip()
-        for registry in (
-            LocalEventHandler.command_rules,
-            LocalEventHandler.fullmatch_rules,
-            LocalEventHandler.regex_rules,
-        ):
-            for key in tuple(registry):
-                rules = [rule for rule in registry[key] if rule.func.__module__ != owner]
-                if rules:
-                    registry[key] = rules
-                else:
-                    del registry[key]
-        LocalEventHandler.regex_fallback = [
-            rule
-            for rule in LocalEventHandler.regex_fallback
-            if rule.func.__module__ != owner
-        ]
-        LocalEventHandler._build_command_index()
-
-    @staticmethod
     def _callback_wrapper(
         commands: list,
         registrar: Callable,
@@ -334,7 +299,6 @@ class LocalEventHandler(BaseMessageHandler):
                     "message_context": message_context,
                     "sender_name": message_context.sender_name,
                     "reply_target": message_context.reply_target,
-                    "adapter_capabilities": message_context.capabilities,
                     "match": item.match,
                 },
             )
@@ -363,8 +327,6 @@ class LocalEventHandler(BaseMessageHandler):
             raw_message=event.raw_message,
             conversation_type=event.conversation_type,
             reply_target=reply_target,
-            capabilities=LocalEventHandler.CAPABILITIES,
-            driver_context=event,
             sender_name=event.sender_name,
         )
 

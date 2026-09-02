@@ -8,7 +8,7 @@ from launch.message_events import subscribe_message_events, unsubscribe_message_
 from .console import service
 
 
-@Scheduler._sync("interval", minutes=30, id="cleanup_runtime_logs")
+@Scheduler.job("interval", minutes=30, id="cleanup_runtime_logs")
 def cleanup_runtime_logs() -> None:
     """统一清理所有带到期时间的运行消息日志。"""
 

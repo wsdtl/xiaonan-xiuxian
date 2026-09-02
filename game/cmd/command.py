@@ -2,98 +2,64 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import re
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from launch.adapter import MessageHandler
 
 from .help_registry import HelpSpec, help_registry
 
-GAME_METADATA_KEY = "game"
 COMMAND_SCOPES = frozenset({"通用", "专属", "后台"})
 _registered_commands: list[tuple[str, str, str, str]] = []
 _registered_command_routes: list[tuple[str, str, str, str, str]] = []
 
 
 class GameCommand:
-    """给三种底层注册器补齐状态守卫和帮助契约。"""
+    """在底层命令注册器上统一收集游戏命令元数据。"""
 
     @staticmethod
     def fullmatch(
         cmd,
         *,
-        aliases: Sequence[str] = (),
-        scope: str,
-        guard_rule: str,
-        help: HelpSpec | None = None,
-        hidden: bool = False,
-        metadata: dict[str, Any] | None = None,
         priority: int = 100,
         block: bool = True,
+        metadata: dict[str, Any] | None = None,
     ) -> Callable:
         return _register(
             MessageHandler.fullmatch,
             cmd,
-            aliases=aliases,
-            scope=scope,
-            guard_rule=guard_rule,
-            help=help,
-            hidden=hidden,
-            metadata=metadata,
             priority=priority,
             block=block,
+            metadata=metadata,
         )
 
     @staticmethod
     def command(
         cmd,
         *,
-        aliases: Sequence[str] = (),
-        scope: str,
-        guard_rule: str,
-        help: HelpSpec | None = None,
-        hidden: bool = False,
-        metadata: dict[str, Any] | None = None,
         priority: int = 100,
         block: bool = True,
+        metadata: dict[str, Any] | None = None,
     ) -> Callable:
         return _register(
             MessageHandler.command,
             cmd,
-            aliases=aliases,
-            scope=scope,
-            guard_rule=guard_rule,
-            help=help,
-            hidden=hidden,
-            metadata=metadata,
             priority=priority,
             block=block,
+            metadata=metadata,
         )
 
     @staticmethod
     def regex(
         cmd,
         *,
-        aliases: Sequence[str] = (),
-        scope: str,
-        guard_rule: str,
-        help: HelpSpec | None = None,
-        hidden: bool = False,
-        metadata: dict[str, Any] | None = None,
         priority: int = 100,
         block: bool = True,
+        metadata: dict[str, Any] | None = None,
     ) -> Callable:
         return _register(
-            MessageHandler.regex,
-            cmd,
-            aliases=aliases,
-            scope=scope,
-            guard_rule=guard_rule,
-            help=help,
-            hidden=hidden,
-            metadata=metadata,
-            priority=priority,
-            block=block,
+            MessageHandler.regex, cmd, priority=priority, block=block, metadata=metadata
         )
 
 
@@ -101,48 +67,28 @@ def _register(
     registrar: Callable[..., Callable],
     cmd,
     *,
-    aliases: Sequence[str],
-    scope: str,
-    guard_rule: str,
-    help: HelpSpec | None,
-    hidden: bool,
-    metadata: dict[str, Any] | None,
     priority: int,
     block: bool,
+    metadata: dict[str, Any] | None,
 ) -> Callable:
-    command_key = str(cmd or "").strip()
-    if not command_key or any(char.isspace() for char in command_key):
-        raise ValueError("游戏命令必须是一个不含空白的主命令")
-    if len(command_key) > 4:
-        raise ValueError("游戏主命令最多四个字；长写法请登记为 aliases")
-    if isinstance(aliases, str):
-        aliases = (aliases,)
-    try:
-        alias_values = tuple(str(alias or "").strip() for alias in aliases)
-    except TypeError as exc:
-        raise TypeError("aliases 必须是字符串序列") from exc
-    if any(not alias or any(char.isspace() for char in alias) for alias in alias_values):
-        raise ValueError("命令别名必须是不含空白的非空字符串")
-    routes = (command_key, *alias_values)
-    if len({route.casefold() for route in routes}) != len(routes):
-        raise ValueError("主命令和别名不能重复")
-    normalized_scope = str(scope or "").strip()
-    if normalized_scope not in COMMAND_SCOPES:
+    if registrar is MessageHandler.regex:
+        return _register_regex(registrar, cmd, priority, block, metadata)
+    routes = _command_routes(cmd)
+    command_key = routes[0]
+    command_metadata = dict(metadata or {})
+    scope = _required_text(command_metadata, "scope")
+    if scope not in COMMAND_SCOPES:
         raise ValueError(f"游戏命令 scope 必须是：{'、'.join(sorted(COMMAND_SCOPES))}")
-    if normalized_scope == "后台" and (not hidden or help is not None):
-        raise ValueError("后台命令必须 hidden=True，且禁止登记玩家帮助")
-    normalized_guard_rule = str(guard_rule or "").strip()
-    if not normalized_guard_rule:
-        raise ValueError("游戏命令必须显式声明状态守卫规则")
-    if help is not None and hidden:
+    guard_rule = _required_text(command_metadata, "guard_rule")
+    hidden = bool(command_metadata.get("hidden", False))
+    help_spec = _help_spec(command_metadata.get("help"))
+    if scope == "后台" and (not hidden or help_spec is not None):
+        raise ValueError("后台命令必须在 metadata 标记 hidden=True，且禁止登记玩家帮助")
+    if help_spec is not None and hidden:
         raise ValueError("游戏命令不能同时登记帮助并标记为隐藏")
-    if help is None and not hidden:
-        raise ValueError("游戏命令必须提供 help=HelpSpec(...) 或 hidden=True")
-    merged = dict(metadata or {})
-    game_metadata = dict(merged.get(GAME_METADATA_KEY) or {})
-    game_metadata["guard_rule"] = normalized_guard_rule
-    game_metadata["scope"] = normalized_scope
-    merged[GAME_METADATA_KEY] = game_metadata
+    if help_spec is None and not hidden:
+        raise ValueError("游戏命令必须在 metadata 提供 help，或标记 hidden=True")
+
     def decorate(func: Callable) -> Callable:
         source_module = func.__module__
         _registered_commands[:] = [
@@ -155,74 +101,130 @@ def _register(
             for entry in _registered_command_routes
             if not (entry[4] == command_key and entry[2] == source_module)
         ]
-        if help is not None:
-            help_registry.register(routes, help, source_module=source_module)
+        if help_spec is not None:
+            help_registry.register(routes, help_spec, source_module=source_module)
         for route in routes:
             registrar(
-                cmd=route,
-                priority=priority,
-                block=block,
-                metadata=merged,
+                cmd=route, priority=priority, block=block, metadata=command_metadata
             )(func)
-        _registered_commands.append(
-            (command_key, normalized_scope, source_module, normalized_guard_rule)
-        )
+        _registered_commands.append((command_key, scope, source_module, guard_rule))
         _registered_command_routes.extend(
-            (route, normalized_scope, source_module, normalized_guard_rule, command_key)
-            for route in routes
+            (route, scope, source_module, guard_rule, command_key) for route in routes
         )
-        decorated = func
-        return decorated
+        return func
 
     return decorate
 
 
-def registered_guard_rules() -> tuple[str, ...]:
-    """返回所有已加载游戏命令显式引用的守卫规则。"""
+def _register_regex(
+    registrar: Callable[..., Callable],
+    cmd: object,
+    priority: int,
+    block: bool,
+    metadata: dict[str, Any] | None,
+) -> Callable:
+    patterns = (
+        (cmd,)
+        if isinstance(cmd, re.Pattern)
+        else tuple(cmd)
+        if isinstance(cmd, Sequence)
+        else ()
+    )
+    if not patterns or any(not isinstance(pattern, re.Pattern) for pattern in patterns):
+        raise TypeError("正则命令 cmd 必须是正则表达式或正则表达式序列")
+    command_metadata = dict(metadata or {})
+    scope = _required_text(command_metadata, "scope")
+    if scope not in COMMAND_SCOPES:
+        raise ValueError(f"游戏命令 scope 必须是：{'、'.join(sorted(COMMAND_SCOPES))}")
+    guard_rule = _required_text(command_metadata, "guard_rule")
+    hidden = bool(command_metadata.get("hidden", False))
+    help_spec = _help_spec(command_metadata.get("help"))
+    if scope == "后台" and (not hidden or help_spec is not None):
+        raise ValueError("后台命令必须在 metadata 标记 hidden=True，且禁止登记玩家帮助")
+    if help_spec is None and not hidden:
+        raise ValueError("游戏命令必须在 metadata 提供 help，或标记 hidden=True")
 
+    def decorate(func: Callable) -> Callable:
+        source_module = func.__module__
+        if help_spec is not None:
+            help_registry.register(
+                tuple(pattern.pattern for pattern in patterns),
+                help_spec,
+                source_module=source_module,
+            )
+        for pattern in patterns:
+            registrar(
+                cmd=pattern, priority=priority, block=block, metadata=command_metadata
+            )(func)
+        command_key = patterns[0].pattern
+        _registered_commands.append((command_key, scope, source_module, guard_rule))
+        _registered_command_routes.extend(
+            (pattern.pattern, scope, source_module, guard_rule, command_key)
+            for pattern in patterns
+        )
+        return func
+
+    return decorate
+
+
+def _command_routes(cmd: object) -> tuple[str, ...]:
+    values: Sequence[object] = (
+        (cmd,) if isinstance(cmd, str) else cmd if isinstance(cmd, Sequence) else ()
+    )
+    if not values:
+        raise TypeError("游戏命令 cmd 必须是字符串或字符串序列")
+    routes = tuple(str(value or "").strip() for value in values)
+    if any(not route or any(char.isspace() for char in route) for route in routes):
+        raise ValueError("游戏命令必须是不含空白的非空字符串")
+    if len(routes[0]) > 4:
+        raise ValueError("游戏主命令最多四个字；长写法可放在 cmd 后续项")
+    if len({route.casefold() for route in routes}) != len(routes):
+        raise ValueError("同一 cmd 中不能重复声明命令")
+    return routes
+
+
+def _required_text(metadata: Mapping[str, Any], key: str) -> str:
+    value = str(metadata.get(key) or "").strip()
+    if not value:
+        raise ValueError(f"游戏命令 metadata 缺少 {key}")
+    return value
+
+
+def _help_spec(value: object) -> HelpSpec | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise TypeError("游戏命令 metadata.help 必须是字典")
+    return HelpSpec(
+        category=value.get("category", ""),
+        summary=value.get("summary", ""),
+        usage=tuple(value.get("usage") or ()),
+        side_effect=value.get("side_effect", ""),
+        order=value.get("order", 100),
+    )
+
+
+def registered_guard_rules() -> tuple[str, ...]:
     return tuple(sorted({entry[3] for entry in _registered_commands}))
 
 
 def registered_commands() -> tuple[tuple[str, str, str], ...]:
-    """返回命令、声明范围和来源模块，供正式检查入口使用。"""
-
     return tuple(
         (command, scope, module) for command, scope, module, _ in _registered_commands
     )
 
 
 def registered_command_routes() -> tuple[tuple[str, str, str], ...]:
-    """返回主命令和别名的完整路由，供启动契约检查冲突。"""
-
     return tuple(
         (route, scope, module)
         for route, scope, module, _, _ in _registered_command_routes
     )
 
 
-def unregister_command_module(module_name: str) -> None:
-    """同步卸载一个命令模块在游戏层和全部驱动器中的旧登记。"""
-
-    owner = str(module_name or "").strip()
-    if not owner:
-        raise ValueError("命令模块名不能为空")
-    _registered_commands[:] = [
-        entry for entry in _registered_commands if entry[2] != owner
-    ]
-    _registered_command_routes[:] = [
-        entry for entry in _registered_command_routes if entry[2] != owner
-    ]
-    help_registry.unregister_module(owner)
-    MessageHandler.unregister_module(owner)
-
-
 __all__ = [
     "COMMAND_SCOPES",
-    "GAME_METADATA_KEY",
     "GameCommand",
-    "HelpSpec",
     "registered_command_routes",
     "registered_commands",
     "registered_guard_rules",
-    "unregister_command_module",
 ]

@@ -81,7 +81,7 @@ class HelpRegistry:
         if existing is not None:
             if existing.source_module != owner:
                 raise ValueError(f"命令帮助重复且定义不一致：{primary}")
-            self.unregister_module(owner, primary=primary)
+            self._remove_entry(primary)
         for command in normalized:
             owner = self._commands.get(command.casefold())
             if owner is not None:
@@ -91,19 +91,14 @@ class HelpRegistry:
             self._commands[command.casefold()] = primary
         return entry
 
-    def unregister_module(self, source_module: str, *, primary: str = "") -> None:
-        """移除一个来源模块的旧帮助，供服务热重启时幂等替换。"""
+    def _remove_entry(self, primary: str) -> None:
+        """替换同一主命令时移除旧索引。"""
 
-        owner = _text(source_module)
-        targets = tuple(
-            key
-            for key, entry in self._entries.items()
-            if entry.source_module == owner and (not primary or key == primary)
-        )
-        for key in targets:
-            entry = self._entries.pop(key)
-            for command in (entry.command, *entry.aliases):
-                self._commands.pop(command.casefold(), None)
+        entry = self._entries.pop(primary, None)
+        if entry is None:
+            return
+        for command in (entry.command, *entry.aliases):
+            self._commands.pop(command.casefold(), None)
 
     def find(self, command: object) -> CommandHelpEntry | None:
         primary = self._commands.get(_text(command).casefold())

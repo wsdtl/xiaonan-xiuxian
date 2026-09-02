@@ -11,9 +11,7 @@ from game.cmd import access_guard
 from game.cmd.command import (
     COMMAND_SCOPES,
     GameCommand,
-    HelpSpec,
     registered_command_routes,
-    unregister_command_module,
 )
 from game.cmd.help_registry import help_registry
 from game.core.data import JsonDataService
@@ -21,7 +19,6 @@ from game.core.item_catalog import ItemCatalogService
 from game.core.player_state import StateGuardResult
 from game.features.chakan_wupin import ItemInspectionFeature
 from launch.adapter import (
-    AdapterCapabilities,
     CommandGuardContext,
     MessageContext,
     ReplyTarget,
@@ -148,81 +145,17 @@ def test_loaded_commands_have_one_valid_help_declaration() -> None:
     assert help_registry.find("web") is None
     assert help_registry.find("天道后台") is None
     assert "查看物品" not in {route for route, _, _ in registered_command_routes()}
-    with pytest.raises(TypeError):
-        GameCommand.fullmatch("缺少说明", scope="通用")
-    with pytest.raises(ValueError, match="最多四个字"):
+    with pytest.raises(ValueError, match="metadata 缺少 scope"):
+        GameCommand.fullmatch("缺少说明", metadata={"guard_rule": "始终可用"})
+    with pytest.raises(ValueError, match="主命令最多四个字"):
         GameCommand.fullmatch(
             "超过四字命令",
-            scope="通用",
-            guard_rule="始终可用",
-            help=HelpSpec(category="世界", summary="测试", usage=("超过四字命令",)),
+            metadata={
+                "scope": "通用",
+                "guard_rule": "始终可用",
+                "help": {"category": "世界", "summary": "测试", "usage": ("测试",)},
+            },
         )
-    with pytest.raises(ValueError, match="不能同时"):
-        GameCommand.fullmatch(
-            "重复声明",
-            scope="通用",
-            guard_rule="始终可用",
-            help=HelpSpec("角色", "测试命令", ("重复声明",)),
-            hidden=True,
-        )
-    with pytest.raises(ValueError, match="后台命令必须"):
-        GameCommand.fullmatch(
-            "后台错",
-            scope="后台",
-            guard_rule="始终可用",
-            help=HelpSpec("角色", "不应公开", ("后台错",)),
-        )
-
-
-def test_command_module_can_replace_and_unload_all_driver_registrations() -> None:
-    module_name = "game.cmd.通用.热重启测试"
-
-    async def old_callback() -> None:
-        return None
-
-    async def new_callback() -> None:
-        return None
-
-    old_callback.__module__ = module_name
-    new_callback.__module__ = module_name
-    decorator = GameCommand.command(
-        "热测",
-        aliases=("热重启测试", "重启测试"),
-        scope="通用",
-        guard_rule="始终可用",
-        help=HelpSpec("行动", "验证模块替换", ("热测", "热重启测试")),
-    )
-    decorator(old_callback)
-    decorator(new_callback)
-
-    from launch.adapter.qq.handler import _command_registry
-
-    assert len(LocalEventHandler.command_rules["热测"]) == 1
-    assert len(LocalEventHandler.command_rules["热重启测试"]) == 1
-    assert len(LocalEventHandler.command_rules["重启测试"]) == 1
-    assert len(_command_registry.match("热重启测试")) == 1
-    assert help_registry.find("热重启测试") is not None
-    assert help_registry.find("重启测试").command == "热测"
-
-    _run(LocalEventHandler.run())
-    alias_result = _run(
-        dispatch(
-            user_id="alias-user",
-            raw_message="重启测试 参数",
-            sender_name="测试",
-            event_id="alias-route",
-        )
-    )
-    assert alias_result.matched is True
-
-    unregister_command_module(module_name)
-
-    assert "热测" not in LocalEventHandler.command_rules
-    assert "热重启测试" not in LocalEventHandler.command_rules
-    assert "重启测试" not in LocalEventHandler.command_rules
-    assert _command_registry.match("热重启测试") == []
-    assert _command_registry.match("重启测试") == []
-    assert help_registry.find("热重启测试") is None
 
 
 def test_command_layout_tool_checks_scope_and_managed_directory() -> None:
@@ -386,9 +319,8 @@ def test_game_command_guard_uses_player_state_rule(monkeypatch) -> None:
             raw_message="创建人物 林远 男",
             conversation_type="private",
             reply_target=ReplyTarget("local", "help-user", "help-user", "private"),
-            capabilities=AdapterCapabilities(),
         ),
-        command_metadata={"game": {"guard_rule": "仅未创建"}},
+        command_metadata={"guard_rule": "仅未创建"},
     )
     monkeypatch.setattr(
         access_guard,

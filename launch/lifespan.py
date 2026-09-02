@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
                 cleanup_errors,
             )
 
-            adapters = await _mount_app(app)
+            adapters = _mount_app(app)
             for adapter in adapters:
                 cleanup.push_async_callback(
                     _capture_cleanup,
@@ -68,14 +68,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
             # AsyncExitStack 逆序清理：调度器必须先停，后台作业才不会在
             # 数据库等业务服务释放后继续访问它们。
-            cleanup.push_async_callback(
-                _capture_cleanup,
+            # 调度器的三个动作都是同步 API，不需要再包一层协程。
+            cleanup.callback(
+                _capture_sync_cleanup,
                 "调度器",
                 _shutdown_schedulers,
                 cleanup_errors,
             )
-            await _start_schedulers()
-            await _add_scheduler_jobs()
+            _start_schedulers()
+            _add_scheduler_jobs()
 
             await _run_callbacks(OnEvent.ordered_callbacks(OnEvent.connect_list))
 
@@ -95,65 +96,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         raise LifecycleCleanupError("服务关闭阶段存在清理失败", cleanup_errors)
 
 
-async def _mount_app(app: FastAPI) -> list[type]:
-    """挂载静态文件和 Adapter，并返回需要启动/关闭的 Adapter 列表。"""
+def _mount_app(app: FastAPI) -> list[type]:
+    """挂载静态资源和适配器，返回需要参与生命周期的处理器。"""
 
-    await FastAPIMount(app)
-    return await AdapterMount(app)
-
-
-async def _start_schedulers() -> None:
-    """启动同步和异步调度器。"""
-
-    if not Scheduler.syncinstance.running:
-        Scheduler.syncinstance.start()
-    Scheduler.bind_async_to_current_loop()
-    if not Scheduler.asyncinstance.running:
-        Scheduler.asyncinstance.start()
+    FastAPIMount(app)
+    return AdapterMount(app)
 
 
-async def _add_scheduler_jobs() -> None:
-    """把装饰器收集到的定时任务添加到调度器。"""
+def _start_schedulers() -> None:
+    """启动唯一的定时任务调度器。
 
-    for task in Scheduler.sync_list:
+    Uvicorn reload 会创建新的事件循环；绑定动作必须放在生命周期里，不能
+    在模块导入时保存旧循环。
+    """
+
+    Scheduler.bind_to_current_loop()
+    if not Scheduler.instance.running:
+        Scheduler.instance.start()
+
+
+def _add_scheduler_jobs() -> None:
+    """把模块导入阶段登记的任务安装到已启动的调度器。
+
+    任务 id 是唯一键。重复创建应用时，已经安装的任务直接跳过，避免同一
+    个后台任务被重复执行。
+    """
+
+    for task in Scheduler.jobs:
         kwargs = task.get("kwargs", {})
         job_id = kwargs.get("id")
-        if Scheduler.syncinstance.get_job(job_id):
+        if Scheduler.instance.get_job(job_id):
             continue
 
-        Scheduler.syncinstance.add_job(
+        Scheduler.instance.add_job(
             task.get("func"),
             *task.get("args", ()),
             **kwargs,
         )
         logger.opt(colors=True).success(
             C.join(
-                C.ok("成功添加定时同步任务"),
-                C.kv("id", job_id),
-            )
-        )
-
-    for task in Scheduler.async_list:
-        kwargs = task.get("kwargs", {})
-        job_id = kwargs.get("id")
-        if Scheduler.asyncinstance.get_job(job_id):
-            continue
-
-        Scheduler.asyncinstance.add_job(
-            task.get("func"),
-            *task.get("args", ()),
-            **kwargs,
-        )
-        logger.opt(colors=True).success(
-            C.join(
-                C.ok("成功添加定时异步任务"),
+                C.ok("成功添加定时任务"),
                 C.kv("id", job_id),
             )
         )
 
 
 async def _run_callbacks(callbacks: Iterable[Callable]) -> None:
-    """按传入顺序运行启动/关闭回调。"""
+    """按已排序的顺序执行回调，兼容同步函数和协程函数。"""
 
     for callback in callbacks:
         result = callback()
@@ -208,21 +197,9 @@ def _capture_sync_cleanup(
         )
 
 
-async def _shutdown_schedulers() -> None:
-    """关闭调度器，避免热重载或退出时留下后台线程/任务。"""
+def _shutdown_schedulers() -> None:
+    """停止调度器，避免关闭数据库后仍有后台任务访问业务服务。"""
 
-    errors: list[Exception] = []
-    for name, scheduler in (
-        ("同步调度器", Scheduler.syncinstance),
-        ("异步调度器", Scheduler.asyncinstance),
-    ):
-        try:
-            if scheduler.running:
-                scheduler.shutdown(wait=False)
-        except Exception as exc:  # noqa: BLE001 - 两类调度器必须分别关闭
-            errors.append(exc)
-            logger.opt(colors=True, exception=exc).error(
-                C.join(C.fail("调度器关闭失败"), C.kv("target", name))
-            )
-    if errors:
-        raise LifecycleCleanupError("调度器关闭失败", errors)
+    scheduler = Scheduler.instance
+    if scheduler.running:
+        scheduler.shutdown(wait=False)

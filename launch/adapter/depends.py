@@ -22,14 +22,22 @@ _current_message_context: ContextVar[dict[str, Any] | None] = ContextVar(
 
 @dataclass(frozen=True)
 class Depends:
-    """声明一个命令参数由依赖函数计算得到。"""
+    """声明一个命令参数由依赖函数计算得到。
+
+    它只解决“按函数签名取值”这一件事，不是 FastAPI 的完整依赖系统；
+    每条消息都会新建一个解析上下文，缓存也只在这一条消息内有效。
+    """
 
     dependency: Callable
     use_cache: bool = True
 
 
 class DependencyContext:
-    """单条消息内的依赖解析上下文。"""
+    """单条消息内的依赖解析上下文。
+
+    `values` 是驱动器整理好的公共字段，`cache` 防止同一依赖在一条命令
+    中被重复执行；消息结束后两者都会随调用栈释放。
+    """
 
     def __init__(self, values: Mapping[str, Any]) -> None:
         self.values = dict(values)
@@ -37,7 +45,11 @@ class DependencyContext:
 
 
 async def call_with_dependencies(func: Callable, context: Mapping[str, Any]) -> Any:
-    """按函数签名解析参数，支持普通上下文字段和 Depends。"""
+    """按函数签名解析参数，支持普通上下文字段和 Depends。
+
+    这是驱动器调用业务回调的唯一入口：先展开公共上下文，再解析参数，
+    最后调用函数并等待协程结果。任何异常都交回上层驱动器处理。
+    """
 
     values = _expanded_context(context)
     dependency_context = DependencyContext(values)
@@ -67,7 +79,6 @@ def _expanded_context(values: Mapping[str, Any]) -> dict[str, Any]:
     if message_context is not None:
         context.setdefault("message_context", message_context)
         context.setdefault("reply_target", message_context.reply_target)
-        context.setdefault("adapter_capabilities", message_context.capabilities)
         context.setdefault("request_id", message_context.request_id)
     else:
         reply_target = context.get("reply_target") or current_reply_target()
@@ -79,33 +90,11 @@ def _expanded_context(values: Mapping[str, Any]) -> dict[str, Any]:
 async def resolve_kwargs(func: Callable, dependency_context: DependencyContext) -> dict[str, Any]:
     """为命令回调解析可注入参数，缺少必填参数时立即报错。"""
 
-    signature = inspect.signature(func)
-    kwargs: dict[str, Any] = {}
-
-    for name, parameter in signature.parameters.items():
-        if parameter.kind == inspect.Parameter.VAR_KEYWORD:
-            kwargs.update(dependency_context.values)
-            continue
-
-        if parameter.kind not in (
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        ):
-            continue
-
-        default = parameter.default
-        if isinstance(default, Depends):
-            kwargs[name] = await resolve_dependency(default, dependency_context)
-            continue
-
-        if name in dependency_context.values:
-            kwargs[name] = dependency_context.values[name]
-            continue
-
-        if default is inspect.Parameter.empty:
-            raise TypeError(f"缺少命令参数：{name}")
-
-    return kwargs
+    return await _resolve_parameters(
+        func,
+        dependency_context,
+        missing_label="命令参数",
+    )
 
 
 async def resolve_dependency(
@@ -143,7 +132,28 @@ async def resolve_dependency_kwargs(
 ) -> dict[str, Any]:
     """为依赖函数解析参数；规则与命令回调保持一致。"""
 
-    signature = inspect.signature(dependency)
+    return await _resolve_parameters(
+        dependency,
+        dependency_context,
+        stack=stack,
+        missing_label="依赖参数",
+    )
+
+
+async def _resolve_parameters(
+    func: Callable,
+    dependency_context: DependencyContext,
+    *,
+    stack: tuple[Callable, ...] = (),
+    missing_label: str,
+) -> dict[str, Any]:
+    """按同一套规则解析命令或 Depends 的函数签名。
+
+    命令和依赖函数的区别只有两点：递归时是否携带依赖栈，以及缺少参数时
+    的错误前缀。把签名遍历集中在这里，避免两套规则以后出现细微分叉。
+    """
+
+    signature = inspect.signature(func)
     kwargs: dict[str, Any] = {}
 
     for name, parameter in signature.parameters.items():
@@ -167,7 +177,10 @@ async def resolve_dependency_kwargs(
             continue
 
         if default is inspect.Parameter.empty:
-            raise TypeError(f"缺少依赖参数：{dependency.__name__}.{name}")
+            label = f"{missing_label}：{name}"
+            if missing_label == "依赖参数":
+                label = f"{missing_label}：{func.__name__}.{name}"
+            raise TypeError(label)
 
     return kwargs
 

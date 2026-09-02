@@ -27,7 +27,7 @@ _current_manager: ContextVar[Any | None] = ContextVar(
 
 @dataclass(frozen=True)
 class AdapterHttpMount:
-    """驱动器可选的 HTTP 入口。"""
+    """驱动器可选的 HTTP 入口；没有入口的驱动器填 `None`。"""
 
     path: str
     router: APIRouter
@@ -35,7 +35,11 @@ class AdapterHttpMount:
 
 @dataclass(frozen=True)
 class AdapterSpec:
-    """一个可启用通信适配器的公共描述。"""
+    """挂载层需要知道的一份适配器描述。
+
+    `handler` 管理生命周期和命令规则，`manager` 负责回复，`has_context`
+    用于没有显式上下文时选择当前驱动器。其余协议细节留在驱动器目录内。
+    """
 
     name: str
     handler: type[BaseMessageHandler]
@@ -47,7 +51,7 @@ class AdapterSpec:
 def available_adapter_specs() -> dict[str, AdapterSpec]:
     """返回项目已接入的适配器清单。
 
-    这里使用函数内导入，避免业务模块导入公共注册器时提前形成循环依赖。
+    这里使用函数内导入，避免公共注册器导入时提前启动 QQ 或 Local 模块。
     """
 
     from . import local, qq
@@ -72,7 +76,11 @@ def available_adapter_specs() -> dict[str, AdapterSpec]:
 
 
 def enabled_adapter_names() -> list[str]:
-    """返回当前运行时启用的适配器名称。"""
+    """返回当前运行时启用的适配器名称。
+
+    适配器数量很少且由代码明确控制；配置只控制业务模块，不在 `.env`
+    里再引入一套容易失控的驱动器开关。
+    """
 
     return ["qq", "local"]
 
@@ -85,7 +93,12 @@ def enabled_adapter_specs() -> list[AdapterSpec]:
 
 
 class MessageHandler:
-    """把业务回调注册到当前启用的消息适配器。"""
+    """把一份业务回调复制注册到当前启用的消息适配器。
+
+    业务组件只写一次 `GameCommand` 或 `MessageHandler`，这里负责把同一个
+    回调分别交给 QQ 与 Local 的本地注册表。两个驱动器仍各自保存规则和
+    运行时状态，公共层不合并它们的匹配实现。
+    """
 
     @staticmethod
     def fullmatch(
@@ -97,17 +110,9 @@ class MessageHandler:
     ) -> Callable:
         """注册必须完整匹配整条消息的回调。"""
 
-        def wrapper(func: Callable) -> Callable:
-            for spec in enabled_adapter_specs():
-                spec.handler.fullmatch(
-                    cmd=cmd,
-                    priority=priority,
-                    block=block,
-                    metadata=metadata,
-                )(MessageHandler._bind_manager(func, spec.manager))
-            return func
-
-        return wrapper
+        return MessageHandler._register(
+            "fullmatch", cmd, priority=priority, block=block, metadata=metadata
+        )
 
     @staticmethod
     def command(
@@ -119,17 +124,9 @@ class MessageHandler:
     ) -> Callable:
         """注册命令词加参数的回调。"""
 
-        def wrapper(func: Callable) -> Callable:
-            for spec in enabled_adapter_specs():
-                spec.handler.command(
-                    cmd=cmd,
-                    priority=priority,
-                    block=block,
-                    metadata=metadata,
-                )(MessageHandler._bind_manager(func, spec.manager))
-            return func
-
-        return wrapper
+        return MessageHandler._register(
+            "command", cmd, priority=priority, block=block, metadata=metadata
+        )
 
     @staticmethod
     def regex(
@@ -141,9 +138,25 @@ class MessageHandler:
     ) -> Callable:
         """注册完整消息正则回调。"""
 
+        return MessageHandler._register(
+            "regex", cmd, priority=priority, block=block, metadata=metadata
+        )
+
+    @staticmethod
+    def _register(
+        method_name: str,
+        cmd,
+        *,
+        priority: int,
+        block: bool,
+        metadata: dict[str, Any] | None,
+    ) -> Callable:
+        """把三种注册器共有的复制逻辑集中到一个地方。"""
+
         def wrapper(func: Callable) -> Callable:
             for spec in enabled_adapter_specs():
-                spec.handler.regex(
+                registrar = getattr(spec.handler, method_name)
+                registrar(
                     cmd=cmd,
                     priority=priority,
                     block=block,
@@ -154,14 +167,14 @@ class MessageHandler:
         return wrapper
 
     @staticmethod
-    def unregister_module(module_name: str) -> None:
-        """同步移除所有驱动器中属于一个模块的旧回调。"""
-
-        for spec in enabled_adapter_specs():
-            spec.handler.unregister_module(module_name)
-
-    @staticmethod
     def _bind_manager(func: Callable, real_manager: Any) -> Callable:
+        """给驱动器回调绑定真实 manager，同时向业务暴露公共 manager。
+
+        `real_manager` 只用于没有显式上下文时的兜底选择；业务回调拿到的
+        始终是下面的公共 `manager`，这样游戏代码不需要判断当前是 QQ 还是
+        Local。真正的驱动器 manager 只在适配器边界内使用。
+        """
+
         @wraps(func)
         async def wrapped(**context: Any) -> Any:
             token = _current_manager.set(context.get("manager") or real_manager)
@@ -184,7 +197,11 @@ class AdapterReplyManager:
         is_log: bool = True,
         request_id: object | None = None,
     ) -> bool:
-        """把回复转交当前或显式目标所属的真实驱动器。"""
+        """把公共消息交给当前或显式目标所属的驱动器。
+
+        业务层永远调用这个入口；QQ 的队列、本地的捕获结果和协议载荷都
+        在各自 manager 内部处理。
+        """
 
         payload = message.message if isinstance(message, SendRequest) else message
         if coerce_message(payload) is None:

@@ -58,9 +58,7 @@ def inspection(result: ItemInspectionResult):
     lines = _definition_lines(detail.section, detail.name, detail.fields, related)
     reply = M.document().header(detail.name)
     if detail.description:
-        reply.section(title, icon=icon).field(
-            "编号", detail.item_id
-        )
+        reply.section(title, icon=icon).field("编号", detail.item_id)
         reply.line(_description(detail))
     else:
         reply.inline_section(

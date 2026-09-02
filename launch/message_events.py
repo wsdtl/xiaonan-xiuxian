@@ -33,7 +33,11 @@ from .log import C, logger
 
 @dataclass(frozen=True)
 class MessageInteraction:
-    """一项可由其它驱动器重新呈现的协议中立交互。"""
+    """一项可由其它驱动器重新呈现的协议中立交互。
+
+    这里保存的是按钮或命令链接的语义，不保存 QQ keyboard 或网页 DOM；
+    订阅方可以据此记录、审查或重新渲染交互。
+    """
 
     kind: str
     action_id: str
@@ -49,7 +53,11 @@ class MessageInteraction:
 
 @dataclass(frozen=True)
 class MessageEvent:
-    """一条驱动器收发消息的完整可展示事实。"""
+    """一条驱动器收发消息的完整可展示事实。
+
+    事件总线只观察收发结果，不参与命令匹配、业务结算或消息发送；订阅者
+    出错也不能反向影响主链路。
+    """
 
     direction: str
     adapter: str
@@ -64,7 +72,10 @@ class MessageEvent:
 
 @dataclass(frozen=True)
 class MessageSnapshot:
-    """从业务消息提取出的正文、媒体和交互语义。"""
+    """从业务消息提取出的正文、媒体和交互语义。
+
+    驱动器和后台只消费这份快照，不直接拆解 `message` 包里的具体对象。
+    """
 
     message_type: str
     content: str
@@ -159,17 +170,6 @@ def event_from_outgoing(
         image=snapshot.image,
         interactions=snapshot.interactions,
     )
-
-
-def display_content_from_message(message: object) -> tuple[str, str]:
-    """从业务回复对象里提取适合消息流水展示的正文。
-
-    这里只做协议中立的“取正文”：markdown 取 content，image 尽量取可访问
-    地址，keyboard/buttons 不进入 content。业务层装饰由订阅组件再过滤。
-    """
-
-    snapshot = snapshot_from_message(message)
-    return snapshot.message_type, snapshot.content
 
 
 def snapshot_from_message(message: object) -> MessageSnapshot:
@@ -490,7 +490,6 @@ __all__ = [
     "MessageEvent",
     "MessageInteraction",
     "MessageSnapshot",
-    "display_content_from_message",
     "emit_message_event",
     "event_from_incoming",
     "event_from_outgoing",

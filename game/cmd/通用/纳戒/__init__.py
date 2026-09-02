@@ -5,21 +5,23 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.najie import NajieQueryError, NajieStateError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="纳戒",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="资源",
-        summary="分类查看物品、功法道藏、修行资粮、器藏、阵藏与所学",
-        usage=("纳戒", "纳戒 大类", "纳戒 大类 小类", "纳戒 大类 小类 页码"),
-        side_effect="只读查询，不消耗、装配或改变任何玩家资产",
-        order=5,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "资源",
+            "summary": "分类查看物品、功法道藏、修行资粮、器藏、阵藏与所学",
+            "usage": ("纳戒", "纳戒 大类", "纳戒 大类 小类", "纳戒 大类 小类 页码"),
+            "side_effect": "只读查询，不消耗、装配或改变任何玩家资产",
+            "order": 5,
+        },
+    },
 )
 async def show_najie(*, user_id: str, message: str, manager, **_) -> None:
     query = tuple(str(message or "").split())

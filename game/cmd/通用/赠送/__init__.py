@@ -5,21 +5,23 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.zengsong import GiftError, GiftSendCommand
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="赠送",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="资源",
-        summary="向附近玩家赠送灵石或基础物资",
-        usage=("赠送 玩家 灵石 数量", "赠送 玩家 物品编号 品级 数量"),
-        side_effect="在同一事务中转移资产",
-        order=83,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "资源",
+            "summary": "向附近玩家赠送灵石或基础物资",
+            "usage": ("赠送 玩家 灵石 数量", "赠送 玩家 物品编号 品级 数量"),
+            "side_effect": "在同一事务中转移资产",
+            "order": 83,
+        },
+    },
 )
 async def send(*, user_id: str, message: str, message_context, manager, **_) -> None:
     feature = current_game_services().features.zengsong

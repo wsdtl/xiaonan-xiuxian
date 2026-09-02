@@ -5,22 +5,23 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.weizhi import NearbyPageError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.fullmatch(
-    scope="通用",
-    cmd="位置",
-    aliases=("山门",),
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="世界",
-        summary="查看当前地点、地势与此地开放功能",
-        usage=("位置", "山门"),
-        side_effect="只查看，不会改变人物状态",
-        order=20,
-    ),
+    cmd=("位置", "山门"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "世界",
+            "summary": "查看当前地点、地势与此地开放功能",
+            "usage": ("位置", "山门"),
+            "side_effect": "只查看，不会改变人物状态",
+            "order": 20,
+        },
+    },
 )
 async def show_position(*, user_id: str, manager, **_) -> None:
     feature = current_game_services().features.weizhi
@@ -42,16 +43,18 @@ async def show_position(*, user_id: str, manager, **_) -> None:
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="附近",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="世界",
-        summary="查看附近地点或修士",
-        usage=("附近", "附近 地点", "附近 修士", "附近 修士 页码"),
-        side_effect="只查看，不会改变人物状态",
-        order=30,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "世界",
+            "summary": "查看附近地点或修士",
+            "usage": ("附近", "附近 地点", "附近 修士", "附近 修士 页码"),
+            "side_effect": "只查看，不会改变人物状态",
+            "order": 30,
+        },
+    },
 )
 async def show_nearby(*, user_id: str, message: str, manager, **_) -> None:
     feature = current_game_services().features.weizhi

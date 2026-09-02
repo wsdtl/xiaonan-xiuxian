@@ -5,21 +5,23 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.qiecuo import DuelError, DuelStartCommand
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="切磋",
-    guard_rule="自主空闲或休息且可行动",
-    help=HelpSpec(
-        category="战斗",
-        summary="向附近玩家及其同行编组发起切磋",
-        usage=("切磋 玩家编号或姓名",),
-        side_effect="发送切磋邀约，不立即改变正式资源",
-        order=80,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息且可行动",
+        "help": {
+            "category": "战斗",
+            "summary": "向附近玩家及其同行编组发起切磋",
+            "usage": ("切磋 玩家编号或姓名",),
+            "side_effect": "发送切磋邀约，不立即改变正式资源",
+            "order": 80,
+        },
+    },
 )
 async def start(*, user_id: str, message: str, message_context, manager, **_) -> None:
     feature = current_game_services().features.qiecuo
@@ -35,16 +37,18 @@ async def start(*, user_id: str, message: str, message_context, manager, **_) ->
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="接受切磋",
-    guard_rule="自主空闲或休息且可行动",
-    help=HelpSpec(
-        category="战斗",
-        summary="接受附近玩家发来的切磋邀约",
-        usage=("接受切磋",),
-        side_effect="执行一次不影响正式资源的切磋并生成战报",
-        order=81,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息且可行动",
+        "help": {
+            "category": "战斗",
+            "summary": "接受附近玩家发来的切磋邀约",
+            "usage": ("接受切磋",),
+            "side_effect": "执行一次不影响正式资源的切磋并生成战报",
+            "order": 81,
+        },
+    },
 )
 async def accept(*, user_id: str, message_context, manager, **_) -> None:
     feature = current_game_services().features.qiecuo
@@ -58,16 +62,18 @@ async def accept(*, user_id: str, message_context, manager, **_) -> None:
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="拒绝切磋",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="战斗",
-        summary="拒绝待处理的切磋邀约",
-        usage=("拒绝切磋",),
-        side_effect="清除待处理邀约",
-        order=82,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "战斗",
+            "summary": "拒绝待处理的切磋邀约",
+            "usage": ("拒绝切磋",),
+            "side_effect": "清除待处理邀约",
+            "order": 82,
+        },
+    },
 )
 async def reject(*, user_id: str, message_context, manager, **_) -> None:
     feature = current_game_services().features.qiecuo

@@ -21,8 +21,6 @@ def current_qq_event() -> QqMessageEvent:
     if context is not None:
         if context.adapter != "qq":
             raise RuntimeError("当前消息不是 QQ 上下文")
-        if isinstance(context.driver_context, QqMessageEvent):
-            return context.driver_context
         driver_target = context.reply_target.driver_target
         if isinstance(driver_target, QqMessageEvent):
             return driver_target

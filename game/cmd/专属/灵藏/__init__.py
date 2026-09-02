@@ -5,23 +5,25 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.zongmen_lingcang import LingcangFeatureError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 _CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="灵藏",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="行动",
-        summary="在本宗洞天分类查看宗门基础资源",
-        usage=("灵藏", "灵藏 灵植", "灵藏 灵矿 2"),
-        side_effect="只读查询；灵藏中的已捐献资源不能自由取回",
-        order=80,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "行动",
+            "summary": "在本宗洞天分类查看宗门基础资源",
+            "usage": ("灵藏", "灵藏 灵植", "灵藏 灵矿 2"),
+            "side_effect": "只读查询；灵藏中的已捐献资源不能自由取回",
+            "order": 80,
+        },
+    },
 )
 async def show_lingcang(*, user_id: str, message: str, manager, **_) -> None:
     feature = current_game_services().features.zongmen_lingcang
@@ -40,20 +42,21 @@ async def show_lingcang(*, user_id: str, message: str, manager, **_) -> None:
 
 
 @GameCommand.command(
-    scope="专属",
-    cmd="捐藏",
-    aliases=("捐入灵藏",),
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="行动",
-        summary="向本宗灵藏捐献基础材料或灵石",
-        usage=(
-            "捐入灵藏 灵石 数量",
-            "捐入灵藏 灵植/灵矿/兽宝 编号或名称 品级 数量",
-        ),
-        side_effect="原子扣除个人资源并计入宗门灵藏，捐献后不能自由取回",
-        order=81,
-    ),
+    cmd=("捐藏", "捐入灵藏"),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "行动",
+            "summary": "向本宗灵藏捐献基础材料或灵石",
+            "usage": (
+                "捐入灵藏 灵石 数量",
+                "捐入灵藏 灵植/灵矿/兽宝 编号或名称 品级 数量",
+            ),
+            "side_effect": "原子扣除个人资源并计入宗门灵藏，捐献后不能自由取回",
+            "order": 81,
+        },
+    },
 )
 async def donate_lingcang(
     *, user_id: str, message: str, message_context, manager, **_

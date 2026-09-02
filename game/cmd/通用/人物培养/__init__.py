@@ -11,21 +11,23 @@ from game.features.renwu_peiyang import (
     CharacterLawRequest,
 )
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.fullmatch(
-    scope="通用",
     cmd="人物培养",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="修行",
-        summary="查看人物修为、修行槽与本命武器培养状态",
-        usage=("人物培养",),
-        side_effect="只查看，不会改变人物状态",
-        order=10,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "修行",
+            "summary": "查看人物修为、修行槽与本命武器培养状态",
+            "usage": ("人物培养",),
+            "side_effect": "只查看，不会改变人物状态",
+            "order": 10,
+        },
+    },
 )
 async def show_character_cultivation(*, user_id: str, manager, **_) -> None:
     feature = current_game_services().features.renwu_peiyang
@@ -37,16 +39,18 @@ async def show_character_cultivation(*, user_id: str, manager, **_) -> None:
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="人物装配",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="修行",
-        summary="把功法或一份真意、气机装入人物槽位",
-        usage=("人物装配 类别 编号或名称 品级 孔位",),
-        side_effect="功法保留所有权；真意和气机消耗一份，原槽内容消失",
-        order=20,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "修行",
+            "summary": "把功法或一份真意、气机装入人物槽位",
+            "usage": ("人物装配 类别 编号或名称 品级 孔位",),
+            "side_effect": "功法保留所有权；真意和气机消耗一份，原槽内容消失",
+            "order": 20,
+        },
+    },
 )
 async def equip_character(
     *, user_id: str, message: str, message_context, manager
@@ -73,16 +77,18 @@ async def equip_character(
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="人物突破",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="修行",
-        summary="消耗对应突破丹为人物突破境界",
-        usage=("人物突破 丹药编号或名称",),
-        side_effect="消耗纳戒中最低品级的一枚对应突破丹",
-        order=30,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "修行",
+            "summary": "消耗对应突破丹为人物突破境界",
+            "usage": ("人物突破 丹药编号或名称",),
+            "side_effect": "消耗纳戒中最低品级的一枚对应突破丹",
+            "order": 30,
+        },
+    },
 )
 async def breakthrough_character(
     *, user_id: str, message: str, message_context, manager
@@ -100,16 +106,18 @@ async def breakthrough_character(
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="人物覆炼",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="修行",
-        summary="把器藏中的器律覆入人物本命武器",
-        usage=("人物覆炼 器律编号或名称 孔位",),
-        side_effect="消耗器藏中的一份器律并覆盖指定孔位",
-        order=40,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "修行",
+            "summary": "把器藏中的器律覆入人物本命武器",
+            "usage": ("人物覆炼 器律编号或名称 孔位",),
+            "side_effect": "消耗器藏中的一份器律并覆盖指定孔位",
+            "order": 40,
+        },
+    },
 )
 async def forge_character_law(
     *, user_id: str, message: str, message_context, manager

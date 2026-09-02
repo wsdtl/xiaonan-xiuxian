@@ -47,11 +47,8 @@ _current_result: ContextVar[LocalDispatchResult | None] = ContextVar(
 class LocalReplyManager:
     """把业务回复收集到本地分发结果。"""
 
-    async def start(self) -> None:
-        """本地驱动器没有后台发送队列。"""
-
     async def shutdown(self) -> None:
-        """本地驱动器没有外部连接需要关闭。"""
+        """本地驱动器没有外部连接；保留生命周期钩子以满足统一契约。"""
 
     def bind_result(self, result: LocalDispatchResult) -> Token[LocalDispatchResult | None]:
         """绑定当前分发结果，让 send(...) 可以记录回复。"""

@@ -12,7 +12,7 @@ from typing import ClassVar
 
 @dataclass(frozen=True)
 class EventCallback:
-    """一个生命周期回调及其执行顺序配置。"""
+    """一个生命周期回调及其排序信息。"""
 
     priority: int
     order: int
@@ -20,7 +20,11 @@ class EventCallback:
 
 
 class OnEvent:
-    """启动和关闭回调注册器。"""
+    """启动和关闭回调注册器。
+
+    装饰器只登记函数，不在导入模块时执行任何工作；真正执行由
+    `launch.lifespan` 统一编排。数值越大越先执行，同值按注册顺序执行。
+    """
 
     connect_list: ClassVar[list[EventCallback]] = []
     disconnect_list: ClassVar[list[EventCallback]] = []
@@ -28,7 +32,7 @@ class OnEvent:
 
     @staticmethod
     def connect(priority: int = 0) -> Callable:
-        """注册服务启动回调，priority 越大越先执行。"""
+        """登记服务启动回调。"""
 
         def wrapper(func: Callable):
             OnEvent.connect_list.append(
@@ -44,7 +48,7 @@ class OnEvent:
 
     @staticmethod
     def disconnect(priority: int = 0) -> Callable:
-        """注册服务关闭回调，priority 越大越先执行。"""
+        """登记服务关闭回调。"""
 
         def wrapper(func: Callable):
             OnEvent.disconnect_list.append(
@@ -60,7 +64,7 @@ class OnEvent:
 
     @staticmethod
     def ordered_callbacks(callbacks: Iterable[EventCallback]) -> list[Callable]:
-        """按优先级整理回调；同优先级保持注册顺序。"""
+        """按优先级取出回调；同优先级保持注册顺序。"""
 
         return [
             callback.func

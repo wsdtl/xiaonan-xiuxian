@@ -155,26 +155,6 @@ class QqCommandRegistry:
         else:
             self.regex_fallback = self._replace_owned(self.regex_fallback, rule)
 
-    def unregister_module(self, module_name: str) -> None:
-        """移除一个模块的全部旧规则，供重启装载时使用。"""
-
-        owner = str(module_name or "").strip()
-        for registry in (
-            self.command_rules,
-            self.fullmatch_rules,
-            self.regex_rules,
-        ):
-            for key in tuple(registry):
-                rules = [rule for rule in registry[key] if rule.func.__module__ != owner]
-                if rules:
-                    registry[key] = rules
-                else:
-                    del registry[key]
-        self.regex_fallback = [
-            rule for rule in self.regex_fallback if rule.func.__module__ != owner
-        ]
-        self.build_index()
-
     @staticmethod
     def _replace_rule(
         registry: dict[str, list[QqCommandRule]],

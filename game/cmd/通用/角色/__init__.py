@@ -10,22 +10,23 @@ from game.features.chuangjian_renwu import (
     InvalidCreateCharacterError,
 )
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
-    cmd="创建人物",
-    aliases=("创建角色",),
-    guard_rule="仅未创建",
-    help=HelpSpec(
-        category="角色",
-        summary="建立当前账号的唯一修士人物",
-        usage=("创建人物 姓名 性别",),
-        side_effect="每个账号只能创建一个人物",
-        order=10,
-    ),
+    cmd=("创建人物", "创建角色"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "仅未创建",
+        "help": {
+            "category": "角色",
+            "summary": "建立当前账号的唯一修士人物",
+            "usage": ("创建人物 姓名 性别",),
+            "side_effect": "每个账号只能创建一个人物",
+            "order": 10,
+        },
+    },
 )
 async def create_character(
     *, user_id: str, message: str, message_context, manager
@@ -54,17 +55,18 @@ async def create_character(
 
 
 @GameCommand.fullmatch(
-    scope="通用",
-    cmd="人物",
-    aliases=("角色",),
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="角色",
-        summary="查看当前人物的修为、状态、位置与已有构筑",
-        usage=("人物",),
-        side_effect="只查看，不会改变人物状态",
-        order=20,
-    ),
+    cmd=("人物", "角色"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "角色",
+            "summary": "查看当前人物的修为、状态、位置与已有构筑",
+            "usage": ("人物",),
+            "side_effect": "只查看，不会改变人物状态",
+            "order": 20,
+        },
+    },
 )
 async def show_character(*, user_id: str, manager, **_) -> None:
     try:

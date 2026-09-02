@@ -18,8 +18,8 @@ from .log import C, logger
 from .paths import STATIC_DIR
 
 
-async def FastAPIMount(app: FastAPI) -> None:
-    """挂载 FastAPI 全局资源。"""
+def FastAPIMount(app: FastAPI) -> None:
+    """挂载项目静态资源；重复调用时保持幂等。"""
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -29,14 +29,18 @@ async def FastAPIMount(app: FastAPI) -> None:
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-async def AdapterMount(app: FastAPI) -> list[type[BaseAdapter]]:
-    """挂载通信适配器，并返回需要启动/关闭的处理器。"""
+def AdapterMount(app: FastAPI) -> list[type[BaseAdapter]]:
+    """挂载适配器的 HTTP 入口，并返回需要启动/关闭的处理器。
+
+    没有 HTTP 入口的 Local 驱动仍会参与生命周期，只是不会向 FastAPI 暴露
+    路由。
+    """
 
     adapters: list[type[BaseAdapter]] = []
 
     for spec in enabled_adapter_specs():
         mount = spec.http_mount
-        if mount is not None and not any(getattr(route, "path", "") == mount.path for route in app.routes):
+        if mount is not None and not _has_path(app, mount.path):
             app.include_router(mount.router)
             logger.opt(colors=True).success(
                 f"{C.ok('已挂载适配器')} {C.kv('name', spec.name)} {C.kv('path', mount.path)}"
@@ -45,3 +49,9 @@ async def AdapterMount(app: FastAPI) -> list[type[BaseAdapter]]:
         adapters.append(spec.handler)
 
     return adapters
+
+
+def _has_path(app: FastAPI, path: str) -> bool:
+    """判断应用是否已经挂载指定路径，避免重复 include。"""
+
+    return any(getattr(route, "path", "") == path for route in app.routes)

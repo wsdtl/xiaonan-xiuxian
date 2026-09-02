@@ -11,10 +11,8 @@ from .site import router
 
 
 @GameCommand.fullmatch(
-    scope="后台",
     cmd="天道后台",
-    guard_rule="始终可用",
-    hidden=True,
+    metadata={"scope": "后台", "guard_rule": "始终可用", "hidden": True},
 )
 async def heavenly_dao_console(*, manager) -> None:
     await manager.send(reply.entry(public_url("game-console")))

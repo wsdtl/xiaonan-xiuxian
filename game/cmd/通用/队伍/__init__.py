@@ -5,31 +5,32 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.duiwu import TeamFeatureError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
-    cmd="队伍",
-    aliases=("组队",),
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="行动",
-        summary="查看和管理玩家队伍",
-        usage=(
-            "队伍",
-            "队伍 邀请 角色名或编号",
-            "队伍 接受",
-            "队伍 拒绝",
-            "队伍 离开",
-            "队伍 请离 角色名或编号",
-            "队伍 移交 角色名或编号",
-            "队伍 解散",
-        ),
-        side_effect="队伍成员将由队长带领行路和探险",
-        order=35,
-    ),
+    cmd=("队伍", "组队"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "行动",
+            "summary": "查看和管理玩家队伍",
+            "usage": (
+                "队伍",
+                "队伍 邀请 角色名或编号",
+                "队伍 接受",
+                "队伍 拒绝",
+                "队伍 离开",
+                "队伍 请离 角色名或编号",
+                "队伍 移交 角色名或编号",
+                "队伍 解散",
+            ),
+            "side_effect": "队伍成员将由队长带领行路和探险",
+            "order": 35,
+        },
+    },
 )
 async def team_command(
     *,

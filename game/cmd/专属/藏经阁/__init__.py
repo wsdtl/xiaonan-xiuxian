@@ -5,21 +5,23 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.zongmen_cangjing import CangjingFeatureError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="藏经阁",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="行动",
-        summary="查看本宗成员共享的最高品级功法",
-        usage=("藏经阁", "藏经阁 2"),
-        side_effect="只读查询，不转移个人道藏所有权",
-        order=85,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "行动",
+            "summary": "查看本宗成员共享的最高品级功法",
+            "usage": ("藏经阁", "藏经阁 2"),
+            "side_effect": "只读查询，不转移个人道藏所有权",
+            "order": 85,
+        },
+    },
 )
 async def show_cangjing(*, user_id: str, message: str, manager, **_) -> None:
     feature = current_game_services().features.zongmen_cangjing
@@ -35,16 +37,18 @@ async def show_cangjing(*, user_id: str, message: str, manager, **_) -> None:
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="借阅功法",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="行动",
-        summary="把藏经阁功法借入人物指定功法槽",
-        usage=("借阅功法 编号或名称 槽位",),
-        side_effect="替换指定人物功法槽；离开洞天后仍生效，离宗时恢复原功法",
-        order=86,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "行动",
+            "summary": "把藏经阁功法借入人物指定功法槽",
+            "usage": ("借阅功法 编号或名称 槽位",),
+            "side_effect": "替换指定人物功法槽；离开洞天后仍生效，离宗时恢复原功法",
+            "order": 86,
+        },
+    },
 )
 async def borrow_technique(
     *, user_id: str, message: str, message_context, manager, **_

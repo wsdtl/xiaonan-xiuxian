@@ -10,7 +10,7 @@ from game.features.fudan import (
     MedicineUseRequest,
 )
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
@@ -40,16 +40,18 @@ async def _use(
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="人物服丹",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="修行",
-        summary="为人物服用恢复丹或寄存一枚战丹",
-        usage=("人物服丹 丹药编号或名称 [品级]",),
-        side_effect="消耗共享纳戒中的一枚丹药",
-        order=80,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "修行",
+            "summary": "为人物服用恢复丹或寄存一枚战丹",
+            "usage": ("人物服丹 丹药编号或名称 [品级]",),
+            "side_effect": "消耗共享纳戒中的一枚丹药",
+            "order": 80,
+        },
+    },
 )
 async def use_for_character(
     *, user_id: str, message: str, message_context, manager
@@ -64,16 +66,18 @@ async def use_for_character(
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="道侣服丹",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="修行",
-        summary="为当前同行道侣服用恢复丹或寄存一枚战丹",
-        usage=("道侣服丹 丹药编号或名称 [品级]",),
-        side_effect="消耗共享纳戒中的一枚丹药",
-        order=90,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "修行",
+            "summary": "为当前同行道侣服用恢复丹或寄存一枚战丹",
+            "usage": ("道侣服丹 丹药编号或名称 [品级]",),
+            "side_effect": "消耗共享纳戒中的一枚丹药",
+            "order": 90,
+        },
+    },
 )
 async def use_for_companion(
     *, user_id: str, message: str, message_context, manager
@@ -110,17 +114,18 @@ async def _setting(
 
 
 @GameCommand.command(
-    scope="通用",
-    cmd="人药",
-    aliases=("人物自动用药",),
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="修行",
-        summary="单独设置人物的战斗自动用药开关",
-        usage=("人物自动用药 开或关",),
-        side_effect="只改变人物开关，不影响道侣",
-        order=100,
-    ),
+    cmd=("人药", "人物自动用药"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "修行",
+            "summary": "单独设置人物的战斗自动用药开关",
+            "usage": ("人物自动用药 开或关",),
+            "side_effect": "只改变人物开关，不影响道侣",
+            "order": 100,
+        },
+    },
 )
 async def set_character_automatic(
     *, user_id: str, message: str, message_context, manager
@@ -135,17 +140,18 @@ async def set_character_automatic(
 
 
 @GameCommand.command(
-    scope="通用",
-    cmd="侣药",
-    aliases=("道侣自动用药",),
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="修行",
-        summary="单独设置当前同行道侣的战斗自动用药开关",
-        usage=("道侣自动用药 开或关",),
-        side_effect="只改变当前同行道侣开关，不影响人物",
-        order=110,
-    ),
+    cmd=("侣药", "道侣自动用药"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "修行",
+            "summary": "单独设置当前同行道侣的战斗自动用药开关",
+            "usage": ("道侣自动用药 开或关",),
+            "side_effect": "只改变当前同行道侣开关，不影响人物",
+            "order": 110,
+        },
+    },
 )
 async def set_companion_automatic(
     *, user_id: str, message: str, message_context, manager

@@ -5,23 +5,25 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.zongmen_wanzhen import WanzhenFeatureError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="万珍殿",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="行动",
-        summary="在本宗洞天分类查看宗门成品",
-        usage=("万珍殿", "万珍殿 丹药", "万珍殿 阵法 2"),
-        side_effect="只读查询；成品由宗主统一发放",
-        order=82,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "行动",
+            "summary": "在本宗洞天分类查看宗门成品",
+            "usage": ("万珍殿", "万珍殿 丹药", "万珍殿 阵法 2"),
+            "side_effect": "只读查询；成品由宗主统一发放",
+            "order": 82,
+        },
+    },
 )
 async def show_wanzhen(*, user_id: str, message: str, manager, **_) -> None:
     feature = current_game_services().features.zongmen_wanzhen
@@ -40,21 +42,22 @@ async def show_wanzhen(*, user_id: str, message: str, manager, **_) -> None:
 
 
 @GameCommand.command(
-    scope="专属",
-    cmd="捐珍",
-    aliases=("捐入万珍殿",),
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="行动",
-        summary="将个人成品存入本宗万珍殿",
-        usage=(
-            "捐入万珍殿 丹药/真意/气机 编号或名称 品级 数量",
-            "捐入万珍殿 器律 编号或名称 数量",
-            "捐入万珍殿 阵法 阵藏条目编号",
-        ),
-        side_effect="原子扣除个人成品并计入万珍殿；阵法每次存入一座",
-        order=83,
-    ),
+    cmd=("捐珍", "捐入万珍殿"),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "行动",
+            "summary": "将个人成品存入本宗万珍殿",
+            "usage": (
+                "捐入万珍殿 丹药/真意/气机 编号或名称 品级 数量",
+                "捐入万珍殿 器律 编号或名称 数量",
+                "捐入万珍殿 阵法 阵藏条目编号",
+            ),
+            "side_effect": "原子扣除个人成品并计入万珍殿；阵法每次存入一座",
+            "order": 83,
+        },
+    },
 )
 async def donate_wanzhen(
     *, user_id: str, message: str, message_context, manager, **_
@@ -95,20 +98,21 @@ async def donate_wanzhen(
 
 
 @GameCommand.command(
-    scope="专属",
-    cmd="发珍",
-    aliases=("发放万珍殿",),
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="行动",
-        summary="由宗主向本宗成员发放万珍殿成品",
-        usage=(
-            "发放万珍殿 角色名或编号 条目编号",
-            "发放万珍殿 角色名或编号 条目编号 数量",
-        ),
-        side_effect="原子扣除宗门成品并写入目标成员的对应个人藏库",
-        order=84,
-    ),
+    cmd=("发珍", "发放万珍殿"),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "行动",
+            "summary": "由宗主向本宗成员发放万珍殿成品",
+            "usage": (
+                "发放万珍殿 角色名或编号 条目编号",
+                "发放万珍殿 角色名或编号 条目编号 数量",
+            ),
+            "side_effect": "原子扣除宗门成品并写入目标成员的对应个人藏库",
+            "order": 84,
+        },
+    },
 )
 async def grant_wanzhen(
     *, user_id: str, message: str, message_context, manager, **_

@@ -5,28 +5,30 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.zongmen_tongxing import SectFollowFeatureError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="宗门同行",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="行动",
-        summary="召集或加入本宗同行",
-        usage=(
-            "宗门同行",
-            "宗门同行 召集",
-            "宗门同行 加入",
-            "宗门同行 离开",
-            "宗门同行 请离 角色名或编号",
-            "宗门同行 解散",
-        ),
-        side_effect="同行成员随宗主共同去、探险、闭关、采药和采矿",
-        order=36,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "行动",
+            "summary": "召集或加入本宗同行",
+            "usage": (
+                "宗门同行",
+                "宗门同行 召集",
+                "宗门同行 加入",
+                "宗门同行 离开",
+                "宗门同行 请离 角色名或编号",
+                "宗门同行 解散",
+            ),
+            "side_effect": "同行成员随宗主共同去、探险、闭关、采药和采矿",
+            "order": 36,
+        },
+    },
 )
 async def sect_follow_command(
     *, user_id: str, message: str, message_context, manager

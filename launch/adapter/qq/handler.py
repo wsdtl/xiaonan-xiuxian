@@ -14,7 +14,6 @@ from ..command_guard import CommandGuardContext, run_command_guards
 from ..context import (
     CONVERSATION_GROUP,
     CONVERSATION_PRIVATE,
-    AdapterCapabilities,
     MessageContext,
     ReplyTarget,
     reset_current_message_context,
@@ -42,17 +41,6 @@ _runtime = QqDriverRuntime()
 
 class QqEventHandler(BaseMessageHandler):
     """QQ 驱动器只编排 QQ 事件，不共享其他驱动器的会话运行时。"""
-
-    CAPABILITIES = AdapterCapabilities(
-        text=True,
-        markdown=True,
-        image=True,
-        buttons=True,
-        mention=True,
-        private_message=True,
-        group_message=True,
-        active_push=True,
-    )
 
     @staticmethod
     async def run() -> None:
@@ -193,10 +181,6 @@ class QqEventHandler(BaseMessageHandler):
         )
 
     @staticmethod
-    def unregister_module(module_name: str) -> None:
-        _command_registry.unregister_module(module_name)
-
-    @staticmethod
     def _callback_wrapper(
         commands: list,
         registrar: Callable,
@@ -321,7 +305,6 @@ class QqEventHandler(BaseMessageHandler):
                     "message_context": message_context,
                     "sender_name": message_context.sender_name,
                     "reply_target": message_context.reply_target,
-                    "adapter_capabilities": message_context.capabilities,
                     "match": item.match,
                 },
             )
@@ -349,8 +332,6 @@ class QqEventHandler(BaseMessageHandler):
             raw_message=event.content,
             conversation_type=conversation_type,
             reply_target=reply_target,
-            capabilities=QqEventHandler.CAPABILITIES,
-            driver_context=event,
             sender_name=event.sender_name,
         )
 

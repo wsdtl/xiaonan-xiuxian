@@ -24,12 +24,12 @@ def schedule_plan(session) -> None:
     if (
         session.status != "运行中"
         or session.next_trigger_at is None
-        or not Scheduler.asyncinstance.running
+        or not Scheduler.instance.running
     ):
         return
     current = datetime.now(timezone.utc)
     run_date = max(session.next_trigger_at, current + timedelta(milliseconds=50))
-    Scheduler.asyncinstance.add_job(
+    Scheduler.instance.add_job(
         run_hosting_plan,
         "date",
         run_date=run_date,
@@ -42,9 +42,9 @@ def schedule_plan(session) -> None:
 
 def cancel_plan(session_id: str) -> None:
     job_id = f"{JOB_PREFIX}{str(session_id or '').strip()}"
-    if not Scheduler.asyncinstance.running:
+    if not Scheduler.instance.running:
         return
-    job = Scheduler.asyncinstance.get_job(job_id)
+    job = Scheduler.instance.get_job(job_id)
     if job is not None:
         job.remove()
 

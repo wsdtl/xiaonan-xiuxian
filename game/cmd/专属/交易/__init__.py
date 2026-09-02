@@ -5,21 +5,23 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.jiaoyi import TradeFeatureError, TradePurchaseCommand
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="交易",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="资源",
-        summary="查看当前位置固定出售的真意和气机",
-        usage=("交易", "交易 真意", "交易 气机", "交易 真意 页码"),
-        side_effect="只读查询，不消耗灵石",
-        order=55,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "资源",
+            "summary": "查看当前位置固定出售的真意和气机",
+            "usage": ("交易", "交易 真意", "交易 气机", "交易 真意 页码"),
+            "side_effect": "只读查询，不消耗灵石",
+            "order": 55,
+        },
+    },
 )
 async def inspect_trade(*, user_id: str, message: str, manager, **_) -> None:
     feature = current_game_services().features.jiaoyi
@@ -43,16 +45,18 @@ async def inspect_trade(*, user_id: str, message: str, manager, **_) -> None:
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="购买",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="资源",
-        summary="从当前位置货架购买真意或气机",
-        usage=("购买 编号或名称 品级", "购买 编号或名称 品级 数量"),
-        side_effect="原子扣除灵石，并把对应数量收入修行资粮",
-        order=56,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "资源",
+            "summary": "从当前位置货架购买真意或气机",
+            "usage": ("购买 编号或名称 品级", "购买 编号或名称 品级 数量"),
+            "side_effect": "原子扣除灵石，并把对应数量收入修行资粮",
+            "order": 56,
+        },
+    },
 )
 async def purchase_trade(
     *, user_id: str, message: str, message_context, manager, **_

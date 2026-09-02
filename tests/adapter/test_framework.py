@@ -6,7 +6,6 @@ from inspect import signature
 import pytest
 
 from launch.adapter import (
-    AdapterCapabilities,
     CommandGuardContext,
     MessageContext,
     ReplyTarget,
@@ -36,7 +35,6 @@ def _guard_context() -> CommandGuardContext:
             raw_message="测试",
             conversation_type="private",
             reply_target=ReplyTarget("local", "qq-1", "qq-1", "private"),
-            capabilities=AdapterCapabilities(),
         )
     )
 
@@ -161,7 +159,6 @@ def test_message_context_rejects_mixed_user_ids() -> None:
             raw_message="帮助",
             conversation_type="private",
             reply_target=ReplyTarget("local", "user-2", "user-2", "private"),
-            capabilities=AdapterCapabilities(),
         )
 
 

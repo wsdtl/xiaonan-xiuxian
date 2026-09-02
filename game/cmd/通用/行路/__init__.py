@@ -9,22 +9,23 @@ from game.features.xinglu import (
     TravelRequest,
 )
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
-    cmd="去",
-    aliases=("前往",),
-    guard_rule="自主空闲且可行动",
-    help=HelpSpec(
-        category="行动",
-        summary="前往指定地点或坐标并立即抵达",
-        usage=("去 地点名", "去 x y"),
-        side_effect="立即改变人物位置，不产生行路等待时间",
-        order=10,
-    ),
+    cmd=("去", "前往"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲且可行动",
+        "help": {
+            "category": "行动",
+            "summary": "前往指定地点或坐标并立即抵达",
+            "usage": ("去 地点名", "去 x y"),
+            "side_effect": "立即改变人物位置，不产生行路等待时间",
+            "order": 10,
+        },
+    },
 )
 async def travel(
     *,

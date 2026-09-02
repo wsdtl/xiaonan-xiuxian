@@ -1,7 +1,7 @@
 """协议中立的消息上下文与发送意图。
 
-业务层只能依赖本模块公开的用户、请求、会话、能力和目标；QQ event 等协议对象
-只可存在于 driver_context/driver_target。
+业务层只能依赖本模块公开的用户、请求、会话和目标；QQ event 等协议对象
+只可存在于 ReplyTarget.driver_target。
 """
 
 from __future__ import annotations
@@ -19,22 +19,13 @@ MENTION_SENDER = "sender"
 
 
 @dataclass(frozen=True)
-class AdapterCapabilities:
-    """当前驱动器声明给业务层看的能力，不暴露协议私有字段。"""
-
-    text: bool = True
-    markdown: bool = False
-    image: bool = False
-    buttons: bool = False
-    mention: bool = False
-    private_message: bool = False
-    group_message: bool = False
-    active_push: bool = False
-
-
-@dataclass(frozen=True)
 class ReplyTarget:
-    """一次回复的用户归属与实际发送目标。"""
+    """一次回复的用户归属与实际发送目标。
+
+    `user_id` 是游戏账号身份，`target_id` 是平台投递目标：私聊时通常相同，
+    群聊时 `target_id` 是群号。`driver_target` 只给对应适配器保存协议对象，
+    游戏层不读取它。
+    """
 
     adapter: str
     user_id: str
@@ -61,7 +52,11 @@ class ReplyTarget:
 
 @dataclass(frozen=True)
 class MessageContext:
-    """一条已规整消息的公共上下文。"""
+    """一条已规整消息的公共上下文。
+
+    QQ payload、Local 事件等协议细节在进入这里前已经被适配器解释；命令
+    回调只依赖这些稳定字段，因此同一组件可以由不同驱动器触发。
+    """
 
     adapter: str
     user_id: str
@@ -71,8 +66,6 @@ class MessageContext:
     raw_message: str
     conversation_type: str
     reply_target: ReplyTarget
-    capabilities: AdapterCapabilities
-    driver_context: Any = None
     sender_name: str = ""
 
     def __post_init__(self) -> None:
@@ -99,35 +92,29 @@ class MessageContext:
 
 @dataclass(frozen=True)
 class SendOptions:
-    """业务层表达发送意图时可选的通用发送选项。"""
+    """业务层表达发送意图时保留的通用发送选项。
+
+    选项只描述发送意图，不描述 QQ 或 Local 的载荷结构。驱动器是否支持
+    某种展示形式，由驱动器自己的渲染器决定。
+    """
 
     mention: str = MENTION_DEFAULT
-    reply_mode: str = "reply"
-    buttons: bool = True
     markdown: bool = True
-    image: bool = True
     log: bool = True
 
 
 @dataclass(frozen=True)
 class SendRequest:
-    """一次发送请求。message 是业务内容，target 缺省表示当前回复目标。"""
+    """一次发送请求。
+
+    `target` 为空时使用当前消息的回复目标；只有跨会话主动发送时才需要
+    显式目标。`request_id` 用于日志和幂等关联，不由消息正文推断。
+    """
 
     message: object
     target: ReplyTarget | None = None
     options: SendOptions = field(default_factory=SendOptions)
     request_id: object | None = None
-
-
-@dataclass(frozen=True)
-class SendResult:
-    """驱动器发送结果。"""
-
-    success: bool
-    adapter: str = ""
-    user_id: str = ""
-    target_id: str = ""
-    error: str = ""
 
 
 _current_message_context: ContextVar[MessageContext | None] = ContextVar(

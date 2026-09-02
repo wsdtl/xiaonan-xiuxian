@@ -9,21 +9,23 @@ from game.features.xiantian_lingbao import (
     InnateTreasureFeatureError,
 )
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="先天灵宝",
-    guard_rule="已创建",
-    help=HelpSpec(
-        category="修行",
-        summary="查看灵宝谱和当前执掌的先天灵宝",
-        usage=("先天灵宝", "先天灵宝 页码"),
-        side_effect="只读查询，不改变灵宝槽",
-        order=50,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "修行",
+            "summary": "查看灵宝谱和当前执掌的先天灵宝",
+            "usage": ("先天灵宝", "先天灵宝 页码"),
+            "side_effect": "只读查询，不改变灵宝槽",
+            "order": 50,
+        },
+    },
 )
 async def show_innate_treasures(*, user_id: str, message: str, manager, **_) -> None:
     feature = current_game_services().features.xiantian_lingbao
@@ -32,22 +34,26 @@ async def show_innate_treasures(*, user_id: str, message: str, manager, **_) -> 
         await manager.send(reply.error("格式：先天灵宝 [页码]"))
         return
     try:
-        await manager.send(reply.view(feature, await feature.inspect(user_id, int(raw or 1))))
+        await manager.send(
+            reply.view(feature, await feature.inspect(user_id, int(raw or 1)))
+        )
     except InnateTreasureFeatureError as exc:
         await manager.send(reply.error(str(exc)))
 
 
 @GameCommand.command(
-    scope="通用",
     cmd="执掌灵宝",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="修行",
-        summary="从个人灵宝谱中选择一件先天灵宝执掌",
-        usage=("执掌灵宝 编号或名称",),
-        side_effect="替换唯一先天灵宝槽，不消耗灵宝",
-        order=60,
-    ),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "修行",
+            "summary": "从个人灵宝谱中选择一件先天灵宝执掌",
+            "usage": ("执掌灵宝 编号或名称",),
+            "side_effect": "替换唯一先天灵宝槽，不消耗灵宝",
+            "order": 60,
+        },
+    },
 )
 async def equip_innate_treasure(
     *, user_id: str, message: str, message_context, manager

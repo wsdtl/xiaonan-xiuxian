@@ -3,21 +3,23 @@
 from game.app import current_game_services
 from game.features.zongmen_shengchan import SectProductionFeatureError
 
-from ...command import GameCommand, HelpSpec
+from ...command import GameCommand
 from . import reply
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="灵脉",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="行动",
-        summary="查看或收取本宗灵脉的随机灵石与灵矿",
-        usage=("灵脉", "灵脉 开启", "灵脉 收取"),
-        side_effect="查看只读；收取时按完整生产轮次统一写入本宗灵藏",
-        order=82,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "行动",
+            "summary": "查看或收取本宗灵脉的随机灵石与灵矿",
+            "usage": ("灵脉", "灵脉 开启", "灵脉 收取"),
+            "side_effect": "查看只读；收取时按完整生产轮次统一写入本宗灵藏",
+            "order": 82,
+        },
+    },
 )
 async def lingmai(*, user_id: str, message: str, message_context, manager, **_) -> None:
     await _dispatch(
@@ -26,16 +28,18 @@ async def lingmai(*, user_id: str, message: str, message_context, manager, **_) 
 
 
 @GameCommand.command(
-    scope="专属",
     cmd="灵田",
-    guard_rule="自主空闲或休息",
-    help=HelpSpec(
-        category="行动",
-        summary="查看或收取本宗灵田的随机灵植",
-        usage=("灵田", "灵田 开启", "灵田 收取"),
-        side_effect="查看只读；收取时按完整生产轮次统一写入本宗灵藏",
-        order=83,
-    ),
+    metadata={
+        "scope": "专属",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "行动",
+            "summary": "查看或收取本宗灵田的随机灵植",
+            "usage": ("灵田", "灵田 开启", "灵田 收取"),
+            "side_effect": "查看只读；收取时按完整生产轮次统一写入本宗灵藏",
+            "order": 83,
+        },
+    },
 )
 async def lingtian(
     *, user_id: str, message: str, message_context, manager, **_
