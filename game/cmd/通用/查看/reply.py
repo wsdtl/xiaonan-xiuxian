@@ -78,10 +78,8 @@ def inspection(result: ItemInspectionResult):
 
 
 def _description(detail) -> str:
-    """道侣的专属查看页已有性情段落，通用资料页只保留身份简介。"""
+    """返回实体自己的公开说明；不从说明文本中截断或推断规则。"""
 
-    if detail.category == "道侣":
-        return detail.description.split("，", 1)[0].rstrip("。") + "。"
     return detail.description
 
 

@@ -62,9 +62,7 @@ class ItemCatalogService:
             item_id = record.entity_id
             value = record.value
             name = _required_text(value.get("名称"), f"{record.section} {item_id}.名称")
-            description = str(
-                value.get("说明") or value.get("描述") or value.get("简介") or ""
-            ).strip()
+            description = str(value.get("说明") or "").strip()
             category = record.number_category
             section = record.section
             selected = _ENTITY_FIELDS.get(section, ())

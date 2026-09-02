@@ -61,7 +61,8 @@ def load_battle_mechanisms(
     for mechanism_id, raw in data.entities("机制").items():
         path = f"机制[{mechanism_id}]"
         entry = _mapping(materialize(raw), path)
-        unknown = set(entry) - {"编号", "名称", "节点"}
+        # 说明是实体的玩家可读文本，不参与战斗机制构造。
+        unknown = set(entry) - {"编号", "名称", "说明", "节点"}
         if unknown:
             raise ValueError(f"{path}存在未知字段：{'、'.join(sorted(unknown))}")
         declared_id = str(entry.get("编号") or "").strip()
@@ -180,7 +181,7 @@ def _validate_battle_environments(
     for environment_id, raw in environments.items():
         path = f"战场环境[{environment_id}]"
         environment = _mapping(raw, path)
-        unknown = set(environment) - {"编号", "名称", "阶段"}
+        unknown = set(environment) - {"编号", "名称", "说明", "阶段"}
         if unknown:
             raise ValueError(f"{path}存在未知字段：{'、'.join(sorted(unknown))}")
         if str(environment.get("编号") or "") != environment_id:
