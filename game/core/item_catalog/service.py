@@ -63,6 +63,7 @@ class ItemCatalogService:
             value = record.value
             name = _required_text(value.get("名称"), f"{record.section} {item_id}.名称")
             description = str(value.get("说明") or "").strip()
+            _validate_description(description, f"{record.section} {item_id}.说明")
             category = record.number_category
             section = record.section
             selected = _ENTITY_FIELDS.get(section, ())
@@ -179,6 +180,15 @@ def _required_text(value: object, path: str) -> str:
     if not text:
         raise JsonDataError(f"{path}必须是非空文本")
     return text
+
+
+def _validate_description(value: str, path: str) -> None:
+    """说明是玩家可见正文：禁止半句和重复标点，避免查看页出现空机制。"""
+
+    if not value:
+        raise JsonDataError(f"{path}必须是非空文本")
+    if "，，" in value or "，。" in value or value.endswith(("，", "；")):
+        raise JsonDataError(f"{path}存在未完成的句子")
 
 
 __all__ = ["ITEM_SECTION", "ItemCatalogService"]

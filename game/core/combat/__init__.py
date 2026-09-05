@@ -40,6 +40,8 @@ from .contracts import (
     StatusResult as StatusResult,
 )
 from .elements import generate_five_elements as generate_five_elements
+from .build_terms import bind_term_slots as bind_term_slots
+from .build_terms import resolve_term as resolve_build_term
 from .service import CombatService as CombatService
 
 __all__ = [
@@ -62,4 +64,6 @@ __all__ = [
     "CombatantSpec",
     "StatusResult",
     "generate_five_elements",
+    "bind_term_slots",
+    "resolve_build_term",
 ]

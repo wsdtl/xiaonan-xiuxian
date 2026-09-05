@@ -98,6 +98,7 @@ class CombatStatusSpec:
     stacks: int = 1
     maximum_stacks: int = 1
     action_limits: tuple[str, ...] = ()
+    build_instance: str = ""
 
 
 @dataclass(frozen=True)
@@ -213,6 +214,7 @@ class StatusResult:
     source: str
     source_name: str
     source_mechanism: str
+    build_instance: str
     modifiers: Mapping[str, float]
     stacks: int
     max_stacks: int
@@ -232,6 +234,7 @@ class StatusResult:
             "来源": self.source,
             "来源名称": self.source_name,
             "来源机制": self.source_mechanism,
+            "构筑实例": self.build_instance,
             "属性": dict(self.modifiers),
             "层数": self.stacks,
             "层数上限": self.max_stacks,
@@ -320,11 +323,15 @@ class CombatResult:
 
     @property
     def left_results(self) -> tuple[CombatantResult, ...]:
-        return self.left_team or (self.left,)
+        if self.left_team or self.right_team:
+            return self.left_team
+        return (self.left,)
 
     @property
     def right_results(self) -> tuple[CombatantResult, ...]:
-        return self.right_team or (self.right,)
+        if self.left_team or self.right_team:
+            return self.right_team
+        return (self.right,)
 
     @property
     def winner_side(self) -> str | None:

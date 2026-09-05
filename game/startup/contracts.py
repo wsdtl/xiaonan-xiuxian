@@ -15,7 +15,14 @@ class _PlayerStateOwner(_StateOwner, Protocol):
     def validate_guard_rule(self, rule_name: str) -> None: ...
 
 
+class _JsonDataOwner(Protocol):
+    def entities(self, section: str) -> Mapping[str, Mapping[str, object]]: ...
+
+    def entity_record(self, section: str, entity_id: str) -> object: ...
+
+
 class _CoreServices(Protocol):
+    data: _JsonDataOwner
     player_state: _PlayerStateOwner
     companion: _StateOwner
     character: _StateOwner
@@ -45,6 +52,7 @@ def validate_startup_contracts(core: _CoreServices) -> None:
     from game.cmd.command import registered_command_routes, registered_guard_rules
 
     validate_command_uniqueness(registered_command_routes())
+    validate_construct_term_slots(core.data)
     owners = {
         "player_state": core.player_state.state_types,
         "companion": core.companion.state_types,
@@ -113,8 +121,96 @@ def validate_state_type_ownership(
     return ownership
 
 
+_CONSTRUCT_SECTIONS = ("功法", "真意", "气机", "器律")
+def validate_construct_term_slots(data: _JsonDataOwner) -> None:
+    """只校核运行时必须成立的构筑词条类别和槽位引用。
+
+    槽位只在当前构筑内解析；没有 ``词条`` 表的旧构筑保持原契约，
+    但一旦声明词条表，所有引用必须命中本表。
+    词条可见名称已经在内容整理阶段确认，不在每次启动重复扫描。
+    """
+
+    from game.core.combat.build_terms import SLOT_KEYS, TERM_CATEGORIES
+
+    for section in _CONSTRUCT_SECTIONS:
+        for entity_id, entity in data.entities(section).items():
+            table = entity.get("词条") if isinstance(entity, Mapping) else None
+            if table is None:
+                continue
+            if not isinstance(table, Mapping):
+                raise StartupContractError(f"{section} {entity_id} 的词条必须是对象")
+            source_file = str(
+                getattr(data.entity_record(section, entity_id), "source_file", "")
+                or "<未知文件>"
+            )
+            owner = f"{section} {entity_id} -> {source_file}"
+            unknown_categories = set(table) - set(TERM_CATEGORIES)
+            if unknown_categories:
+                raise StartupContractError(
+                    f"{owner} 的词条类别未知：{ '、'.join(sorted(map(str, unknown_categories))) }"
+                )
+            for category in TERM_CATEGORIES:
+                category_table = table.get(category, {})
+                if not isinstance(category_table, Mapping):
+                    raise StartupContractError(f"{owner} 的词条.{category} 必须是对象")
+                for slot, raw_term in category_table.items():
+                    slot = str(slot).strip()
+                    if not slot or not isinstance(raw_term, Mapping):
+                        raise StartupContractError(
+                            f"{owner} 的词条.{category} 槽位定义无效：{slot or '<空>'}"
+                        )
+                    if not str(raw_term.get("名称") or "").strip():
+                        raise StartupContractError(
+                            f"{owner} 的词条.{category}.{slot} 缺少名称"
+                        )
+            _validate_slot_references(
+                entity,
+                owner=owner,
+                table=table,
+                slot_keys=SLOT_KEYS,
+            )
+def _validate_slot_references(
+    value: object,
+    *,
+    owner: str,
+    table: Mapping[str, object],
+    slot_keys: Mapping[str, str],
+    path: tuple[str, ...] = (),
+) -> None:
+    if isinstance(value, Mapping):
+        if path and path[0] == "词条":
+            return
+        for key, child in value.items():
+            category = slot_keys.get(str(key))
+            if category is not None:
+                slot = str(child or "").strip()
+                category_table = table.get(category)
+                if not isinstance(category_table, Mapping) or slot not in category_table:
+                    dotted = ".".join((*path, str(key)))
+                    raise StartupContractError(
+                        f"{owner} 的槽位引用未定义：{dotted} -> {category}.{slot or '<空>'}"
+                    )
+            _validate_slot_references(
+                child,
+                owner=owner,
+                table=table,
+                slot_keys=slot_keys,
+                path=(*path, str(key)),
+            )
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            _validate_slot_references(
+                child,
+                owner=owner,
+                table=table,
+                slot_keys=slot_keys,
+                path=(*path, f"[{index}]"),
+            )
+
+
 __all__ = [
     "StartupContractError",
+    "validate_construct_term_slots",
     "validate_command_uniqueness",
     "validate_startup_contracts",
     "validate_state_type_ownership",

@@ -257,7 +257,8 @@ def _escape(value: object) -> str:
     text = str(value or "")
     for token in ("\\", "`", "*", "_", "$"):
         text = text.replace(token, f"\\{token}")
-    text = text.replace("[", "&#91;").replace("]", "&#93;")
+    # 公开文本统一使用半角方括号。只有紧随圆括号的方括号才会组成
+    # Markdown 链接；孤立的 [名称] 应原样交给客户端显示。
     return text.replace("\r", " ").replace("\n", " ")
 
 

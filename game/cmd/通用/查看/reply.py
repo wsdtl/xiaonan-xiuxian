@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+import re
 
 from game.features.chakan_wupin import ItemInspectionResult
 from message import M
@@ -26,7 +27,9 @@ def inspection(result: ItemInspectionResult):
             .section("名称不唯一", icon="notice")
             .line(
                 M.status("需要选择", tone="warning"),
-                f" “{result.query}”对应多项资料，请选择编号查看。",
+                _normalize_brackets(
+                    f" “{result.query}”对应多项资料，请选择编号查看。"
+                ),
             )
             .section("候选")
         )
@@ -48,18 +51,36 @@ def inspection(result: ItemInspectionResult):
         return (
             M.document()
             .section("查看", icon="notice")
-            .line(M.status("未找到", tone="danger"), f" “{result.query}”没有对应资料。")
+            .line(
+                M.status("未找到", tone="danger"),
+                _normalize_brackets(f" “{result.query}”没有对应资料。"),
+            )
             .small("请检查编号或完整名称是否正确。")
             .build()
         )
     detail = result.detail
     title, icon = _display_title(detail.category)
     related = {item.item_id: item for item in result.related_details}
-    lines = _definition_lines(detail.section, detail.name, detail.fields, related)
+    lines = (
+        _build_description_lines(detail)
+        if detail.section in {"功法", "真意", "气机", "器律"}
+        else _definition_lines(detail.section, detail.name, detail.fields, related)
+    )
+    if detail.section == "机制" and detail.name.startswith("构筑计量结算"):
+        summary = _mechanism_summary(detail, related)
+        lines = (summary,) if summary else lines
     reply = M.document().header(detail.name)
-    if detail.description:
+    # 构筑正文统一从说明字段进入详情区；其他实体仍使用短引言加结构化详情。
+    description = _player_description(detail)
+    if detail.section in {"功法", "真意", "气机", "器律"}:
+        # 构筑正文已按说明字段逐行放入详情区，避免引言重复出现。
+        description = ""
+    if detail.section == "机制" and lines:
+        # 机制说明由节点解析成“运转”；避免再把同一段效果重复输出。
+        description = ""
+    if description:
         reply.section(title, icon=icon).field("编号", detail.item_id)
-        reply.line(_description(detail))
+        reply.line(description)
     else:
         reply.inline_section(
             title,
@@ -69,7 +90,7 @@ def inspection(result: ItemInspectionResult):
     if lines:
         reply.section(_detail_title(detail.category), icon=icon)
         for line in lines:
-            reply.line(line)
+            reply.line(_normalize_brackets(line))
     elif not detail.description:
         reply.section("详情", icon=icon).line(
             M.status("暂无", tone="muted"), " 暂无更多记载。"
@@ -81,6 +102,78 @@ def _description(detail) -> str:
     """返回实体自己的公开说明；不从说明文本中截断或推断规则。"""
 
     return detail.description
+
+
+def _player_description(detail) -> str:
+    """返回短引言；构筑的数值与处理顺序统一由下方节点说明。"""
+
+    description = _normalize_brackets(_description(detail).strip())
+    if detail.section not in {"功法", "真意", "气机", "器律"}:
+        return description
+    if not description:
+        return ""
+
+    # 内容 JSON 中的说明可能沿用“类别[名称]：五行根基……”的卡头，
+    # 查看页已经有实体标题和五行栏，因此只留下真正的引言。
+    prefix = rf"^(?:功法|真意|气机|器律)\[{re.escape(detail.name)}\][：:]\s*"
+    description = re.sub(prefix, "", description)
+    description = re.sub(r"^五行根基为[^。；]+。\s*", "", description)
+
+    # 器律的说明同时承担目录简介和完整规则记录；查看页的器纹区已经
+    # 展开了真实机制，因此这里只保留铸法引言，避免同一效果占两遍版面。
+    if detail.section == "器律" and "。" in description:
+        description = description.split("。", 1)[0].strip() + "。"
+
+    # 主动、被动、常驻和计量结算的完整效果由“法门”结构化展示。
+    cut = re.search(r"(?:主动|被动|常驻|闭环结算)(?:[，,:：]|\[)", description)
+    if cut:
+        description = description[: cut.start()].rstrip("。；： ") + "。"
+    return description.strip("。 ") + ("。" if description.strip("。 ") else "")
+
+
+def _build_description_lines(detail) -> tuple[str, ...]:
+    """构筑查看正文直接采用 JSON 说明，避免展示层重写战斗文案。"""
+
+    fields = detail.fields
+    lines: list[str] = []
+    attributes = fields.get("属性构成")
+    if isinstance(attributes, Mapping):
+        lines.append(
+            "五行根基："
+            + " · ".join(f"{key}{value}%" for key, value in attributes.items())
+        )
+    if detail.section == "器律":
+        for key in ("器阶", "铸法"):
+            if key in fields:
+                lines.append(f"{key}：{fields[key]}")
+
+    description = _normalize_brackets(detail.description.strip())
+    prefix = rf"^(?:功法|真意|气机|器律)\[{re.escape(detail.name)}\][：:]\s*"
+    description = re.sub(prefix, "", description, count=1)
+    # 元数据已经单独显示；正文中删掉重复的五行卡头，其他说明逐行原样保留。
+    description = re.sub(r"^五行根基为[^。；]+。\s*", "", description, count=1)
+    body = description.splitlines()
+    while body and not body[0].strip():
+        body.pop(0)
+    while body and not body[-1].strip():
+        body.pop()
+    lines.extend(body)
+    return tuple(lines)
+
+
+def _normalize_brackets(value: str) -> str:
+    """展示正文统一使用半角方括号；不改动 Markdown 链接语法。"""
+
+    return (
+        value.replace("【", "[")
+        .replace("】", "]")
+        .replace("「", "[")
+        .replace("」", "]")
+        .replace("『", "[")
+        .replace("』", "]")
+        .replace("“", "[")
+        .replace("”", "]")
+    )
 
 
 def _effect_lines(value: object, prefix: str = "") -> tuple[str, ...]:
@@ -111,7 +204,7 @@ def _definition_lines(
         attributes = fields.get("属性构成")
         if isinstance(attributes, Mapping):
             lines.append(
-                "五行："
+                "五行根基："
                 + " · ".join(f"{key}{value}%" for key, value in attributes.items())
             )
         if section == "器律":
@@ -121,7 +214,7 @@ def _definition_lines(
         abilities = fields.get("能力")
         if isinstance(abilities, Sequence) and not isinstance(abilities, (str, bytes)):
             labels: list[str] = []
-            for ability in abilities:
+            for ability_index, ability in enumerate(abilities, start=1):
                 if isinstance(ability, Mapping):
                     name = str(
                         ability.get("名称") or ability.get("能力") or "未命名能力"
@@ -133,7 +226,7 @@ def _definition_lines(
                         attributes = ability.get("属性")
                         if isinstance(attributes, Mapping):
                             labels.append(
-                                "常驻 · "
+                                f"[{ability_index}] 常驻："
                                 + "、".join(
                                     f"{key}{_signed('增加', value)}"
                                     for key, value in attributes.items()
@@ -151,11 +244,17 @@ def _definition_lines(
                         tags, (str, bytes)
                     ):
                         details.extend(str(tag) for tag in tags)
-                    labels.append(" · ".join(details))
+                    labels.append(f"[{ability_index}] " + " · ".join(details))
                     effects = ability.get("效果")
-                    effect_lines = _ability_effects(effects, related or {})
-                    if effect_lines:
-                        labels.extend(effect_lines)
+                    effect_groups = _ability_effects(effects, related or {})
+                    for effect_lines in effect_groups:
+                        if not effect_lines:
+                            continue
+                        labels.append(f"  → {effect_lines[0]}")
+                        labels.extend(
+                            f"     {'' if line.startswith(('随后', '结算后')) else '• '}{line}"
+                            for line in effect_lines[1:]
+                        )
             if labels:
                 lines.extend(labels)
         return tuple(lines)
@@ -219,7 +318,7 @@ def _definition_lines(
         return tuple(lines)
     if section == "机制":
         node = fields.get("节点")
-        return _combat_lines(node) if isinstance(node, Mapping) else ()
+        return _combat_lines(node, related or {}) if isinstance(node, Mapping) else ()
     if section == "伤势":
         lines = []
         if "来源类别" in fields:
@@ -419,10 +518,12 @@ def _display_number(value: float) -> str:
     return str(int(value)) if value.is_integer() else str(value)
 
 
-def _ability_effects(effects: object, related: Mapping[str, object]) -> tuple[str, ...]:
+def _ability_effects(
+    effects: object, related: Mapping[str, object]
+) -> tuple[tuple[str, ...], ...]:
     if not isinstance(effects, Sequence) or isinstance(effects, (str, bytes)):
         return ()
-    lines: list[str] = []
+    groups: list[tuple[str, ...]] = []
     for effect in effects:
         if not isinstance(effect, Mapping):
             continue
@@ -431,18 +532,149 @@ def _ability_effects(effects: object, related: Mapping[str, object]) -> tuple[st
             mechanism = related.get(str(effect.get("机制") or ""))
             if mechanism is None:
                 continue
-            node = mechanism.fields.get("节点")
-            summary = (
-                "；".join(_combat_lines(node, related))
-                if isinstance(node, Mapping)
-                else ""
-            )
-            lines.append(
-                f"{mechanism.name}：{summary}" if summary else str(mechanism.name)
-            )
+            summary = _mechanism_summary(mechanism, related)
+            name = str(mechanism.name)
+            if name.startswith("构筑计量结算·"):
+                # 这是运行时分类名；玩家只需要知道是哪一项计量何时结算。
+                label = name.removeprefix("构筑计量结算·")
+                groups.append(_mechanism_display_lines(f"结算[{label}]", summary))
+            else:
+                groups.append(_mechanism_display_lines(name, summary))
         else:
-            lines.extend(_combat_lines(effect, related))
-    return tuple(line for line in lines if line)
+            lines = tuple(line for line in _combat_lines(effect, related) if line)
+            if lines:
+                groups.append(lines)
+    return tuple(groups)
+
+
+def _mechanism_display_lines(label: str, summary: str) -> tuple[str, ...]:
+    """将引用机制的顺序步骤拆成独立行，保留机制名只出现一次。"""
+
+    if not summary:
+        return (label,)
+    steps: list[str] = []
+    random_expanded = False
+    for part in summary.split("；"):
+        part = part.strip()
+        if not part:
+            continue
+        # 随机备选项是并列内容，单独成行比斜杠串联更易读。
+        marker = "随机触发"
+        choice_separator = part.find("：", part.find(marker) + len(marker))
+        if marker in part and choice_separator >= 0 and " / " in part[choice_separator + 1 :]:
+            prefix = (
+                part[: choice_separator + 1]
+                .replace("造成伤害后：", "造成伤害后，")
+                .replace("随机触发一项", "随机执行1项")
+            )
+            steps.append(prefix)
+            steps.extend(
+                choice.strip() for choice in part[choice_separator + 1 :].split(" / ")
+            )
+            random_expanded = True
+        else:
+            if random_expanded and not part.startswith(("随后", "若", "否则")):
+                part = f"随后，自身{part}"
+            steps.append(part)
+    if len(steps) <= 1:
+        return (f"{label}：{summary}",)
+    return (f"{label}：{steps[0]}",) + tuple(steps[1:])
+
+
+def _mechanism_summary(mechanism: object, related: Mapping[str, object]) -> str:
+    """把计量监听的内部尝试分支压成玩家可判断的结算语句。"""
+
+    node = getattr(mechanism, "fields", {}).get("节点")
+    if not isinstance(node, Mapping):
+        return ""
+    if not str(getattr(mechanism, "name", "")).startswith("构筑计量结算"):
+        return "；".join(_combat_lines(node, related))
+    condition_node = next(
+        (value for value in _walk_nodes(node.get("效果"))
+         if isinstance(value, Mapping) and value.get("能力") == "条件执行"),
+        node,
+    )
+    condition = _conditions(condition_node.get("条件"))
+    counter = ""
+    # 监听节点把条件放在嵌套的“条件执行”中，不能从外层监听节点读取。
+    left = condition_node.get("条件") or ()
+    if isinstance(left, Sequence) and left and isinstance(left[0], Mapping):
+        value = left[0].get("左值")
+        if isinstance(value, Mapping):
+            counter = str(value.get("计量") or "")
+    body_nodes = condition_node.get("成立效果")
+    body = _nodes(_without_counter_reset(body_nodes, counter), related)
+    # 成立分支通常先引用真正的消费者机制。按节点能力识别，不能依赖展示文案。
+    ref = next(
+        (
+            str(value.get("机制") or "")
+            for value in _walk_nodes(body_nodes)
+            if isinstance(value, Mapping)
+            and value.get("能力") in {"引用战斗机制", "引用被动机制"}
+        ),
+        "",
+    )
+    target = related.get(ref)
+    target_node = getattr(target, "fields", {}).get("节点") if target else None
+    if isinstance(target_node, Mapping):
+        consumer_body = (
+            target_node.get("成立效果")
+            if target_node.get("能力") == "条件执行"
+            else target_node
+        )
+        body = _nodes(_without_counter_reset(consumer_body, counter), related)
+    event = str(node.get("事件") or "行动结束")
+    suffix = f"；结算后{counter}清零，需重新积累" if counter else ""
+    limits = _trigger_limit_suffix(node)
+    return f"{event}时，若{condition}，{'；'.join(body) or '执行结算'}{suffix}{limits}"
+
+
+def _without_counter_reset(value: object, counter: str) -> object:
+    """从消费者正文中移除计量清空节点，避免与外层结算说明重复。"""
+
+    if not counter:
+        return value
+    if isinstance(value, Mapping):
+        if (
+            value.get("能力") == "修改机制计量"
+            and value.get("方式") == "清空"
+            and str(value.get("计量") or "") == counter
+        ):
+            return None
+        return {
+            key: _without_counter_reset(child, counter)
+            for key, child in value.items()
+        }
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return tuple(
+            child
+            for item in value
+            if (child := _without_counter_reset(item, counter)) is not None
+        )
+    return value
+
+
+def _walk_nodes(value: object):
+    if isinstance(value, Mapping):
+        yield value
+        for child in value.values():
+            yield from _walk_nodes(child)
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        for child in value:
+            yield from _walk_nodes(child)
+
+
+def _trigger_limit_suffix(node: Mapping[str, object]) -> str:
+    """把节点级触发上限统一写成玩家可判断的限制。"""
+
+    limits: list[str] = []
+    per_action = node.get("每次行动最多触发")
+    if isinstance(per_action, (int, float)) and not isinstance(per_action, bool) and per_action > 0:
+        limits.append(f"每行动限{_display_number(float(per_action))}次")
+    per_battle = node.get("每场战斗最多触发")
+    if isinstance(per_battle, (int, float)) and not isinstance(per_battle, bool) and per_battle > 0:
+        limits.append(f"每战限{_display_number(float(per_battle))}次")
+    return f"，{'，'.join(limits)}" if limits else ""
 
 
 def _combat_lines(
@@ -453,19 +685,22 @@ def _combat_lines(
     if ability == "顺序执行":
         effects = node.get("效果")
         if isinstance(effects, Sequence) and not isinstance(effects, (str, bytes)):
-            return tuple(
+            lines = tuple(
                 line
                 for effect in effects
                 if isinstance(effect, Mapping)
                 for line in _combat_lines(effect, related)
             )
+            if len(lines) > 1:
+                return ("依次处理：" + "；".join(lines),)
+            return lines
         return ()
     if ability == "条件执行":
         condition = _conditions(node.get("条件"))
-        success = "；".join(_nodes(node.get("成立效果"), related)) or "无额外效果"
+        success = "；".join(_nodes(node.get("成立效果"), related)) or "不产生额外效果"
         failure = "；".join(_nodes(node.get("不成立效果"), related))
-        suffix = f"；否则，{failure}" if failure else ""
-        return (f"若{condition}，{success}{suffix}",)
+        suffix = f"；否则：{failure}" if failure else ""
+        return (f"若{condition}：{success}{suffix}",)
     if ability == "随机执行":
         options = node.get("选项")
         summaries = []
@@ -504,14 +739,20 @@ def _combat_lines(
         attempt = "；".join(_nodes(node.get("尝试效果"), related))
         success = "；".join(_nodes(node.get("成功效果"), related))
         failure = "；".join(_nodes(node.get("失败效果"), related))
-        suffix = f"；成功后，{success}" if success else ""
-        suffix += f"；失败后，{failure}" if failure else ""
-        return (f"尝试{attempt}{suffix}",)
+        text = f"先处理：{attempt or '指定效果'}"
+        if success:
+            text += f"；处理成功后：{success}"
+        if failure:
+            text += f"；处理未成功时：{failure}"
+        return (text,)
     if ability == "事务执行":
         body = "；".join(_nodes(node.get("效果"), related))
         failure = "；".join(_nodes(node.get("失败效果"), related))
-        suffix = f"；未能完成时，{failure}" if failure else ""
-        return (f"同时完成：{body}{suffix}",)
+        text = f"依次处理：{body or '指定效果'}"
+        text += "；任一步骤失败，本项不成立并回退已处理的改变"
+        if failure:
+            text += f"；回退后：{failure}"
+        return (text,)
     if ability == "监听事件":
         event = str(node.get("事件") or "对应时机")
         relation = str(node.get("阵营关系") or "")
@@ -526,8 +767,6 @@ def _combat_lines(
             for effect in effects:
                 if isinstance(effect, Mapping):
                     summaries.extend(_combat_lines(effect, related))
-        limit = node.get("每次行动最多触发")
-        cap = f"，每行动限{limit}次" if isinstance(limit, int) and limit > 0 else ""
         timing = (
             "的召唤物或构造物入场后"
             if event == "战斗对象入场后"
@@ -535,12 +774,11 @@ def _combat_lines(
             if event.endswith(("前", "后", "时"))
             else f"{event}时"
         )
-        per_battle = node.get("每场战斗最多触发")
-        if isinstance(per_battle, int) and per_battle > 0:
-            cap += f"，每战限{per_battle}次"
+        cap = _trigger_limit_suffix(node)
         condition = _conditions(node.get("条件"))
-        requirement = f"，并且{condition}" if condition != "条件成立" else ""
-        return (f"{subject}{timing}{requirement}，{'；'.join(summaries)}{cap}",)
+        requirement = f"，且{condition}" if condition != "条件成立" else ""
+        effect_text = "；".join(summaries) or "不产生额外效果"
+        return (f"{subject}{timing}{requirement}：{effect_text}{cap}",)
     if ability in {
         "读取数值",
         "计算数值",
@@ -586,7 +824,9 @@ def _combat_lines(
             if node.get(key):
                 traits.append(label)
         trait_text = f"，{'、'.join(traits)}" if traits else ""
-        return (f"对{target}造成{amount}{element_text}伤害{trait_text}",)
+        defense_rule = str(node.get("防御规则") or "")
+        damage_type = "真实伤害" if defense_rule == "真实" else "伤害"
+        return (f"对{target}造成{amount}{element_text}{damage_type}{trait_text}",)
     if ability == "恢复资源":
         return (
             (
@@ -696,7 +936,7 @@ def _combat_lines(
         counter = {"分伤": "伤害分担强度"}.get(raw_counter, raw_counter)
         limit = node.get("最高值")
         suffix = (
-            f"，上限{limit}" if isinstance(limit, (int, float)) and limit < 999 else ""
+            f"（上限{limit}）" if isinstance(limit, (int, float)) and limit < 999 else ""
         )
         target = _target(node.get("目标"))
         prefix = "" if target == "自身" else target
@@ -736,7 +976,24 @@ def _combat_lines(
             f"立即对{_target(node.get('目标'))}施展{_skill(node.get('技能'))}{suffix}",
         )
     if ability == "记录战斗事实":
-        return ()
+        name = str(node.get("名称") or "战斗记录")
+        value = node.get("值")
+        mode = str(node.get("方式") or "覆盖")
+        value_text = _value(value)
+        action = {
+            "覆盖": "覆盖保存",
+            "累加": "累计保存",
+        }.get(mode, f"按{mode}保存")
+        retained = node.get("保留数量")
+        suffix = f"，最多保留{retained}条" if retained is not None else ""
+        return (f"将{value_text or '本次事件数值'}{action}为“{name}”{suffix}",)
+    if ability == "保存结果":
+        name = str(node.get("名称") or "临时结果")
+        source = str(node.get("来源") or "上个效果")
+        value = node.get("值")
+        if value is not None:
+            return (f"将{_value(value) or '指定值'}保存为“{name}”",)
+        return (f"保存{source}的结果为“{name}”，供后续效果读取",)
     if ability == "修改战斗关联":
         method = "建立" if node.get("方式") == "建立" else "解除"
         left = _target(node.get("一方"))
@@ -782,8 +1039,6 @@ def _combat_lines(
         detail = "；".join(_nodes(listeners, related))
         suffix = f"：{detail}" if detail else ""
         return (f"{node.get('方式', '添加')}战场规则“{name}”{suffix}",)
-    if ability == "保存结果":
-        return ()
     if ability == "切换形态":
         definition = node.get("定义")
         changes = ""

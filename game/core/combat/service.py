@@ -11,6 +11,7 @@ from game.core.data import JsonDataService, materialize
 from game.core.formation import FormationService
 
 from .catalog import BattleReportCatalog
+from .build_terms import bind_term_slots
 from .contracts import (
     BUILD_SECTIONS,
     CombatantSpec,
@@ -215,7 +216,9 @@ class CombatService:
             content_id = str(reference.content_id or "").strip()
             if section not in BUILD_SECTIONS:
                 raise ValueError(f"战斗构筑不支持实体类别：{section or '<空>'}")
-            definition = materialize(self._data.entity(section, content_id))
+            definition = bind_term_slots(
+                materialize(self._data.entity(section, content_id))
+            )
             definition["属性构成"] = dict(
                 definition.get("属性构成") or {"无相": 100}
             )
@@ -311,6 +314,7 @@ class CombatService:
             "监听": listeners,
             "来源": value.source,
             "来源名称": value.source_name,
+            "构筑实例": value.build_instance,
             "记录": record,
         }
 

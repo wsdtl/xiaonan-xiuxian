@@ -149,6 +149,9 @@ class BattleEngine(MechanismRuntime):
             raise ValueError("参战者 ID 必须非空且不可重复")
         left_fighters = [self._build_fighter(value) for value in left]
         right_fighters = [self._build_fighter(value) for value in right]
+        # 归属转换可能把原始队伍清空；保留开始时的首位对象用于摘要字段。
+        left_anchor = left_fighters[0]
+        right_anchor = right_fighters[0]
         self._share_inventories(left_fighters)
         self._share_inventories(right_fighters)
         runtime_field = self._build_field(field, (*left_fighters, *right_fighters))
@@ -220,8 +223,10 @@ class BattleEngine(MechanismRuntime):
             self._fighter_result(value) for value in context.right_team
         )
         return CombatResult(
-            left=left_results[0],
-            right=right_results[0],
+            # 归属转换可能让一方队伍为空；摘要字段保留原始首位，
+            # 队伍字段仍如实反映战斗结束时的实际阵营。
+            left=left_results[0] if left_results else self._fighter_result(left_anchor),
+            right=right_results[0] if right_results else self._fighter_result(right_anchor),
             actions=context.action_number,
             events=tuple(context.events),
             trigger_activations=sum(context.battle_trigger_counts.values()),
@@ -516,7 +521,7 @@ class BattleEngine(MechanismRuntime):
         context.event(
             "行动结束",
             actor,
-            actor,
+            actual_target,
             f"{actor.name}结束行动",
             values={"行动": context.action_number, "行动者": actor.id},
         )
@@ -902,6 +907,7 @@ class BattleEngine(MechanismRuntime):
             source=status.source,
             source_name=status.source_name,
             source_mechanism=status.source_mechanism,
+            build_instance=status.build_instance,
             modifiers=dict(status.modifiers),
             stacks=status.stacks,
             max_stacks=status.max_stacks,
@@ -1054,6 +1060,7 @@ class BattleEngine(MechanismRuntime):
                 release_order=int(node.get("释放顺序", index + 1)),
                 source_id=source_id,
                 source_category=str(instance.get("来源类别") or "功法"),
+                build_instance=str(instance.get("实例") or ""),
                 ability_order=index,
                 multiplier=float(instance.get("威力倍率", 1)),
                 spirit_cost=max(0.0, float(node.get("精神消耗", 0))),
@@ -1063,9 +1070,11 @@ class BattleEngine(MechanismRuntime):
                 costs=tuple(copy.deepcopy(node.get("额外代价") or ())),
                 use_limit=max(0, int(node.get("使用次数", 0))),
                 cooldown_group=str(node.get("共享冷却") or ""),
+                rollback_on_failure=bool(node.get("失败时回滚", False)),
                 element_composition=copy.deepcopy(
                     dict(node.get("属性构成") or instance.get("属性构成") or {"无相": 100})
                 ),
+                term_table=copy.deepcopy(dict(instance.get("词条") or {})),
             )
         )
 
@@ -1083,11 +1092,13 @@ class BattleEngine(MechanismRuntime):
                     "装配位序": born_order,
                     "物品编号": source_id,
                     "来源类别": str(instance.get("来源类别") or "功法"),
+                    "构筑实例": str(instance.get("实例") or ""),
                     "属性构成": copy.deepcopy(
                         dict(node.get("属性构成") or instance.get("属性构成") or {"无相": 100})
                     ),
                     "能力序号": index,
                     "效果序号": effect_index,
+                    "词条": copy.deepcopy(dict(instance.get("词条") or {})),
                     "节点": copy.deepcopy(dict(raw)),
                 }
             )
@@ -1257,7 +1268,13 @@ class BattleEngine(MechanismRuntime):
                     return False
         actor.current_skill = skill.key
         previous_composition = context.current_element_composition
+        previous_mechanism = context.current_mechanism
+        previous_instance = context.current_build_instance
+        previous_terms = context.current_term_table
+        context.current_mechanism = skill.key
+        context.current_build_instance = skill.build_instance
         context.current_element_composition = dict(skill.element_composition)
+        context.current_term_table = dict(skill.term_table)
         success = True
         try:
             for node in skill.effects:
@@ -1273,7 +1290,25 @@ class BattleEngine(MechanismRuntime):
                 )
         finally:
             actor.current_skill = ""
+            context.current_mechanism = previous_mechanism
+            context.current_build_instance = previous_instance
             context.current_element_composition = previous_composition
+            context.current_term_table = previous_terms
+        if not success and skill.rollback_on_failure:
+            self._restore_transaction(context, snapshot)
+            self._dispatch_event(
+                context,
+                kind="技能施放失败后",
+                source=actor,
+                target=target,
+                values={
+                    "技能": skill.name,
+                    "技能键": skill.key,
+                    "原因": "技能前置条件未满足",
+                },
+                tags=skill.tags,
+            )
+            return False
         reduction = self._clamp(self._percent(actor, "冷却缩减"), -5, 0.8)
         raw_cooldown = skill.cooldown_actions * (1 - reduction)
         rounding = self.catalog.action_rules["技能冷却"]["余数处理"]

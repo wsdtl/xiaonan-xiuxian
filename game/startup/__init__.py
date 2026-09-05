@@ -2,6 +2,7 @@
 
 from .contracts import (
     StartupContractError,
+    validate_construct_term_slots,
     validate_command_uniqueness,
     validate_startup_contracts,
     validate_state_type_ownership,
@@ -9,6 +10,7 @@ from .contracts import (
 
 __all__ = [
     "StartupContractError",
+    "validate_construct_term_slots",
     "validate_command_uniqueness",
     "validate_startup_contracts",
     "validate_state_type_ownership",

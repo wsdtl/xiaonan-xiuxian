@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .contracts import BattleEvent
+from .build_terms import bind_term_slots
 from .models import CombatObject, EventFrame, Fighter, Skill, StatusState
 
 
@@ -25,11 +26,14 @@ class MechanismRuntime:
         previous = context.current_mechanism
         context.current_mechanism = str(mechanism_id)
         try:
+            node = dict(self.catalog.require_mechanism(mechanism_id))
+            if context.current_term_table:
+                node = bind_term_slots({"词条": context.current_term_table, "节点": node})["节点"]
             return self._execute_mechanism(
                 context,
                 source,
                 target,
-                dict(self.catalog.require_mechanism(mechanism_id)),
+                node,
                 multiplier,
                 **kwargs,
             )
@@ -216,6 +220,7 @@ class MechanismRuntime:
             "action_intent": copy.deepcopy(context.action_intent),
             "last_result": copy.deepcopy(context.last_result),
             "triggered_skill_depth": context.triggered_skill_depth,
+            "term_table": copy.deepcopy(context.current_term_table),
             "frames": [
                 {
                     "frame": frame,
@@ -249,6 +254,7 @@ class MechanismRuntime:
         context.relations = copy.deepcopy(snapshot["relations"])
         context.combat_objects = copy.deepcopy(snapshot["objects"])
         context.battle_rules = copy.deepcopy(snapshot["rules"])
+        context.mark_listener_index_dirty()
         context.action_progress = copy.deepcopy(snapshot["progress"])
         context.mechanism_counters = copy.deepcopy(snapshot["counters"])
         context.saved_results = copy.deepcopy(snapshot["saved"])
@@ -261,6 +267,7 @@ class MechanismRuntime:
         context.action_intent = copy.deepcopy(snapshot["action_intent"])
         context.last_result = copy.deepcopy(snapshot["last_result"])
         context.triggered_skill_depth = snapshot["triggered_skill_depth"]
+        context.current_term_table = copy.deepcopy(snapshot["term_table"])
         context.summon_serial = snapshot["summon_serial"]
         for saved in snapshot["frames"]:
             frame = saved["frame"]
@@ -282,7 +289,7 @@ class MechanismRuntime:
         listener_order = tuple(self.catalog.timing["事件监听"]["排序"])
         grouped: dict[
             str,
-            list[tuple[tuple[Any, ...], Fighter, str, str, Mapping[str, Any]]],
+            list[tuple[tuple[Any, ...], Fighter, str, str, str, Mapping[str, Any], Mapping[str, float], Mapping[str, Any]]],
         ] = {}
         participant_order = context.fighter_order
 
@@ -297,7 +304,9 @@ class MechanismRuntime:
             ability_order: int = 0,
             effect_order: int = 0,
             source_category: str = "功法",
+            build_instance: str = "",
             element_composition: Mapping[str, float] | None = None,
+            term_table: Mapping[str, Any] | None = None,
         ) -> None:
             event_name = str(node.get("事件") or "")
             if not event_name:
@@ -312,9 +321,9 @@ class MechanismRuntime:
                 "能力序号": (int(ability_order), int(effect_order)),
             }
             activation_id = (
-                f"{item_id}:{listener_id}:{ability_order}:{effect_order}"
+                f"{build_instance}:{item_id}:{listener_id}:{ability_order}:{effect_order}"
                 if item_id
-                else str(listener_id)
+                else f"{build_instance}:{listener_id}"
             )
             key = tuple(values[field] for field in listener_order) + (activation_id,)
             grouped.setdefault(event_name, []).append(
@@ -323,15 +332,16 @@ class MechanismRuntime:
                     owner,
                     activation_id,
                     str(listener_id),
+                    str(build_instance),
                     node,
                     dict(element_composition or {"无相": 100}),
+                    dict(term_table or {}),
                 )
             )
 
         for owner in context.fighters:
             for passive in owner.passives:
-                mechanism_id, node = self._passive_node(passive)
-                if self.catalog.parse_node(node).executor == "监听事件":
+                for mechanism_id, node in self._passive_listener_nodes(passive):
                     add_listener(
                         owner,
                         mechanism_id,
@@ -342,7 +352,9 @@ class MechanismRuntime:
                         ability_order=int(passive.get("能力序号", 0)),
                         effect_order=int(passive.get("效果序号", 0)),
                         source_category=str(passive.get("来源类别") or "功法"),
+                        build_instance=str(passive.get("构筑实例") or ""),
                         element_composition=passive.get("属性构成"),
+                        term_table=passive.get("词条"),
                     )
             for status in owner.statuses:
                 mechanism_ids = tuple(
@@ -362,6 +374,7 @@ class MechanismRuntime:
                         item_id=item_id,
                         ability_order=index,
                         source_category="战丹",
+                        build_instance=str(status.build_instance or ""),
                     )
         if context.field is not None:
             field = context.field
@@ -391,6 +404,7 @@ class MechanismRuntime:
                     item_id=f"战场:{index}",
                     ability_order=listener_index,
                     source_category="战场规则",
+                    term_table=rule.get("构筑词条"),
                 )
 
         context.listener_index = {
@@ -429,7 +443,7 @@ class MechanismRuntime:
         context.event_depth += 1
         try:
             listeners = self._compiled_listeners(context).get(kind, ())
-            for _, owner, activation_id, mechanism_id, node, composition in listeners:
+            for _, owner, activation_id, mechanism_id, build_instance, node, composition, term_table in listeners:
                 if not self._listener_relation_matches(context, owner, frame, node):
                     continue
                 if not self._conditions_allow(
@@ -450,8 +464,12 @@ class MechanismRuntime:
                 context.trigger_stack.add(activation)
                 previous = context.current_mechanism
                 previous_composition = context.current_element_composition
+                previous_instance = context.current_build_instance
+                previous_terms = context.current_term_table
                 context.current_mechanism = mechanism_id
+                context.current_build_instance = build_instance
                 context.current_element_composition = dict(composition)
+                context.current_term_table = dict(term_table)
                 try:
                     self._run_effects(
                         context,
@@ -465,7 +483,9 @@ class MechanismRuntime:
                     )
                 finally:
                     context.current_mechanism = previous
+                    context.current_build_instance = previous_instance
                     context.current_element_composition = previous_composition
+                    context.current_term_table = previous_terms
                     context.trigger_stack.discard(activation)
             if frame.transformed_kind:
                 frame.facts["原事件"] = frame.kind
@@ -514,6 +534,37 @@ class MechanismRuntime:
         if not isinstance(raw, Mapping):
             raise TypeError("被动技能缺少监听节点")
         return str(passive.get("机制") or "内联被动"), dict(raw)
+
+    def _passive_listener_nodes(
+        self, passive: Mapping[str, Any]
+    ) -> tuple[tuple[str, dict[str, Any]], ...]:
+        """展开被动技能中的机制引用，只把最终监听节点登记到事件索引。"""
+
+        mechanism_id, node = self._passive_node(passive)
+        term_table = passive.get("词条")
+        result: list[tuple[str, dict[str, Any]]] = []
+        pending: list[tuple[str, dict[str, Any], tuple[str, ...]]] = [
+            (mechanism_id, node, ())
+        ]
+        while pending:
+            current_id, current, stack = pending.pop()
+            if term_table:
+                current = bind_term_slots({"词条": term_table, "节点": current})["节点"]
+            executor = self.catalog.parse_node(current).executor
+            if executor == "监听事件":
+                result.append((current_id, current))
+                continue
+            if executor != "引用机制":
+                continue
+            referenced_id = str(current.get("机制") or "").strip()
+            if not referenced_id:
+                raise ValueError("被动机制引用缺少机制编号")
+            if referenced_id in stack:
+                chain = " -> ".join((*stack, referenced_id))
+                raise ValueError(f"被动机制引用形成循环：{chain}")
+            referenced = dict(self.catalog.require_mechanism(referenced_id))
+            pending.append((referenced_id, referenced, (*stack, referenced_id)))
+        return tuple(result)
 
     def _listener_relation_matches(self, context, owner, frame, node) -> bool:
         role = str(node.get("观察角色") or "来源")
@@ -661,6 +712,7 @@ class MechanismRuntime:
     def _mechanism_recover_resource(self, context, source, target, effect, multiplier, **kwargs):
         requested_resource = str(effect.get("资源") or "血气")
         changed = False
+        attempted = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
             amount = max(0.0, self._resolve_value(context, effect.get("数值"), source, destination, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier)
             amount *= self._element_multiplier(context, source, destination, effect)
@@ -681,6 +733,8 @@ class MechanismRuntime:
             destination = frame.target
             if "恢复" in self._immunities(destination):
                 continue
+            # 恢复已满不是执行失败；后续顺序效果仍必须继续执行。
+            attempted = True
             before, maximum = self._resource_values(destination, resource)
             received = max(0.0, frame.amount)
             if resource == "血气":
@@ -697,7 +751,7 @@ class MechanismRuntime:
             changed = changed or applied > 0
             if applied > 0:
                 self._mark_team_synergy(context, source, effect)
-        return changed
+        return changed or attempted
 
     def _element_multiplier(self, context, source, target, effect):
         composition = effect.get("属性构成")
@@ -871,6 +925,7 @@ class MechanismRuntime:
             definition["来源"] = source.id
             definition["来源名称"] = source.name
             definition["来源机制"] = context.current_mechanism
+            definition["构筑实例"] = self._build_instance(context, definition)
             definition["属性"] = {str(k): float(v) * multiplier for k, v in dict(definition.get("属性") or {}).items()}
             if is_control and str(definition.get("持续单位") or "状态承受者行动") != "整场战斗":
                 duration = max(1, int(definition.get("剩余行动", 1)))
@@ -878,7 +933,25 @@ class MechanismRuntime:
                 duration_limit = int(destination.battle_profile.get("控制持续上限", 0))
                 definition["剩余行动"] = min(duration, duration_limit) if duration_limit else duration
             status = StatusState.from_dict(definition)
-            existing = next((item for item in destination.statuses if item.name == status.name and (definition.get("叠加范围", "同名共享") == "同名共享" or item.source == source.id)), None)
+            allow_cross_build = bool(definition.get("允许跨构筑", False))
+            existing = next(
+                (
+                    item
+                    for item in destination.statuses
+                    if item.name == status.name
+                    and (
+                        allow_cross_build
+                        or not status.build_instance
+                        or not item.build_instance
+                        or status.build_instance == item.build_instance
+                    )
+                    and (
+                        definition.get("叠加范围", "同名共享") == "同名共享"
+                        or item.source == source.id
+                    )
+                ),
+                None,
+            )
             mode = str(definition.get("重复方式") or "刷新持续")
             if existing is None:
                 destination.statuses.append(status)
@@ -938,6 +1011,9 @@ class MechanismRuntime:
                 if isinstance(generated, Mapping):
                     value = copy.deepcopy(dict(generated))
                     value["来源"] = source.id
+                    value["来源名称"] = source.name
+                    value["来源机制"] = context.current_mechanism
+                    value["构筑实例"] = self._build_instance(context, value)
                     target.statuses.append(StatusState.from_dict(value))
                     context.mark_listener_index_dirty()
                 self._run_effects(context, source, target, reaction.get("效果") or (), multiplier)
@@ -953,11 +1029,25 @@ class MechanismRuntime:
                     },
                 )
 
-    def _matching_statuses(self, fighter, selector):
+    def _matching_statuses(self, context, fighter, selector):
         name = str(selector.get("名称") or "")
         category = str(selector.get("分类") or "")
         tags = {str(value) for value in selector.get("标签") or ()}
-        values = [status for status in fighter.statuses if (not name or status.name == name) and (not category or status.category == category) and (not tags or tags <= set(status.tags))]
+        allow_cross_build = bool(selector.get("允许跨构筑", False))
+        current_instance = self._build_instance(context, selector)
+        values = [
+            status
+            for status in fighter.statuses
+            if (not name or status.name == name)
+            and (not category or status.category == category)
+            and (not tags or tags <= set(status.tags))
+            and (
+                allow_cross_build
+                or not current_instance
+                or not status.build_instance
+                or status.build_instance == current_instance
+            )
+        ]
         order = str(selector.get("排序") or "获得顺序")
         if order == "层数从高到低":
             values.sort(key=lambda item: item.stacks, reverse=True)
@@ -975,7 +1065,7 @@ class MechanismRuntime:
             raise ValueError("状态字段必须使用选择状态")
         result = []
         for fighter in self._select_targets(context, source, target, value.get("目标")):
-            result.extend((fighter, status) for status in self._matching_statuses(fighter, value))
+            result.extend((fighter, status) for status in self._matching_statuses(context, fighter, value))
         return result
 
     def _mechanism_remove_status(self, context, source, target, effect, multiplier, **_):
@@ -1103,11 +1193,12 @@ class MechanismRuntime:
 
     def _mechanism_modify_counter(self, context, source, target, effect, multiplier, **kwargs):
         name = str(effect.get("计量") or "")
+        instance = self._build_instance(context, effect)
         mode = str(effect.get("方式") or "增加")
         amount = self._resolve_value(context, effect.get("数值", 0), source, target, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
-            key = (fighter.id, name)
+            key = (fighter.id, instance, name)
             before = context.mechanism_counters.get(key, float(effect.get("初始值", 0)))
             if mode == "减少" and before < amount and effect.get("不足时是否失败", True):
                 return False
@@ -1116,6 +1207,13 @@ class MechanismRuntime:
             context.mechanism_counters[key] = after
             changed = changed or before != after
         return changed
+
+    @staticmethod
+    def _build_instance(context, node: Mapping[str, Any] | None = None) -> str:
+        """解析当前机制所属构筑实例；公共机制保持空作用域。"""
+
+        value = (node or {}).get("构筑实例") if isinstance(node, Mapping) else None
+        return str(value or context.current_build_instance or "").strip()
 
     def _mechanism_additional_attack(self, context, source, target, effect, multiplier, **_):
         destinations = self._select_targets(context, source, target, effect.get("目标"))
@@ -1388,6 +1486,13 @@ class MechanismRuntime:
             if changed:
                 context.mark_listener_index_dirty()
         else:
+            duplicate_mode = str(effect.get("重复处理") or "允许")
+            existing = [
+                rule for rule in context.battle_rules
+                if str(rule.get("名称") or "") == name
+            ]
+            if existing and duplicate_mode in {"拒绝", "已存在则拒绝"}:
+                return False
             definition = copy.deepcopy(dict(effect.get("规则") or {}))
             unknown = set(definition) - {"监听"}
             if unknown:
@@ -1397,6 +1502,7 @@ class MechanismRuntime:
                 "名称": name,
                 "来源": source.id,
                 "来源退场时移除": bool(effect.get("来源退场时移除", False)),
+                "构筑词条": copy.deepcopy(dict(context.current_term_table)),
             })
             context.mark_listener_index_dirty()
             changed = True
@@ -1684,7 +1790,14 @@ class MechanismRuntime:
             values = context.records.get((selected.id, str(node.get("名称") or "")), [])
             value = values[-1] if values else 0
         elif origin == "机制计量":
-            value = context.mechanism_counters.get((selected.id, str(node.get("计量") or "")), 0)
+            value = context.mechanism_counters.get(
+                (
+                    selected.id,
+                    self._build_instance(context, node),
+                    str(node.get("计量") or ""),
+                ),
+                0,
+            )
         elif origin == "状态层数":
             value = sum(status.stacks for status in selected.statuses if status.name == str(node.get("状态") or ""))
         elif origin == "行动条":
@@ -1933,6 +2046,7 @@ class MechanismRuntime:
             born_order=index,
             release_order=int(value.get("释放顺序", index + 1)),
             source_id=source_id,
+            build_instance=str(value.get("实例") or prefix or ""),
             ability_order=index,
             multiplier=float(value.get("威力倍率", 1)),
             spirit_cost=max(0.0, float(value.get("精神消耗", 0))),
