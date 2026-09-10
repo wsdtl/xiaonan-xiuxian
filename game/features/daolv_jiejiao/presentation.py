@@ -8,6 +8,7 @@ from string import Formatter
 from types import MappingProxyType
 
 from game.core.data import JsonDataError
+from game.features.presentation import require_mapping
 
 from .contracts import CompanionAction, CompanionCopy
 
@@ -28,7 +29,7 @@ def load_companion_presentation(
 ) -> tuple[CompanionCopy, tuple[CompanionButton, ...]]:
     if set(dataset) != {"文本", "图标", "道侣"}:
         raise JsonDataError("道侣展示必须包含文本、图标和道侣按钮")
-    text_value = _mapping(dataset["文本"], "展示/道侣/规则/文本.json")
+    text_value = require_mapping(dataset["文本"], "道侣/展示/规则/文本.json")
     expected_sections = {"查看", "交谈", "赠礼", "邀约", "暂别", "命令", "错误"}
     if set(text_value) != expected_sections:
         raise JsonDataError("道侣展示文本分区不完整")
@@ -37,13 +38,13 @@ def load_companion_presentation(
             section: MappingProxyType(
                 {
                     str(key): _text(raw, f"道侣文本.{section}.{key}")
-                    for key, raw in _mapping(value, f"道侣文本.{section}").items()
+                    for key, raw in require_mapping(value, f"道侣文本.{section}").items()
                 }
             )
             for section, value in text_value.items()
         }
     )
-    icons_value = _mapping(dataset["图标"], "展示/道侣/规则/图标.json")
+    icons_value = require_mapping(dataset["图标"], "道侣/展示/规则/图标.json")
     expected_icons = {
         "身份",
         "性情",
@@ -83,10 +84,10 @@ def render_action(button: CompanionButton, companion_id: str) -> CompanionAction
 
 def _buttons(value: object) -> tuple[CompanionButton, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError("展示/道侣/按钮/道侣.json必须是字典列表")
+        raise JsonDataError("道侣/展示/按钮/道侣.json必须是字典列表")
     result: list[CompanionButton] = []
     for index, raw in enumerate(value):
-        row = _mapping(raw, f"道侣按钮[{index}]")
+        row = require_mapping(raw, f"道侣按钮[{index}]")
         if unknown := set(row) - {
             "页面",
             "条件",
@@ -147,12 +148,6 @@ def _template(value: object, label: str, fields: set[str]) -> str:
     if found != fields:
         raise JsonDataError(f"{label}占位符必须是：{'、'.join(sorted(fields)) or '无'}")
     return template
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 def _text(value: object, label: str) -> str:

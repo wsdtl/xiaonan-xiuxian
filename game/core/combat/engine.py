@@ -906,7 +906,7 @@ class BattleEngine(MechanismRuntime):
             remaining_turns=status.remaining_turns,
             source=status.source,
             source_name=status.source_name,
-            source_mechanism=status.source_mechanism,
+            source_ability=status.source_ability,
             build_instance=status.build_instance,
             modifiers=dict(status.modifiers),
             stacks=status.stacks,
@@ -1088,6 +1088,7 @@ class BattleEngine(MechanismRuntime):
             passives.append(
                 {
                     "机制": f"{source_name}:{index}:{effect_index}",
+                    "来源能力": str(node.get("名称") or source_name),
                     "结算顺序": int(node.get("结算顺序", 1)),
                     "装配位序": born_order,
                     "物品编号": source_id,
@@ -1268,10 +1269,10 @@ class BattleEngine(MechanismRuntime):
                     return False
         actor.current_skill = skill.key
         previous_composition = context.current_element_composition
-        previous_mechanism = context.current_mechanism
+        previous_ability = context.current_ability
         previous_instance = context.current_build_instance
         previous_terms = context.current_term_table
-        context.current_mechanism = skill.key
+        context.current_ability = skill.name
         context.current_build_instance = skill.build_instance
         context.current_element_composition = dict(skill.element_composition)
         context.current_term_table = dict(skill.term_table)
@@ -1290,7 +1291,7 @@ class BattleEngine(MechanismRuntime):
                 )
         finally:
             actor.current_skill = ""
-            context.current_mechanism = previous_mechanism
+            context.current_ability = previous_ability
             context.current_build_instance = previous_instance
             context.current_element_composition = previous_composition
             context.current_term_table = previous_terms

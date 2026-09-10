@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
+from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import AlchemyAction, AlchemyCopy
 
@@ -32,7 +33,7 @@ def load_presentation(
             str(section): MappingProxyType(
                 {
                     str(key): _text(value, f"炼丹文本.{section}.{key}")
-                    for key, value in _mapping(raw, f"炼丹文本.{section}").items()
+                    for key, value in require_mapping(raw, f"炼丹文本.{section}").items()
                 }
             )
             for section, raw in raw_text.items()
@@ -43,17 +44,9 @@ def load_presentation(
     for section, fields in _REQUIRED_TEXT.items():
         if set(text[section]) != set(fields):
             raise JsonDataError(f"炼丹文本字段不完整：{section}")
-    rows = data.dataset("炼丹按钮").get("按钮")
-    if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-        raise JsonDataError("炼丹按钮必须是字典列表")
-    buttons = tuple(
-        MappingProxyType(
-            {
-                key: str(_mapping(raw, "炼丹按钮[]").get(key) or "").strip()
-                for key in ("页面", "条件", "编号", "名称", "命令", "行为", "样式")
-            }
-        )
-        for raw in rows
+    buttons = project_buttons(
+        data.dataset("炼丹按钮").get("按钮"),
+        label="炼丹按钮",
     )
     _validate_buttons(buttons)
     return AlchemyCopy(text), buttons
@@ -99,10 +92,6 @@ def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:
         raise JsonDataError("炼丹按钮使用了未知条件")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 def _text(value: object, label: str) -> str:

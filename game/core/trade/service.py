@@ -78,7 +78,7 @@ class TradeService:
             if not ready:
                 raise RuntimeError(f"{label}必须先于地点交易核心启动")
         raw = self._data.dataset("交易规则").get("修行资粮")
-        rules = _mapping(raw, "规则/交易/修行资粮.json")
+        rules = _mapping(raw, "交易/规则/修行资粮.json")
         if rules.get("货币") != "灵石" or rules.get("固定货架") is not True:
             raise JsonDataError("修行资粮交易必须使用灵石固定货架")
         if rules.get("公共库存") != "无限":

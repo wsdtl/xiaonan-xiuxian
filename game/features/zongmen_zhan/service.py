@@ -13,6 +13,7 @@ from game.core.sect_war import (
     SectWarService,
     SectWarView,
 )
+from game.features.presentation import require_mapping
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ class SectWarFeature:
                 str(section): MappingProxyType(
                     {
                         str(key): str(value)
-                        for key, value in _mapping(values, str(section)).items()
+                        for key, value in require_mapping(values, str(section)).items()
                     }
                 )
                 for section, values in raw.items()
@@ -59,7 +60,7 @@ class SectWarFeature:
         buttons = tuple(
             MappingProxyType(
                 {
-                    key: str(_mapping(item, "宗门战按钮[]").get(key) or "").strip()
+                    key: str(require_mapping(item, "宗门战按钮[]").get(key) or "").strip()
                     for key in ("状态", "编号", "名称", "命令", "行为", "样式")
                 }
             )
@@ -129,12 +130,6 @@ class SectWarFeature:
             for button in self._buttons
             if button["状态"] == status
         )
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 __all__ = [

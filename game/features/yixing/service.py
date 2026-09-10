@@ -68,7 +68,7 @@ class YixingFeature:
                 raise YixingError("纳戒中没有两仪易形丹")
             stack = min(stacks, key=lambda value: value.grade.order)
             inventory = await self._asset.plan_inventory_changes(user_id, (InventoryAdjustment(self._medicine_id, stack.grade.grade_id, -1),))
-            payload = {"人物名称": profile.name, "原性别": plan.gender_before, "新性别": plan.gender_after, "丹药名称": str(self._data.entity("物品", self._medicine_id).get("名称") or "两仪易形丹")}
+            payload = {"人物名称": profile.name, "原性别": plan.gender_before, "新性别": plan.gender_after, "丹药名称": str(self._data.entity("丹药", self._medicine_id).get("名称") or "两仪易形丹")}
             receipt = await self._database.commit(TransactionCommand(user_id, request_id, "两仪易形", inventory.operations + (plan.operation,), payload))
         except (InventoryChangeError, CharacterCultivationError, StateConflictError) as exc:
             raise YixingError(str(exc)) from exc

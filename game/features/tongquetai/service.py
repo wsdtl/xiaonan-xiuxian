@@ -246,7 +246,7 @@ class TongquetaiFeature:
         except (LocationError, CompanionCultivationError, CultivationTransferError) as exc:
             raise TongquetaiError(str(exc)) from exc
         definition = self._companion.definition(active.instance.companion_id)
-        medicine = self._data.entity("物品", self._transfer.medicine_id)
+        medicine = self._data.entity("丹药", self._transfer.medicine_id)
         return {
             "location": location.location_name,
             "instance": active.instance,

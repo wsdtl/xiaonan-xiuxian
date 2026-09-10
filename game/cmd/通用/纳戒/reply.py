@@ -121,7 +121,7 @@ def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
     parts: list[object] = [name]
     if entry.grade_name:
         parts.extend((" · ", entry.grade_name))
-    if entry.category in {"物品", "修行资粮", "器藏"} or entry.quantity > 1:
+    if entry.category in {"基础物品", "修行资粮", "器藏"} or entry.quantity > 1:
         parts.append(f" × {entry.quantity}")
     if entry.equipped_slots:
         parts.extend((" · 已装", "、".join(entry.equipped_slots)))

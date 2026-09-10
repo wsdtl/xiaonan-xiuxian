@@ -45,7 +45,7 @@ class MedicineService:
             raise RuntimeError("玩家资产核心必须先于丹药核心启动")
         rules = self._data.dataset("服丹规则").get("服丹")
         if not isinstance(rules, Mapping):
-            raise JsonDataError("规则/服丹/服丹.json 必须是对象")
+            raise JsonDataError("服丹/规则/服丹.json 必须是对象")
         self._rules = rules
         auto = _mapping(rules.get("自动用药"), "服丹.自动用药")
         threshold_range = _number_range(
@@ -180,7 +180,7 @@ class MedicineService:
         snapshot = await self._asset.snapshot(user_id)
         result: list[RecoveryMedicineStack] = []
         for entry in snapshot.entries:
-            if entry.category != "物品" or entry.subcategory != "恢复丹":
+            if entry.category != "基础物品" or entry.subcategory != "恢复丹":
                 continue
             medicine = self.recovery(entry.content_id, entry.grade_id)
             result.append(
@@ -314,7 +314,7 @@ class MedicineService:
         self._recovery.clear()
         self._battle.clear()
         self._special.clear()
-        for medicine_id, raw in self._data.entities("物品").items():
+        for medicine_id, raw in self._data.entities("丹药").items():
             effect_value = raw.get("使用效果")
             if effect_value is None:
                 continue

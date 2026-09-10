@@ -34,7 +34,7 @@ class RuntimeBattleReportParticipant:
     statuses: Sequence[StatusResult | Mapping[str, Any]] = ()
     techniques: Sequence[Mapping[str, Any]] = ()
     moves: Sequence[str] = ()
-    mechanisms: Sequence[str] = ()
+    abilities: Sequence[str] = ()
     ability_definitions: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     color: str = ""
     extra: Mapping[str, Any] = field(default_factory=dict)
@@ -50,7 +50,6 @@ def build_battle_report(
     seed: int | None = None,
     generated_at: str | None = None,
     scene: str = "青岚山演武台",
-    mechanism_names: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """生成 `晓楠修仙.战报.v1`；前端不再解释战斗事件。"""
 
@@ -78,7 +77,6 @@ def build_battle_report(
     }
     participants_by_id = {value.id: value for value in participants}
     formations_by_id = {value.formation_id: value for value in outcome.formations}
-    known_mechanisms = dict(mechanism_names or {})
     event_reports = [
         _event_report(
             event,
@@ -86,7 +84,6 @@ def build_battle_report(
             participants_by_id,
             participant_colors,
             formations_by_id,
-            known_mechanisms,
             catalog,
         )
         for index, event in enumerate(outcome.events)
@@ -126,7 +123,6 @@ def build_battle_report(
             color=participant_colors[value.id],
             outcome_label="平" if outcome.draw else "胜" if value.id in winner_ids else "负",
             events=outcome.events,
-            mechanism_names=known_mechanisms,
             catalog=catalog,
         )
         for index, value in enumerate(participants)
@@ -226,7 +222,6 @@ def _participant_report(
     color: str,
     outcome_label: str,
     events: Sequence[BattleEvent],
-    mechanism_names: Mapping[str, str],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     damage = sum(
@@ -241,12 +236,12 @@ def _participant_report(
         if event.kind in catalog.settlement_kinds("资源恢复")
         and event.source_id == participant.id
     )
-    mechanisms = {
-        mechanism_names.get(event.mechanism, event.mechanism)
+    abilities = {
+        event.ability
         for event in events
-        if event.source_id == participant.id and event.mechanism
+        if event.source_id == participant.id and event.ability
     }
-    mechanisms.update(str(value) for value in participant.mechanisms if str(value).strip())
+    abilities.update(str(value) for value in participant.abilities if str(value).strip())
 
     health_max = max(1.0, float(participant.attributes.get("血气上限", 1.0)))
     spirit_max = max(0.0, float(participant.attributes.get("精神上限", 0.0)))
@@ -277,7 +272,7 @@ def _participant_report(
         "totals": [
             {"label": "造成伤害", "value": _number_text(damage)},
             {"label": "恢复资源", "value": _number_text(recovery)},
-            {"label": "触发机制", "value": str(len(mechanisms))},
+            {"label": "触发能力", "value": str(len(abilities))},
         ],
         "attributes": [
             {
@@ -298,12 +293,11 @@ def _participant_report(
                 value,
                 catalog,
                 participant.ability_definitions,
-                mechanism_names,
             )
             for value in participant.techniques
         ],
         "moves": [str(value) for value in participant.moves if str(value).strip()],
-        "mechanisms": sorted(mechanisms),
+        "abilities": sorted(abilities),
         "statuses": [_status_report(value) for value in participant.statuses],
         "initial_statuses": [
             _status_report(value) for value in participant.initial_statuses
@@ -318,7 +312,6 @@ def _event_report(
     participants: Mapping[str, RuntimeBattleReportParticipant],
     colors: Mapping[str, str],
     formations: Mapping[str, CombatFormationResult],
-    mechanism_names: Mapping[str, str],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     category = catalog.normalized_category(event.kind)
@@ -394,8 +387,7 @@ def _event_report(
         "text": event.text,
         "amount": _round(event.amount),
         "amount_text": amount_text,
-        "mechanism_id": event.mechanism,
-        "mechanism": mechanism_names.get(event.mechanism, event.mechanism),
+        "ability": event.ability,
         "tags": list(event.tags),
         "steps": steps,
         "details": details,
@@ -477,10 +469,9 @@ def _technique_report(
     value: Mapping[str, Any],
     catalog: BattleReportCatalog,
     ability_definitions: Mapping[str, Mapping[str, Any]] | None = None,
-    mechanism_names: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     active: Mapping[str, Any] = {}
-    mechanisms: list[str] = []
+    abilities: list[str] = []
     fixed_attributes: dict[str, float] = {}
     for raw_node in value.get("能力") or ():
         if not isinstance(raw_node, Mapping):
@@ -497,13 +488,9 @@ def _technique_report(
                 }
             )
         if executor in {"装配主动技能", "装配被动技能"}:
-            mechanisms.extend(
-                _mechanism_names(
-                    node.get("效果") or (),
-                    ability_definitions,
-                    mechanism_names,
-                )
-            )
+            name = str(node.get("名称") or "").strip()
+            if name:
+                abilities.append(name)
 
     return {
         "section": str(value.get("来源类别") or ""),
@@ -511,28 +498,9 @@ def _technique_report(
         "grade": str(value.get("品级") or ""),
         "born_order": int(value.get("出生序号") or 0),
         "move": str(active.get("名称") or ""),
-        "mechanisms": list(dict.fromkeys(mechanisms)),
+        "abilities": list(dict.fromkeys(abilities)),
         "fixed_attributes": fixed_attributes,
     }
-
-
-def _mechanism_names(
-    values: Sequence[Any],
-    ability_definitions: Mapping[str, Mapping[str, Any]] | None,
-    mechanism_names: Mapping[str, str] | None,
-) -> list[str]:
-    result: list[str] = []
-    for raw_value in values:
-        if not isinstance(raw_value, Mapping):
-            continue
-        value = dict(raw_value)
-        executor = _ability_executor(value, ability_definitions)
-        if executor == "引用机制":
-            mechanism_id = str(value.get("机制") or "")
-            result.append(str((mechanism_names or {}).get(mechanism_id) or mechanism_id))
-        else:
-            result.append(str(value.get("名称") or value.get("能力") or ""))
-    return [value for value in result if value]
 
 
 def _ability_executor(

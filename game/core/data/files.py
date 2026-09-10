@@ -12,7 +12,7 @@ from typing import Any
 
 from .contracts import JsonDataError
 
-ROUTING_RULES_PATH = Path("定义") / "读取规则.json"
+ROUTING_RULES_PATH = Path("基础") / "读取规则.json"
 
 OBJECT = "对象"
 OBJECT_LIST = "字典列表"
@@ -188,12 +188,14 @@ class JsonDataReader:
                 key=lambda value: value.relative_to(self.root).as_posix().casefold(),
             )
             for path in files:
+                if path == directory / "组件.json":
+                    continue
                 relative_path = path.relative_to(self.root).as_posix()
                 value = self._read_path(path, relative_path)
                 descriptor = read_rules.descriptor(relative_path, path.stem)
                 document = JsonDocument(
                     relative_path=relative_path,
-                    scope=scope,
+                    scope=(path.relative_to(directory).parts[0] if path.parent != directory else "定义"),
                     file_id=path.stem,
                     value=value,
                     descriptor=descriptor,
@@ -212,7 +214,7 @@ class JsonDataReader:
                     )
                 names[descriptor.data_name] = relative_path
                 by_dataset.setdefault(descriptor.dataset, []).append(document)
-                if scope not in read_rules.unique_filename_scopes:
+                if document.scope not in read_rules.unique_filename_scopes:
                     continue
                 file_key = path.stem.casefold()
                 previous = content_sources.get(file_key)
@@ -236,7 +238,32 @@ class JsonDataReader:
         path = self.root / ROUTING_RULES_PATH
         relative_path = ROUTING_RULES_PATH.as_posix()
         value = self._read_path(path, relative_path)
-        return _parse_read_rules(value, relative_path)
+        if not isinstance(value, Mapping):
+            raise JsonDataError("读取入口必须是对象")
+        if set(value) != {"扫描目录", "编号定义", "文件名唯一", "资源池字段", "归属规则"}:
+            raise JsonDataError("读取入口字段错误")
+        if any(self.root.glob("*.json")):
+            raise JsonDataError("正式 JSON 必须归属组件")
+        components = _nonempty_unique_strings(value.get("扫描目录"), "扫描目录")
+        actual = {p.name for p in self.root.iterdir() if p.is_dir()}
+        if actual != set(components):
+            raise JsonDataError(f"组件目录与读取入口不一致：{sorted(actual ^ set(components))}")
+        rows = []
+        for component in components:
+            manifest_path = self.root / component / "组件.json"
+            manifest = self._read_path(manifest_path, f"{component}/组件.json")
+            if not isinstance(manifest, Mapping) or set(manifest) != {"组件", "读取规则"}:
+                raise JsonDataError(f"组件清单字段错误：{component}")
+            if manifest["组件"] != component or not _is_array(manifest["读取规则"]):
+                raise JsonDataError(f"组件清单身份或规则错误：{component}")
+            for row in manifest["读取规则"]:
+                if not isinstance(row, Mapping) or not str(row.get("路径", "")).startswith(component + "/"):
+                    raise JsonDataError(f"组件不能注册其他组件的文件：{component}")
+                parts = PurePosixPath(str(row["路径"])).parts
+                if str(row["路径"]) != ROUTING_RULES_PATH.as_posix() and (len(parts) < 3 or parts[1] not in {"定义", "规则", "内容", "展示"}):
+                    raise JsonDataError(f"数据必须声明组件内语义分类：{row['路径']}")
+                rows.append(row)
+        return _parse_read_rules({**value, "读取规则": tuple(rows)}, relative_path)
 
     @staticmethod
     def _read_path(path: Path, display_path: str) -> Any:
@@ -269,7 +296,7 @@ def _parse_read_rules(value: Any, path: str) -> DataReadRules:
     unique_filename_scopes = _declared_scopes(
         value.get("文件名唯一"),
         "文件名唯一",
-        scopes,
+        ("定义", "规则", "内容", "展示"),
     )
     pool_references = value.get("资源池字段")
     if not isinstance(pool_references, Mapping) or not pool_references:

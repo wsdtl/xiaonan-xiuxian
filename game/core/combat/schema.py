@@ -119,8 +119,8 @@ class RuleSchemaValidator:
     def validate_mechanisms(self, path: str = "战斗机制") -> None:
         if not self.mechanisms:
             raise RuleSchemaError(f"{path}：不能为空")
-        for mechanism_name, node in self.mechanisms.items():
-            self.validate_node(node, f"{path}.{mechanism_name}")
+        for mechanism_id, node in self.mechanisms.items():
+            self.validate_node(node, f"{path}.{mechanism_id}")
         self._validate_reference_cycles(path)
 
     def validate_node(
@@ -444,8 +444,8 @@ class RuleSchemaValidator:
 
     def _validate_reference_cycles(self, path: str) -> None:
         graph = {
-            str(name): set(self._mechanism_references(node))
-            for name, node in self.mechanisms.items()
+            str(mechanism_id): set(self._mechanism_references(node))
+            for mechanism_id, node in self.mechanisms.items()
         }
         visiting: list[str] = []
         visited: set[str] = set()
@@ -463,8 +463,8 @@ class RuleSchemaValidator:
             visiting.pop()
             visited.add(name)
 
-        for mechanism_name in graph:
-            visit(mechanism_name)
+        for mechanism_id in graph:
+            visit(mechanism_id)
 
     def _mechanism_references(self, raw_node: Any) -> Iterable[str]:
         node = dict(raw_node)
@@ -477,7 +477,10 @@ class RuleSchemaValidator:
             field_type = spec.get("类型")
             value = node[field_name]
             if field_type == "机制引用":
-                yield str(value)
+                if isinstance(value, Mapping):
+                    yield str(value.get("编号") or "")
+                else:
+                    yield str(value)
             elif field_type == "能力":
                 yield from self._mechanism_references(value)
             elif field_type == "能力数组":

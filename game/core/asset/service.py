@@ -86,7 +86,7 @@ class AssetService:
 
         layout = _mapping(
             self._data.dataset("纳戒展示").get("分类"),
-            "展示/纳戒/分类.json",
+            "基础物品/展示/分类.json",
         )
         self._page_limit = _positive_int(layout.get("每页上限"), "纳戒.每页上限")
         if self._page_limit > 50:
@@ -155,7 +155,7 @@ class AssetService:
         self._require_initialized()
         normalized_user_id = _required_text(user_id, "user_id")
         normalized_item_id = _required_text(item_id, "物品编号")
-        item_name = _entity_name(self._data, "物品", normalized_item_id)
+        item_name = _entity_name(self._data, "基础物品", normalized_item_id)
         addresses = tuple(
             StateAddress(
                 normalized_user_id,
@@ -204,7 +204,7 @@ class AssetService:
                 or quantity < 1
             ):
                 raise InventoryChangeError("初始物品数量必须是正整数")
-            _entity_name(self._data, "物品", normalized_item_id)
+            _entity_name(self._data, "基础物品", normalized_item_id)
             key = (normalized_item_id, normalized_grade_id)
             if key in seen:
                 raise InventoryChangeError(
@@ -242,7 +242,7 @@ class AssetService:
             delta = adjustment.quantity_delta
             if isinstance(delta, bool) or not isinstance(delta, int) or delta == 0:
                 raise InventoryChangeError("库存变化数量必须是非零整数")
-            _entity_name(self._data, "物品", item_id)
+            _entity_name(self._data, "基础物品", item_id)
             key = (item_id, grade_id)
             totals[key] = totals.get(key, 0) + delta
         totals = {key: delta for key, delta in totals.items() if delta}
@@ -273,7 +273,7 @@ class AssetService:
                 version = snapshot.version
             after = before + totals[(item_id, grade_id)]
             if after < 0:
-                item_name = _entity_name(self._data, "物品", item_id)
+                item_name = _entity_name(self._data, "基础物品", item_id)
                 grade_name = self._grades[grade_id].name
                 raise InventoryChangeError(
                     f"{grade_name}{item_name}数量不足：现有{before}，需要{-totals[(item_id, grade_id)]}"
@@ -293,7 +293,7 @@ class AssetService:
             changes.append(
                 InventoryChange(
                     item_id,
-                    _entity_name(self._data, "物品", item_id),
+                    _entity_name(self._data, "基础物品", item_id),
                     self._grades[grade_id],
                     before,
                     after,
@@ -860,7 +860,7 @@ class AssetService:
         grade_id, grade_name = self._grade(value.get("品级"))
         quantity = _positive_int(value.get("数量"), "普通物品.数量")
         _expect_key(snapshot, f"{content_id}:{grade_id}")
-        name = _entity_name(self._data, "物品", content_id)
+        name = _entity_name(self._data, "基础物品", content_id)
         subcategory = self._match_subcategory(category, "编号类别", number_category)
         return AssetEntry(
             category,
@@ -1010,7 +1010,7 @@ class AssetService:
 
     def _load_prefixes(self) -> None:
         numbering = _mapping(
-            self._data.dataset("基础定义").get("编号"), "定义/编号.json"
+            self._data.dataset("基础定义").get("编号"), "基础/定义/编号.json"
         )
         rows = _sequence(numbering.get("编号前缀"), "编号.编号前缀")
         prefixes: dict[str, tuple[str, str]] = {}
@@ -1027,7 +1027,7 @@ class AssetService:
         self._prefixes = prefixes
 
     def _load_grades(self) -> None:
-        rows = _sequence(self._data.dataset("基础定义").get("品级"), "定义/品级.json")
+        rows = _sequence(self._data.dataset("基础定义").get("品级"), "基础/定义/品级.json")
         self._grades = {
             _text(_mapping(raw, "品级[]").get("编号"), "品级.编号"): AssetGrade(
                 _text(_mapping(raw, "品级[]").get("编号"), "品级.编号"),
@@ -1102,7 +1102,7 @@ class AssetService:
     def _validate_cultivation_rules(self) -> None:
         rules = _mapping(
             self._data.dataset("角色规则").get("修行所得"),
-            "规则/角色/修行/修行所得.json",
+            "角色/规则/修行/修行所得.json",
         )
         policy = _mapping(rules.get("功法取得"), "修行所得.功法取得")
         identity = tuple(

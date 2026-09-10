@@ -24,7 +24,6 @@ from .contracts import BattleEvent, CombatMedicineSpec
 class CombatCatalog:
     attributes: Mapping[str, Mapping[str, Any]]
     mechanisms: Mapping[str, Mapping[str, Any]]
-    mechanism_names: Mapping[str, str]
     abilities: Mapping[str, Mapping[str, Any]]
     events: Mapping[str, Mapping[str, Any]]
     resources: Mapping[str, Mapping[str, Any]]
@@ -47,10 +46,6 @@ class CombatCatalog:
         return cls(
             attributes=dict(source.get("属性") or {}),
             mechanisms=dict(source.get("机制") or {}),
-            mechanism_names={
-                str(key): str(name)
-                for key, name in dict(source.get("机制名称") or {}).items()
-            },
             abilities=dict(source.get("原子能力") or {}),
             events=events,
             resources=dict(source.get("资源") or {}),
@@ -75,9 +70,6 @@ class CombatCatalog:
             return self.events[str(key)]
         except KeyError as exc:
             raise ValueError(f"战斗核心未登记事件：{key}") from exc
-
-    def mechanism_name(self, key: str) -> str:
-        return self.mechanism_names.get(str(key), str(key))
 
     def parse_node(self, value: Mapping[str, Any]) -> RuleNode:
         ability = str(value.get("能力") or "")
@@ -111,7 +103,7 @@ class StatusState:
     remaining_turns: int = 1
     source: str = ""
     source_name: str = ""
-    source_mechanism: str = ""
+    source_ability: str = ""
     build_instance: str = ""
     modifiers: dict[str, float] = dataclass_field(default_factory=dict)
     stacks: int = 1
@@ -127,7 +119,7 @@ class StatusState:
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> StatusState:
         allowed = {
-            "名称", "类别", "剩余行动", "来源", "来源名称", "来源机制", "构筑实例", "属性", "层数",
+            "名称", "类别", "剩余行动", "来源", "来源名称", "来源能力", "构筑实例", "属性", "层数",
             "层数上限", "标签", "持续单位", "行动限制", "效果免疫", "监听", "记录",
             "来源退场时移除", "叠加范围", "重复方式", "允许跨构筑", "是否控制", "控制基础命中率",
         }
@@ -140,7 +132,7 @@ class StatusState:
             remaining_turns=max(0, int(value.get("剩余行动", 1) or 0)),
             source=str(value.get("来源") or "").strip(),
             source_name=str(value.get("来源名称") or "").strip(),
-            source_mechanism=str(value.get("来源机制") or "").strip(),
+            source_ability=str(value.get("来源能力") or "").strip(),
             build_instance=str(value.get("构筑实例") or "").strip(),
             modifiers={str(k): float(v) for k, v in dict(value.get("属性") or {}).items()},
             stacks=max(1, int(value.get("层数") or 1)),
@@ -161,7 +153,7 @@ class StatusState:
             "剩余行动": self.remaining_turns,
             "来源": self.source,
             "来源名称": self.source_name,
-            "来源机制": self.source_mechanism,
+            "来源能力": self.source_ability,
             "构筑实例": self.build_instance,
             "属性": dict(self.modifiers),
             "层数": self.stacks,
@@ -467,7 +459,7 @@ class BattleContext:
     triggered_skill_depth: int = 0
     action_progress: dict[str, float] = dataclass_field(default_factory=dict)
     mechanism_counters: dict[tuple[str, str, str], float] = dataclass_field(default_factory=dict)
-    current_mechanism: str = ""
+    current_ability: str = ""
     current_build_instance: str = ""
     current_element_composition: dict[str, float] = dataclass_field(
         default_factory=lambda: {"无相": 100}
@@ -569,7 +561,7 @@ class BattleContext:
         *,
         values: Mapping[str, Any] | None = None,
         tags: tuple[str, ...] = (),
-        mechanism: str = "",
+        ability: str = "",
         dispatch: bool = True,
     ) -> EventFrame | None:
         event_values = dict(values or {})
@@ -599,7 +591,7 @@ class BattleContext:
                 round(float(event_values.get("实际数值", event_values.get("当前数值", amount)) or 0), 3),
                 event_values,
                 tuple(tags),
-                mechanism,
+                ability,
                 source.id,
                 target.id,
             )

@@ -105,7 +105,7 @@ class GuiyuanFeature:
         return min(stacks, key=lambda value: value.grade.order) if stacks else None
 
     def _medicine_raw(self):
-        return self._data.entity("物品", self._medicine_id)
+        return self._data.entity("丹药", self._medicine_id)
 
 
 def _result(payload: Mapping[str, object], replayed: bool) -> GuiyuanResult:

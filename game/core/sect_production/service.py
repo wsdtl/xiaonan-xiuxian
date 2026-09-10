@@ -467,7 +467,7 @@ def _request(value):
 
 
 def _entity_name(data, content_id):
-    value = data.entity("物品", content_id)
+    value = data.entity("基础物品", content_id)
     name = str(value.get("名称") or "").strip()
     if not name:
         raise SectProductionError(f"物品缺少名称：{content_id}")

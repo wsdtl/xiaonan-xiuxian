@@ -56,7 +56,7 @@ class CultivationTransferService:
         protected = _mapping(rules.get("服丹"), "铜雀台.服丹")
         severed = _mapping(rules.get("未服丹"), "铜雀台.未服丹")
         self._medicine_id = _text(protected.get("丹药"), "铜雀台.服丹.丹药")
-        medicine = self._data.entity("物品", self._medicine_id)
+        medicine = self._data.entity("丹药", self._medicine_id)
         effect = _mapping(medicine.get("使用效果"), "铜雀台护契丹.使用效果")
         if effect.get("类型") != "护持道契":
             raise JsonDataError("铜雀台护契丹效果必须是护持道契")

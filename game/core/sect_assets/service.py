@@ -138,7 +138,7 @@ class SectAssetService:
         member = await self._member(user_id)
         normalized_category = _required_category(category, self._materials)
         normalized_quantity = _positive_int(quantity, "捐献数量")
-        record = self._data.entity_record("物品", content_id)
+        record = self._data.entity_record("基础物品", content_id)
         if record.number_category != normalized_category:
             raise SectAssetError("该物品不属于指定基础材料类别")
         grade = self._asset.grade(grade_id)
@@ -613,7 +613,7 @@ class SectAssetService:
         quantity: int,
     ) -> tuple[StateMutation, str, str, tuple[tuple[str, int], ...], str]:
         if category == "丹药":
-            record = self._data.entity_record("物品", content_id)
+            record = self._data.entity_record("丹药", content_id)
             if record.number_category != "丹药":
                 raise SectAssetError("该物品不是丹药")
             grade = self._asset.grade(grade_or_key)
@@ -917,7 +917,7 @@ def _rule_positive_int(value: object, label: str) -> int:
 
 
 def _entity_name(data: JsonDataService, category: str, content_id: str) -> str:
-    section = "物品" if category in {"丹药", "灵植", "灵矿", "兽宝"} else category
+    section = "基础物品" if category in {"丹药", "灵植", "灵矿", "兽宝"} else category
     value = data.entity(section, content_id)
     name = str(value.get("名称") or "").strip()
     if not name:

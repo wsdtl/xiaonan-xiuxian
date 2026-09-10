@@ -477,7 +477,7 @@ class GatheringService:
         count_per_round = unit_count * mode.draws_per_unit
         draws = self._pool.draw(
             PoolRequest(
-                section="物品",
+                section="基础物品",
                 count=count_per_round * mode.maximum_rounds,
                 mode=ALLOW_REPEATS,
                 file_ids=pool_names,
@@ -486,7 +486,7 @@ class GatheringService:
         )
         result: list[dict[str, object]] = []
         for index, entry in enumerate(draws.entries):
-            record = self._data.entity_record("物品", entry.entity_id)
+            record = self._data.entity_record("基础物品", entry.entity_id)
             if record.number_category != mode.resource_category:
                 raise GatheringStateError(
                     f"{mode.kind}资源池混入{record.number_category}：{entry.entity_id}"

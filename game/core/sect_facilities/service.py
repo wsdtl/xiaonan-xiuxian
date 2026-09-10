@@ -589,13 +589,13 @@ class SectFacilityService:
             entries = tuple(
                 item
                 for item in snapshot.entries
-                if item.category == "物品"
+                if item.category == "基础物品"
                 and item.subcategory in {"兽宝", "灵植", "灵矿"}
             )
         else:
             entries = tuple(
                 AssetEntry(
-                    "物品",
+                    "基础物品",
                     item.category,
                     item.content_id,
                     item.entry_key,

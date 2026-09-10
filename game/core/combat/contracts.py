@@ -142,7 +142,7 @@ class CombatantReportSpec:
     title: str = ""
     color: str = ""
     moves: tuple[str, ...] = ()
-    mechanisms: tuple[str, ...] = ()
+    abilities: tuple[str, ...] = ()
     extra: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -213,7 +213,7 @@ class StatusResult:
     remaining_turns: int
     source: str
     source_name: str
-    source_mechanism: str
+    source_ability: str
     build_instance: str
     modifiers: Mapping[str, float]
     stacks: int
@@ -233,7 +233,7 @@ class StatusResult:
             "剩余行动": self.remaining_turns,
             "来源": self.source,
             "来源名称": self.source_name,
-            "来源机制": self.source_mechanism,
+            "来源能力": self.source_ability,
             "构筑实例": self.build_instance,
             "属性": dict(self.modifiers),
             "层数": self.stacks,
@@ -258,7 +258,7 @@ class BattleEvent:
     amount: float = 0.0
     values: Mapping[str, Any] = field(default_factory=dict)
     tags: tuple[str, ...] = ()
-    mechanism: str = ""
+    ability: str = ""
     source_id: str = ""
     target_id: str = ""
 
@@ -272,7 +272,7 @@ class BattleEvent:
             "amount": self.amount,
             "values": dict(self.values),
             "tags": list(self.tags),
-            "mechanism": self.mechanism,
+            "ability": self.ability,
             "source_id": self.source_id,
             "target_id": self.target_id,
         }

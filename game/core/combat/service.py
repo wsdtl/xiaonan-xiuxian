@@ -408,7 +408,7 @@ class CombatService:
                     statuses=value.statuses,
                     techniques=runtime.techniques if runtime is not None else (),
                     moves=display.moves if display else (),
-                    mechanisms=display.mechanisms if display else (),
+                    abilities=display.abilities if display else (),
                     ability_definitions=self._require_engine().catalog.abilities,
                     color=display.color if display else "",
                     extra=display.extra if display else {},
@@ -423,7 +423,6 @@ class CombatService:
             seed=request.seed,
             generated_at=report_spec.generated_at,
             scene=result.field.scene if result.field is not None else report_spec.scene,
-            mechanism_names=self._require_engine().catalog.mechanism_names,
         )
         presentation = (
             build_battle_report_presentation(

@@ -38,51 +38,37 @@ def load_battle_foundation(
         }
     )
     if mechanisms is None:
-        mechanism_nodes, mechanism_names = load_battle_mechanisms(data)
+        mechanism_nodes = load_battle_mechanisms(data)
     else:
         mechanism_nodes = {
             str(key): materialize(value) for key, value in mechanisms.items()
         }
-        mechanism_names = {str(key): str(key) for key in mechanism_nodes}
     result["机制"] = mechanism_nodes
-    result["机制名称"] = mechanism_names
     validate_battle_foundation(result)
     return result
 
 
 def load_battle_mechanisms(
     data: JsonDataService,
-) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+) -> dict[str, dict[str, Any]]:
     """把编号机制实体投影为核心所需的编号到能力节点映射。"""
 
     nodes: dict[str, dict[str, Any]] = {}
-    names: dict[str, str] = {}
-    name_sources: dict[str, str] = {}
     for mechanism_id, raw in data.entities("机制").items():
         path = f"机制[{mechanism_id}]"
         entry = _mapping(materialize(raw), path)
-        # 说明是实体的玩家可读文本，不参与战斗机制构造。
-        unknown = set(entry) - {"编号", "名称", "说明", "节点"}
+        unknown = set(entry) - {"编号", "节点"}
         if unknown:
             raise ValueError(f"{path}存在未知字段：{'、'.join(sorted(unknown))}")
         declared_id = str(entry.get("编号") or "").strip()
-        name = str(entry.get("名称") or "").strip()
         node = _mapping(entry.get("节点"), f"{path}.节点")
         if declared_id != mechanism_id:
             raise ValueError(f"{path}.编号与数据索引不一致")
-        if not name:
-            raise ValueError(f"{path}.名称不能为空")
-        if name in name_sources:
-            raise ValueError(
-                f"机制名称重复：{name}，位于 {name_sources[name]} 与 {path}"
-            )
         _validate_event_bound_abilities(node, f"{path}.节点")
         nodes[mechanism_id] = dict(node)
-        names[mechanism_id] = name
-        name_sources[name] = path
     if not nodes:
         raise ValueError("JSON 数据微服务没有登记战斗机制")
-    return nodes, names
+    return nodes
 
 
 def _validate_event_bound_abilities(

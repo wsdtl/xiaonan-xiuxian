@@ -180,6 +180,14 @@ class JsonDataService:
             for document in self._require_loaded().catalog.documents
         )
 
+    def pools(self) -> Mapping[str, str]:
+        """返回资源池文件到实体类别的只读索引，供审查和管理工具使用。"""
+
+        loaded = self._require_loaded()
+        return MappingProxyType(
+            {file_id: pool.section for file_id, pool in loaded.pool_definitions.items()}
+        )
+
     def _require_loaded(self) -> LoadedGameData:
         if self._loaded is None:
             raise RuntimeError("JSON 数据微服务尚未加载")

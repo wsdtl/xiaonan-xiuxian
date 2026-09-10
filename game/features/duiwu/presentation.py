@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
+from game.features.presentation import (
+    BUTTON_KEYS_WITHOUT_CONDITION,
+    project_buttons,
+    require_mapping,
+)
 
 from .contracts import TeamAction, TeamCopy
+
+_TEXT_SECTIONS = frozenset({"图标", "格式", "查看", "结果", "错误"})
+_PAGES = frozenset({"未组队", "待处理邀请", "队长", "队员"})
 
 
 def load_presentation(
@@ -21,34 +29,23 @@ def load_presentation(
             str(section): MappingProxyType(
                 {
                     str(key): str(value)
-                    for key, value in _mapping(raw, str(section)).items()
+                    for key, value in require_mapping(raw, str(section)).items()
                 }
             )
             for section, raw in raw_text.items()
         }
     )
-    required_sections = {"图标", "格式", "查看", "结果", "错误"}
-    if set(text) != required_sections:
+    if set(text) != _TEXT_SECTIONS:
         raise JsonDataError("队伍文本必须完整包含图标、格式、查看、结果、错误")
-    raw_buttons = data.dataset("队伍按钮").get("按钮")
-    if not isinstance(raw_buttons, Sequence) or isinstance(raw_buttons, (str, bytes)):
-        raise JsonDataError("队伍按钮必须是字典列表")
-    buttons = tuple(
-        MappingProxyType(
-            {
-                key: str(_mapping(raw, "队伍按钮[]").get(key) or "").strip()
-                for key in ("页面", "编号", "名称", "命令", "行为", "样式")
-            }
-        )
-        for raw in raw_buttons
+    buttons = project_buttons(
+        data.dataset("队伍按钮").get("按钮"),
+        label="队伍按钮",
+        keys=BUTTON_KEYS_WITHOUT_CONDITION,
     )
     identities = tuple(button["编号"] for button in buttons)
     if len(identities) != len(set(identities)):
         raise JsonDataError("队伍按钮编号不能重复")
-    if any(
-        button["页面"] not in {"未组队", "待处理邀请", "队长", "队员"}
-        for button in buttons
-    ):
+    if any(button["页面"] not in _PAGES for button in buttons):
         raise JsonDataError("队伍按钮使用了未知页面")
     return TeamCopy(text), buttons
 
@@ -67,12 +64,6 @@ def actions(
         for button in buttons
         if button["页面"] == page
     )
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 __all__ = ["actions", "load_presentation"]

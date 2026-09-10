@@ -8,6 +8,7 @@ from string import Formatter
 from types import MappingProxyType
 
 from game.core.data import JsonDataError
+from game.features.presentation import require_mapping
 
 from .contracts import PositionAction, PositionCopy
 
@@ -53,34 +54,34 @@ def load_position_presentation(
         },
         "位置展示数据集",
     )
-    distance_and_direction = _mapping(
-        dataset["距离与方向"], "展示/位置/规则/距离与方向.json"
+    distance_and_direction = require_mapping(
+        dataset["距离与方向"], "位置/展示/规则/距离与方向.json"
     )
     _require_keys(
         distance_and_direction,
         {"距离", "同处措辞", "方向"},
         "距离与方向",
     )
-    distance = _mapping(distance_and_direction["距离"], "距离与方向.距离")
+    distance = require_mapping(distance_and_direction["距离"], "距离与方向.距离")
     _require_keys(distance, {"单位", "每里米数", "约数步长"}, "距离与方向.距离")
     function_buttons = _button_templates(
         dataset["地点功能"],
-        "展示/位置/按钮/地点功能.json",
+        "位置/展示/按钮/地点功能.json",
         function_buttons=True,
     )
     terrain_buttons = _button_templates(
         dataset["地形功能"],
-        "展示/位置/按钮/地形功能.json",
+        "位置/展示/按钮/地形功能.json",
         function_buttons=True,
     )
     position_buttons = _button_templates(
         dataset["位置"],
-        "展示/位置/按钮/位置.json",
+        "位置/展示/按钮/位置.json",
         default_page="位置",
     )
     nearby_buttons = _button_templates(
         dataset["附近"],
-        "展示/位置/按钮/附近.json",
+        "位置/展示/按钮/附近.json",
     )
     buttons = function_buttons + terrain_buttons + position_buttons + nearby_buttons
     identities = tuple((item.page, item.action_id) for item in buttons)
@@ -115,7 +116,7 @@ def _direction_map(value: object) -> dict[tuple[int, int], str]:
         raise JsonDataError("距离与方向.方向必须是字典列表")
     result: dict[tuple[int, int], str] = {}
     for index, raw in enumerate(value):
-        row = _mapping(raw, f"距离与方向.方向[{index}]")
+        row = require_mapping(raw, f"距离与方向.方向[{index}]")
         offset = row.get("偏移")
         if (
             not isinstance(offset, Sequence)
@@ -135,19 +136,19 @@ def _direction_map(value: object) -> dict[tuple[int, int], str]:
 
 
 def _position_copy(value: object, icon_value: object) -> PositionCopy:
-    root = _mapping(value, "展示/位置/规则/文本.json")
-    icons = _mapping(icon_value, "展示/位置/规则/图标.json")
+    root = require_mapping(value, "位置/展示/规则/文本.json")
+    icons = require_mapping(icon_value, "位置/展示/规则/图标.json")
     _require_keys(
         root,
         {"格式", "位置", "附近概览", "附近修士", "附近地点", "命令"},
         "位置文本",
     )
-    common = _mapping(root["格式"], "位置文本.格式")
-    current = _mapping(root["位置"], "位置文本.位置")
-    overview = _mapping(root["附近概览"], "位置文本.附近概览")
-    cultivators = _mapping(root["附近修士"], "位置文本.附近修士")
-    locations = _mapping(root["附近地点"], "位置文本.附近地点")
-    command = _mapping(root["命令"], "位置文本.命令")
+    common = require_mapping(root["格式"], "位置文本.格式")
+    current = require_mapping(root["位置"], "位置文本.位置")
+    overview = require_mapping(root["附近概览"], "位置文本.附近概览")
+    cultivators = require_mapping(root["附近修士"], "位置文本.附近修士")
+    locations = require_mapping(root["附近地点"], "位置文本.附近地点")
+    command = require_mapping(root["命令"], "位置文本.命令")
     _require_keys(
         common,
         {
@@ -367,7 +368,7 @@ def _button_templates(
         raise JsonDataError(f"{label}必须是字典列表")
     result: list[ButtonTemplate] = []
     for index, raw in enumerate(value):
-        row = _mapping(raw, f"{label}[{index}]")
+        row = require_mapping(raw, f"{label}[{index}]")
         allowed = {"编号", "名称", "命令", "行为", "样式"}
         if function_buttons:
             allowed.add("功能")
@@ -470,12 +471,6 @@ def _partial_template(
             f"{label}只能使用占位符：{'、'.join(sorted(allowed_fields)) or '无'}"
         )
     return template, found
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 def _positive_int(value: object, label: str) -> int:

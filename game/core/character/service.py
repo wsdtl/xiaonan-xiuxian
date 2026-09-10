@@ -126,10 +126,10 @@ class CharacterService:
         _mapping(creation.get("初始本命武器"), "人物.json.创建.初始本命武器")
         attributes = self._data.dataset("战斗定义").get("属性")
         self._five_element_rules = _mapping(
-            self._data.dataset("战斗规则").get("五行"), "规则/战斗/五行.json"
+            self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         medicine_rules = _mapping(
-            self._data.dataset("服丹规则").get("服丹"), "规则/服丹/服丹.json"
+            self._data.dataset("服丹规则").get("服丹"), "服丹/规则/服丹.json"
         )
         medicine_auto = _mapping(medicine_rules.get("自动用药"), "服丹.自动用药")
         self._role_rule = role_rule
@@ -1212,8 +1212,8 @@ class CharacterService:
         self, medicine_id: str, target_realm_id: str
     ) -> tuple[Mapping[str, object], Mapping[str, int | float]]:
         normalized = str(medicine_id or "").strip()
-        medicine = self._data.entity("物品", normalized)
-        if self._data.entity_record("物品", normalized).number_category != "丹药":
+        medicine = self._data.entity("丹药", normalized)
+        if self._data.entity_record("丹药", normalized).number_category != "丹药":
             raise CharacterCultivationError("只能使用突破丹突破境界")
         effect = _mapping(medicine.get("使用效果"), "突破丹.使用效果")
         if (
@@ -1246,7 +1246,10 @@ class CharacterService:
         _mapping(creation.get("初始本命武器"), "人物.json.创建.初始本命武器")
         _initial_items(self._role_rule)
         for item_id, grade, _ in _initial_items(self._role_rule):
-            self._data.entity("物品", item_id)
+            try:
+                self._data.entity("基础物品", item_id)
+            except JsonDataError:
+                self._data.entity("丹药", item_id)
             if grade not in self._grade_values:
                 raise JsonDataError(f"人物初始物品使用未知品级：{item_id} -> {grade}")
         if not self._attributes:
@@ -1624,7 +1627,7 @@ def _request_ratio(value: object, label: str) -> float:
 
 
 def _initial_items(role_rule: Mapping[str, object]) -> tuple[tuple[str, str, int], ...]:
-    raw_items = role_rule.get("物品")
+    raw_items = role_rule.get("基础物品")
     if not isinstance(raw_items, Sequence) or isinstance(raw_items, (str, bytes)):
         raise JsonDataError("人物.json.物品必须是字典列表")
     result: list[tuple[str, str, int]] = []

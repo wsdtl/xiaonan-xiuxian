@@ -674,7 +674,7 @@ class FormationService:
         return tuple(
             entry
             for entry in snapshot.entries
-            if entry.category == "物品" and entry.subcategory in _CATEGORIES
+            if entry.category == "基础物品" and entry.subcategory in _CATEGORIES
         )
 
     async def _current_master(self, user_id: str) -> tuple[str, FormationMaster]:
@@ -938,7 +938,7 @@ def _payload_materials(
             FormationMaterial(
                 _payload_text(row.get("类别"), "炼阵事务.材料.类别"),
                 item_id,
-                _text(data.entity("物品", item_id).get("名称"), f"物品 {item_id}.名称"),
+                _text(data.entity("基础物品", item_id).get("名称"), f"物品 {item_id}.名称"),
                 grade.grade_id,
                 grade.name,
                 _payload_positive_int(row.get("数量"), "炼阵事务.材料.数量"),

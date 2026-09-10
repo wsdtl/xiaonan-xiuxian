@@ -13,6 +13,7 @@ from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.sect_assets import SectAssetError, SectAssetService
+from game.features.presentation import require_mapping
 
 from .contracts import (
     WanzhenAction,
@@ -53,16 +54,16 @@ class WanzhenFeature:
             raise RuntimeError("万珍殿玩法已经初始化")
         if not self._assets.status().initialized:
             raise RuntimeError("宗门公共资产核心必须先于万珍殿玩法启动")
-        rule = _mapping(self._data.dataset("宗门规则").get("万珍殿"), "万珍殿规则")
-        storing = _mapping(rule.get("存入"), "万珍殿.存入")
-        distribution = _mapping(rule.get("发放"), "万珍殿.发放")
+        rule = require_mapping(self._data.dataset("宗门规则").get("万珍殿"), "万珍殿规则")
+        storing = require_mapping(rule.get("存入"), "万珍殿.存入")
+        distribution = require_mapping(rule.get("发放"), "万珍殿.发放")
         store_guard = _text(storing.get("状态守卫"), "万珍殿.存入.状态守卫")
         grant_guard = _text(distribution.get("状态守卫"), "万珍殿.发放.状态守卫")
         if store_guard != grant_guard:
             raise JsonDataError("万珍殿存入和发放必须使用同一状态守卫")
         self._guard_rule = store_guard
         self._page_limit = _positive_int(rule.get("每页上限"), "万珍殿.每页上限")
-        raw_copy = _mapping(self._data.dataset("万珍殿展示").get("文本"), "万珍殿展示")
+        raw_copy = require_mapping(self._data.dataset("万珍殿展示").get("文本"), "万珍殿展示")
         self._copy = WanzhenCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
@@ -242,12 +243,6 @@ class WanzhenFeature:
             raise WanzhenFeatureError("只有身处本宗洞天时才能使用万珍殿")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _text(value: object, label: str) -> str:
     result = str(value or "").strip()
     if not result:
@@ -268,7 +263,7 @@ def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
     result = tuple(
         MappingProxyType(
             {
-                key: str(_mapping(raw, f"{label}[]").get(key) or "").strip()
+                key: str(require_mapping(raw, f"{label}[]").get(key) or "").strip()
                 for key in keys
             }
         )

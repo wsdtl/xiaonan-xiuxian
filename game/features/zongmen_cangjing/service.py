@@ -11,6 +11,7 @@ from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.sect_library import SectLibraryError, SectLibraryService
+from game.features.presentation import require_mapping
 
 from .contracts import CangjingAction, CangjingCopy, CangjingFeatureError, CangjingPage
 
@@ -41,11 +42,11 @@ class CangjingFeature:
             raise RuntimeError("藏经阁玩法已经初始化")
         if not self._library.status().initialized:
             raise RuntimeError("藏经阁核心必须先于藏经阁玩法启动")
-        rule = _mapping(self._data.dataset("宗门规则").get("藏经阁"), "藏经阁规则")
-        borrowing = _mapping(rule.get("借阅"), "藏经阁.借阅")
+        rule = require_mapping(self._data.dataset("宗门规则").get("藏经阁"), "藏经阁规则")
+        borrowing = require_mapping(rule.get("借阅"), "藏经阁.借阅")
         self._page_limit = _positive_int(rule.get("每页上限"), "藏经阁.每页上限")
         self._guard_rule = _text(borrowing.get("状态守卫"), "藏经阁.借阅.状态守卫")
-        raw_copy = _mapping(self._data.dataset("藏经阁展示").get("文本"), "藏经阁展示")
+        raw_copy = require_mapping(self._data.dataset("藏经阁展示").get("文本"), "藏经阁展示")
         self._copy = CangjingCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
@@ -118,12 +119,6 @@ class CangjingFeature:
             raise CangjingFeatureError("只有身处本宗洞天时才能使用藏经阁")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _text(value: object, label: str) -> str:
     result = str(value or "").strip()
     if not result:
@@ -144,7 +139,7 @@ def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
     result = tuple(
         MappingProxyType(
             {
-                key: str(_mapping(raw, f"{label}[]").get(key) or "").strip()
+                key: str(require_mapping(raw, f"{label}[]").get(key) or "").strip()
                 for key in keys
             }
         )

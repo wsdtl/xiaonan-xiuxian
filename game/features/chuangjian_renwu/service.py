@@ -85,7 +85,7 @@ class CreateCharacterFeature:
             raise CharacterExistsError(str(exc)) from exc
         item_names = tuple(
             (
-                str(self._data.entity("物品", item_id).get("名称") or item_id),
+                str(self._data.entity("基础物品", item_id).get("名称") or item_id),
                 self._grade_names.get(grade, grade),
                 quantity,
             )

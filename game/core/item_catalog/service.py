@@ -15,7 +15,7 @@ from .contracts import (
     ItemSummary,
 )
 
-ITEM_SECTION = "物品"
+ITEM_SECTION = "基础物品"
 _ENTITY_FIELDS = {
     "丹方": ("炼制难度", "炉法", "成丹"),
     "人物状态": ("可转入", "附近公开"),
@@ -25,11 +25,10 @@ _ENTITY_FIELDS = {
     "器律": ("属性构成", "器阶", "铸法", "兽引", "能力"),
     "境界": ("等级下限", "等级上限", "下一境界"),
     "战场环境": ("阶段",),
-    "机制": ("节点",),
     "气机": ("属性构成", "能力"),
     "炼丹师": ("称号", "炉名", "丹道传承", "开放丹方"),
     "炼器工匠": ("称号", "炉名", "工艺流派", "开放器律"),
-    "物品": ("使用效果", "强度"),
+    "基础物品": ("使用效果", "强度"),
     "真意": ("属性构成", "能力"),
     "道侣": ("性别", "身份", "结交", "等级", "资质范围", "本命武器"),
     "阵师": ("称号", "阵台", "阵道传承", "开放阵法"),
@@ -59,6 +58,9 @@ class ItemCatalogService:
         by_category: dict[str, list[ItemSummary]] = defaultdict(list)
         entity_by_name: dict[str, list[ItemSummary]] = defaultdict(list)
         for record in self._data.numbered_entities():
+            # 战斗机制是内部执行节点，不是玩家可查看的内容实体。
+            if record.section == "机制":
+                continue
             item_id = record.entity_id
             value = record.value
             name = _required_text(value.get("名称"), f"{record.section} {item_id}.名称")

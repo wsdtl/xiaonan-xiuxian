@@ -15,6 +15,7 @@ from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.team import TeamService
 from game.core.world import LocationQuery, WorldService
+from game.features.presentation import require_mapping
 
 from .contracts import (
     CurrentPositionView,
@@ -77,8 +78,8 @@ class PositionFeature:
             if not initialized:
                 raise RuntimeError(f"{label}必须先于位置查看玩法启动")
         nearby = self._data.dataset("位置规则").get("附近")
-        nearby_rule = _mapping(nearby, "附近.json")
-        location_rule = _mapping(nearby_rule.get("地点"), "附近.地点")
+        nearby_rule = require_mapping(nearby, "附近.json")
+        location_rule = require_mapping(nearby_rule.get("地点"), "附近.地点")
         self._location_radius_meters = _positive_int(
             location_rule.get("范围米数"), "附近.地点.范围米数"
         )
@@ -473,12 +474,6 @@ class PositionFeature:
                     )
                 )
         return tuple(result)
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 def _positive_int(value: object, label: str) -> int:

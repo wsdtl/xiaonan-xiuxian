@@ -140,8 +140,8 @@ class WorldService:
         for location_name, raw in self._locations.items():
             xy = _xy(raw.get("坐标"), f"地点 {location_name}.坐标")
             terrain_name = self._terrain_at(xy)
-            self._require_pool(f"灵植-{terrain_name}", "物品")
-            self._require_pool(f"灵矿-{terrain_name}", "物品")
+            self._require_pool(f"灵植-{terrain_name}", "基础物品")
+            self._require_pool(f"灵矿-{terrain_name}", "基础物品")
             for function in _strings(raw.get("可用功能")):
                 sections = self._feature_contents.get(function)
                 if sections is None:

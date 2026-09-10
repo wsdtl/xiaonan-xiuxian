@@ -29,7 +29,7 @@ class ItemSummary:
     item_id: str
     category: str
     name: str
-    section: str = "物品"
+    section: str = "基础物品"
 
     @property
     def entity_id(self) -> str:
@@ -43,7 +43,7 @@ class ItemDetail:
     name: str
     description: str
     fields: Mapping[str, Any] = field(default_factory=dict)
-    section: str = "物品"
+    section: str = "基础物品"
 
     @property
     def entity_id(self) -> str:

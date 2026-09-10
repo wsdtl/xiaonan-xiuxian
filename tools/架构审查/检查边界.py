@@ -1,0 +1,334 @@
+"""架构边界审查。
+
+把 `系统架构.md` 与 `微服务边界规范.md` 已经声明的禁止项变成可执行检查。
+本脚本属于维护审查，不进入游戏启动流程，也不被 `game` 依赖。
+
+用法：
+
+```powershell
+.venv/Scripts/python.exe -X utf8 tools/架构审查/检查边界.py
+```
+
+退出码 0 表示全部通过；1 表示存在越界，并在标准输出列出文件与行号。
+"""
+
+from __future__ import annotations
+
+import ast
+import sys
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SOURCE_ROOTS = ("game", "launch", "message")
+SKIP_PARTS = {"__pycache__", ".venv", ".git"}
+
+# 实现模块不得被跨服务导入（见 微服务边界规范.md 第二节）。
+INTERNAL_MODULES = {
+    "engine",
+    "models",
+    "runtime",
+    "schema",
+    "selection",
+    "loading",
+    "files",
+    "storage",
+    "mechanics",
+}
+# 绑定模块属于该服务自己的运行实现，只在服务内部导入。
+BOUND_INTERNAL_MODULES = {"build_terms", "catalog", "damage", "elements", "executors", "presentation", "report"}
+
+# 只有这两个装载边界允许运行时动态导入（见 微服务边界规范.md 第八节）。
+DYNAMIC_IMPORT_ALLOWLIST = {
+    Path("game/cmd/__init__.py"),
+    Path("launch/load_router.py"),
+}
+# 框架不得静态引用应用层（见 系统架构.md 第四节）。
+FRAMEWORK_ROOTS = ("launch", "message")
+
+# 数据原则：Python 只读取引导文件，不得硬编码 data 目录布局。
+DATA_PATH_ALLOWLIST = {Path("game/core/data/files.py"), Path("game/core/data/loading.py")}
+
+
+@dataclass(frozen=True)
+class Finding:
+    rule: str
+    path: Path
+    line: int
+    detail: str
+
+    def render(self) -> str:
+        return f"[{self.rule}] {self.path}:{self.line}  {self.detail}"
+
+
+def _relative(path: Path) -> Path:
+    return path.relative_to(PROJECT_ROOT)
+
+
+def _python_files(root: str) -> Iterator[Path]:
+    for path in (PROJECT_ROOT / root).rglob("*.py"):
+        if SKIP_PARTS & set(path.parts):
+            continue
+        yield path
+
+
+def _imports(tree: ast.AST) -> Iterator[tuple[int, str]]:
+    """产出 (行号, 被导入的模块名)。"""
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                yield node.lineno, alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            yield node.lineno, node.module
+
+
+def _package_of(path: Path) -> str:
+    """返回微服务包名，例如 game/core/combat/engine.py -> game.core.combat。"""
+
+    relative = path.relative_to(PROJECT_ROOT)
+    parts = relative.parts
+    if len(parts) >= 3 and parts[0] == "game" and parts[1] in {"core", "features"}:
+        return ".".join(parts[:3])
+    return ".".join(parts[:-1])
+
+
+def check_dynamic_imports() -> list[Finding]:
+    findings: list[Finding] = []
+    for root in SOURCE_ROOTS:
+        for path in _python_files(root):
+            relative = _relative(path)
+            if relative in DYNAMIC_IMPORT_ALLOWLIST:
+                continue
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                names: list[str] = []
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                    if node.func.id == "__import__":
+                        names.append("__import__")
+                elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                    if node.func.attr == "import_module":
+                        names.append("import_module")
+                elif isinstance(node, ast.ImportFrom) and node.module == "importlib":
+                    names.extend(alias.name for alias in node.names if alias.name == "import_module")
+                if names:
+                    findings.append(
+                        Finding(
+                            "动态导入越界",
+                            relative,
+                            node.lineno,
+                            f"{names[0]} 只能出现在 game/cmd/__init__.py 与 launch/load_router.py",
+                        )
+                    )
+    return findings
+
+
+def check_framework_dependency() -> list[Finding]:
+    findings: list[Finding] = []
+    for root in FRAMEWORK_ROOTS:
+        for path in _python_files(root):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for line, module in _imports(tree):
+                top = module.split(".")[0]
+                if top in {"game", "tools"}:
+                    findings.append(
+                        Finding(
+                            "框架反向依赖",
+                            _relative(path),
+                            line,
+                            f"launch/message 不得静态引用 {top}",
+                        )
+                    )
+    return findings
+
+
+def check_core_internal_imports() -> list[Finding]:
+    """核心与玩法服务只能从其他微服务包顶层导入。"""
+
+    findings: list[Finding] = []
+    for root in ("game/core", "game/features"):
+        for path in _python_files(root):
+            relative = _relative(path)
+            owner = _package_of(path)
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for line, module in _imports(tree):
+                if not module.startswith("game.core."):
+                    continue
+                parts = module.split(".")
+                if len(parts) < 4:
+                    continue
+                target = ".".join(parts[:3])
+                if target == owner:
+                    continue
+                leaf = parts[3]
+                if leaf in INTERNAL_MODULES or leaf in BOUND_INTERNAL_MODULES:
+                    findings.append(
+                        Finding(
+                            "跨服务导入内部实现",
+                            relative,
+                            line,
+                            f"{module} 属于 {target} 的内部实现，应只导入其包顶层",
+                        )
+                    )
+    return findings
+
+
+def check_data_layout_hardcoding() -> list[Finding]:
+    """业务服务不得硬编码 data 目录布局。"""
+
+    findings: list[Finding] = []
+    for root in SOURCE_ROOTS:
+        for path in _python_files(root):
+            relative = _relative(path)
+            if relative in DATA_PATH_ALLOWLIST:
+                continue
+            for number, raw in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                stripped = raw.strip()
+                if stripped.startswith("#"):
+                    continue
+                if '"data/' in stripped or "'data/" in stripped or '"data\\\\' in stripped:
+                    findings.append(
+                        Finding(
+                            "硬编码数据目录",
+                            relative,
+                            number,
+                            "只允许 game/core/data 读取 data 目录布局",
+                        )
+                    )
+    return findings
+
+
+def check_single_json_reader() -> list[Finding]:
+    """不得出现第二套 JSON Reader。
+
+    红线是"从磁盘读文件"。数据库状态反序列化、HTTP 响应解析和 QQ 回调体解析
+    都不是读取正式 JSON，不属于本规则管辖。
+    """
+
+    findings: list[Finding] = []
+    for root in SOURCE_ROOTS:
+        for path in _python_files(root):
+            relative = _relative(path)
+            if relative.parts[:3] == ("game", "core", "data"):
+                continue
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                detail: str | None = None
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                    owner = node.func.value
+                    if isinstance(owner, ast.Name) and owner.id == "json":
+                        if node.func.attr == "load" and node.args:
+                            detail = "json.load 直接读取文件对象"
+                        elif node.func.attr == "loads":
+                            first = node.args[0] if node.args else None
+                            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                                if first.value.strip().endswith(".json"):
+                                    detail = f"json.loads 内联 JSON 文件内容 {first.value[:40]}"
+                if detail is None and isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    text = node.value.strip()
+                    if text.endswith(".json") and "/" in text and "data" in text:
+                        detail = f"硬编码 JSON 文件路径 {text[:60]}"
+                if detail:
+                    findings.append(
+                        Finding("第二套 JSON 读取", relative, node.lineno, detail)
+                    )
+    return findings
+
+
+def check_service_doc_coverage() -> list[Finding]:
+    """每个微服务包必须提供 __init__.py、service.py 与 说明.md。
+
+    `contracts.py` 是契约定义位置，不是必备文件：只做「再导出核心契约」或
+    「只读取展示文本」的玩法包没有自己的新类型，就不应为了凑齐文件而造出
+    无人消费的类型——那会成为死代码，并改变命令层原有的异常语义。
+    """
+
+    findings: list[Finding] = []
+    for root in ("game/core", "game/features"):
+        for directory in sorted((PROJECT_ROOT / root).iterdir()):
+            if not directory.is_dir() or directory.name == "__pycache__":
+                continue
+            for required in ("__init__.py", "service.py", "说明.md"):
+                if not (directory / required).is_file():
+                    findings.append(
+                        Finding(
+                            "微服务包结构不完整",
+                            _relative(directory),
+                            0,
+                            f"缺少 {required}",
+                        )
+                    )
+    return findings
+
+
+def check_console_boundary() -> list[Finding]:
+    """维护者入口的例外边界（见 game/cmd/说明.md）。
+
+    `game/cmd/后台` 可以保留自身认证、短期存储、站点与 HTML 投影，但不得读取
+    游戏规则、玩家资产或战斗事实，也不得使用游戏数据库。例外只覆盖这些职责。
+    """
+
+    findings: list[Finding] = []
+    console_root = PROJECT_ROOT / "game" / "cmd" / "后台"
+    if not console_root.is_dir():
+        return findings
+    for path in console_root.rglob("*.py"):
+        if SKIP_PARTS & set(path.parts):
+            continue
+        relative = _relative(path)
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for line, module in _imports(tree):
+            if module.startswith(("game.core", "game.features", "game.startup")):
+                findings.append(
+                    Finding(
+                        "后台越界读取游戏",
+                        relative,
+                        line,
+                        f"维护者入口不得导入 {module}",
+                    )
+                )
+        for number, raw in enumerate(source.splitlines(), start=1):
+            if "game_config.database.path" in raw:
+                findings.append(
+                    Finding(
+                        "后台使用游戏数据库",
+                        relative,
+                        number,
+                        "维护者入口只能使用 RUNTIME_LOG_DATABASE_PATH",
+                    )
+                )
+    return findings
+
+
+CHECKS = (
+    ("动态导入越界", check_dynamic_imports),
+    ("框架反向依赖", check_framework_dependency),
+    ("跨服务导入内部实现", check_core_internal_imports),
+    ("硬编码数据目录", check_data_layout_hardcoding),
+    ("第二套 JSON 读取", check_single_json_reader),
+    ("微服务包结构", check_service_doc_coverage),
+    ("后台例外边界", check_console_boundary),
+)
+
+
+def main() -> int:
+    all_findings: list[Finding] = []
+    for _name, check in CHECKS:
+        all_findings.extend(check())
+    if not all_findings:
+        print(f"架构边界审查通过：{len(CHECKS)} 项检查")
+        return 0
+    print(f"架构边界越界 {len(all_findings)} 处：")
+    for finding in sorted(all_findings, key=lambda item: (item.rule, str(item.path), item.line)):
+        print(f"  {finding.render()}")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -48,7 +48,7 @@ class EnemyService:
             raise RuntimeError("敌人核心已经初始化")
         role_rules = self._data.dataset("角色规则")
         self._five_element_rules = _mapping(
-            self._data.dataset("战斗规则").get("五行"), "规则/战斗/五行.json"
+            self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         self._role_rules = MappingProxyType(
             {
@@ -366,14 +366,14 @@ class EnemyService:
         pool_names: list[str] = []
         if role_name == "灵兽":
             pool_names.append(f"兽宝-{name}")
-        extra = loot.get("额外物品池", ())
+        extra = loot.get("丹药池", ())
         if extra:
-            pool_names.extend(_texts(extra, f"{name}.额外物品池"))
+            pool_names.extend(_texts(extra, f"{name}.丹药池"))
         drops: list[EnemyDrop] = []
         for pool_name in pool_names:
             item_id = self._pool.draw(
                 PoolRequest(
-                    section="物品",
+                    section="基础物品",
                     count=1,
                     mode=EXPAND_DEDUPLICATED,
                     file_ids=(pool_name,),

@@ -7,6 +7,7 @@ from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
 from game.core.sect_production import SectProductionError, SectProductionService
+from game.features.presentation import require_mapping
 
 from .contracts import SectProductionAction
 
@@ -37,7 +38,7 @@ class SectProductionFeature:
         self._buttons = tuple(
             MappingProxyType(
                 {
-                    key: str(_mapping(row, "宗门生产按钮[]").get(key) or "").strip()
+                    key: str(require_mapping(row, "宗门生产按钮[]").get(key) or "").strip()
                     for key in (
                         "页面",
                         "设施",
@@ -105,12 +106,6 @@ class SectProductionFeature:
             return result
         except SectProductionError as exc:
             raise SectProductionFeatureError(str(exc)) from exc
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:

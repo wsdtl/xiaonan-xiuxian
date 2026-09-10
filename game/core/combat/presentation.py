@@ -372,7 +372,7 @@ def _detail_groups(
         for value in participant.get("attributes") or ()
     ]
     moves = [_item(value, "") for value in participant.get("moves") or ()]
-    mechanisms = [_item(value, "") for value in participant.get("mechanisms") or ()]
+    abilities = [_item(value, "") for value in participant.get("abilities") or ()]
     totals = [
         _item(value["label"], value["value"])
         for value in participant.get("totals") or ()
@@ -383,7 +383,7 @@ def _detail_groups(
         for group_id, items in (
             ("techniques", techniques),
             ("moves", moves),
-            ("mechanisms", mechanisms),
+            ("abilities", abilities),
             ("attributes", attributes),
             ("settlement", totals),
         )
@@ -500,7 +500,7 @@ def _apply_events(
                         resource["maximum"], max(0.0, resource["current"] + delta)
                     )
         elif target and kind in catalog.settlement_kinds("状态添加"):
-            name = str(values.get("状态") or event.get("mechanism") or event.get("text"))
+            name = str(values.get("状态") or event.get("ability") or event.get("text"))
             target["statuses"][name] = {
                 "name": name,
                 "category": str(
@@ -561,7 +561,7 @@ def _transition_title(
                 for value in attack.get("details") or ()
             }
             ability = (
-                attack.get("mechanism")
+                attack.get("ability")
                 or details.get("伤害名称")
                 or str(attack.get("text") or "普通行动")
                 .split("造成", 1)[0]
@@ -595,7 +595,7 @@ def _public_event(
         }
         for value in details
     ]
-    subject_label = event.get("mechanism") or event.get("kind_label") or event.get("kind")
+    subject_label = event.get("ability") or event.get("kind_label") or event.get("kind")
     return {
         "kind": event.get("kind", "unknown"),
         "label": event.get("kind_label") or event.get("kind") or "事件",
@@ -604,7 +604,7 @@ def _public_event(
         "text": event.get("text", ""),
         "source": {"key": source.get("id", "system"), "label": source.get("name", "战场")},
         "target": {"key": target.get("id", "system"), "label": target.get("name", "战场")},
-        "subject": {"id": event.get("mechanism") or event.get("kind", "event"), "label": subject_label},
+        "subject": {"id": event.get("ability") or event.get("kind", "event"), "label": subject_label},
         "phase": str(event.get("sequence") or event_index),
         "logical_time": logical_time,
         "facts": facts,

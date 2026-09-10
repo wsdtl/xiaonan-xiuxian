@@ -12,6 +12,7 @@ from game.core.database import (
     TransactionCommand,
 )
 from game.core.innate_treasure import InnateTreasureError, InnateTreasureService
+from game.features.presentation import require_mapping
 
 from .contracts import (
     InnateTreasureEquipRequest,
@@ -45,9 +46,9 @@ class InnateTreasureFeature:
             raise RuntimeError("先天灵宝核心必须先于玩法微服务启动")
         if not self._database.status().initialized:
             raise RuntimeError("数据库核心必须先于先天灵宝玩法启动")
-        self._copy = _mapping(
+        self._copy = require_mapping(
             self._data.dataset("先天灵宝展示").get("文本"),
-            "展示/先天灵宝/文本.json",
+            "先天灵宝/展示/文本.json",
         )
         self._page_limit = self._treasures.status().page_limit
         self._initialized = True
@@ -117,12 +118,6 @@ class InnateTreasureFeature:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("先天灵宝玩法微服务尚未初始化")
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 __all__ = ["InnateTreasureFeature"]

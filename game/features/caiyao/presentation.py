@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
+from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import HerbGatheringAction, HerbGatheringCopy
 
@@ -21,23 +22,15 @@ def load_presentation(
             str(section): MappingProxyType(
                 {
                     str(key): str(value)
-                    for key, value in _mapping(raw, str(section)).items()
+                    for key, value in require_mapping(raw, str(section)).items()
                 }
             )
             for section, raw in raw_text.items()
         }
     )
-    rows = data.dataset("采药按钮").get("按钮")
-    if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-        raise JsonDataError("采药按钮必须是字典列表")
-    buttons = tuple(
-        MappingProxyType(
-            {
-                key: str(_mapping(raw, "采药按钮[]").get(key) or "").strip()
-                for key in ("页面", "条件", "编号", "名称", "命令", "行为", "样式")
-            }
-        )
-        for raw in rows
+    buttons = project_buttons(
+        data.dataset("采药按钮").get("按钮"),
+        label="采药按钮",
     )
     _validate_buttons(buttons, "采药")
     return HerbGatheringCopy(text), buttons
@@ -72,10 +65,6 @@ def _validate_buttons(buttons: tuple[Mapping[str, str], ...], label: str) -> Non
         raise JsonDataError(f"{label}同一页面的按钮编号不能重复")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 __all__ = ["actions", "load_presentation"]

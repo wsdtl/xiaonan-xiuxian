@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
+from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import RetreatAction, RetreatCopy
+
+_PAGES = frozenset({"开始", "进度", "总结"})
 
 
 def load_presentation(
@@ -21,25 +24,14 @@ def load_presentation(
             str(section): MappingProxyType(
                 {
                     str(key): str(value)
-                    for key, value in _mapping(raw, str(section)).items()
+                    for key, value in require_mapping(raw, str(section)).items()
                 }
             )
             for section, raw in raw_text.items()
         }
     )
-    rows = data.dataset("闭关按钮").get("按钮")
-    if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-        raise JsonDataError("闭关按钮必须是字典列表")
-    buttons = tuple(
-        MappingProxyType(
-            {
-                key: str(_mapping(raw, "闭关按钮[]").get(key) or "").strip()
-                for key in ("页面", "条件", "编号", "名称", "命令", "行为", "样式")
-            }
-        )
-        for raw in rows
-    )
-    if any(button["页面"] not in {"开始", "进度", "总结"} for button in buttons):
+    buttons = project_buttons(data.dataset("闭关按钮").get("按钮"), label="闭关按钮")
+    if any(button["页面"] not in _PAGES for button in buttons):
         raise JsonDataError("闭关按钮使用了未知页面")
     if len({button["编号"] for button in buttons}) != len(buttons):
         raise JsonDataError("闭关按钮编号不能重复")
@@ -65,12 +57,6 @@ def actions(
         if button["页面"] == page
         and (not button["条件"] or button["条件"] in conditions)
     )
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 __all__ = ["actions", "load_presentation"]

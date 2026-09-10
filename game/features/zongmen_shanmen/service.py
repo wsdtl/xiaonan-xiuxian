@@ -13,6 +13,7 @@ from game.core.location import (
 )
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
+from game.features.presentation import require_mapping
 
 from .contracts import GateAction, GateCopy, GateFeatureError, GateResult
 from .presentation import actions, load_presentation
@@ -45,7 +46,7 @@ class GateFeature:
             raise RuntimeError("位置核心必须先于山门玩法启动")
         if not self._action_group.status().initialized:
             raise RuntimeError("行动编排核心必须先于山门玩法启动")
-        rule = _mapping(self._data.dataset("宗门规则").get("山门"), "山门.json")
+        rule = require_mapping(self._data.dataset("宗门规则").get("山门"), "山门.json")
         self._space_type = _text(rule.get("空间类型"), "山门.空间类型")
         self._copy, self._buttons = load_presentation(self._data)
 
@@ -157,12 +158,6 @@ class GateFeature:
     def _require_initialized(self) -> None:
         if self._copy is None:
             raise RuntimeError("山门玩法尚未初始化")
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 def _text(value: object, label: str) -> str:

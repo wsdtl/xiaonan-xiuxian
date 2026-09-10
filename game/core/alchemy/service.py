@@ -592,7 +592,7 @@ class AlchemyService:
         return tuple(
             entry
             for entry in snapshot.entries
-            if entry.category == "物品" and entry.subcategory in {"兽宝", "灵植"}
+            if entry.category == "基础物品" and entry.subcategory in {"兽宝", "灵植"}
         )
 
     async def _current_alchemist(self, user_id: str) -> tuple[str, Alchemist]:
@@ -663,7 +663,7 @@ class AlchemyService:
             pool = _text(row.get("灵植池"), "归脉.灵植池")
             primary = _text(row.get("本脉"), "归脉.本脉")
             secondary = _text(row.get("旁脉"), "归脉.旁脉")
-            for item_id in self._data.pool_members((pool,), "物品"):
+            for item_id in self._data.pool_members((pool,), "基础物品"):
                 if item_id in result:
                     raise JsonDataError(f"灵植重复归脉：{item_id}")
                 result[item_id] = _HerbIdentity(
@@ -684,7 +684,7 @@ class AlchemyService:
                 raise JsonDataError(f"丹方名称或成丹重复：{name}")
             if method not in self._methods or difficulty not in self._difficulties:
                 raise JsonDataError(f"丹方引用未知炉法或难度：{name}")
-            medicine = self._data.entity("物品", medicine_id)
+            medicine = self._data.entity("丹药", medicine_id)
             category = _RECIPE_CATEGORIES.get(recipe_id[:2], "")
             if category not in _CATEGORIES:
                 raise JsonDataError(f"丹方成丹类别错误：{name} -> {category}")
@@ -909,13 +909,13 @@ def _payload_material(
 def _item_ids(data: JsonDataService, category: str) -> set[str]:
     return {
         item_id
-        for item_id in data.entities("物品")
-        if data.entity_record("物品", item_id).number_category == category
+        for item_id in data.entities("基础物品")
+        if data.entity_record("基础物品", item_id).number_category == category
     }
 
 
 def _entity_name(data: JsonDataService, item_id: str) -> str:
-    return _text(data.entity("物品", item_id).get("名称"), f"物品 {item_id}.名称")
+    return _text(data.entity("基础物品", item_id).get("名称"), f"物品 {item_id}.名称")
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:

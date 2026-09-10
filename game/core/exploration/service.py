@@ -131,7 +131,7 @@ class ExplorationService:
         if not self._innate_treasure.status().initialized:
             raise RuntimeError("先天灵宝核心必须先于探险核心启动")
         rules = self._data.dataset("玩法规则").get("探险")
-        self._rules = _mapping(rules, "规则/玩法/探险.json")
+        self._rules = _mapping(rules, "探险/规则/探险.json")
         seconds = _positive_int(self._rules.get("每场秒数"), "探险.每场秒数")
         maximum = _positive_int(self._rules.get("最多场数"), "探险.最多场数")
         duration = _positive_int(self._rules.get("持续秒数"), "探险.持续秒数")
@@ -1087,7 +1087,7 @@ def _battle_value(
                 "数值": event.amount,
                 "记录": materialize(event.values),
                 "标签": list(event.tags),
-                "机制": event.mechanism,
+                "能力": event.ability,
                 "来源编号": event.source_id,
                 "目标编号": event.target_id,
             }
@@ -1186,7 +1186,7 @@ def _apply_treasure_reward(
             next_grade_id = f"{int(grade_id) + 1:02d}"
             drops[(item_id, grade_id)] -= 1
             drops[(item_id, next_grade_id)] += int(values["数量"])
-            item_name = str(data.entity("物品", item_id).get("名称") or item_id)
+            item_name = str(data.entity("基础物品", item_id).get("名称") or item_id)
             summary = (
                 f"{asset.grade(grade_id).name}{item_name} × 1升为"
                 f"{asset.grade(next_grade_id).name}品"
@@ -1197,7 +1197,7 @@ def _apply_treasure_reward(
                 (item_id, grade_id)
                 for (item_id, grade_id), quantity in drops.items()
                 if quantity > 0
-                and data.entity_record("物品", item_id).number_category == "兽宝"
+                and data.entity_record("基础物品", item_id).number_category == "兽宝"
             ),
             key=lambda key: (asset.grade(key[1]).order, key[0]),
         )
@@ -1205,7 +1205,7 @@ def _apply_treasure_reward(
             item_id, grade_id = candidates[0]
             quantity = int(values["数量"])
             drops[(item_id, grade_id)] += quantity
-            item_name = str(data.entity("物品", item_id).get("名称") or item_id)
+            item_name = str(data.entity("基础物品", item_id).get("名称") or item_id)
             summary = f"额外获得{asset.grade(grade_id).name}{item_name} × {quantity}"
     elif node == "恢复丹生效" and ability == "提高恢复量" and raw.get("消耗"):
         summary = f"自动恢复丹恢复量提高{float(values['比例']):.0%}"
@@ -1334,7 +1334,7 @@ def _payload_activation(value: object) -> InnateTreasureActivation | None:
 
 
 def _item_tuple(value: object) -> tuple[str, str, int]:
-    raw = _mapping(value, "物品")
+    raw = _mapping(value, "基础物品")
     return (
         _text(raw.get("编号"), "物品.编号"),
         _text(raw.get("品级"), "物品.品级"),

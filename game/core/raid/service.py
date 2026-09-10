@@ -90,7 +90,7 @@ class RaidService:
             raise RuntimeError("敌人核心必须先于讨伐核心启动")
         rules = self._data.dataset("玩法规则").get("讨伐")
         if not isinstance(rules, Mapping):
-            raise JsonDataError("规则/玩法/讨伐.json 必须是对象")
+            raise JsonDataError("讨伐/规则/讨伐.json 必须是对象")
         self._rules = dict(rules)
         self._state_id = _text(self._rules.get("行为状态"), "讨伐.行为状态")
         self._initialized = True
@@ -370,7 +370,7 @@ class RaidService:
             stones = int(reward.get("灵石", 0) or 0)
             if stones:
                 reward_ops.append(await self._asset.plan_spirit_stone_change(participant, stones))
-            adjustments = tuple(InventoryAdjustment(item_id, grade_id, quantity) for item_id, grade_id, quantity in reward.get("物品", []))
+            adjustments = tuple(InventoryAdjustment(item_id, grade_id, quantity) for item_id, grade_id, quantity in reward.get("基础物品", []))
             if adjustments:
                 reward_ops.extend((await self._asset.plan_inventory_changes(participant, adjustments)).operations)
         value = {"讨伐编号": session_id, "地点": session["地点"], "参与用户": session["参与用户"], "战败敌人": session["战败敌人"], "胜负": session.get("胜负", "平局"), "结算时间": settled_at.isoformat()}
@@ -398,7 +398,7 @@ class RaidService:
         self._require_initialized()
 
     def _boss_reward(self, definition: RaidDefinition, seed: int) -> tuple[str, str, int]:
-        candidates = self._data.pool_members(definition.reward_pool, "物品")
+        candidates = self._data.pool_members(definition.reward_pool, "基础物品")
         item_id = random.Random(seed ^ 0xA5A5A5A5).choice(candidates)
         grade_id = self._asset.draw_drop_grade(seed=seed ^ 0x5A5A5A5A).grade_id
         return item_id, grade_id, 1
@@ -516,7 +516,7 @@ def _raid_rewards(
     if bonus is not None:
         item_id, grade_id, quantity = bonus
         drops[(item_id, grade_id)] = drops.get((item_id, grade_id), 0) + quantity
-    rewards = {user_id: {"灵石": 0, "物品": []} for user_id in participants}
+    rewards = {user_id: {"灵石": 0, "基础物品": []} for user_id in participants}
     if not recipients:
         return rewards
     for user_id in recipients:
@@ -525,5 +525,5 @@ def _raid_rewards(
         share = quantity // len(recipients)
         if share:
             for user_id in recipients:
-                rewards[user_id]["物品"].append([item_id, grade_id, share])
+                rewards[user_id]["基础物品"].append([item_id, grade_id, share])
     return rewards

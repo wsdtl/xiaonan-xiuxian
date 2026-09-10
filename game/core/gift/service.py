@@ -18,6 +18,7 @@ from game.core.location import LocationService
 from .contracts import GiftError, GiftResult, GiftSendCommand
 
 RESULT_STATE = "gift_result"
+BASIC_ITEM_CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
 
 
 class GiftService:
@@ -39,7 +40,7 @@ class GiftService:
             raise RuntimeError("玩家赠送核心已经初始化")
         rules = self._data.dataset("交易规则").get("玩家赠送")
         if not isinstance(rules, Mapping):
-            raise JsonDataError("规则/交易/玩家赠送.json 必须是对象")
+            raise JsonDataError("交易/规则/玩家赠送.json 必须是对象")
         allowed = rules.get("允许物品类别")
         if not isinstance(allowed, (list, tuple)) or not allowed:
             raise JsonDataError("玩家赠送.允许物品类别不能为空")
@@ -86,7 +87,11 @@ class GiftService:
             operations = (plan.operation, receive.operation)
         else:
             item = self._item_catalog.inspect(command.item_id)
-            if item.category not in self._allowed:
+            if not (
+                item.category in self._allowed
+                or "基础物品" in self._allowed
+                and item.category in BASIC_ITEM_CATEGORIES
+            ):
                 raise GiftError("该物品类别不允许玩家赠送")
             grade = self._asset.grade(command.grade_id)
             quantity = _bounded(command.quantity, self._maximum_quantity, "物品数量")

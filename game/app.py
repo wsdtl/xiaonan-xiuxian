@@ -326,9 +326,11 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         )
     )
     action_group = ActionGroupService(team, sect)
-    action_group.initialize()
+    action_group_status = action_group.initialize()
+    logger.opt(colors=True).success(C.ok("行动组核心微服务已启动"))
     hosting = HostingService(data, database, player_state, action_group)
-    hosting.initialize()
+    hosting_status = hosting.initialize()
+    logger.opt(colors=True).success(C.ok("托管核心微服务已启动"))
     medicine = MedicineService(data, asset)
     medicine_status = medicine.initialize()
     logger.opt(colors=True).success(
@@ -500,9 +502,11 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         action_group,
         combat,
     )
-    duel.initialize()
+    duel_status = duel.initialize()
+    logger.opt(colors=True).success(C.ok("切磋核心微服务已启动"))
     gift = GiftService(data, database, location, character, asset, item_catalog)
-    gift.initialize()
+    gift_status = gift.initialize()
+    logger.opt(colors=True).success(C.ok("赠送核心微服务已启动"))
     raid = RaidService(
         data,
         enemy,
@@ -561,7 +565,10 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     )
     sect_war_status = sect_war.initialize()
     logger.opt(colors=True).success(
-        C.join(C.ok("宗门战核心微服务已启动"), C.kv("seconds", sect_war_status.seconds))
+        C.join(
+            C.ok("宗门战核心微服务已启动"),
+            C.kv("seconds", sect_war_status.seconds),
+        )
     )
     retreat = RetreatService(
         data,

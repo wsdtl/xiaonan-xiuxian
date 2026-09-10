@@ -65,7 +65,7 @@ class InnateTreasureService:
             raise RuntimeError("核心数据库必须先于先天灵宝核心启动")
         rules = _mapping(
             self._data.dataset("先天灵宝规则").get("先天灵宝"),
-            "规则/先天灵宝/先天灵宝.json",
+            "先天灵宝/规则/先天灵宝.json",
         )
         self._validate_rules(rules)
         self._page_limit = _positive_int(

@@ -25,6 +25,7 @@ from game.core.database import (
 from game.core.forging import ForgingService
 from game.core.growth import GrowthService
 from game.core.item_catalog import ItemCatalogError, ItemCatalogService
+from game.features.presentation import require_mapping
 
 from .contracts import (
     CompanionBreakthroughRequest,
@@ -74,15 +75,15 @@ class CompanionCultivationFeature:
             if not ready:
                 raise RuntimeError(f"{label}必须先于道侣培养玩法启动")
         dataset = self._data.dataset("培养展示")
-        self._copy = _mapping(dataset.get("文本"), "展示/培养/文本.json")
-        _mapping(self._copy.get("道侣"), "培养文本.道侣")
-        _mapping(self._copy.get("突破"), "培养文本.突破")
-        _mapping(self._copy.get("覆炼"), "培养文本.覆炼")
+        self._copy = require_mapping(dataset.get("文本"), "培养/展示/文本.json")
+        require_mapping(self._copy.get("道侣"), "培养文本.道侣")
+        require_mapping(self._copy.get("突破"), "培养文本.突破")
+        require_mapping(self._copy.get("覆炼"), "培养文本.覆炼")
         self._initialized = True
 
     def copy(self, section: str, key: str) -> str:
         self._require_initialized()
-        value = _mapping(self._copy.get(section), f"培养文本.{section}").get(key)
+        value = require_mapping(self._copy.get(section), f"培养文本.{section}").get(key)
         if not isinstance(value, str) or not value.strip():
             raise RuntimeError(f"培养展示缺少文本：{section}.{key}")
         return value.strip()
@@ -240,12 +241,6 @@ class CompanionCultivationFeature:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("道侣培养玩法微服务尚未初始化")
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 __all__ = ["CompanionCultivationFeature"]

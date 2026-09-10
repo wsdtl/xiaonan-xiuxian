@@ -94,7 +94,7 @@ class ButianFeature:
                 raise ButianError("纳戒中没有九霄补天丹")
             inventory = await self._asset.plan_inventory_changes(user_id, (InventoryAdjustment(self._medicine_id, stack.grade.grade_id, -1),))
             attribute, value = attrs[0]
-            payload = {"请求目标": target, "请求境界": requested_realm, "请求来源丹药": source, "目标": target, "目标名称": target_name, "境界": realm_name, "属性": attribute, "数值": value, "丹药名称": str(self._data.entity("物品", self._medicine_id).get("名称") or "九霄补天丹")}
+            payload = {"请求目标": target, "请求境界": requested_realm, "请求来源丹药": source, "目标": target, "目标名称": target_name, "境界": realm_name, "属性": attribute, "数值": value, "丹药名称": str(self._data.entity("丹药", self._medicine_id).get("名称") or "九霄补天丹")}
             receipt = await self._database.commit(TransactionCommand(user_id, request_id, "九霄补天", inventory.operations + operations, payload))
         except (InventoryChangeError, CharacterCultivationError, CompanionCultivationError, StateConflictError) as exc:
             raise ButianError(str(exc)) from exc

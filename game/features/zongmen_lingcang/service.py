@@ -12,6 +12,7 @@ from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.sect_assets import SectAssetError, SectAssetService
+from game.features.presentation import require_mapping
 
 from .contracts import LingcangAction, LingcangCopy, LingcangFeatureError, LingcangPage
 
@@ -44,11 +45,11 @@ class LingcangFeature:
             raise RuntimeError("灵藏玩法已经初始化")
         if not self._assets.status().initialized:
             raise RuntimeError("宗门公共资产核心必须先于灵藏玩法启动")
-        rule = _mapping(self._data.dataset("宗门规则").get("灵藏"), "灵藏规则")
-        storing = _mapping(rule.get("存入"), "灵藏.存入")
+        rule = require_mapping(self._data.dataset("宗门规则").get("灵藏"), "灵藏规则")
+        storing = require_mapping(rule.get("存入"), "灵藏.存入")
         self._page_limit = _positive_int(rule.get("每页上限"), "灵藏.每页上限")
         self._guard_rule = _text(storing.get("状态守卫"), "灵藏.存入.状态守卫")
-        raw_copy = _mapping(self._data.dataset("灵藏展示").get("文本"), "灵藏展示")
+        raw_copy = require_mapping(self._data.dataset("灵藏展示").get("文本"), "灵藏展示")
         self._copy = LingcangCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
@@ -161,12 +162,6 @@ class LingcangFeature:
             raise LingcangFeatureError("只有身处本宗洞天时才能使用灵藏")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _text(value: object, label: str) -> str:
     result = str(value or "").strip()
     if not result:
@@ -187,7 +182,7 @@ def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
     result = tuple(
         MappingProxyType(
             {
-                key: str(_mapping(raw, f"{label}[]").get(key) or "").strip()
+                key: str(require_mapping(raw, f"{label}[]").get(key) or "").strip()
                 for key in keys
             }
         )

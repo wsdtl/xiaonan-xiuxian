@@ -27,7 +27,7 @@ def item(
     return (
         _result(feature, target_name)
         .field(
-            "物品",
+            "基础物品",
             M.command(
                 M.text(f"{grade_name}{item_name}", tone="emphasis"),
                 f"查看 {value.item_id}",

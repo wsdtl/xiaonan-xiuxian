@@ -95,7 +95,7 @@ class CompanionService:
         if not self._forging.status().initialized:
             raise RuntimeError("炼器核心必须先于道侣核心启动")
         self._five_element_rules = _mapping(
-            self._data.dataset("战斗规则").get("五行"), "规则/战斗/五行.json"
+            self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         self._rules = self._load_rules()
         self._attribute_definitions = _mapping(
@@ -116,7 +116,7 @@ class CompanionService:
         grade_ids = frozenset(
             _text(value.get("编号"), "品级.编号")
             for value in _sequence(
-                self._data.dataset("基础定义").get("品级"), "定义/品级.json"
+                self._data.dataset("基础定义").get("品级"), "基础/定义/品级.json"
             )
         )
         definitions: dict[str, CompanionDefinition] = {}
@@ -1010,8 +1010,8 @@ class CompanionService:
         self, medicine_id: str, target_realm_id: str
     ) -> tuple[Mapping[str, object], Mapping[str, int | float]]:
         normalized = str(medicine_id or "").strip()
-        medicine = self._data.entity("物品", normalized)
-        if self._data.entity_record("物品", normalized).number_category != "丹药":
+        medicine = self._data.entity("丹药", normalized)
+        if self._data.entity_record("丹药", normalized).number_category != "丹药":
             raise CompanionCultivationError("只能使用突破丹突破境界")
         effect = _mapping(medicine.get("使用效果"), "突破丹.使用效果")
         if (
@@ -1266,7 +1266,7 @@ class CompanionService:
     def _load_rules(self) -> CompanionRules:
         value = _mapping(
             self._data.dataset("角色规则").get("道侣"),
-            "规则/角色/主体/道侣.json",
+            "角色/规则/主体/道侣.json",
         )
         invitation = _mapping(value.get("邀约"), "道侣.邀约")
         gift_rules = _mapping(value.get("赠礼喜好"), "道侣.赠礼喜好")
@@ -1284,7 +1284,7 @@ class CompanionService:
         slots_value = _mapping(value.get("修行槽位"), "道侣.修行槽位")
         qualification_growth = _mapping(value.get("资质成长修正"), "道侣.资质成长修正")
         medicine_rules = _mapping(
-            self._data.dataset("服丹规则").get("服丹"), "规则/服丹/服丹.json"
+            self._data.dataset("服丹规则").get("服丹"), "服丹/规则/服丹.json"
         )
         medicine_auto = _mapping(medicine_rules.get("自动用药"), "服丹.自动用药")
         return CompanionRules(
@@ -1322,7 +1322,7 @@ class CompanionService:
     def _load_plant_pool_meridians(self) -> Mapping[str, str]:
         rows = _sequence(
             self._data.dataset("炼药规则").get("归脉"),
-            "规则/炼药/归脉.json",
+            "炼丹/规则/归脉.json",
         )
         result: dict[str, str] = {}
         for raw in rows:
@@ -1368,11 +1368,11 @@ class CompanionService:
             _text(raw, f"道侣 {companion_id}.结交.灵植池")
             for raw in _sequence(join.get("灵植池"), "道侣.结交.灵植池")
         )
-        favorite_items = frozenset(self._data.pool_members(favorite_pools, "物品"))
+        favorite_items = frozenset(self._data.pool_members(favorite_pools, "基础物品"))
         if not favorite_items:
             raise JsonDataError(f"道侣 {companion_id} 的喜爱灵植池为空")
         for item_id in favorite_items:
-            if self._data.entity_record("物品", item_id).number_category != "灵植":
+            if self._data.entity_record("基础物品", item_id).number_category != "灵植":
                 raise JsonDataError(f"道侣 {companion_id} 的喜爱池包含非灵植 {item_id}")
         try:
             favorite_meridians = {
@@ -1390,7 +1390,7 @@ class CompanionService:
             )
         )
         acceptable_items = frozenset(
-            self._data.pool_members(acceptable_pools, "物品")
+            self._data.pool_members(acceptable_pools, "基础物品")
         ) - favorite_items
         reward_value = _mapping(join.get("圆满回礼"), "道侣.结交.圆满回礼")
         reward = CompanionReward(
@@ -1398,7 +1398,10 @@ class CompanionService:
             _text(reward_value.get("品级"), "圆满回礼.品级"),
             _positive_int(reward_value.get("数量"), "圆满回礼.数量"),
         )
-        self._data.entity("物品", reward.item_id)
+        try:
+            self._data.entity("基础物品", reward.item_id)
+        except JsonDataError:
+            self._data.entity("丹药", reward.item_id)
         if reward.grade_id not in grade_ids:
             raise JsonDataError(f"道侣 {companion_id} 使用未知回礼品级")
         fluctuation = _mapping(value.get("实力波动"), "道侣.实力波动")

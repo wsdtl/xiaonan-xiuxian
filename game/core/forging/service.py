@@ -611,7 +611,7 @@ class ForgingService:
         return tuple(
             entry
             for entry in snapshot.entries
-            if entry.category == "物品" and entry.subcategory in {"兽宝", "灵矿"}
+            if entry.category == "基础物品" and entry.subcategory in {"兽宝", "灵矿"}
         )
 
     async def _current_artisan(self, user_id: str) -> tuple[str, ForgingArtisan]:
@@ -659,7 +659,7 @@ class ForgingService:
             row = _mapping(raw, "归引[]")
             pool = _text(row.get("兽宝池"), "归引.兽宝池")
             trait = _text(row.get("兽脉"), "归引.兽脉")
-            for item_id in self._data.pool_members((pool,), "物品"):
+            for item_id in self._data.pool_members((pool,), "基础物品"):
                 if item_id in result:
                     raise JsonDataError(f"兽宝重复归引：{item_id}")
                 result[item_id] = _MaterialIdentity(
@@ -676,7 +676,7 @@ class ForgingService:
             pool = _text(row.get("灵矿池"), "归脉.灵矿池")
             primary = _text(row.get("本脉"), "归脉.本脉")
             secondary = _text(row.get("旁脉"), "归脉.旁脉")
-            for item_id in self._data.pool_members((pool,), "物品"):
+            for item_id in self._data.pool_members((pool,), "基础物品"):
                 if item_id in result:
                     raise JsonDataError(f"灵矿重复归脉：{item_id}")
                 result[item_id] = _MaterialIdentity(
@@ -978,13 +978,13 @@ def _weapon_stage(value: Mapping[str, object]) -> WeaponStage:
 def _item_ids(data: JsonDataService, category: str) -> set[str]:
     return {
         item_id
-        for item_id in data.entities("物品")
-        if data.entity_record("物品", item_id).number_category == category
+        for item_id in data.entities("基础物品")
+        if data.entity_record("基础物品", item_id).number_category == category
     }
 
 
 def _entity_name(data: JsonDataService, item_id: str) -> str:
-    return _text(data.entity("物品", item_id).get("名称"), f"物品 {item_id}.名称")
+    return _text(data.entity("基础物品", item_id).get("名称"), f"物品 {item_id}.名称")
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:

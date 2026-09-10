@@ -6,8 +6,11 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
+from game.features.presentation import require_mapping
 
 from .contracts import HostingCopy
+
+_TEXT_SECTIONS = frozenset({"图标", "结果", "错误"})
 
 
 def load_presentation(data: JsonDataService) -> HostingCopy:
@@ -19,21 +22,15 @@ def load_presentation(data: JsonDataService) -> HostingCopy:
             str(section): MappingProxyType(
                 {
                     str(key): str(value)
-                    for key, value in _mapping(value, str(section)).items()
+                    for key, value in require_mapping(value, str(section)).items()
                 }
             )
             for section, value in raw.items()
         }
     )
-    if set(text) != {"图标", "结果", "错误"}:
+    if set(text) != _TEXT_SECTIONS:
         raise JsonDataError("托管文本必须完整包含图标、结果、错误")
     return HostingCopy(text)
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 __all__ = ["load_presentation"]

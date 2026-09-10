@@ -371,17 +371,17 @@ def _validate_number_prefixes(
     rule = number_definition.get("编号规则")
     prefix_rows = number_definition.get("编号前缀")
     if not isinstance(rule, Mapping) or not _is_array(prefix_rows):
-        raise JsonDataError("定义/编号.json 缺少编号规则或编号前缀")
+        raise JsonDataError("基础/定义/编号.json 缺少编号规则或编号前缀")
     digits = int(rule.get("位数") or 0)
     prefix_digits = int(rule.get("前缀位数") or 0)
     allowed: dict[str, set[str]] = {}
     for row in prefix_rows:
         if not isinstance(row, Mapping):
-            raise JsonDataError("定义/编号.json.编号前缀必须是字典数组")
+            raise JsonDataError("基础/定义/编号.json.编号前缀必须是字典数组")
         prefix = str(row.get("前缀") or "")
         category = str(row.get("类别") or "")
         if not prefix or not category:
-            raise JsonDataError("定义/编号.json.编号前缀缺少前缀或类别")
+            raise JsonDataError("基础/定义/编号.json.编号前缀缺少前缀或类别")
         allowed.setdefault(category, set()).add(prefix)
     for document in catalog.documents:
         descriptor = document.descriptor
@@ -390,7 +390,7 @@ def _validate_number_prefixes(
         category = descriptor.number_category
         prefixes = allowed.get(category, set())
         if not prefixes:
-            raise JsonDataError(f"定义/编号.json 没有登记{category}编号前缀")
+            raise JsonDataError(f"基础/定义/编号.json 没有登记{category}编号前缀")
         for entity_id, _ in _numbered_entries(
             document.value,
             document,

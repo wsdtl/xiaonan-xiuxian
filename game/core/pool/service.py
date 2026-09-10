@@ -19,7 +19,7 @@ from .contracts import (
 )
 from .selection import inverse_weighted_sample
 
-WEIGHTED_SECTIONS = frozenset({"敌人", "物品", "功法", "真意", "气机"})
+WEIGHTED_SECTIONS = frozenset({"敌人", "基础物品", "功法", "真意", "气机"})
 
 
 class PoolService:
@@ -109,13 +109,13 @@ class PoolService:
         normalized = str(category or "").strip()
         candidates = tuple(
             entity_id
-            for entity_id in self._weights["物品"]
-            if self._data.entity_record("物品", entity_id).number_category
+            for entity_id in self._weights["基础物品"]
+            if self._data.entity_record("基础物品", entity_id).number_category
             == normalized
         )
         if not candidates:
             raise ValueError(f"物品类别没有可抽取候选：{normalized or '<空>'}")
-        weights = tuple(self._weights["物品"][entity_id] for entity_id in candidates)
+        weights = tuple(self._weights["基础物品"][entity_id] for entity_id in candidates)
         selected = inverse_weighted_sample(
             random.Random(seed), candidates, weights, count=count, replace=True
         )
