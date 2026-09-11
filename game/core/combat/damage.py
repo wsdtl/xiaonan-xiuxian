@@ -119,6 +119,12 @@ class DamageEngine:
         judge: Callable[[str, float, float | None], bool] | None = None,
     ) -> DamageResolution:
         raw = max(0.0, float(request.amount))
+        # 全局输出倍率：和 `恢复倍率` 对称的总闸。整条流水线都从 raw 长出来，
+        # 所以乘在这里等于同比例缩放所有伤害，卡的相对强弱不变。
+        # 只放大「打向别人」的伤害：自伤（血祭代价一类）是成本不是输出，
+        # 跟着一起放大等于把成本也乘几倍，会让代价型卡整体失真。
+        if source.side != target.side:
+            raw *= max(0.0, float(self.rules.get("输出倍率", 100))) / 100.0
         minimum_hit = float(self.rules.get("最低命中率", 20)) / 100.0
         maximum_hit = float(self.rules.get("最高命中率", 100)) / 100.0
         base_hit = float(self.rules.get("基础命中率", 95)) / 100.0
@@ -215,8 +221,14 @@ class DamageEngine:
 
         rate_multiplier = 1.0
         if request.defense_rule != "真实":
+            # 减免是无上限的百分比，叠满就能把伤害压成 0；必须有天花板。
+            # `最高伤害减免=100` 表示不设限，行为与加护栏之前完全一致。
+            reduction = min(
+                self._percent(target, "伤害减免"),
+                float(self.rules.get("最高伤害减免", 100)) / 100.0,
+            )
             rate_multiplier += self._percent(source, "伤害加成")
-            rate_multiplier -= self._percent(target, "伤害减免")
+            rate_multiplier -= reduction
             rate_multiplier = self._clamp(
                 rate_multiplier,
                 0.0,

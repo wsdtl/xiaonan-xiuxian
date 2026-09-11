@@ -508,6 +508,9 @@ def _validate_damage_rules(value: Mapping[str, Any]) -> None:
         "最高伤害倍率",
         "防御常数",
         "最低伤害",
+        "恢复倍率",
+        "输出倍率",
+        "最高伤害减免",
     }
     unknown = set(value) - expected
     missing = expected - set(value)

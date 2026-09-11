@@ -285,9 +285,16 @@ def test_entry_surfaces_reach_their_deep_paths(services) -> None:
         for entry in _load("阵法/内容/*.json")
         if isinstance(entry, dict) and str(entry.get("编号", "")).startswith("53")
     )
+    # 首轮阵法轮转要等到 `ceil(12 × 周期倍率 / 传导)` 个行动之后，而一场仗有多长
+    # 取决于全局伤害量级（`输出倍率`）。这里要验的是「轮转这条路走得到」，
+    # 不是「战斗该有多长」，所以自己把血池撑到足以跨过一次轮转，
+    # 免得以后每次调平衡都来踩这个断言。
+    sturdy = replace(_spec("L"), attributes={**ATTRS, "血气上限": 200_000})
     result = _fight(
         services,
         limit=120,
+        left_team=(sturdy,),
+        right_team=(replace(sturdy, id="R", name="R"),),
         left_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄"),
         right_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄"),
     )

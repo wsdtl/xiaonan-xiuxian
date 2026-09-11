@@ -689,6 +689,11 @@ class AbilityRuntime:
                 received *= max(0.0, 1.0 + self._percent(destination, "受疗加成"))
             elif resource == "护盾":
                 received *= max(0.0, 1.0 + self._percent(destination, "受盾加成"))
+            # 全局恢复倍率：调「恢复压过输出」时的总闸，不必去改几千处卡数据。
+            # 只闸血气与护盾：精神是出手预算，把它一起闸掉会让「治疗太强」
+            # 表现成「技能放不出来」，那是另一个问题，也会盖住真正的症状。
+            if resource in ("血气", "护盾"):
+                received *= max(0.0, float(self.catalog.damage_rules.get("恢复倍率", 100))) / 100.0
             applied = min(maximum - before, received)
             self._set_resource(destination, resource, before + applied)
             after_event = "恢复后" if resource == "血气" else "获得护盾后" if resource == "护盾" else "资源恢复后"
