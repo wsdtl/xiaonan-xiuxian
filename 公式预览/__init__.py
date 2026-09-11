@@ -1,6 +1,6 @@
 """通过 QQ 驱动器发送 Markdown 与公式混合预览。"""
 
-from launch.adapter.qq import QqEventHandler
+from launch.adapter.qq_wh import QqEventHandler
 
 from .reply import build_preview, list_cases
 

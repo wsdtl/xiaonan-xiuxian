@@ -785,9 +785,7 @@ class CharacterService:
         }
         conflict = self._growth.build_conflict(build)
         if conflict is not None:
-            raise CharacterCultivationError(
-                f"该构筑触发相冲机制：{'、'.join(sorted(conflict))}"
-            )
+            raise CharacterCultivationError(f"该构筑触发相冲：{conflict}")
         try:
             if normalized_category == "功法":
                 ownership = await self._asset.cultivation_ownership(

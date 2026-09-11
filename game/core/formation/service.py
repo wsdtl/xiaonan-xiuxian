@@ -14,7 +14,7 @@ from game.core.asset import (
     InventoryAdjustment,
     InventoryChangeError,
 )
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import ContractSet, JsonDataError, JsonDataService
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -29,6 +29,7 @@ from game.core.innate_treasure import (
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
+from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
 
 from .contracts import (
     FormationActivationPlan,
@@ -109,10 +110,14 @@ class FormationService:
         self._town_max_grade_name = _text(
             self._rules.get("城镇最高品级"), "阵法规则.城镇最高品级"
         )
-        raw_formations = {
-            formation_id: _mapping(raw, f"阵法 {formation_id}")
-            for formation_id, raw in self._data.entities("阵法").items()
-        }
+        contract = ContractSet.load(
+            self._data.dataset("阵法字段契约").get("阵法字段契约"),
+            "阵法/内容/阵法字段契约.json",
+        )
+        raw_formations = {}
+        for formation_id, raw in self._data.entities("阵法").items():
+            contract.validate(raw, "阵法", f"阵法 {formation_id}")
+            raw_formations[formation_id] = _mapping(raw, f"阵法 {formation_id}")
         self._raw_formations = MappingProxyType(raw_formations)
         self._formations = MappingProxyType(
             {
@@ -736,7 +741,11 @@ class FormationService:
 
     def _load_masters(self) -> dict[str, FormationMaster]:
         result: dict[str, FormationMaster] = {}
+        contract = ContractSet.from_dataset(
+            self._data.dataset(WORLD_CONTRACT_DATASET), WORLD_CONTRACT_PATH
+        )
         for master_id, raw in self._data.entities("阵师").items():
+            contract.validate(raw, "阵师", f"阵师 {master_id}")
             location = self._data.entity_record("阵师", master_id).directory_owner
             if not location:
                 raise JsonDataError(f"阵师 {master_id} 缺少地点目录归属")

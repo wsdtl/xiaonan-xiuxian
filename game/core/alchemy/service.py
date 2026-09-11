@@ -13,7 +13,7 @@ from game.core.asset import (
     InventoryAdjustment,
     InventoryChangeError,
 )
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import ContractSet, JsonDataError, JsonDataService
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -26,6 +26,7 @@ from game.core.innate_treasure import (
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
+from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
 
 from .contracts import (
     Alchemist,
@@ -675,7 +676,11 @@ class AlchemyService:
         result: dict[str, AlchemyRecipe] = {}
         names: set[str] = set()
         medicines: set[str] = set()
+        contract = ContractSet.from_dataset(
+            self._data.dataset("炼丹字段契约"), "炼丹/规则/炼丹字段契约.json"
+        )
         for recipe_id, raw in self._data.entities("丹方").items():
+            contract.validate(raw, "丹方", f"丹方 {recipe_id}")
             name = _text(raw.get("名称"), f"丹方 {recipe_id}.名称")
             method = _text(raw.get("炉法"), f"丹方 {name}.炉法")
             medicine_id = _text(raw.get("成丹"), f"丹方 {name}.成丹")
@@ -703,7 +708,11 @@ class AlchemyService:
 
     def _load_alchemists(self) -> dict[str, Alchemist]:
         result: dict[str, Alchemist] = {}
+        contract = ContractSet.from_dataset(
+            self._data.dataset(WORLD_CONTRACT_DATASET), WORLD_CONTRACT_PATH
+        )
         for alchemist_id, raw in self._data.entities("炼丹师").items():
+            contract.validate(raw, "炼丹师", f"炼丹师 {alchemist_id}")
             location = self._data.entity_record("炼丹师", alchemist_id).directory_owner
             if not location:
                 raise JsonDataError(f"炼丹师 {alchemist_id} 缺少地点目录归属")

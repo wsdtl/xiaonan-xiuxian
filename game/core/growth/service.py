@@ -7,7 +7,7 @@ import random
 import secrets
 from collections.abc import Mapping, Sequence
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import ContractSet, JsonDataError, JsonDataService
 from game.core.pool import EXPAND_DEDUPLICATED, PoolRequest, PoolService
 
 from .contracts import (
@@ -31,7 +31,7 @@ class GrowthService:
         self._initialized = False
         self._cultivator_rule: Mapping[str, object] = {}
         self._realms: dict[str, RealmDefinition] = {}
-        self._conflicts: tuple[frozenset[str], ...] = ()
+        self._conflicts: tuple[tuple[str, tuple[frozenset[str], ...]], ...] = ()
         self._attempt_limit = 0
 
     def initialize(self) -> GrowthStatus:
@@ -43,22 +43,32 @@ class GrowthService:
             raise RuntimeError("资源池微服务必须先于成长核心启动")
         rules = self._data.dataset("角色规则")
         self._cultivator_rule = _mapping(rules.get("修士修炼"), "修士修炼.json")
-        self._realms = {
-            realm_id: RealmDefinition(
+        contract = ContractSet.load(
+            self._data.dataset("角色字段契约").get("角色字段契约"),
+            "角色/规则/角色字段契约.json",
+        )
+        self._realms = {}
+        for realm_id, value in self._data.entities("境界").items():
+            contract.validate(value, "境界", f"境界 {realm_id}")
+            self._realms[realm_id] = RealmDefinition(
                 realm_id,
                 _text(value.get("名称"), f"境界 {realm_id}.名称"),
                 _positive_int(value.get("等级下限"), f"境界 {realm_id}.等级下限"),
                 _positive_int(value.get("等级上限"), f"境界 {realm_id}.等级上限"),
                 str(value.get("下一境界") or "").strip(),
             )
-            for realm_id, value in self._data.entities("境界").items()
-        }
         build_rules = self._data.dataset("构筑规则")
         generation = _mapping(build_rules.get("生成"), "构筑/生成.json")
         self._attempt_limit = _positive_int(generation.get("尝试上限"), "构筑.尝试上限")
         self._conflicts = tuple(
-            frozenset(
-                _strings(_mapping(row, "构筑/相冲.json[]").get("机制"), "相冲.机制")
+            (
+                _text(_mapping(row, "构筑/相冲.json[]").get("名称"), "相冲.名称"),
+                tuple(
+                    frozenset(_strings(side, "相冲.相冲[]"))
+                    for side in _sequence(
+                        _mapping(row, "构筑/相冲.json[]").get("相冲"), "相冲.相冲"
+                    )
+                ),
             )
             for row in _sequence(build_rules.get("相冲"), "构筑/相冲.json")
         )
@@ -216,16 +226,18 @@ class GrowthService:
 
     def build_conflict(
         self, build: Mapping[str, Sequence[str]]
-    ) -> frozenset[str] | None:
+    ) -> str | None:
+        """返回构筑触发的相冲规则名；没有相冲时返回 None。"""
+
         self._require_initialized()
-        mechanism_ids: set[str] = set()
+        selected: set[str] = set()
         for category in _CATEGORIES:
             for content_id in build.get(category, ()):
-                mechanism_ids.update(self._mechanism_ids(category, content_id))
-        return next(
-            (conflict for conflict in self._conflicts if conflict <= mechanism_ids),
-            None,
-        )
+                selected.add(str(content_id))
+        for name, sides in self._conflicts:
+            if all(selected & side for side in sides):
+                return name
+        return None
 
     def redraw_companion_category(
         self,
@@ -297,27 +309,6 @@ class GrowthService:
             current_level >= maximum_level,
         )
 
-    def _mechanism_ids(self, section: str, content_id: str) -> set[str]:
-        value = self._data.entity(section, str(content_id))
-        result: set[str] = set()
-        pending: list[object] = [value]
-        while pending:
-            current = pending.pop()
-            if isinstance(current, Mapping):
-                pending.extend(current.values())
-            elif isinstance(current, Sequence) and not isinstance(
-                current, (str, bytes)
-            ):
-                pending.extend(current)
-            elif isinstance(current, str) and len(current) == 6 and current.isdecimal():
-                try:
-                    record = self._data.entity_record("机制", current)
-                except JsonDataError:
-                    continue
-                if record.entity_id == current:
-                    result.add(current)
-        return result
-
     def _validate_static_rules(self) -> None:
         maximum = _positive_int(self._cultivator_rule.get("等级上限"), "修士等级上限")
         if maximum != 100:
@@ -335,6 +326,33 @@ class GrowthService:
             )
             if len(matches) != 1:
                 raise JsonDataError(f"等级{level}必须唯一归属一个境界")
+        self._validate_conflicts()
+
+    def _validate_conflicts(self) -> None:
+        """相冲规则必须成对、互不重叠，并且只引用构筑类别的真实卡片。"""
+
+        known = {
+            category: set(self._data.entities(category))
+            for category in _CATEGORIES
+        }
+        names: set[str] = set()
+        for name, sides in self._conflicts:
+            if name in names:
+                raise JsonDataError(f"相冲规则名重复：{name}")
+            names.add(name)
+            if len(sides) != 2:
+                raise JsonDataError(f"相冲规则{name}必须声明两组卡片")
+            for side in sides:
+                if not side:
+                    raise JsonDataError(f"相冲规则{name}存在空分组")
+                for content_id in side:
+                    if not any(content_id in known[category] for category in _CATEGORIES):
+                        raise JsonDataError(
+                            f"相冲规则{name}引用未知卡片：{content_id}"
+                        )
+            if sides[0] & sides[1]:
+                overlap = "、".join(sorted(sides[0] & sides[1]))
+                raise JsonDataError(f"相冲规则{name}两组卡片重叠：{overlap}")
 
     def _require_initialized(self) -> None:
         if not self._initialized:

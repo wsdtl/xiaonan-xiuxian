@@ -320,7 +320,7 @@ class DamageEngine:
         resolution: DamageResolution,
         amount: float,
     ) -> DamageResolution:
-        """用伤害前机制裁定后的最终伤害重建资源变化。"""
+        """用伤害前裁定后的最终伤害重建资源变化。"""
 
         limited = max(0.0, min(float(amount), resolution.breakdown.limited))
         shield_damage = (

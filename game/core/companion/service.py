@@ -9,11 +9,12 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from types import MappingProxyType
 
 from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import ContractSet, JsonDataError, JsonDataService
 from game.core.database import DatabaseService, StateAddress, StateMutation
 from game.core.forging import ForgingService
 from game.core.growth import GrowthService
 from game.core.medicine import PreparedBattleMedicine
+from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
 
 from .contracts import (
     ActiveCompanion,
@@ -122,7 +123,11 @@ class CompanionService:
         definitions: dict[str, CompanionDefinition] = {}
         by_name: dict[str, str] = {}
         by_location: dict[str, list[LocalCultivator]] = {}
+        contract = ContractSet.from_dataset(
+            self._data.dataset(WORLD_CONTRACT_DATASET), WORLD_CONTRACT_PATH
+        )
         for companion_id, value in self._data.entities("道侣").items():
+            contract.validate(value, "道侣", f"道侣 {companion_id}")
             definition = self._definition(companion_id, value, realms, grade_ids)
             normalized_name = _normalize(definition.name)
             if normalized_name in by_name:

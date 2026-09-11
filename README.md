@@ -18,7 +18,11 @@ game/startup/               跨命令、跨核心服务的启动契约
 game/config.py              从框架自定义项中解释游戏配置
 game/app.py                 游戏微服务的唯一组合根
 launch/                     Local、QQ、HTTP 与生命周期适配
-launch/adapter/qq/          QQ 自有匹配、队列、去重与回复运行时
+launch/adapter/local/       本地驱动器：天道后台与托管借它派发正式命令
+launch/adapter/qq_wh/      QQ 开放平台回调驱动器（HTTP 路由与验签）
+launch/adapter/qq_ws/      QQ 网关 WebSocket 驱动器（opcode、心跳、重连、关闭码）
+launch/adapter/qq_protocol/ QQ 协议层：命令表、事件解析、去重队列与回复链路
+launch/adapter/websocket.py 与平台无关的 RFC6455 客户端
 message/                    通用消息协议
 static/game-console/        控制台前端
 static/battle-report/       战报前端
@@ -43,10 +47,10 @@ tools/                      游戏外校核、维护脚本与迁移清单
 - Python 只固定读取这一份引导文件，不硬编码功法、气机、道路等业务目录；其他微服务按数据集、实体类别或资源池取得数据。
 - JSON 读取是 `core` 的第一个微服务；后续 `features` 微服务由 `game/app.py` 注入所需核心服务，`cmd` 只触发对应玩法服务。
 - 所有代码级微服务使用包顶层公共契约，禁止跨目录导入内部引擎、运行模型或加载实现；详见 `微服务边界规范.md`。
-- 消息业务统一使用 `user_id`；QQ 的 OpenID 和群聊目标只在 `launch/adapter/qq` 内解释，回复统一通过 `reply_target`，不向业务层泄露传输目标字段。
+- 消息业务统一使用 `user_id`；QQ 的 OpenID 和群聊目标只在 `launch/adapter/qq_protocol` 内解释，回复统一通过 `reply_target`，不向业务层泄露传输目标字段。
 - 校核、评分和平衡只在 `tools/` 中运行，不进入游戏进程、存档、抽取和战斗裁定。
 
-功法、真意、气机是三个独立内容方向。它们可以组合战斗基石，但不共享一套方向名、随机词条或评分数据。评分仅服务游戏外平衡维护。
+功法、真意、气机、器律是四个独立内容方向。它们可以组合战斗基石，但不共享一套方向名、形状或评分数据。评分仅服务游戏外平衡维护。
 
 器律不并入上述三个随机方向。它由两到三件兽宝共同为引、多件灵矿为辅，经铸法锻入本命武器四孔；战斗核心只执行最终装配的器律能力。
 
@@ -79,17 +83,44 @@ bash start.sh
 ```powershell
 .venv/Scripts/python.exe -X utf8 -m pytest -q tests
 .venv/Scripts/python.exe -X utf8 tools/audit_data.py
+.venv/Scripts/python.exe -X utf8 tools/audit_combat_descriptions.py
+.venv/Scripts/python.exe -X utf8 tools/验证契约引擎.py
 .venv/Scripts/python.exe -X utf8 tools/架构审查/检查边界.py
 .venv/Scripts/python.exe -X utf8 tools/架构审查/校验命令目录.py
 .venv/Scripts/python.exe -X utf8 tools/架构审查/校验启动契约.py
+.venv/Scripts/python.exe -X utf8 tools/架构审查/检查构筑形状.py
+.venv/Scripts/python.exe -X utf8 tools/验证控制台媒体.py
+.venv/Scripts/python.exe -X utf8 tools/验证驱动器派发.py
+.venv/Scripts/python.exe -X utf8 tools/验证QQ传输开关.py
+.venv/Scripts/python.exe -X utf8 tools/验证QQ双驱动器生命周期.py
+.venv/Scripts/python.exe -X utf8 tools/验证QQWebSocket.py
+.venv/Scripts/python.exe -X utf8 tools/验证QQWebSocket关闭码.py
 ```
 
 `pytest` 是开发期工具，不在 `requirements.txt` 中，需要单独安装：`.venv/Scripts/python.exe -m pip install pytest`。
 
 `tools/架构审查/` 把 `系统架构.md` 与 `微服务边界规范.md` 已经声明的禁止项变成可执行检查，是维护期手动入口，不进入游戏启动，也不被 `game` 依赖：
 
-- `检查边界.py`：动态导入边界、框架反向依赖、跨服务导入内部实现、硬编码数据目录、第二套 JSON 读取、微服务包必备文件六项；
+- `检查边界.py`：动态导入边界、框架反向依赖、跨服务导入内部实现、硬编码数据目录、第二套 JSON 读取、微服务包必备文件、后台例外边界七项；
 - `校验命令目录.py`：命令所在目录与其 `metadata.scope` 是否一致；
-- `校验启动契约.py`：`game/app.py` 的初始化播报、接收者配对与装配顺序。
+- `校验启动契约.py`：`game/app.py` 的初始化播报、接收者配对与装配顺序；
+- `检查数据驱动.py`：无消费者的数据集/池、字段契约覆盖率与手写校验规模；
+- `检查构筑形状.py`：功法、真意、气机、器律四个方向的形状是否互相越界，以及被动槽位里从未生效的效果。
 
-三项检查都必须为 0 越界。修改 `game/`、`launch/` 或新增微服务包后应先运行它们，再运行测试。
+另有按领域补充的独立验证入口：
+
+- `验证契约引擎.py`：字段契约引擎本身的行为契约（真实数据通过 + 定向破坏必被拒绝），含四类构筑的形状断言；
+
+- `验证控制台媒体.py`：控制台图片物化、落盘与引用清理的行为契约；
+- `验证驱动器派发.py`：QQ webhook、QQ WebSocket 与 Local 三个驱动器在共享派发逻辑上的一致性与截断符契约；
+- `验证QQ传输开关.py`：`QQ_TRANSPORT` 各取值、未配置时的默认值（webhook）、非法值必须报错，以及两个 QQ 驱动器共用同一个回复管理器；
+- `验证QQ双驱动器生命周期.py`：`both` 模式下两种启停顺序，共享运行时都不会被提前拆掉；
+- `验证QQWebSocket.py`：回环假网关上的握手、鉴权、心跳、命令派发、回复载荷与 Resume 全链路；
+- `验证QQWebSocket关闭码.py`：按官方错误码表核对关闭码决策（可 Resume / 必须重新 Identify / 停止重连）；
+- `验证契约引擎.py`：字段契约引擎对合法数据、契约破坏与数据破坏的判定；
+- `验证物品契约.py`：物品契约对丹药数据的实际约束力（基线通过 + 各类破坏被拒）；
+- `验证组件契约.py`：境界、伤势、阵法、先天灵宝契约对实体数据的实际约束力。
+
+全部检查都必须为 0 越界。修改 `game/` 或 `launch/` 后应先运行它们，再运行测试。改动源码后若结果与预期不符，先清除对应目录的 `__pycache__`：陈旧字节码会掩盖源码改动。
+
+字段契约的书写约定见 [data/schema编写规范.md](data/schema编写规范.md)。

@@ -15,7 +15,7 @@ from game.core.asset import (
     InventoryAdjustment,
     InventoryChangeError,
 )
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import ContractSet, JsonDataError, JsonDataService
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -28,6 +28,7 @@ from game.core.innate_treasure import (
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
+from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
 
 from .contracts import (
     ForgingArtisan,
@@ -714,7 +715,11 @@ class ForgingService:
 
     def _load_artisans(self) -> dict[str, ForgingArtisan]:
         result: dict[str, ForgingArtisan] = {}
+        contract = ContractSet.from_dataset(
+            self._data.dataset(WORLD_CONTRACT_DATASET), WORLD_CONTRACT_PATH
+        )
         for artisan_id, raw in self._data.entities("炼器工匠").items():
+            contract.validate(raw, "炼器工匠", f"炼器工匠 {artisan_id}")
             location = self._data.entity_record("炼器工匠", artisan_id).directory_owner
             if not location:
                 raise JsonDataError(f"炼器工匠 {artisan_id} 缺少地点目录归属")

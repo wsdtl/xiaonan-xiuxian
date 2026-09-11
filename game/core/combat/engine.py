@@ -16,7 +16,7 @@ from .contracts import (
     StatusResult,
 )
 from .damage import DamageEngine, DamageRequest
-from .mechanics import MechanismRuntime
+from .mechanics import AbilityRuntime
 from .models import (
     ActionIntent,
     BattleContext,
@@ -32,62 +32,61 @@ from .models import (
 )
 
 
-class BattleEngine(MechanismRuntime):
+class BattleEngine(AbilityRuntime):
     """执行自动战斗；所有内容规则均来自传入的 JSON 目录。"""
 
     def __init__(self, combat_rules: Mapping[str, Any] | None = None) -> None:
         self.catalog = CombatCatalog.from_mapping(combat_rules)
         self.damage = DamageEngine(self.catalog.damage_rules)
-        self._mechanism_handlers: dict[str, Callable[..., bool]] = {
-            "顺序执行": self._mechanism_sequence,
-            "条件执行": self._mechanism_conditional,
-            "随机执行": self._mechanism_random,
-            "遍历目标": self._mechanism_iterate,
-            "重复执行": self._mechanism_repeat,
-            "尝试执行": self._mechanism_attempt,
-            "事务执行": self._mechanism_transaction,
-            "监听事件": self._mechanism_listener,
-            "引用机制": self._mechanism_reference,
-            "造成伤害": self._mechanism_damage,
-            "恢复资源": self._mechanism_recover_resource,
-            "消耗资源": self._mechanism_consume_resource,
-            "支付代价": self._mechanism_pay_cost,
-            "设置资源": self._mechanism_set_resource,
-            "转移资源": self._mechanism_transfer_resource,
-            "添加状态": self._mechanism_add_status,
-            "移除状态": self._mechanism_remove_status,
-            "修改状态层数": self._mechanism_modify_status_stacks,
-            "修改状态持续": self._mechanism_modify_status_duration,
-            "复制状态": self._mechanism_copy_status,
-            "转移状态": self._mechanism_transfer_status,
-            "修改行动条": self._mechanism_modify_action_progress,
-            "修改技能冷却": self._mechanism_modify_cooldown,
-            "修改机制计量": self._mechanism_modify_counter,
-            "追加攻击": self._mechanism_additional_attack,
-            "分摊伤害": self._mechanism_share_damage,
-            "转移伤害": self._mechanism_transfer_damage,
-            "抵挡致命伤害": self._mechanism_fatal_guard,
-            "复活": self._mechanism_revive,
-            "修改事件数值": self._mechanism_modify_event_value,
-            "修改事件目标": self._mechanism_modify_event_target,
-            "修改事件标签": self._mechanism_modify_event_tags,
-            "取消事件": self._mechanism_cancel_event,
-            "触发技能": self._mechanism_trigger_skill,
-            "记录战斗事实": self._mechanism_record_fact,
-            "修改战斗关联": self._mechanism_modify_relation,
-            "修改技能": self._mechanism_modify_skill,
-            "复制技能": self._mechanism_copy_skill,
-            "修改行动意图": self._mechanism_modify_intent,
-            "转化事件": self._mechanism_transform_event,
-            "修改判定": self._mechanism_modify_judgement,
-            "修改战场规则": self._mechanism_modify_battle_rule,
-            "保存结果": self._mechanism_save_result,
-            "切换形态": self._mechanism_switch_form,
-            "创建战斗对象": self._mechanism_create_object,
-            "移除战斗对象": self._mechanism_remove_object,
-            "修改归属": self._mechanism_modify_ownership,
-            "回放效果": self._mechanism_replay_effect,
-            "修改战术": self._mechanism_modify_tactic,
+        self._ability_handlers: dict[str, Callable[..., bool]] = {
+            "顺序执行": self._ability_sequence,
+            "条件执行": self._ability_conditional,
+            "随机执行": self._ability_random,
+            "遍历目标": self._ability_iterate,
+            "重复执行": self._ability_repeat,
+            "尝试执行": self._ability_attempt,
+            "事务执行": self._ability_transaction,
+            "监听事件": self._ability_listener,
+            "造成伤害": self._ability_damage,
+            "恢复资源": self._ability_recover_resource,
+            "消耗资源": self._ability_consume_resource,
+            "支付代价": self._ability_pay_cost,
+            "设置资源": self._ability_set_resource,
+            "转移资源": self._ability_transfer_resource,
+            "添加状态": self._ability_add_status,
+            "移除状态": self._ability_remove_status,
+            "修改状态层数": self._ability_modify_status_stacks,
+            "修改状态持续": self._ability_modify_status_duration,
+            "复制状态": self._ability_copy_status,
+            "转移状态": self._ability_transfer_status,
+            "修改行动条": self._ability_modify_action_progress,
+            "修改技能冷却": self._ability_modify_cooldown,
+            "修改构筑计量": self._ability_modify_counter,
+            "追加攻击": self._ability_additional_attack,
+            "分摊伤害": self._ability_share_damage,
+            "转移伤害": self._ability_transfer_damage,
+            "抵挡致命伤害": self._ability_fatal_guard,
+            "复活": self._ability_revive,
+            "修改事件数值": self._ability_modify_event_value,
+            "修改事件目标": self._ability_modify_event_target,
+            "修改事件标签": self._ability_modify_event_tags,
+            "取消事件": self._ability_cancel_event,
+            "触发技能": self._ability_trigger_skill,
+            "记录战斗事实": self._ability_record_fact,
+            "修改战斗关联": self._ability_modify_relation,
+            "修改技能": self._ability_modify_skill,
+            "复制技能": self._ability_copy_skill,
+            "修改行动意图": self._ability_modify_intent,
+            "转化事件": self._ability_transform_event,
+            "修改判定": self._ability_modify_judgement,
+            "修改战场规则": self._ability_modify_battle_rule,
+            "保存结果": self._ability_save_result,
+            "切换形态": self._ability_switch_form,
+            "创建战斗对象": self._ability_create_object,
+            "移除战斗对象": self._ability_remove_object,
+            "修改归属": self._ability_modify_ownership,
+            "回放效果": self._ability_replay_effect,
+            "修改战术": self._ability_modify_tactic,
         }
         self._condition_handlers = {
             "概率条件": self._condition_probability,
@@ -1074,7 +1073,6 @@ class BattleEngine(MechanismRuntime):
                 element_composition=copy.deepcopy(
                     dict(node.get("属性构成") or instance.get("属性构成") or {"无相": 100})
                 ),
-                term_table=copy.deepcopy(dict(instance.get("词条") or {})),
             )
         )
 
@@ -1087,7 +1085,7 @@ class BattleEngine(MechanismRuntime):
         for effect_index, raw in enumerate(node.get("效果") or ()):
             passives.append(
                 {
-                    "机制": f"{source_name}:{index}:{effect_index}",
+                    "监听键": f"{source_name}:{index}:{effect_index}",
                     "来源能力": str(node.get("名称") or source_name),
                     "结算顺序": int(node.get("结算顺序", 1)),
                     "装配位序": born_order,
@@ -1123,7 +1121,7 @@ class BattleEngine(MechanismRuntime):
         ).items():
             amount = actor.value(str(attribute), 0)
             if amount > 0:
-                self._mechanism_recover_resource(
+                self._ability_recover_resource(
                     context,
                     actor,
                     actor,
@@ -1235,7 +1233,7 @@ class BattleEngine(MechanismRuntime):
         target = frame.target
         snapshot = self._transaction_snapshot(context)
         if not ignore_cost:
-            if spirit_cost > 0 and not self._mechanism_consume_resource(
+            if spirit_cost > 0 and not self._ability_consume_resource(
                 context,
                 actor,
                 actor,
@@ -1271,11 +1269,9 @@ class BattleEngine(MechanismRuntime):
         previous_composition = context.current_element_composition
         previous_ability = context.current_ability
         previous_instance = context.current_build_instance
-        previous_terms = context.current_term_table
         context.current_ability = skill.name
         context.current_build_instance = skill.build_instance
         context.current_element_composition = dict(skill.element_composition)
-        context.current_term_table = dict(skill.term_table)
         success = True
         try:
             for node in skill.effects:
@@ -1294,7 +1290,6 @@ class BattleEngine(MechanismRuntime):
             context.current_ability = previous_ability
             context.current_build_instance = previous_instance
             context.current_element_composition = previous_composition
-            context.current_term_table = previous_terms
         if not success and skill.rollback_on_failure:
             self._restore_transaction(context, snapshot)
             self._dispatch_event(
@@ -1417,7 +1412,7 @@ class BattleEngine(MechanismRuntime):
         if can_lifesteal and resolution.health_damage > 0 and source.alive:
             rate = self._percent(source, "吸血率")
             if rate > 0:
-                self._mechanism_recover_resource(
+                self._ability_recover_resource(
                     context,
                     source,
                     source,
@@ -1787,7 +1782,7 @@ class BattleEngine(MechanismRuntime):
             fighter.inventory[item_id] -= 1
             fighter.consumed_items[item_id] = fighter.consumed_items.get(item_id, 0) + 1
             before, _ = self._resource_values(fighter, resource)
-            self._mechanism_recover_resource(
+            self._ability_recover_resource(
                 context,
                 fighter,
                 fighter,

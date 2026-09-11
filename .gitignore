@@ -17,3 +17,10 @@ data/*.db-wal
 data/backups/*.db
 立绘/*
 certs/*
+
+# 审查工具与一次性迁移脚本的临时产物（`_词条改名.txt`、语料摘要等）
+/_*.txt
+/_*.json
+/_*.named
+/_*.sem
+/_*.md

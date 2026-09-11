@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
-import mimetypes
 import time
 from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
-from game.config import game_config
 from launch import C, config, logger
 from launch.adapter import dispatch_local_message
 from launch.message_events import (
@@ -24,10 +20,10 @@ from launch.message_events import (
     emit_message_event,
     event_from_outgoing,
 )
-from launch.paths import STATIC_DIR, static_url
 from message import Action, M
 
 from .auth import ConsoleAuthService
+from .media import ConsoleMediaStore
 from .models import ConsoleFlowRecord
 from .storage import MessageFlowStore
 
@@ -38,7 +34,6 @@ MAX_COMMAND_LENGTH = 4000
 MEMORY_RECORD_LIMIT = 300
 EVENT_QUEUE_LIMIT = 5000
 SUBSCRIBER_QUEUE_LIMIT = 500
-MEDIA_MAX_BYTES = 10 * 1024 * 1024
 MAX_ROWS = 1_000
 RETENTION_SECONDS = 2 * 60 * 60
 MAX_CONTENT_BYTES = 256 * 1024
@@ -77,6 +72,7 @@ class MessageConsoleService:
         self.storage = storage
         self.auth = ConsoleAuthService()
         self.media_dir = Path(media_dir)
+        self.media = ConsoleMediaStore(self.media_dir)
         self._event_queue: asyncio.Queue[MessageEvent | None] = asyncio.Queue(
             EVENT_QUEUE_LIMIT
         )
@@ -96,7 +92,7 @@ class MessageConsoleService:
             _record_from_row(row)
             for row in self.storage.recent(limit=MEMORY_RECORD_LIMIT)
         )
-        self._cleanup_media()
+        self.media.cleanup(set(self.storage.referenced_images()))
         self._worker = asyncio.create_task(
             self._run(), name="heavenly-dao-message-writer"
         )
@@ -247,7 +243,7 @@ class MessageConsoleService:
 
     def _record(self, event: MessageEvent) -> ConsoleFlowRecord:
         now_value = datetime.now(ZoneInfo(config.project.timezone))
-        image = self._materialize_image(event.image)
+        image = self.media.materialize(event.image)
         content, truncated = _bounded_text(event.content, MAX_CONTENT_BYTES)
         sender_name = event.sender_name.strip()
         if not sender_name:
@@ -294,74 +290,13 @@ class MessageConsoleService:
 
         self.storage.initialize()
         self.storage.cleanup(now_timestamp=time.time(), max_rows=MAX_ROWS)
-        self._cleanup_media()
+        self.media.cleanup(set(self.storage.referenced_images()))
 
     async def _publish(self, record: ConsoleFlowRecord) -> None:
         async with self._subscriber_lock:
             subscribers = tuple(self._subscribers)
         for queue in subscribers:
             _replace_queue_tail(queue, record)
-
-    def _materialize_image(self, image: object) -> str:
-        if image is None:
-            return ""
-        if isinstance(image, Path):
-            return self._path_image(image)
-        if isinstance(image, str):
-            text = image.strip()
-            if not text or text == "〔图片〕":
-                return text
-            if text.startswith(("http://", "https://", "/")):
-                return text
-            path = Path(text)
-            return self._path_image(path) if path.is_file() else "〔图片〕"
-        if isinstance(image, BytesIO):
-            return self._bytes_image(image.getvalue())
-        if isinstance(image, (bytes, bytearray, memoryview)):
-            return self._bytes_image(bytes(image))
-        return "〔图片〕"
-
-    def _path_image(self, path: Path) -> str:
-        try:
-            resolved = path.resolve()
-            relative = resolved.relative_to(STATIC_DIR.resolve())
-            return static_url(*relative.parts)
-        except (OSError, ValueError):
-            pass
-        try:
-            return self._bytes_image(path.read_bytes(), suffix=path.suffix)
-        except OSError:
-            return "〔图片〕"
-
-    def _bytes_image(self, value: bytes, *, suffix: str = "") -> str:
-        if not value or len(value) > MEDIA_MAX_BYTES:
-            return "〔图片内容为空或超过 10 MiB〕"
-        extension = (
-            suffix.lower()
-            if suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-            else _image_suffix(value)
-        )
-        digest = hashlib.sha256(value).hexdigest()
-        filename = f"{digest}{extension}"
-        path = self.media_dir / filename
-        if not path.exists():
-            path.write_bytes(value)
-        return f"/game-console/media/{filename}"
-
-    def _cleanup_media(self) -> None:
-        references = {
-            Path(value).name
-            for value in self.storage.referenced_images()
-            if value.startswith("/game-console/media/")
-        }
-        if not self.media_dir.exists():
-            return
-        for path in self.media_dir.iterdir():
-            if path.is_file() and path.name not in references:
-                try:
-                    path.unlink()
-                except OSError:
-                    continue
 
     @staticmethod
     def _assert_interaction_permission(interaction: MessageInteraction) -> None:
@@ -385,26 +320,22 @@ def _replace_queue_tail(queue: asyncio.Queue, value: Any) -> None:
     queue.put_nowait(value)
 
 
-def _image_suffix(value: bytes) -> str:
-    signatures = (
-        (b"\x89PNG\r\n\x1a\n", ".png"),
-        (b"\xff\xd8\xff", ".jpg"),
-        (b"GIF87a", ".gif"),
-        (b"GIF89a", ".gif"),
-        (b"RIFF", ".webp"),
-    )
-    for signature, suffix in signatures:
-        if value.startswith(signature):
-            return suffix
-    guessed = mimetypes.guess_extension("application/octet-stream")
-    return guessed or ".bin"
+def _runtime_log_database_path() -> Path:
+    """解析消息流水库路径。
+
+    维护者入口自己解释框架自定义项，不经过 `game/config.py`：游戏配置只登记
+    游戏自身拥有的事实库，消息观察库不进入游戏配置面。相对路径按项目根解析。
+    """
+
+    raw = (config.custom.get("RUNTIME_LOG_DATABASE_PATH", "") or "").strip()
+    path = Path(raw or "database/runtime_log.db").expanduser()
+    return path if path.is_absolute() else config.base_dir / path
 
 
 service = MessageConsoleService(
     MessageFlowStore(
-        game_config.database.runtime_log_path,
+        _runtime_log_database_path(),
         retention_seconds=RETENTION_SECONDS,
-        busy_timeout_ms=game_config.database.busy_timeout_ms,
     ),
     media_dir=config.base_dir / ".runtime" / "runtime_log_media",
 )

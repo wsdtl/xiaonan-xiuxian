@@ -68,19 +68,32 @@ def test_legacy_compatibility_names_are_absent() -> None:
     assert all("兼容名" not in path.read_text(encoding="utf-8") for path in json_files)
 
 
-def test_term_binding_uses_explicit_slots() -> None:
-    from game.core.combat.build_terms import bind_term_slots
+def test_builds_carry_their_own_combat_text() -> None:
+    """构筑必须自带完整能力树：不许按编号回查中间层，也不留词条表。"""
 
-    bound = bind_term_slots(
-        {
-            "词条": {
-                "计量": {"正式槽位": {"名称": "正式名称", "上限": 9}},
-                "状态": {},
-                "规则": {},
-                "判定": {},
-            },
-            "节点": {"能力": "修改机制计量", "计量槽位": "正式槽位"},
-        }
+    patterns = (
+        "战斗/内容/功法/功法-*.json",
+        "战斗/内容/真意/真意-*.json",
+        "战斗/内容/气机/气机-*.json",
+        "炼器/内容/器律-*.json",
     )
-    assert bound["节点"]["计量"] == "正式槽位"
-    assert bound["节点"]["最高值"] == 9
+    files = [path for pattern in patterns for path in DATA_ROOT.glob(pattern)]
+    assert files
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        assert "引用战斗机制" not in text, path
+        assert "引用被动机制" not in text, path
+        assert '"词条"' not in text, path
+
+
+def test_four_build_contracts_are_satisfied() -> None:
+    """功法、真意、气机、器律各按自己的形状通过启动契约。"""
+
+    from game.core.combat.builds import validate_builds
+    from game.core.data import JsonDataService
+
+    service = JsonDataService(DATA_ROOT)
+    service.initialize()
+    counts = validate_builds(service)
+    assert set(counts) == {"功法", "真意", "气机", "器律"}
+    assert all(value > 0 for value in counts.values())

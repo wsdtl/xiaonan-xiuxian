@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 from game.core.combat import BattleEvent, CombatantResult, CombatStatusSpec
-from game.core.data import JsonDataError, JsonDataService, materialize
+from game.core.data import ContractSet, JsonDataError, JsonDataService, materialize
 from game.core.database import DatabaseService, StateAddress, StateMutation
 
 from .contracts import (
@@ -83,10 +83,14 @@ class InjuryService:
         ):
             raise JsonDataError("长期伤势只能通过闭关完整轮次治疗")
 
-        definitions = {
-            injury_id: self._definition(injury_id, value)
-            for injury_id, value in self._data.entities("伤势").items()
-        }
+        contract = ContractSet.load(
+            self._data.dataset("角色字段契约").get("角色字段契约"),
+            "角色/规则/角色字段契约.json",
+        )
+        definitions = {}
+        for injury_id, value in self._data.entities("伤势").items():
+            contract.validate(value, "伤势", f"伤势 {injury_id}")
+            definitions[injury_id] = self._definition(injury_id, value)
         external_values = tuple(
             sorted(
                 (
@@ -230,7 +234,9 @@ class InjuryService:
                         ).items()
                     ),
                     tags=tuple(_texts(raw.get("标签", ()), "战斗状态.标签")),
-                    mechanism_ids=tuple(_texts(raw.get("机制", ()), "战斗状态.机制")),
+                    listeners=tuple(
+                        _mappings(raw.get("监听", ()), "战斗状态.监听")
+                    ),
                     source=entry.injury_id,
                     source_name=definition.name,
                     metadata=(("伤势编号", entry.injury_id),),
@@ -583,6 +589,12 @@ def _sequence(value: object, path: str) -> tuple[object, ...]:
 
 def _texts(value: object, path: str) -> tuple[str, ...]:
     return tuple(_text(item, f"{path}[]") for item in _sequence(value, path))
+
+
+def _mappings(value: object, path: str) -> tuple[Mapping[str, object], ...]:
+    return tuple(
+        _mapping(item, f"{path}[]") for item in _sequence(value, path)
+    )
 
 
 def _text(value: object, path: str) -> str:

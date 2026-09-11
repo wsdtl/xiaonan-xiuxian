@@ -23,7 +23,6 @@ from .contracts import BattleEvent, CombatMedicineSpec
 @dataclass(frozen=True)
 class CombatCatalog:
     attributes: Mapping[str, Mapping[str, Any]]
-    mechanisms: Mapping[str, Mapping[str, Any]]
     abilities: Mapping[str, Mapping[str, Any]]
     events: Mapping[str, Mapping[str, Any]]
     resources: Mapping[str, Mapping[str, Any]]
@@ -45,7 +44,6 @@ class CombatCatalog:
         events = {str(key): dict(definition) for key, definition in raw_events.items()}
         return cls(
             attributes=dict(source.get("属性") or {}),
-            mechanisms=dict(source.get("机制") or {}),
             abilities=dict(source.get("原子能力") or {}),
             events=events,
             resources=dict(source.get("资源") or {}),
@@ -58,12 +56,6 @@ class CombatCatalog:
             five_elements=dict(source.get("五行") or {}),
             formation_rules=source["阵法规则"],
         )
-
-    def require_mechanism(self, key: str) -> Mapping[str, Any]:
-        try:
-            return self.mechanisms[str(key)]
-        except KeyError as exc:
-            raise ValueError(f"战斗核心未登记机制：{key}") from exc
 
     def require_event(self, key: str) -> Mapping[str, Any]:
         try:
@@ -83,9 +75,6 @@ class CombatCatalog:
             category=str(definition.get("类别") or ""),
             values=value,
         )
-
-    def require_node(self, key: str) -> RuleNode:
-        return self.parse_node(self.require_mechanism(key))
 
 
 @dataclass(frozen=True)
@@ -194,8 +183,6 @@ class Skill:
     element_composition: Mapping[str, float] = dataclass_field(
         default_factory=lambda: {"无相": 100}
     )
-    # 构筑词条表只随运行期技能传递，不进入公共战斗目录。
-    term_table: Mapping[str, Any] = dataclass_field(default_factory=dict)
 
     def clone(self, *, key: str, name: str | None = None) -> Skill:
         value = copy.deepcopy(self)
@@ -455,16 +442,15 @@ class BattleContext:
     trigger_counts: dict[tuple[str, str], int] = dataclass_field(default_factory=dict)
     battle_trigger_counts: dict[tuple[str, str], int] = dataclass_field(default_factory=dict)
     event_depth: int = 0
-    mechanism_depth: int = 0
+    ability_depth: int = 0
     triggered_skill_depth: int = 0
     action_progress: dict[str, float] = dataclass_field(default_factory=dict)
-    mechanism_counters: dict[tuple[str, str, str], float] = dataclass_field(default_factory=dict)
+    ability_counters: dict[tuple[str, str, str], float] = dataclass_field(default_factory=dict)
     current_ability: str = ""
     current_build_instance: str = ""
     current_element_composition: dict[str, float] = dataclass_field(
         default_factory=lambda: {"无相": 100}
     )
-    current_term_table: Mapping[str, Any] = dataclass_field(default_factory=dict)
     trigger_stack: set[tuple[str, str]] = dataclass_field(default_factory=set)
     event_stack: list[EventFrame] = dataclass_field(default_factory=list)
     records: dict[tuple[str, str], list[Any]] = dataclass_field(default_factory=dict)

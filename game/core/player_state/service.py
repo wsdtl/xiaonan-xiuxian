@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
 
-from game.core.data import JsonDataService, materialize
+from game.core.data import ContractSet, JsonDataService, materialize
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -74,6 +74,14 @@ class PlayerStateService:
             )
             for state_type, file_name in STATE_FILES.items()
         }
+        contract = ContractSet.from_dataset(
+            self._data.dataset("角色字段契约"), "角色/规则/角色字段契约.json"
+        )
+        for state_type, entries in states.items():
+            for state_id, rule in entries.items():
+                contract.validate(
+                    rule, "人物状态", f"人物状态 {state_type}.{state_id}"
+                )
         initial_states = _mapping(documents.get("初始状态"), "初始状态.json")
         guard_rules = _index_guard_rules(documents.get("状态守卫"))
         self._validate_definition(states, initial_states, guard_rules)

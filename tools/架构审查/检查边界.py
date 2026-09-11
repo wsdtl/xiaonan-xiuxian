@@ -284,7 +284,11 @@ def check_console_boundary() -> list[Finding]:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source)
         for line, module in _imports(tree):
-            if module.startswith(("game.core", "game.features", "game.startup")):
+            # 维护者入口不读游戏规则、玩家资产、战斗事实，也不使用游戏配置：
+            # 消息观察库路径由控制台自己从框架自定义项解析。
+            if module == "game.config" or module.startswith(
+                ("game.core", "game.features", "game.startup")
+            ):
                 findings.append(
                     Finding(
                         "后台越界读取游戏",

@@ -19,8 +19,13 @@ class CustomConfigSource(Protocol):
 
 @dataclass(frozen=True)
 class GameDatabaseConfig:
+    """游戏资产库配置。
+
+    只包含游戏自身拥有的事实库。维护者入口（`game/cmd/后台`）的消息观察使用
+    独立库，其路径由后台组件直接从框架自定义项读取，不进入游戏配置。
+    """
+
     path: Path
-    runtime_log_path: Path
     busy_timeout_ms: int
 
 
@@ -34,11 +39,6 @@ def load_game_config(source: CustomConfigSource = framework_config) -> GameConfi
 
     database = GameDatabaseConfig(
         path=_custom_path(source, "DATABASE_PATH", "database/game.db"),
-        runtime_log_path=_custom_path(
-            source,
-            "RUNTIME_LOG_DATABASE_PATH",
-            "database/runtime_log.db",
-        ),
         busy_timeout_ms=_positive_int(source, "DATABASE_BUSY_TIMEOUT_MS", 5000),
     )
     return GameConfig(database=database)

@@ -40,12 +40,16 @@ from .contracts import (
     StatusResult as StatusResult,
 )
 from .elements import generate_five_elements as generate_five_elements
-from .build_terms import bind_term_slots as bind_term_slots
-from .build_terms import resolve_term as resolve_build_term
+from .builds import BUILD_SECTIONS as BUILD_SECTIONS
+from .builds import BuildContractError as BuildContractError
+from .builds import load_build_contracts as load_build_contracts
+from .builds import validate_builds as validate_builds
 from .service import CombatService as CombatService
 
 __all__ = [
+    "BUILD_SECTIONS",
     "BattleEvent",
+    "BuildContractError",
     "CombatBuildRef",
     "CombatFieldResult",
     "CombatFieldSpec",
@@ -64,6 +68,6 @@ __all__ = [
     "CombatantSpec",
     "StatusResult",
     "generate_five_elements",
-    "bind_term_slots",
-    "resolve_build_term",
+    "load_build_contracts",
+    "validate_builds",
 ]

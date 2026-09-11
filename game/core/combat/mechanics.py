@@ -1,4 +1,4 @@
-"""由原子能力 JSON 驱动的通用战斗机制执行器。"""
+"""由原子能力 JSON 驱动的通用战斗执行器。"""
 
 from __future__ import annotations
 
@@ -8,39 +8,16 @@ from collections.abc import Mapping
 from typing import Any
 
 from .contracts import BattleEvent
-from .build_terms import bind_term_slots
 from .models import CombatObject, EventFrame, Fighter, Skill, StatusState
 
 
-class MechanismRuntime:
+class AbilityRuntime:
     """只实现组合语义，不决定具体功法内容。"""
 
     MAX_EVENT_DEPTH = 32
-    MAX_MECHANISM_DEPTH = 64
+    MAX_ABILITY_DEPTH = 64
     MAX_REPEAT = 100
     MAX_TRIGGERED_SKILLS = 8
-
-    def _execute_mechanism_reference(
-        self, context, source, target, mechanism_id: str, multiplier: float = 1.0, **kwargs
-    ) -> bool:
-        # 编号只定位无名执行节点；事件归属保留外层构筑能力。
-        node = dict(self.catalog.require_mechanism(mechanism_id))
-        if context.current_term_table:
-            node = bind_term_slots(
-                {
-                    "词条": context.current_term_table,
-                    "机制参数": kwargs.get("mechanism_parameters", {}),
-                    "节点": node,
-                }
-            )["节点"]
-        return self._execute_mechanism(
-            context,
-            source,
-            target,
-            node,
-            multiplier,
-            **kwargs,
-        )
 
     def _execute_mechanism(
         self,
@@ -54,8 +31,8 @@ class MechanismRuntime:
         event_values: Mapping[str, Any] | None = None,
         tags: tuple[str, ...] = (),
     ) -> bool:
-        depth_limit = int(self.catalog.action_rules.get("能力链深度上限", self.MAX_MECHANISM_DEPTH))
-        if context.mechanism_depth >= depth_limit:
+        depth_limit = int(self.catalog.action_rules.get("能力链深度上限", self.MAX_ABILITY_DEPTH))
+        if context.ability_depth >= depth_limit:
             raise RuntimeError("战斗能力链超过安全深度")
         node = self.catalog.parse_node(effect)
         effective = dict(effect)
@@ -65,12 +42,12 @@ class MechanismRuntime:
             and context.current_element_composition
         ):
             effective["属性构成"] = dict(context.current_element_composition)
-        handler = self._mechanism_handlers.get(node.executor)
+        handler = self._ability_handlers.get(node.executor)
         if handler is None:
             raise ValueError(f"战斗核心未实现执行器：{node.executor or '<空>'}")
         before_events = len(context.events)
         previous_result = context.last_result
-        context.mechanism_depth += 1
+        context.ability_depth += 1
         try:
             result = handler(
                 context,
@@ -83,7 +60,7 @@ class MechanismRuntime:
                 tags=tuple(tags),
             )
         finally:
-            context.mechanism_depth -= 1
+            context.ability_depth -= 1
         success = True if result is None else bool(result)
         details = context.last_result if context.last_result is not previous_result else {}
         context.last_result = {
@@ -114,12 +91,12 @@ class MechanismRuntime:
                 return False
         return True
 
-    def _mechanism_sequence(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_sequence(self, context, source, target, effect, multiplier, **kwargs):
         return self._run_effects(
             context, source, target, effect.get("效果"), multiplier, **kwargs
         )
 
-    def _mechanism_conditional(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_conditional(self, context, source, target, effect, multiplier, **kwargs):
         allowed = self._conditions_allow(
             context,
             source,
@@ -132,7 +109,7 @@ class MechanismRuntime:
         branch = effect.get("成立效果" if allowed else "不成立效果") or ()
         return self._run_effects(context, source, target, branch, multiplier, **kwargs)
 
-    def _mechanism_random(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_random(self, context, source, target, effect, multiplier, **kwargs):
         options = list(effect.get("选项") or ())
         count = min(len(options) if not effect.get("是否放回") else self.MAX_REPEAT, max(0, int(effect.get("抽取数量", 1))))
         if not options or count <= 0:
@@ -144,7 +121,7 @@ class MechanismRuntime:
         )
         return self._run_effects(context, source, target, chosen, multiplier, **kwargs)
 
-    def _mechanism_iterate(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_iterate(self, context, source, target, effect, multiplier, **kwargs):
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
             return False
@@ -155,7 +132,7 @@ class MechanismRuntime:
             ) and ok
         return ok
 
-    def _mechanism_repeat(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_repeat(self, context, source, target, effect, multiplier, **kwargs):
         count = int(
             self._resolve_value(
                 context,
@@ -177,7 +154,7 @@ class MechanismRuntime:
                 return False
         return True
 
-    def _mechanism_attempt(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_attempt(self, context, source, target, effect, multiplier, **kwargs):
         success = self._run_effects(
             context, source, target, effect.get("尝试效果"), multiplier, **kwargs
         )
@@ -185,7 +162,7 @@ class MechanismRuntime:
         self._run_effects(context, source, target, branch, multiplier, **kwargs)
         return success
 
-    def _mechanism_transaction(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transaction(self, context, source, target, effect, multiplier, **kwargs):
         snapshot = self._transaction_snapshot(context)
         if self._run_effects(
             context, source, target, effect.get("效果"), multiplier, **kwargs
@@ -211,7 +188,7 @@ class MechanismRuntime:
             "objects": copy.deepcopy(context.combat_objects),
             "rules": copy.deepcopy(context.battle_rules),
             "progress": copy.deepcopy(context.action_progress),
-            "counters": copy.deepcopy(context.mechanism_counters),
+            "counters": copy.deepcopy(context.ability_counters),
             "saved": copy.deepcopy(context.saved_results),
             "event_count": len(context.events),
             "history_count": len(context.effect_history),
@@ -222,7 +199,6 @@ class MechanismRuntime:
             "action_intent": copy.deepcopy(context.action_intent),
             "last_result": copy.deepcopy(context.last_result),
             "triggered_skill_depth": context.triggered_skill_depth,
-            "term_table": copy.deepcopy(context.current_term_table),
             "frames": [
                 {
                     "frame": frame,
@@ -258,7 +234,7 @@ class MechanismRuntime:
         context.battle_rules = copy.deepcopy(snapshot["rules"])
         context.mark_listener_index_dirty()
         context.action_progress = copy.deepcopy(snapshot["progress"])
-        context.mechanism_counters = copy.deepcopy(snapshot["counters"])
+        context.ability_counters = copy.deepcopy(snapshot["counters"])
         context.saved_results = copy.deepcopy(snapshot["saved"])
         del context.events[snapshot["event_count"]:]
         del context.effect_history[snapshot["history_count"]:]
@@ -269,7 +245,6 @@ class MechanismRuntime:
         context.action_intent = copy.deepcopy(snapshot["action_intent"])
         context.last_result = copy.deepcopy(snapshot["last_result"])
         context.triggered_skill_depth = snapshot["triggered_skill_depth"]
-        context.current_term_table = copy.deepcopy(snapshot["term_table"])
         context.summon_serial = snapshot["summon_serial"]
         for saved in snapshot["frames"]:
             frame = saved["frame"]
@@ -279,7 +254,7 @@ class MechanismRuntime:
             frame.tags = set(saved["tags"])
 
     @staticmethod
-    def _mechanism_listener(*_args, **_kwargs):
+    def _ability_listener(*_args, **_kwargs):
         return True
 
     def _compiled_listeners(self, context):
@@ -309,7 +284,6 @@ class MechanismRuntime:
             source_category: str = "功法",
             build_instance: str = "",
             element_composition: Mapping[str, float] | None = None,
-            term_table: Mapping[str, Any] | None = None,
         ) -> None:
             event_name = str(node.get("事件") or "")
             if not event_name:
@@ -338,7 +312,6 @@ class MechanismRuntime:
                     str(build_instance),
                     node,
                     dict(element_composition or {"无相": 100}),
-                    dict(term_table or {}),
                 )
             )
 
@@ -358,22 +331,13 @@ class MechanismRuntime:
                         source_category=str(passive.get("来源类别") or "功法"),
                         build_instance=str(passive.get("构筑实例") or ""),
                         element_composition=passive.get("属性构成"),
-                        term_table=passive.get("词条"),
                     )
             for status in owner.statuses:
-                mechanism_ids = tuple(
-                    str(value) for value in status.values.get("战斗机制", ())
-                )
                 item_id = str(status.values.get("战丹编号") or status.name)
                 for index, node in enumerate(status.listeners):
-                    listener_id = (
-                        mechanism_ids[index]
-                        if index < len(mechanism_ids)
-                        else f"{status.name}:{index}"
-                    )
                     add_listener(
                         owner,
-                        listener_id,
+                        f"{status.name}:{index}",
                         node,
                         source_ability=status.source_ability or status.name,
                         item_id=item_id,
@@ -419,7 +383,6 @@ class MechanismRuntime:
                     item_id=f"战场:{index}",
                     ability_order=listener_index,
                     source_category="战场规则",
-                    term_table=rule.get("构筑词条"),
                 )
 
         context.listener_index = {
@@ -435,19 +398,6 @@ class MechanismRuntime:
             if str(entry.get("来源") or "") == str(source):
                 return int(entry["序位"])
         raise ValueError(f"战斗时序未登记来源层级：{source}")
-
-    def _mechanism_reference(self, context, source, target, effect, multiplier, **kwargs):
-        raw_mechanism = effect.get("机制")
-        if isinstance(raw_mechanism, Mapping):
-            mechanism_id = str(raw_mechanism.get("编号") or "").strip()
-            parameters = raw_mechanism.get("参数")
-            if isinstance(parameters, Mapping):
-                kwargs["mechanism_parameters"] = dict(parameters)
-        else:
-            mechanism_id = str(raw_mechanism or "")
-        return self._execute_mechanism_reference(
-            context, source, target, mechanism_id, multiplier, **kwargs
-        )
 
     def _dispatch_event(self, context, *, kind, source, target, amount=0.0, values=None, tags=(), record=True):
         depth_limit = int(self.catalog.action_rules.get("事件链深度上限", self.MAX_EVENT_DEPTH))
@@ -466,7 +416,7 @@ class MechanismRuntime:
         context.event_depth += 1
         try:
             listeners = self._compiled_listeners(context).get(kind, ())
-            for _, owner, activation_id, source_ability, build_instance, node, composition, term_table in listeners:
+            for _, owner, activation_id, source_ability, build_instance, node, composition in listeners:
                 if not self._listener_relation_matches(context, owner, frame, node):
                     continue
                 if not self._conditions_allow(
@@ -488,11 +438,9 @@ class MechanismRuntime:
                 previous = context.current_ability
                 previous_composition = context.current_element_composition
                 previous_instance = context.current_build_instance
-                previous_terms = context.current_term_table
                 context.current_ability = source_ability
                 context.current_build_instance = build_instance
                 context.current_element_composition = dict(composition)
-                context.current_term_table = dict(term_table)
                 try:
                     self._run_effects(
                         context,
@@ -508,7 +456,6 @@ class MechanismRuntime:
                     context.current_ability = previous
                     context.current_build_instance = previous_instance
                     context.current_element_composition = previous_composition
-                    context.current_term_table = previous_terms
                     context.trigger_stack.discard(activation)
             if frame.transformed_kind:
                 frame.facts["原事件"] = frame.kind
@@ -552,53 +499,20 @@ class MechanismRuntime:
             context.event_stack.pop()
 
     @staticmethod
-    def _passive_node(passive: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
+    def _passive_listener_nodes(
+        passive: Mapping[str, Any]
+    ) -> tuple[tuple[str, dict[str, Any]], ...]:
+        """只登记监听节点；被动槽位里的非监听效果不参与事件索引。
+
+        `tools/架构审查/检查构筑形状.py` 会把这类效果列出来，它们从未生效过。
+        """
+
         raw = passive.get("节点")
         if not isinstance(raw, Mapping):
             raise TypeError("被动技能缺少监听节点")
-        return str(passive.get("机制") or "内联被动"), dict(raw)
-
-    def _passive_listener_nodes(
-        self, passive: Mapping[str, Any]
-    ) -> tuple[tuple[str, dict[str, Any]], ...]:
-        """展开被动技能中的机制引用，只把最终监听节点登记到事件索引。"""
-
-        mechanism_id, node = self._passive_node(passive)
-        term_table = passive.get("词条")
-        result: list[tuple[str, dict[str, Any]]] = []
-        pending: list[tuple[str, dict[str, Any], tuple[str, ...], Mapping[str, Any]]] = [
-            (mechanism_id, node, (), {})
-        ]
-        while pending:
-            current_id, current, stack, parameters = pending.pop()
-            if term_table:
-                current = bind_term_slots(
-                    {"词条": term_table, "机制参数": parameters, "节点": current}
-                )["节点"]
-            executor = self.catalog.parse_node(current).executor
-            if executor == "监听事件":
-                result.append((current_id, current))
-                continue
-            if executor != "引用机制":
-                continue
-            raw_reference = current.get("机制")
-            if isinstance(raw_reference, Mapping):
-                referenced_id = str(raw_reference.get("编号") or "").strip()
-                next_parameters = raw_reference.get("参数")
-                if not isinstance(next_parameters, Mapping):
-                    next_parameters = parameters
-            else:
-                referenced_id = str(raw_reference or "").strip()
-                next_parameters = parameters
-            if not referenced_id:
-                raise ValueError("被动机制引用缺少机制编号")
-            if referenced_id in stack:
-                chain = " -> ".join((*stack, referenced_id))
-                raise ValueError(f"被动机制引用形成循环：{chain}")
-            referenced = dict(self.catalog.require_mechanism(referenced_id))
-            referenced["机制参数"] = dict(next_parameters)
-            pending.append((referenced_id, referenced, (*stack, referenced_id), next_parameters))
-        return tuple(result)
+        if str(raw.get("能力") or "") != "监听事件":
+            return ()
+        return ((str(passive.get("监听键") or "内联被动"), dict(raw)),)
 
     def _listener_relation_matches(self, context, owner, frame, node) -> bool:
         role = str(node.get("观察角色") or "来源")
@@ -714,7 +628,7 @@ class MechanismRuntime:
             "小于等于": left <= right,
         }.get(relation, False)
 
-    def _mechanism_damage(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_damage(self, context, source, target, effect, multiplier, **kwargs):
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
             return False
@@ -743,7 +657,7 @@ class MechanismRuntime:
             context.last_result = {**context.last_result, **resolution.values()}
         return success
 
-    def _mechanism_recover_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_recover_resource(self, context, source, target, effect, multiplier, **kwargs):
         requested_resource = str(effect.get("资源") or "血气")
         changed = False
         attempted = False
@@ -855,7 +769,7 @@ class MechanismRuntime:
                 continue
             ally.team_synergy[element] = 1
 
-    def _mechanism_consume_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_consume_resource(self, context, source, target, effect, multiplier, **kwargs):
         resource = str(effect.get("资源") or "精神")
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
@@ -874,24 +788,24 @@ class MechanismRuntime:
             changed = changed or applied > 0
         return changed
 
-    def _mechanism_pay_cost(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_pay_cost(self, context, source, target, effect, multiplier, **kwargs):
         kind = str(effect.get("代价类型") or "资源")
         if kind == "资源":
-            return self._mechanism_consume_resource(context, source, target, effect, multiplier, **kwargs)
+            return self._ability_consume_resource(context, source, target, effect, multiplier, **kwargs)
         if kind == "状态层数":
             value = {**effect, "层数": effect.get("数值", 1), "不足时是否失败": True}
-            return self._mechanism_modify_status_stacks(context, source, target, value, multiplier, consume=True)
+            return self._ability_modify_status_stacks(context, source, target, value, multiplier, consume=True)
         if kind == "行动条":
             value = {**effect, "方式": "减少"}
-            return self._mechanism_modify_action_progress(context, source, target, value, multiplier, cost=True)
+            return self._ability_modify_action_progress(context, source, target, value, multiplier, cost=True)
         if kind == "技能冷却":
             value = {**effect, "方式": "增加"}
-            return self._mechanism_modify_cooldown(context, source, target, value, multiplier)
+            return self._ability_modify_cooldown(context, source, target, value, multiplier)
         if kind == "战斗对象":
-            return self._mechanism_remove_object(context, source, target, effect, multiplier)
+            return self._ability_remove_object(context, source, target, effect, multiplier)
         raise ValueError(f"未知代价类型：{kind}")
 
-    def _mechanism_set_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_set_resource(self, context, source, target, effect, multiplier, **kwargs):
         resource = str(effect.get("资源") or "血气")
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
@@ -902,7 +816,7 @@ class MechanismRuntime:
             changed = changed or before != after
         return changed
 
-    def _mechanism_transfer_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transfer_resource(self, context, source, target, effect, multiplier, **kwargs):
         donors = self._select_targets(context, source, target, effect.get("来源目标"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not donors or not receivers:
@@ -923,7 +837,7 @@ class MechanismRuntime:
         self._set_resource(receiver, target_resource, receiver_before + applied)
         return applied > 0
 
-    def _mechanism_add_status(self, context, source, target, effect, multiplier, **_):
+    def _ability_add_status(self, context, source, target, effect, multiplier, **_):
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
             definition = copy.deepcopy(dict(effect.get("状态") or {}))
@@ -1102,7 +1016,7 @@ class MechanismRuntime:
             result.extend((fighter, status) for status in self._matching_statuses(context, fighter, value))
         return result
 
-    def _mechanism_remove_status(self, context, source, target, effect, multiplier, **_):
+    def _ability_remove_status(self, context, source, target, effect, multiplier, **_):
         del multiplier
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         removed = False
@@ -1117,7 +1031,7 @@ class MechanismRuntime:
                 removed = True
         return removed
 
-    def _mechanism_modify_status_stacks(self, context, source, target, effect, multiplier, consume=False, **_):
+    def _ability_modify_status_stacks(self, context, source, target, effect, multiplier, consume=False, **_):
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         amount = max(0, int(float(effect.get("层数", effect.get("数值", 1))) * multiplier))
         if not pairs:
@@ -1136,7 +1050,7 @@ class MechanismRuntime:
             self._dispatch_event(context, kind="状态层数变化后", source=source, target=owner, values={"状态": status.name, "变化前数值": before, "变化后数值": status.stacks})
         return True
 
-    def _mechanism_modify_status_duration(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_status_duration(self, context, source, target, effect, multiplier, **_):
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         amount = max(0, int(float(effect.get("持续数值", 1)) * multiplier))
         mode = str(effect.get("方式") or "增加")
@@ -1144,7 +1058,7 @@ class MechanismRuntime:
             status.remaining_turns = max(0, status.remaining_turns + (amount if mode == "增加" else -amount))
         return bool(pairs)
 
-    def _mechanism_copy_status(self, context, source, target, effect, multiplier, **_):
+    def _ability_copy_status(self, context, source, target, effect, multiplier, **_):
         sources = self._select_statuses(context, source, target, effect.get("状态"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not sources or not receivers:
@@ -1183,7 +1097,7 @@ class MechanismRuntime:
                 )
         return True
 
-    def _mechanism_transfer_status(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transfer_status(self, context, source, target, effect, multiplier, **kwargs):
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not pairs or not receivers:
@@ -1194,7 +1108,7 @@ class MechanismRuntime:
             context.mark_listener_index_dirty()
         return True
 
-    def _mechanism_modify_action_progress(self, context, source, target, effect, multiplier, cost=False, **_):
+    def _ability_modify_action_progress(self, context, source, target, effect, multiplier, cost=False, **_):
         amount = max(0.0, float(effect.get("数值", 0)) * multiplier) / 100.0
         mode = str(effect.get("方式") or "增加")
         changed = False
@@ -1209,7 +1123,7 @@ class MechanismRuntime:
             changed = changed or before != after
         return changed
 
-    def _mechanism_modify_cooldown(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_cooldown(self, context, source, target, effect, multiplier, **_):
         mode = str(effect.get("方式") or "减少")
         amount = max(0, int(float(effect.get("数值", 0)) * multiplier))
         changed = False
@@ -1225,7 +1139,7 @@ class MechanismRuntime:
                 changed = changed or before != after
         return changed
 
-    def _mechanism_modify_counter(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_modify_counter(self, context, source, target, effect, multiplier, **kwargs):
         name = str(effect.get("计量") or "")
         instance = self._build_instance(context, effect)
         mode = str(effect.get("方式") or "增加")
@@ -1233,23 +1147,23 @@ class MechanismRuntime:
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             key = (fighter.id, instance, name)
-            before = context.mechanism_counters.get(key, float(effect.get("初始值", 0)))
+            before = context.ability_counters.get(key, float(effect.get("初始值", 0)))
             if mode == "减少" and before < amount and effect.get("不足时是否失败", True):
                 return False
             after = amount if mode == "设置" else 0 if mode == "清空" else before + amount if mode == "增加" else before - amount
             after = self._clamp(after, float(effect.get("最低值", 0)), float(effect.get("最高值", 100)))
-            context.mechanism_counters[key] = after
+            context.ability_counters[key] = after
             changed = changed or before != after
         return changed
 
     @staticmethod
     def _build_instance(context, node: Mapping[str, Any] | None = None) -> str:
-        """解析当前机制所属构筑实例；公共机制保持空作用域。"""
+        """解析当前能力所属构筑实例；公共能力保持空作用域。"""
 
         value = (node or {}).get("构筑实例") if isinstance(node, Mapping) else None
         return str(value or context.current_build_instance or "").strip()
 
-    def _mechanism_additional_attack(self, context, source, target, effect, multiplier, **_):
+    def _ability_additional_attack(self, context, source, target, effect, multiplier, **_):
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
             return False
@@ -1265,7 +1179,7 @@ class MechanismRuntime:
         self._dispatch_event(context, kind="追加攻击后", source=source, target=destination, amount=applied, values={"实际数值": applied, "行动类型": "追加攻击"}, tags=("追加攻击",))
         return True
 
-    def _mechanism_share_damage(self, context, source, target, effect, multiplier, **_):
+    def _ability_share_damage(self, context, source, target, effect, multiplier, **_):
         frame = self._current_event(context, "造成伤害前")
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
@@ -1275,7 +1189,7 @@ class MechanismRuntime:
         self._apply_damage(context, frame.source, destinations[0], amount, label=str(effect.get("名称") or "分摊伤害"), damage_form="分摊", defense_rule="真实", can_critical=False, can_block=False, tags=("分摊",))
         return True
 
-    def _mechanism_transfer_damage(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transfer_damage(self, context, source, target, effect, multiplier, **kwargs):
         frame = self._current_event(context)
         if frame.kind not in {"造成伤害前", "受到致命伤害"}:
             raise ValueError("转移伤害只能修改伤害前或致命伤害事件")
@@ -1296,14 +1210,14 @@ class MechanismRuntime:
         self._apply_damage(context, frame.source, destinations[0], amount, label=str(effect.get("名称") or "转移伤害"), damage_form="转移", defense_rule="真实", can_critical=False, can_block=False, tags=("转移",))
         return True
 
-    def _mechanism_fatal_guard(self, context, source, target, effect, multiplier, **_):
+    def _ability_fatal_guard(self, context, source, target, effect, multiplier, **_):
         frame = self._current_event(context, "受到致命伤害")
         amount = max(1.0, float(effect.get("保留血气", 1)) * multiplier)
         frame.facts["保留血气"] = max(float(frame.facts.get("保留血气", 0)), amount)
         frame.cancelled = True
         return True
 
-    def _mechanism_revive(self, context, source, target, effect, multiplier, **_):
+    def _ability_revive(self, context, source, target, effect, multiplier, **_):
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             if fighter.alive:
@@ -1315,7 +1229,7 @@ class MechanismRuntime:
             changed = True
         return changed
 
-    def _mechanism_modify_event_value(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_modify_event_value(self, context, source, target, effect, multiplier, **kwargs):
         frame = self._current_event(context)
         self._require_event_mutation(frame, "当前数值")
         amount = self._resolve_value(context, effect.get("数值"), source, target, kwargs.get("event_amount", frame.amount), frame.facts) * multiplier
@@ -1323,7 +1237,7 @@ class MechanismRuntime:
         frame.facts["当前数值"] = max(0.0, amount if mode == "设置" else frame.amount + amount if mode == "增加" else frame.amount - amount if mode == "减少" else frame.amount * amount / 100.0)
         return True
 
-    def _mechanism_modify_event_target(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_event_target(self, context, source, target, effect, multiplier, **_):
         del multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "目标")
@@ -1334,7 +1248,7 @@ class MechanismRuntime:
         frame.facts["承受者"] = values[0].id
         return True
 
-    def _mechanism_modify_event_tags(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_event_tags(self, context, source, target, effect, multiplier, **_):
         del source, target, multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "标签")
@@ -1344,7 +1258,7 @@ class MechanismRuntime:
         frame.facts["标签"] = sorted(frame.tags)
         return True
 
-    def _mechanism_cancel_event(self, context, source, target, effect, multiplier, **_):
+    def _ability_cancel_event(self, context, source, target, effect, multiplier, **_):
         del source, target, effect, multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "取消")
@@ -1352,7 +1266,7 @@ class MechanismRuntime:
         frame.facts["已取消"] = True
         return True
 
-    def _mechanism_trigger_skill(self, context, source, target, effect, multiplier, **_):
+    def _ability_trigger_skill(self, context, source, target, effect, multiplier, **_):
         limit = int(self.catalog.action_rules.get("触发技能嵌套上限", self.MAX_TRIGGERED_SKILLS))
         if context.triggered_skill_depth >= limit:
             return False
@@ -1375,7 +1289,7 @@ class MechanismRuntime:
         finally:
             context.triggered_skill_depth -= 1
 
-    def _mechanism_record_fact(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_record_fact(self, context, source, target, effect, multiplier, **kwargs):
         owners = (
             self._select_targets(context, source, target, effect.get("归属"))
             if effect.get("归属") is not None
@@ -1399,7 +1313,7 @@ class MechanismRuntime:
                 del values[:-limit]
         return True
 
-    def _mechanism_modify_relation(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_relation(self, context, source, target, effect, multiplier, **_):
         del multiplier
         left = self._select_targets(context, source, target, effect.get("一方")) or [source]
         right = self._select_targets(context, source, target, effect.get("另一方")) or [target]
@@ -1413,7 +1327,7 @@ class MechanismRuntime:
         self._dispatch_event(context, kind="关联变化后", source=source, target=right[0], values={"关联": name, "方式": mode})
         return before != len(context.relations)
 
-    def _mechanism_modify_skill(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_skill(self, context, source, target, effect, multiplier, **_):
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             for key in self._select_skills(context, fighter, effect.get("技能")):
@@ -1442,7 +1356,7 @@ class MechanismRuntime:
                 changed = True
         return changed
 
-    def _mechanism_copy_skill(self, context, source, target, effect, multiplier, **_):
+    def _ability_copy_skill(self, context, source, target, effect, multiplier, **_):
         sources = self._select_targets(context, source, target, effect.get("来源目标"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not sources or not receivers:
@@ -1457,7 +1371,7 @@ class MechanismRuntime:
         receiver.skills.append(copied)
         return True
 
-    def _mechanism_modify_intent(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_intent(self, context, source, target, effect, multiplier, **_):
         del multiplier
         intent = context.action_intent
         if intent is None:
@@ -1490,7 +1404,7 @@ class MechanismRuntime:
         self._dispatch_event(context, kind="行动意图变化后", source=source, target=target, values={"字段": field, "行动": intent.action, "技能键": intent.skill_key, "目标ID": intent.target_id})
         return True
 
-    def _mechanism_transform_event(self, context, source, target, effect, multiplier, **_):
+    def _ability_transform_event(self, context, source, target, effect, multiplier, **_):
         del multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "类型")
@@ -1503,13 +1417,13 @@ class MechanismRuntime:
         self._dispatch_event(context, kind="事件转化后", source=source, target=target, values={"原事件": frame.kind, "新事件": destination})
         return True
 
-    def _mechanism_modify_judgement(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_judgement(self, context, source, target, effect, multiplier, **_):
         del source, target, multiplier
         kind = str(effect.get("判定") or "任意")
         context.judgement_overrides.setdefault(kind, []).append({"方式": str(effect.get("方式") or "必定成功"), "次数": max(1, int(effect.get("次数", 1)))})
         return True
 
-    def _mechanism_modify_battle_rule(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_battle_rule(self, context, source, target, effect, multiplier, **_):
         del target, multiplier
         name = str(effect.get("名称") or "")
         mode = str(effect.get("方式") or "添加")
@@ -1536,21 +1450,20 @@ class MechanismRuntime:
                 "名称": name,
                 "来源": source.id,
                 "来源退场时移除": bool(effect.get("来源退场时移除", False)),
-                "构筑词条": copy.deepcopy(dict(context.current_term_table)),
             })
             context.mark_listener_index_dirty()
             changed = True
         self._dispatch_event(context, kind="战场规则变化后", source=source, target=source, values={"规则": name, "方式": mode})
         return changed
 
-    def _mechanism_save_result(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_save_result(self, context, source, target, effect, multiplier, **kwargs):
         name = str(effect.get("名称") or "")
         source_name = str(effect.get("来源") or "上个效果")
         value = context.last_result if source_name == "上个效果" else self._resolve_any(context, effect.get("值"), source, target, kwargs.get("event_amount", 0), kwargs.get("event_values") or {})
         context.saved_results[name] = copy.deepcopy(value)
         return True
 
-    def _mechanism_switch_form(self, context, source, target, effect, multiplier, **_):
+    def _ability_switch_form(self, context, source, target, effect, multiplier, **_):
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             name = str(effect.get("形态") or "")
@@ -1579,7 +1492,7 @@ class MechanismRuntime:
             changed = True
         return changed
 
-    def _mechanism_create_object(self, context, source, target, effect, multiplier, **_):
+    def _ability_create_object(self, context, source, target, effect, multiplier, **_):
         definition = copy.deepcopy(dict(effect.get("定义") or {}))
         kind = str(effect.get("类型") or "构造物")
         side = source.side if str(effect.get("阵营") or "己方") == "己方" else 1 - source.side
@@ -1603,7 +1516,7 @@ class MechanismRuntime:
                 health=max(1.0, float(attributes.get("血气上限", 1))),
                 spirit=max(0.0, float(attributes.get("精神上限", 0))),
                 skills=[self._skill_from_definition(source, index, value, prefix=object_id) for index, value in enumerate(definition.get("技能") or ())],
-                passives=[{"机制": f"{object_id}:{i}", "结算顺序": i, "节点": copy.deepcopy(value)} for i, value in enumerate(definition.get("被动") or ())],
+                passives=[{"监听键": f"{object_id}:{i}", "结算顺序": i, "节点": copy.deepcopy(value)} for i, value in enumerate(definition.get("被动") or ())],
                 combatant_type=str(definition.get("身份") or "召唤物"),
                 side=side,
                 owner_id=source.id,
@@ -1637,7 +1550,7 @@ class MechanismRuntime:
         self._dispatch_event(context, kind="战斗对象入场后", source=source, target=event_target, values={"对象ID": object_id, "对象类型": kind, "名称": name})
         return True
 
-    def _mechanism_remove_object(self, context, source, target, effect, multiplier, **_):
+    def _ability_remove_object(self, context, source, target, effect, multiplier, **_):
         del multiplier
         object_id = str(effect.get("对象ID") or "")
         candidates = [fighter for fighter in context.fighters if fighter.active and fighter.summoned and (fighter.id == object_id or (not object_id and fighter.owner_id == source.id))]
@@ -1699,7 +1612,7 @@ class MechanismRuntime:
                     values={"规则": str(rule.get("名称") or ""), "方式": "来源退场移除"},
                 )
 
-    def _mechanism_modify_ownership(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_ownership(self, context, source, target, effect, multiplier, **_):
         del multiplier
         values = self._select_targets(context, source, target, effect.get("目标"))
         if not values:
@@ -1733,7 +1646,7 @@ class MechanismRuntime:
             raise ValueError(f"未知归属字段：{field}")
         return True
 
-    def _mechanism_replay_effect(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_replay_effect(self, context, source, target, effect, multiplier, **kwargs):
         scope = str(effect.get("范围") or "上个效果")
         history = [item for item in context.effect_history if item.get("成功")]
         if scope == "自身上个效果":
@@ -1744,7 +1657,7 @@ class MechanismRuntime:
         destinations = self._select_targets(context, source, target, effect.get("目标")) or [target]
         return self._execute_mechanism(context, source, destinations[0], item["节点"], float(item.get("倍率", 1)) * float(effect.get("倍率", 1)) * multiplier, **kwargs)
 
-    def _mechanism_modify_tactic(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_tactic(self, context, source, target, effect, multiplier, **_):
         del multiplier
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
@@ -1823,8 +1736,8 @@ class MechanismRuntime:
         elif origin == "战斗记录":
             values = context.records.get((selected.id, str(node.get("名称") or "")), [])
             value = values[-1] if values else 0
-        elif origin == "机制计量":
-            value = context.mechanism_counters.get(
+        elif origin == "构筑计量":
+            value = context.ability_counters.get(
                 (
                     selected.id,
                     self._build_instance(context, node),

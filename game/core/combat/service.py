@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -11,7 +12,7 @@ from game.core.data import JsonDataService, materialize
 from game.core.formation import FormationService
 
 from .catalog import BattleReportCatalog
-from .build_terms import bind_term_slots
+from .builds import load_build_contracts, validate_builds
 from .contracts import (
     BUILD_SECTIONS,
     CombatantSpec,
@@ -43,6 +44,7 @@ class CombatService:
         self._formation = formation
         self._engine: BattleEngine | None = None
         self._report_catalog: BattleReportCatalog | None = None
+        self._build_count = 0
 
     def initialize(self) -> CombatStatus:
         if self._engine is not None:
@@ -53,6 +55,10 @@ class CombatService:
             self._data,
             formation_rules=self._formation.node_rules(),
         )
+        build_counts = validate_builds(
+            self._data, load_build_contracts(self._data)
+        )
+        self._build_count = sum(build_counts.values())
         report_dataset = materialize(self._data.dataset("战斗展示"))
         report_catalog = BattleReportCatalog.from_mapping(report_dataset["战报"])
         self._engine = BattleEngine(foundation)
@@ -66,7 +72,7 @@ class CombatService:
             return CombatStatus(False, 0, 0, 0, 0)
         return CombatStatus(
             initialized=True,
-            mechanism_count=len(engine.catalog.mechanisms),
+            build_count=self._build_count,
             ability_count=len(engine.catalog.abilities),
             event_count=len(engine.catalog.events),
             environment_count=len(engine.catalog.environments),
@@ -216,9 +222,7 @@ class CombatService:
             content_id = str(reference.content_id or "").strip()
             if section not in BUILD_SECTIONS:
                 raise ValueError(f"战斗构筑不支持实体类别：{section or '<空>'}")
-            definition = bind_term_slots(
-                materialize(self._data.entity(section, content_id))
-            )
+            definition = materialize(self._data.entity(section, content_id))
             definition["属性构成"] = dict(
                 definition.get("属性构成") or {"无相": 100}
             )
@@ -292,15 +296,11 @@ class CombatService:
 
     def _prepared_status(self, value: CombatStatusSpec) -> dict[str, Any]:
         listeners = []
-        for mechanism_id in value.mechanism_ids:
-            mechanism = materialize(self._data.entity("机制", mechanism_id))
-            node = copy.deepcopy(dict(mechanism["节点"]))
-            if node.get("能力") != "监听事件":
-                raise ValueError(f"战前状态只能装配监听型战斗机制：{mechanism_id}")
-            listeners.append(node)
+        for index, node in enumerate(value.listeners):
+            if not isinstance(node, Mapping) or node.get("能力") != "监听事件":
+                raise ValueError(f"战前状态第{index}个监听不是监听事件节点")
+            listeners.append(materialize(node))
         record = dict(value.metadata)
-        if value.mechanism_ids:
-            record["战斗机制"] = list(value.mechanism_ids)
         return {
             "名称": value.name,
             "类别": value.category,

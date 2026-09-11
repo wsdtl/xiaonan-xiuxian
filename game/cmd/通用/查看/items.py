@@ -7,6 +7,8 @@ import re
 
 from message import M
 
+from game.core.combat.card_text import render_body, render_listeners
+
 from .utils import (
     _display_number,
     _number,
@@ -38,7 +40,7 @@ def _player_description(detail) -> str:
     description = re.sub(r"^五行根基为[^。；]+。\s*", "", description)
 
     # 器律的说明同时承担目录简介和完整规则记录；查看页的器纹区已经
-    # 展开了真实机制，因此这里只保留铸法引言，避免同一效果占两遍版面。
+    # 展开了真实能力树，因此这里只保留铸法引言，避免同一效果占两遍版面。
     if detail.section == "器律" and "。" in description:
         description = description.split("。", 1)[0].strip() + "。"
 
@@ -50,7 +52,12 @@ def _player_description(detail) -> str:
 
 
 def _build_description_lines(detail) -> tuple[str, ...]:
-    """构筑查看正文直接采用 JSON 说明，避免展示层重写战斗文案。"""
+    """构筑查看正文 = 卡头（人工写）+ 规则正文（由能力树现算）。
+
+    `说明` 只保存卡头风味简介。规则正文由 `game/core/combat/card_text.py` 从卡片自己的
+    能力树渲染，所以正文和 JSON 不可能对不上——以前 `说明` 里另存一份正文，漂移过两次
+    （引用了卡里不存在的专名、留下「按 JSON 能力执行」占位残句）。
+    """
 
     fields = detail.fields
     lines: list[str] = []
@@ -65,10 +72,10 @@ def _build_description_lines(detail) -> tuple[str, ...]:
             if key in fields:
                 lines.append(f"{key}：{fields[key]}")
 
+    # 卡头里重复了标题与五行；展示层已经单独显示，这里只留风味引言。
     description = _normalize_brackets(detail.description.strip())
     prefix = rf"^(?:功法|真意|气机|器律)\[{re.escape(detail.name)}\][：:]\s*"
     description = re.sub(prefix, "", description, count=1)
-    # 元数据已经单独显示；正文中删掉重复的五行卡头，其他说明逐行原样保留。
     description = re.sub(r"^五行根基为[^。；]+。\s*", "", description, count=1)
     body = description.splitlines()
     while body and not body[0].strip():
@@ -76,6 +83,9 @@ def _build_description_lines(detail) -> tuple[str, ...]:
     while body and not body[-1].strip():
         body.pop()
     lines.extend(body)
+
+    rendered, _unknown = render_body(fields)
+    lines.extend(rendered)
     return tuple(lines)
 
 
@@ -155,6 +165,10 @@ def _definition_lines(
             suffix = f" · {quantity}份" if quantity is not None else ""
             lines.append(f"作用：{node}时，{ability}{suffix}")
         return tuple(lines)
+    if section == "丹药":
+        # 丹药正文同样由能力树现算：用途 → 战前生效 → 监听。
+        rendered, _unknown = render_body(fields)
+        return tuple(rendered)
     if section == "基础物品":
         effect = fields.get("使用效果")
         if isinstance(effect, Mapping):
@@ -197,26 +211,16 @@ def _definition_lines(
         treatment = fields.get("治疗")
         if isinstance(treatment, Mapping) and "每层所需轮数" in treatment:
             lines.append(f"疗伤：每层需要闭关{treatment['每层所需轮数']}轮")
+        # 战斗状态里的 `监听` 是真正的时序规则，按同一套措辞写出来。
+        state = fields.get("战斗状态")
+        if isinstance(state, Mapping):
+            rendered, _unknown = render_listeners(state)
+            lines.extend(rendered)
         return tuple(lines)
     if section == "战场环境":
-        lines = []
-        for key, value in fields.items():
-            if isinstance(value, Mapping):
-                if key == "节点":
-                    lines.append(
-                        f"节点：{value.get('能力', '未说明')} · {value.get('事件', '')}".rstrip(
-                            " ·"
-                        )
-                    )
-                elif key == "战斗状态":
-                    lines.append(f"战斗状态：{value.get('类别', '未说明')}")
-                else:
-                    lines.append(f"{key}：" + "、".join(str(item) for item in value))
-            elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-                lines.append(f"{key}：共{len(value)}项")
-            else:
-                lines.append(f"{key}：{value}")
-        return tuple(lines)
+        # 环境正文同样由能力树现算：`阶段 → 入阶能力 / 常驻监听`。
+        rendered, _unknown = render_body(fields)
+        return tuple(rendered)
     if section == "丹方":
         lines = []
         for key in ("炼制难度", "炉法"):
@@ -309,7 +313,7 @@ def _item_effect_lines(
                 for key, value in attributes.items()
             )
         lines.append(f"战前生效：获得“{state_name}”{changes}，持续整场战斗")
-    handled = {"类型", "恢复百分比", "目标境界", "永久属性", "战前状态", "战斗机制"}
+    handled = {"类型", "恢复百分比", "目标境界", "永久属性", "战前状态", "监听"}
     labels = {
         "目标角色": "适用对象",
         "目标构筑": "重塑构筑",

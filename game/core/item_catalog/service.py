@@ -29,6 +29,7 @@ _ENTITY_FIELDS = {
     "炼丹师": ("称号", "炉名", "丹道传承", "开放丹方"),
     "炼器工匠": ("称号", "炉名", "工艺流派", "开放器律"),
     "基础物品": ("使用效果", "强度"),
+    "丹药": ("使用效果",),
     "真意": ("属性构成", "能力"),
     "道侣": ("性别", "身份", "结交", "等级", "资质范围", "本命武器"),
     "阵师": ("称号", "阵台", "阵道传承", "开放阵法"),
@@ -58,9 +59,6 @@ class ItemCatalogService:
         by_category: dict[str, list[ItemSummary]] = defaultdict(list)
         entity_by_name: dict[str, list[ItemSummary]] = defaultdict(list)
         for record in self._data.numbered_entities():
-            # 战斗机制是内部执行节点，不是玩家可查看的内容实体。
-            if record.section == "机制":
-                continue
             item_id = record.entity_id
             value = record.value
             name = _required_text(value.get("名称"), f"{record.section} {item_id}.名称")
@@ -185,7 +183,7 @@ def _required_text(value: object, path: str) -> str:
 
 
 def _validate_description(value: str, path: str) -> None:
-    """说明是玩家可见正文：禁止半句和重复标点，避免查看页出现空机制。"""
+    """说明是玩家可见正文：禁止半句和重复标点，避免查看页出现空泛描述。"""
 
     if not value:
         raise JsonDataError(f"{path}必须是非空文本")

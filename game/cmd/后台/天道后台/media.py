@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import hashlib
+import mimetypes
 from io import BytesIO
 from pathlib import Path
 
@@ -91,15 +92,18 @@ class ConsoleMediaStore:
 
 
 def _image_suffix(value: bytes) -> str:
-    if value.startswith(b"\x89PNG\r\n\x1a\n"):
-        return ".png"
-    if value.startswith(b"\xff\xd8\xff"):
-        return ".jpg"
-    if value.startswith((b"GIF87a", b"GIF89a")):
-        return ".gif"
-    if value[:4] == b"RIFF" and value[8:12] == b"WEBP":
-        return ".webp"
-    return ".png"
+    signatures = (
+        (b"\x89PNG\r\n\x1a\n", ".png"),
+        (b"\xff\xd8\xff", ".jpg"),
+        (b"GIF87a", ".gif"),
+        (b"GIF89a", ".gif"),
+        (b"RIFF", ".webp"),
+    )
+    for signature, suffix in signatures:
+        if value.startswith(signature):
+            return suffix
+    guessed = mimetypes.guess_extension("application/octet-stream")
+    return guessed or ".bin"
 
 
 __all__ = ["ConsoleMediaStore", "MEDIA_MAX_BYTES", "PLACEHOLDER"]

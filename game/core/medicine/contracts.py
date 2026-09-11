@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -55,7 +56,7 @@ class BattleMedicine:
     name: str
     grade_id: str
     grade_name: str
-    mechanism_ids: tuple[str, ...]
+    listeners: tuple[Mapping[str, object], ...]
     prepared_status: dict[str, object]
     grade_order: int
 

@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 
 from game.core.asset import AssetService
 from game.core.combat import CombatStatusSpec
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, SchemaValidator, materialize
 
 from .contracts import (
     BattleMedicine,
@@ -246,10 +246,9 @@ class MedicineService:
         if raw is None:
             raise MedicineError("该丹药不是战丹")
         effect = _mapping(raw.get("使用效果"), "战丹.使用效果")
-        mechanisms = _strings(
-            effect.get("战斗机制", ()),
-            "战丹.战斗机制",
-            allow_empty=True,
+        listeners = tuple(
+            dict(materialize(node))
+            for node in _mappings(effect.get("监听", ()), "战丹.监听")
         )
         prepared = _mapping(effect.get("战前状态"), "战丹.战前状态")
         grade = self._asset.grade(grade_id)
@@ -264,7 +263,7 @@ class MedicineService:
             _text(raw.get("名称"), "战丹.名称"),
             grade.grade_id,
             grade.name,
-            mechanisms,
+            listeners,
             dict(prepared),
             grade.order,
         )
@@ -294,7 +293,9 @@ class MedicineService:
             duration_unit=duration,
             modifiers=modifiers,
             tags=tags,
-            mechanism_ids=medicine.mechanism_ids,
+            listeners=tuple(
+                dict(_mapping(node, "战丹.监听[]")) for node in medicine.listeners
+            ),
             source="丹药",
             source_name=medicine.name,
             metadata=(("丹药编号", medicine.medicine_id), ("品级编号", medicine.grade_id)),
@@ -310,23 +311,107 @@ class MedicineService:
         return self._required_id(medicine_id) in self._special
 
     def _index_medicines(self) -> None:
+        """按物品契约索引丹药，并校验每个实体真的符合契约。
+
+        契约来自 `data/基础物品` 的 `分类.json` 与 `使用效果.json`：
+        `分类.json` 声明丹药必须有 `使用效果`、可选 `强度`；`使用效果.json` 按效果
+        类型声明各自的必填与可选字段。此前这两份契约没有任何消费者，改动它们不影响
+        游戏；现在启动即按契约校验，不再静默跳过缺字段的实体。
+        """
+
         self._medicines.clear()
         self._recovery.clear()
         self._battle.clear()
         self._special.clear()
+        validator = SchemaValidator()
+        category_required, category_optional = self._medicine_category_contract()
+        effect_contract = self._effect_contract()
+
         for medicine_id, raw in self._data.entities("丹药").items():
+            label = f"丹药 {medicine_id}"
+            validator.validate_declared_fields(
+                raw,
+                category_required,
+                category_optional,
+                label,
+                discriminator="",
+            )
             effect_value = raw.get("使用效果")
             if effect_value is None:
-                continue
-            effect = _mapping(effect_value, f"丹药 {medicine_id}.使用效果")
+                raise JsonDataError(f"{label}：物品契约要求填写使用效果")
+            effect = _mapping(effect_value, f"{label}.使用效果")
+            effect_type = _text(effect.get("类型"), f"{label}.使用效果.类型")
+            if effect_type not in effect_contract:
+                raise JsonDataError(f"{label}：使用效果类型未在契约中声明 {effect_type}")
+            required, optional = effect_contract[effect_type]
+            validator.validate_declared_fields(
+                effect, required, optional, f"{label}.使用效果"
+            )
             self._medicines[medicine_id] = raw
-            effect_type = str(effect.get("类型") or "")
             if effect_type in {"恢复血气", "恢复精神"}:
                 self._recovery[medicine_id] = raw
             elif effect_type == "寄存战丹":
                 self._battle[medicine_id] = raw
             else:
                 self._special[medicine_id] = raw
+
+    def _medicine_category_contract(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """从物品契约取得「丹药」类别的完整字段契约。
+
+        契约分两处：`物品定义/公共字段.json` 声明全部编号实体共有的字段（例如
+        `编号`/`名称`/`参考价`），`物品规则/分类.json` 声明类别专属字段。合并后
+        才是完整契约——只查类别专属字段会把公共字段当成未知字段拒绝。
+        """
+
+        common_required = self._common_entity_fields()
+        rows = self._data.dataset("物品规则").get("分类")
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise JsonDataError("基础物品/规则/分类.json 必须是字典列表")
+        for raw_category in rows:
+            entry = _mapping(raw_category, "分类[]")
+            if str(entry.get("类别") or "").strip() != "丹药":
+                continue
+            required = _strings(
+                entry.get("必填字段", []), "分类.丹药.必填字段", allow_empty=True
+            )
+            optional = _strings(
+                entry.get("可选字段", []), "分类.丹药.可选字段", allow_empty=True
+            )
+            return (tuple(dict.fromkeys((*common_required, *required))), optional)
+        raise JsonDataError("物品分类契约缺少「丹药」类别")
+
+    def _common_entity_fields(self) -> tuple[str, ...]:
+        """从 `物品定义/公共字段.json` 取得编号实体的公共字段。"""
+
+        rows = self._data.dataset("物品定义").get("公共字段")
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise JsonDataError("基础物品/定义/公共字段.json 必须是字典列表")
+        for raw in rows:
+            entry = _mapping(raw, "公共字段[]")
+            if str(entry.get("类别") or "").strip() != "编号实体":
+                continue
+            return _strings(entry.get("必填字段", []), "公共字段.必填字段", allow_empty=True)
+        raise JsonDataError("物品契约缺少「编号实体」公共字段声明")
+
+    def _effect_contract(self) -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
+        """从 `物品定义/使用效果.json` 取得每种效果类型的字段契约。"""
+
+        rows = self._data.dataset("物品定义").get("使用效果")
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise JsonDataError("基础物品/定义/使用效果.json 必须是字典列表")
+        contract: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
+        for raw in rows:
+            entry = _mapping(raw, "使用效果[]")
+            effect_type = _text(entry.get("类型"), "使用效果.类型")
+            if effect_type in contract:
+                raise JsonDataError(f"使用效果契约重复声明类型：{effect_type}")
+            contract[effect_type] = (
+                _strings(entry.get("必填字段", []), f"使用效果.{effect_type}.必填字段", allow_empty=True),
+                _strings(entry.get("可选字段", []), f"使用效果.{effect_type}.可选字段", allow_empty=True),
+            )
+        if not contract:
+            raise JsonDataError("使用效果契约不能为空")
+        return contract
 
     def _all(self) -> Mapping[str, Mapping[str, object]]:
         return self._medicines
@@ -348,6 +433,12 @@ def _mapping(value: object, label: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise JsonDataError(f"{label}必须是对象")
     return value
+
+
+def _mappings(value: object, label: str) -> tuple[Mapping[str, object], ...]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise JsonDataError(f"{label}必须是对象数组")
+    return tuple(_mapping(item, f"{label}[]") for item in value)
 
 
 def _strings(

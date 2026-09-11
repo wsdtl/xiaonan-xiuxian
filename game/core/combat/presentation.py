@@ -200,7 +200,7 @@ def build_battle_report_presentation(
                 *formation_lines,
                 f"战斗行动: {report['result']['actions']}",
                 f"后端事件: {public_event_count}",
-                f"机制触发: {report['result']['trigger_count']}",
+                f"触发次数: {report['result']['trigger_count']}",
             ],
         },
         "started_at": report["generated_at"],

@@ -12,7 +12,7 @@ BUILD_SECTIONS = frozenset({"功法", "真意", "气机", "器律"})
 @dataclass(frozen=True)
 class CombatStatus:
     initialized: bool
-    mechanism_count: int
+    build_count: int
     ability_count: int
     event_count: int
     environment_count: int
@@ -83,7 +83,7 @@ class CombatGroupSpec:
 
 @dataclass(frozen=True)
 class CombatStatusSpec:
-    """由其他核心服务准备、由战斗核心解析机制的战前状态。"""
+    """由其他核心服务准备、由战斗核心解析监听节点的战前状态。"""
 
     name: str
     category: str
@@ -91,7 +91,7 @@ class CombatStatusSpec:
     duration_unit: str
     modifiers: tuple[tuple[str, float], ...] = ()
     tags: tuple[str, ...] = ()
-    mechanism_ids: tuple[str, ...] = ()
+    listeners: tuple[Mapping[str, Any], ...] = ()
     source: str = ""
     source_name: str = ""
     metadata: tuple[tuple[str, str | int | float], ...] = ()

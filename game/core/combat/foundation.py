@@ -15,7 +15,6 @@ from .schema import RuleSchemaValidator
 def load_battle_foundation(
     data: JsonDataService,
     *,
-    mechanisms: Mapping[str, Mapping[str, Any]] | None = None,
     formation_rules: FormationNodeRules | None = None,
 ) -> dict[str, Any]:
     if not data.status().loaded:
@@ -37,38 +36,8 @@ def load_battle_foundation(
             "阵法规则": formation_rules,
         }
     )
-    if mechanisms is None:
-        mechanism_nodes = load_battle_mechanisms(data)
-    else:
-        mechanism_nodes = {
-            str(key): materialize(value) for key, value in mechanisms.items()
-        }
-    result["机制"] = mechanism_nodes
     validate_battle_foundation(result)
     return result
-
-
-def load_battle_mechanisms(
-    data: JsonDataService,
-) -> dict[str, dict[str, Any]]:
-    """把编号机制实体投影为核心所需的编号到能力节点映射。"""
-
-    nodes: dict[str, dict[str, Any]] = {}
-    for mechanism_id, raw in data.entities("机制").items():
-        path = f"机制[{mechanism_id}]"
-        entry = _mapping(materialize(raw), path)
-        unknown = set(entry) - {"编号", "节点"}
-        if unknown:
-            raise ValueError(f"{path}存在未知字段：{'、'.join(sorted(unknown))}")
-        declared_id = str(entry.get("编号") or "").strip()
-        node = _mapping(entry.get("节点"), f"{path}.节点")
-        if declared_id != mechanism_id:
-            raise ValueError(f"{path}.编号与数据索引不一致")
-        _validate_event_bound_abilities(node, f"{path}.节点")
-        nodes[mechanism_id] = dict(node)
-    if not nodes:
-        raise ValueError("JSON 数据微服务没有登记战斗机制")
-    return nodes
 
 
 def _validate_event_bound_abilities(
@@ -102,12 +71,23 @@ def _validate_event_bound_abilities(
             )
 
 
+def rule_validator(value: Mapping[str, Any]) -> RuleSchemaValidator:
+    """按战斗定义装配一份能力节点校验器；构筑与定义共用同一份词汇表。"""
+
+    return RuleSchemaValidator(
+        abilities=_mapping(value.get("原子能力"), "原子能力"),
+        executor_categories=EXECUTOR_CATEGORIES,
+        attributes=_mapping(value.get("属性"), "属性"),
+        resources=_mapping(value.get("资源"), "资源"),
+        events=_mapping(value.get("事件"), "事件"),
+    )
+
+
 def validate_battle_foundation(value: Mapping[str, Any]) -> None:
     abilities = _mapping(value.get("原子能力"), "原子能力")
     events = _mapping(value.get("事件"), "事件")
     attributes = _mapping(value.get("属性"), "属性")
     resources = _mapping(value.get("资源"), "资源")
-    mechanisms = _mapping(value.get("机制") or {}, "机制")
     action_rules = _mapping(value.get("行动规则"), "行动规则")
     timing = _mapping(value.get("时序"), "时序")
     damage_rules = _mapping(value.get("伤害规则"), "伤害规则")
@@ -134,16 +114,8 @@ def validate_battle_foundation(value: Mapping[str, Any]) -> None:
             raise ValueError(f"事件.{name}的事实或修改项不能重复")
         if "类型" in mutable and name not in {"恢复前", "获得护盾前", "资源恢复前"}:
             raise ValueError(f"事件.{name}没有可转化的共同结算语义")
-    validator = RuleSchemaValidator(
-        abilities=abilities,
-        executor_categories=EXECUTOR_CATEGORIES,
-        attributes=attributes,
-        resources=resources,
-        events=events,
-        mechanisms=mechanisms,
-    )
+    validator = rule_validator(value)
     validator.validate_definitions("战斗定义.原子能力")
-    validator.validate_mechanisms("战斗机制")
     _validate_battle_environments(environments, validator)
     if not isinstance(formation_rules, FormationNodeRules):
         raise TypeError("战斗核心缺少阵法节点运行契约")

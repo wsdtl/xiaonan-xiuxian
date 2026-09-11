@@ -376,7 +376,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     logger.opt(colors=True).success(
         C.join(
             C.ok("战斗核心微服务已启动"),
-            C.kv("mechanisms", combat_status.mechanism_count),
+            C.kv("builds", combat_status.build_count),
             C.kv("abilities", combat_status.ability_count),
             C.kv("events", combat_status.event_count),
             C.kv("environments", combat_status.environment_count),

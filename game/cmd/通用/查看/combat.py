@@ -266,7 +266,7 @@ def _combat_lines(
         return (
             f"令{_target(node.get('目标'))}的{_skill(node.get('技能'))}冷却{method}{_value(node.get('数值'))}次行动",
         )
-    if ability == "修改机制计量":
+    if ability == "修改构筑计量":
         method = str(node.get("方式") or "改变")
         value = _value(node.get("数值", ""))
         raw_counter = _display_name(node.get("计量") or "效果")
@@ -438,10 +438,7 @@ def _combat_lines(
             f"将{_target(node.get('目标'))}的战术{node.get('方式', '调整')}为"
             + "、".join(arrangements),
         )
-    if ability in {"引用战斗机制", "引用被动机制"}:
-        return ()
     return ()
-
 
 def _nodes(
     value: object, related: Mapping[str, object] | None = None
@@ -605,7 +602,7 @@ def _value(value: object) -> str:
                 "自身属性": f"自身{value.get('属性', '属性')}",
                 "目标属性": f"目标{value.get('属性', '属性')}",
                 "效果来源属性": f"效果来源的{value.get('属性', '属性')}",
-                "机制计量": f"{target}{value.get('计量', '机制计量')}",
+                "构筑计量": f"{target}{value.get('计量', '构筑计量')}",
                 "事件事实": f"本次{value.get('事实', '事件数值')}",
                 "战斗记录": f"战斗记录“{value.get('名称', '')}”",
                 "状态层数": f"{target}“{value.get('状态', '')}”层数",

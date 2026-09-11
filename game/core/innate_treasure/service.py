@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import ContractSet, JsonDataError, JsonDataService
 from game.core.database import DatabaseService, StateAddress, StateMutation
 
 from .contracts import (
@@ -72,10 +72,14 @@ class InnateTreasureService:
             _mapping(rules.get("分页"), "先天灵宝.分页").get("每页上限"),
             "先天灵宝.分页.每页上限",
         )
-        treasures = {
-            treasure_id: _treasure(treasure_id, raw)
-            for treasure_id, raw in self._data.entities("先天灵宝").items()
-        }
+        contract = ContractSet.load(
+            self._data.dataset("先天灵宝字段契约").get("先天灵宝字段契约"),
+            "先天灵宝/内容/先天灵宝字段契约.json",
+        )
+        treasures = {}
+        for treasure_id, raw in self._data.entities("先天灵宝").items():
+            contract.validate(raw, "先天灵宝", f"先天灵宝 {treasure_id}")
+            treasures[treasure_id] = _treasure(treasure_id, raw)
         if len(treasures) != 21:
             raise JsonDataError("首批先天灵宝必须完整定义21件")
         names = {value.name: value.treasure_id for value in treasures.values()}

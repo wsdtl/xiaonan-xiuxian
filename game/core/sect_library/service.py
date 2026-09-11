@@ -113,9 +113,7 @@ class SectLibraryService:
         }
         conflict = self._growth.build_conflict(build)
         if conflict is not None:
-            raise SectLibraryError(
-                f"该借阅构筑触发相冲机制：{'、'.join(sorted(conflict))}"
-            )
+            raise SectLibraryError(f"该借阅构筑触发相冲：{conflict}")
         try:
             receipt = await self._database.commit(
                 TransactionCommand(
