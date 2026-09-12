@@ -541,6 +541,8 @@ class BattleEngine(AbilityRuntime):
         self._rotate_formations(context)
 
     def _rotate_formations(self, context: BattleContext) -> None:
+        """到期的阵法各轮转一次：定目标、摊算冲击、结算、播报。"""
+
         active = [value for value in context.formations if value.active]
         due = [
             value for value in active if context.action_number >= value.next_rotation
@@ -548,6 +550,31 @@ class BattleEngine(AbilityRuntime):
         if not due:
             return
         node_rules = self.catalog.formation_rules
+        prepared = self._prepare_rotations(context, active, due, node_rules)
+        formation_damage, fighter_damage, impact_events = (
+            self._aggregate_rotation_impacts(context, prepared, node_rules)
+        )
+        collapsed, formation_absorbed, health_changes = self._apply_rotation_damage(
+            context, active, formation_damage, fighter_damage
+        )
+        self._announce_rotation_impacts(
+            context, active, impact_events, formation_absorbed, health_changes
+        )
+        self._announce_formation_collapses(context, collapsed)
+
+    def _prepare_rotations(
+        self,
+        context: BattleContext,
+        active: list[RuntimeFormation],
+        due: list[RuntimeFormation],
+        node_rules: Any,
+    ) -> list[tuple[RuntimeFormation, float, tuple[Fighter | RuntimeFormation, ...]]]:
+        """给每个到期阵法定下本轮的冲击强度与目标，并播报轮转。
+
+        `next_rotation` 与 `rotations` 在**选目标之前**就推进：没有目标的阵法同样
+        算轮转过一次，只是不播报、不结算。这是原有语义，别把次序调过来。
+        """
+
         stage_index = context.field.stage_index if context.field is not None else 0
         prepared: list[
             tuple[RuntimeFormation, float, tuple[Fighter | RuntimeFormation, ...]]
@@ -574,39 +601,9 @@ class BattleEngine(AbilityRuntime):
             formation.next_rotation = context.action_number + interval
             formation.rotations += 1
             impact = formation.definition.impact * stage.impact_multiplier
-            enemy_formations = [
-                value
-                for value in active
-                if value.side != formation.side and value.active
-            ]
-            if node_rules.enemy_formation_first and enemy_formations:
-                targets: tuple[Fighter | RuntimeFormation, ...] = (
-                    min(
-                        enemy_formations,
-                        key=lambda value: (
-                            value.definition.position,
-                            value.definition.formation_id,
-                        ),
-                    ),
-                )
-            else:
-                enemies = (
-                    context.right_team if formation.side == 0 else context.left_team
-                )
-                alive = [
-                    value
-                    for value in enemies
-                    if value.alive and value.counts_for_victory
-                ]
-                if not alive:
-                    continue
-                minimum = node_rules.minimum_targets
-                count_field = node_rules.target_count_field
-                available_count = {
-                    "节点": formation.definition.nodes,
-                }[count_field]
-                target_count = min(len(alive), max(minimum, available_count))
-                targets = tuple(alive[:target_count])
+            targets = self._rotation_targets(context, formation, active, node_rules)
+            if targets is None:
+                continue
             prepared.append((formation, impact, targets))
             context.event(
                 "阵法轮转后",
@@ -622,6 +619,60 @@ class BattleEngine(AbilityRuntime):
                     "行动周期倍率": stage.cycle_multiplier,
                 },
             )
+        return prepared
+
+    def _rotation_targets(
+        self,
+        context: BattleContext,
+        formation: RuntimeFormation,
+        active: list[RuntimeFormation],
+        node_rules: Any,
+    ) -> tuple[Fighter | RuntimeFormation, ...] | None:
+        """本轮冲击谁：按规则先打敌方阵法，否则打存活修士。`None` 表示无目标。"""
+
+        enemy_formations = [
+            value
+            for value in active
+            if value.side != formation.side and value.active
+        ]
+        if node_rules.enemy_formation_first and enemy_formations:
+            return (
+                min(
+                    enemy_formations,
+                    key=lambda value: (
+                        value.definition.position,
+                        value.definition.formation_id,
+                    ),
+                ),
+            )
+        enemies = context.right_team if formation.side == 0 else context.left_team
+        alive = [
+            value for value in enemies if value.alive and value.counts_for_victory
+        ]
+        if not alive:
+            return None
+        minimum = node_rules.minimum_targets
+        count_field = node_rules.target_count_field
+        available_count = {
+            "节点": formation.definition.nodes,
+        }[count_field]
+        target_count = min(len(alive), max(minimum, available_count))
+        return tuple(alive[:target_count])
+
+    def _aggregate_rotation_impacts(
+        self,
+        context: BattleContext,
+        prepared: list[
+            tuple[RuntimeFormation, float, tuple[Fighter | RuntimeFormation, ...]]
+        ],
+        node_rules: Any,
+    ) -> tuple[
+        dict[int, float],
+        dict[str, float],
+        list[tuple[Fighter, Fighter, float, Mapping[str, Any]]],
+    ]:
+        """把各阵法的冲击摊到具体阵基与修士身上，并攒下待播报的冲击事件。"""
+
         formation_damage: dict[int, float] = {}
         fighter_damage: dict[str, float] = {}
         impact_events: list[tuple[Fighter, Fighter, float, Mapping[str, Any]]] = []
@@ -666,6 +717,23 @@ class BattleEngine(AbilityRuntime):
                         },
                     )
                 )
+        return formation_damage, fighter_damage, impact_events
+
+    def _apply_rotation_damage(
+        self,
+        context: BattleContext,
+        active: list[RuntimeFormation],
+        formation_damage: dict[int, float],
+        fighter_damage: dict[str, float],
+    ) -> tuple[
+        list[RuntimeFormation], dict[int, float], dict[str, tuple[float, float]]
+    ]:
+        """先扣阵基承载力（归零即崩解），再扣修士血气并处理因此阵亡的挂钩。
+
+        返回（崩解清单、阵基实收、各修士血气前后）：播报阶段要用实收值，
+        不能用名义冲击值。
+        """
+
         collapsed: list[RuntimeFormation] = []
         formation_absorbed: dict[int, float] = {}
         for formation in active:
@@ -715,6 +783,18 @@ class BattleEngine(AbilityRuntime):
                         tags=("阵法", "宏观冲击"),
                     )
                     self._remove_source_lifetimes(context, fighter)
+        return collapsed, formation_absorbed, fighter_health_changes
+
+    def _announce_rotation_impacts(
+        self,
+        context: BattleContext,
+        active: list[RuntimeFormation],
+        impact_events: list[tuple[Fighter, Fighter, float, Mapping[str, Any]]],
+        formation_absorbed: dict[int, float],
+        fighter_health_changes: dict[str, tuple[float, float]],
+    ) -> None:
+        """播报每次冲击：数值取**实际**发生的那一份（阵基实收或血气差）。"""
+
         for source, target, impact, values in impact_events:
             event_values = dict(values)
             if bool(event_values["是否命中阵法"]):
@@ -751,6 +831,12 @@ class BattleEngine(AbilityRuntime):
                 values=event_values,
                 tags=("阵法", "宏观冲击"),
             )
+
+    def _announce_formation_collapses(
+        self, context: BattleContext, collapsed: list[RuntimeFormation]
+    ) -> None:
+        """播报阵基崩解。"""
+
         for formation in collapsed:
             context.event(
                 "阵法崩解后",
