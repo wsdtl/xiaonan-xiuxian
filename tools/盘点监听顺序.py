@@ -34,37 +34,150 @@ EVENT_WRITERS = {
     "修改事件目标": "事件目标",
     "修改事件标签": "事件标签",
     "取消事件": "事件存活",
-    "转化事件": "事件存活",
-    "修改判定": "判定",
 }
 
 #: 改写**状态修饰**的能力：属性与层数的来源，影响同事件上读属性的监听。
 STATE_WRITERS = {
-    "添加状态": "状态",
-    "移除状态": "状态",
-    "增加状态层数": "状态",
-    "消耗状态层数": "状态",
-    "复制状态": "状态",
-    "转移状态": "状态",
+    "添加状态", "移除状态", "增加状态层数", "消耗状态层数", "复制状态", "转移状态",
 }
 
-#: `读取数值.来源` 映射到共享量。**故意不收 `构筑计量` 与 `保存结果`**：
-#: 计量全库唯一（3757 处），结果是按卡命名的，两者都不跨卡冲突。
-READ_SOURCES = {
+#: `读取数值.来源` -> 键前缀。**故意不收 `构筑计量` 与 `保存结果`**：
+#: 计量全库唯一、结果按卡命名，两者都不跨卡冲突。
+READ_PREFIX = {
     "本次数值": "事件数值",
     "事件事实": "事件数值",
     "自身属性": "属性",
     "目标属性": "属性",
     "状态层数": "状态",
-    "战斗记录": "记录",
-    "自身当前血气": "资源",
-    "目标当前血气": "资源",
-    "自身已损失血气": "资源",
-    "目标已损失血气": "资源",
-    "自身当前精神": "资源",
-    "目标当前精神": "资源",
-    "目标已损失精神": "资源",
+    "自身当前血气": "资源:血气",
+    "目标当前血气": "资源:血气",
+    "自身已损失血气": "资源:血气",
+    "目标已损失血气": "资源:血气",
+    "自身当前精神": "资源:精神",
+    "目标当前精神": "资源:精神",
+    "目标已损失精神": "资源:精神",
 }
+
+#: 这些键上「两边写同一个值」是可交换的，所以**不**在下面那个前缀表里：
+#: 两张卡都把 `获得护盾前` 转成 `资源恢复前`，谁先谁后结果完全一样。
+#: 实测里最热的那一对（400086 × 400138，116 次共现）正是这种情况。
+
+
+def _status_name(node) -> str:
+    body = node.get("状态")
+    if isinstance(body, dict):
+        return str(body.get("名称") or "")
+    if isinstance(body, str):
+        return body
+    return ""
+
+
+def _status_attributes(node) -> set[str]:
+    body = node.get("状态")
+    if isinstance(body, dict) and isinstance(body.get("属性"), dict):
+        return {f"属性:{name}" for name in body["属性"]}
+    return set()
+
+
+def classify(node: dict) -> tuple[set[str], set[str]]:
+    """把这个监听体的「写」与「读」落到**具体的量**上。
+
+    粒度必须落到具体，粗了指标就废，而且废过四次：
+
+    1. 把「造成伤害/恢复资源」也算写「资源」时人人都写资源，配出 65 万对；
+    2. 不管来源层级时，跨方向（功法 < 器律 < 真意）的顺序被算成待办，
+       而它早就由来源层级解决了；
+    3. 不管共存时，27 张战场环境的 `修改判定` 被列成一组，而一场仗
+       只有一个环境，它们永远不可能相遇；
+    4. 只看「有没有写同一个键」时，两张卡**把事件转成同一个目标**也被算成
+       冲突，而那种情况是可交换的——实测最热的一对就是。
+
+    所以现在键是 `属性:攻击` / `状态:九幽灵契` / `转化:资源恢复前` / `判定:暴击`
+    这种具体形式，并且由 `COMMUTATIVE_PREFIX` 排除可交换的同值写入。
+    """
+
+    event = str(node.get("事件") or "")
+    writes: set[str] = set()
+    reads: set[str] = set()
+
+    def visit(item) -> None:
+        if isinstance(item, dict):
+            name = item.get("能力")
+            if isinstance(name, str):
+                # `修改战场规则` 里内嵌的 `监听` 属于**规则自己的事件**，
+                # 不是外层这个监听体的效果；钻进去会把它们错算到外层事件上。
+                if name == "修改战场规则":
+                    return
+                if name in EVENT_WRITERS:
+                    writes.add(EVENT_WRITERS[name])
+                elif name == "转化事件":
+                    writes.add(f"转化:{item.get('事件')}")
+                elif name == "修改判定":
+                    writes.add(f"判定:{item.get('判定')}")
+                elif name in STATE_WRITERS:
+                    status = _status_name(item)
+                    writes.add(f"状态:{status}" if status else "状态")
+                    # 属性修饰要分加/减：两张卡都往同一属性上加值是**可交换**的
+                    # （实测里最重的一类就是各加各的印、都 +35 控制命中率），
+                    # 只有「移除修饰」与「添加修饰」撞在同一属性上才真的有关。
+                    sign = "-" if name in ("移除状态", "消耗状态层数") else "+"
+                    for attribute in _status_attributes(item):
+                        writes.add(f"{attribute}{sign}")
+                elif name == "标签条件":
+                    reads.add("事件标签")
+                elif name in ("读取数值", "数值条件"):
+                    prefix = READ_PREFIX.get(str(item.get("来源")))
+                    if prefix == "属性":
+                        reads.add(f"属性:{item.get('属性')}")
+                    elif prefix == "状态":
+                        status = _status_name(item)
+                        reads.add(f"状态:{status}" if status else "状态")
+                    elif prefix:
+                        reads.add(prefix)
+            for value in item.values():
+                visit(value)
+        elif isinstance(item, list):
+            for value in item:
+                visit(value)
+
+    visit(node.get("效果") or ())
+    visit(node.get("条件") or ())
+    del event
+    return writes - {""}, reads - {""}
+
+
+#: 这些键上的**写写**才算冲突。
+#: `属性:` 不在其中——纯加法的先后可交换，只有「加」与「减」相撞才算，
+#: 那由 `interlock` 单独判。
+CONFLICTING_WRITE_PREFIX = ("事件数值", "判定:", "事件存活", "事件目标", "事件标签")
+
+
+def _attribute_base(key: str) -> str:
+    return key[:-1] if key.startswith("属性:") and key.endswith(("+", "-")) else ""
+
+
+def interlock(left: tuple[set[str], set[str]],
+              right: tuple[set[str], set[str]]) -> set[str]:
+    """两边是否互相咬住：一侧写、另一侧读或写同一个量。
+
+    - **写读**一律算咬住（先后会改变读到什么）。
+    - **写写**只在 `CONFLICTING_WRITE_PREFIX` 上算，或者同一属性上一个加一个减。
+    - 同一转化目标、同一个状态名、同一属性的两次**加法**都可交换，不算。
+    """
+
+    left_write, left_read = left
+    right_write, right_read = right
+    shared = (left_write & right_read) | (right_write & left_read)
+    for key in left_write & right_write:
+        if key.startswith(CONFLICTING_WRITE_PREFIX):
+            shared.add(key)
+    # 同一属性：一边加、一边减 ⇒ 先后会改变最终值。
+    left_attr = {_attribute_base(k): k[-1] for k in left_write if _attribute_base(k)}
+    right_attr = {_attribute_base(k): k[-1] for k in right_write if _attribute_base(k)}
+    for base in left_attr.keys() & right_attr.keys():
+        if left_attr[base] != right_attr[base]:
+            shared.add(base)
+    return shared
 
 #: 组合能力，盘点时要钻进去看。
 CONTAINERS = {
@@ -114,22 +227,6 @@ def corpus(root: pathlib.Path):
                     yield direction, path, entry
 
 
-def abilities(node, out: list[str]) -> None:
-    """把一棵能力树里出现的原子能力名列出来（钻进组合能力）。"""
-
-    if isinstance(node, dict):
-        name = node.get("能力")
-        if isinstance(name, str):
-            out.append(name)
-            if name in CONTAINERS or name in ("触发技能", "回放效果"):
-                pass
-        for value in node.values():
-            abilities(value, out)
-    elif isinstance(node, list):
-        for value in node:
-            abilities(value, out)
-
-
 def listeners(node, out: list[dict]) -> None:
     """收集监听节点；监听体内部不再当监听看。"""
 
@@ -142,40 +239,6 @@ def listeners(node, out: list[dict]) -> None:
     elif isinstance(node, list):
         for value in node:
             listeners(value, out)
-
-
-def classify(node: dict) -> tuple[set[str], set[str]]:
-    """把这个监听体的「写」与「读」落到**具体的共享量**上。
-
-    必须落到具体量，粒度粗了指标就废：把「造成伤害/恢复资源」也算成写「资源」
-    时，人人都写资源，于是 2395 条「行动结束」配出 65 万对冲突，什么也筛不出来。
-    """
-
-    writes: set[str] = set()
-    reads: set[str] = set()
-
-    def visit(item) -> None:
-        if isinstance(item, dict):
-            name = item.get("能力")
-            if name in EVENT_WRITERS:
-                writes.add(EVENT_WRITERS[name])
-            if name in STATE_WRITERS:
-                writes.add(STATE_WRITERS[name])
-            if name == "标签条件":
-                reads.add("事件标签")
-            if name in ("读取数值", "数值条件"):
-                # `数值条件` 的左值通常就是一棵 `读取数值`，一并取到。
-                reads.add(READ_SOURCES.get(str(item.get("来源")), ""))
-            for value in item.values():
-                visit(value)
-        elif isinstance(item, list):
-            for value in item:
-                visit(value)
-
-    visit(node.get("效果") or ())
-    if node.get("条件"):
-        visit(node["条件"])
-    return writes - {""}, reads - {""}
 
 
 def main() -> int:
