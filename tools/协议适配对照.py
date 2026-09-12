@@ -96,7 +96,7 @@ def _cases() -> list[tuple[str, object]]:
         ("载荷/图片", lambda: payload.image("base64-abc")),
         ("载荷/原始", lambda: payload.raw({"content": "x", "msg_type": 0})),
     ]
-    return cases + _inbound_cases()
+    return cases + _inbound_cases() + _wide_cases()
 
 
 def _inbound_cases() -> list[tuple[str, object]]:
@@ -182,8 +182,117 @@ def _inbound_cases() -> list[tuple[str, object]]:
     return cases
 
 
+def _wide_cases() -> list[tuple[str, object]]:
+    """第三批：把兼容意图**整类**钉住，而不是钉住其中一个名字。
+
+    ① 群事件类型那个常量里现在有几个名字就造几条样本——以后 QQ 加名字、或有人删掉
+       某个兼容名，摘要立刻变。
+    ② mention 的多组合（多个 at、混 is_you、at 在中间）。
+    ③ 去重键：普通消息按消息 ID、按钮按交互 ID。
+    ④ 出站：公共文档消息 → QQ 原生载荷（含带按钮的那条，走 keyboard 分支）。
+    """
+
+    from message import M
+
+    from launch.adapter.qq_protocol.dedupe import event_dedupe_key
+    from launch.adapter.qq_protocol.event import (
+        GROUP_MESSAGE_EVENT_TYPES,
+        normalize_content,
+        parse_message_event,
+    )
+    from launch.adapter.qq_protocol.render import render_qq_message
+
+    def data(**extra: object) -> dict:
+        base = {
+            "id": "MSG-D",
+            "content": "查看 100005",
+            "author": {"id": "u-1"},
+            "group_openid": "g-1",
+        }
+        base.update(extra)
+        return base
+
+    cases: list[tuple[str, object]] = []
+
+    # ① 群事件类型逐个枚举
+    for index, name in enumerate(sorted(GROUP_MESSAGE_EVENT_TYPES)):
+        cases.append(
+            (
+                f"体裁/群事件类型[{index}]:{name}",
+                lambda name=name: parse_message_event(
+                    {"t": name, "d": data()}, bot_name="晓楠"
+                ),
+            )
+        )
+
+    # ② 多 mention 组合
+    you = {"id": "BOT", "is_you": True, "user_id": "bot-1"}
+    other = {"id": "OTHER", "is_you": False, "user_id": "u-9"}
+    cases += [
+        ("mention/两个 at 都在开头", lambda: normalize_content(
+            "<@BOT> <@OTHER> 查看", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[you, other], bot_name="晓楠")),
+        ("mention/at 在中间与结尾", lambda: normalize_content(
+            "查看 <@OTHER> 并 <@BOT>", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[you, other], bot_name="晓楠")),
+        ("mention/同一 token 重复出现", lambda: normalize_content(
+            "<@BOT> 查看 <@BOT>", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[you], bot_name="晓楠")),
+        ("mention/列表里混非字典", lambda: normalize_content(
+            "<@BOT> 查看", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[you, "not-a-dict"], bot_name="晓楠")),
+        ("mention/私聊体裁不剥前缀", lambda: normalize_content(
+            "<@BOT> 查看", event_type="C2C_MESSAGE_CREATE",
+            mentions=[you], bot_name="晓楠")),
+    ]
+
+    # ③ 去重键：普通消息按消息 ID，按钮按交互 ID
+    def parsed_message(message_id: str):
+        return parse_message_event(
+            {"t": "C2C_MESSAGE_CREATE", "d": {"id": message_id, "content": "查看", "author": {"id": "u-1"}}},
+            bot_name="晓楠",
+        )
+
+    cases += [
+        ("去重/普通消息键", lambda: event_dedupe_key(parsed_message("MSG-X"))),
+        ("去重/同一消息两次键相同", lambda: (
+            event_dedupe_key(parsed_message("MSG-Y")),
+            event_dedupe_key(parsed_message("MSG-Y")),
+        )),
+        ("去重/不同消息键不同", lambda: (
+            event_dedupe_key(parsed_message("MSG-A")),
+            event_dedupe_key(parsed_message("MSG-B")),
+        )),
+    ]
+
+    # ④ 出站渲染
+    def simple_document():
+        return M.document().header("五岳镇界镇岳诀").section("功法", icon="skill").line("编号 400503").build()
+
+    def document_with_actions():
+        return (
+            M.document()
+            .header("查看结果")
+            .section("候选", icon="notice")
+            .item(1, M.command(M.text("功法 · 五岳镇界镇岳诀"), "查看 400503", submit=False), " · 400503")
+            .build()
+        )
+
+    cases += [
+        ("出站/文档消息", lambda: render_qq_message(simple_document())),
+        ("出站/文档消息带按钮", lambda: render_qq_message(document_with_actions())),
+        ("出站/不认识的值原样保留", lambda: render_qq_message({"native": True})),
+        ("出站/字符串值", lambda: render_qq_message("plain")),
+    ]
+    return cases
+
+
+#: 自检门：这些样本必须给出内容，否则说明样本形状不对，基准不该写。
+MUST_SUCCEED_EXTRA = ("入站/私聊基本", "出站/文档消息", "去重/普通消息键")
+
+
 #: 自检门：这些样本必须解析出事件，否则说明样本形状不对，基准不该写。
-MUST_SUCCEED = ("入站/私聊基本", "入站/群聊-group_openid", "正文/纯文本")
+MUST_SUCCEED = ("入站/私聊基本", "入站/群聊-group_openid", "正文/纯文本") + MUST_SUCCEED_EXTRA
 
 
 def digest() -> tuple[dict[str, object], list[str]]:
