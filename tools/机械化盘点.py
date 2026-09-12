@@ -75,6 +75,7 @@ def scan() -> dict[str, object]:
     verbs: collections.Counter = collections.Counter()
     sources: collections.Counter = collections.Counter()
     limits: collections.Counter = collections.Counter()
+    stats: collections.Counter = collections.Counter()
     event_cards: dict[str, set[str]] = collections.defaultdict(set)
     verb_cards: dict[str, set[str]] = collections.defaultdict(set)
     card_events: dict[str, set[str]] = collections.defaultdict(set)
@@ -100,6 +101,12 @@ def scan() -> dict[str, object]:
                 # 第三条轴动的是「缩放从哪来」而不是动词本身：卡内计数器是现状，
                 # 换成对方属性 / 事件数值 / 已损失血气比才是散开。
                 sources[str(node.get("来源") or "（未写）")] += 1
+            if ability == "固定属性加成":
+                # 第五条轴：**数值档**。气机 703 张（36% 的语料）没有监听节点，
+                # 前四条轴一条都量不到它；它的机械化就在「每个属性一个死值」上
+                # （`命中率=3` 曾出现在 36 张上）。所以按 `属性=值` 的组合数一遍。
+                for key, value in dict(node.get("属性") or {}).items():
+                    stats[f"{key}={value}"] += 1
             for value in node.values():
                 walk(value, card_id)
         elif isinstance(node, list):
@@ -138,6 +145,7 @@ def scan() -> dict[str, object]:
         "缩放来源": axis(
             sources, sources.most_common(1)[0][0] if sources else ""
         ),
+        "数值档": axis(stats, stats.most_common(1)[0][0] if stats else ""),
         "卡级": {
             "单一触发卡": single_trigger,
             "单一触发占比": round(single_trigger / total_cards, 4) if total_cards else 0.0,
@@ -193,7 +201,7 @@ def gaps() -> dict[str, object]:
 
 def render(reading: dict[str, object], detail: bool) -> None:
     print(f"卡数 {reading['卡数']}")
-    for name in ("触发时点", "效果动词", "限额形态", "缩放来源"):
+    for name in ("触发时点", "效果动词", "限额形态", "缩放来源", "数值档"):
         row = reading[name]
         print(
             f"  {name}：最大项 {row['最大项']} {row['最大项次数']} 次"
@@ -257,8 +265,13 @@ def main() -> int:
         return 2
 
     worse: list[str] = []
-    for name in ("触发时点", "效果动词", "限额形态", "缩放来源"):
-        now, was = stored[name], expected[name]
+    for name in ("触发时点", "效果动词", "限额形态", "缩放来源", "数值档"):
+        now, was = stored.get(name), expected.get(name)
+        if not now or not was:
+            # 新加的轴：旧基线里没有这一项。跳过比较，`--写基准` 之后才纳入棘轮
+            # （否则加一条新轴就会让所有旧基线当场崩掉）。
+            print(f"  （{name}：基线里还没有，本轮跳过比较——跑一次 --写基准 即纳入）")
+            continue
         if now["最大项占比"] > was["最大项占比"] + SHARE_TOLERANCE:
             worse.append(
                 f"{name} 更集中：{was['最大项']} {was['最大项占比']:.1%}"
