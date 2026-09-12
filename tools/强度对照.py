@@ -1,4 +1,4 @@
-﻿"""强度对照：量一小批构筑卡的胜负，用来给「改写批」报强度漂移。
+"""强度对照：量一小批构筑卡的胜负，用来给「改写批」报强度漂移。
 
 `交叉对局对照.py` 判的是**相等**（一个哈希），它回答「变了没有」，不回答「变强还是变弱」。
 本工具补这一格：给一批卡，各对三名固定对手各打若干局，报胜/负/平与平均行动，
@@ -51,6 +51,11 @@ def load_cards(path: pathlib.Path) -> list[str]:
         for key in ("差异卡", "卡", "授权卡"):
             if key in raw:
                 return [str(item) for item in raw[key]]
+        if raw and all(isinstance(value, list) for value in raw.values()):
+            # 也吃 `换源恢复.py --授权集` 的格式：{"data/战斗/内容/真意/真意-绝境.json": ["410129", …]}
+            cards = [f"{pathlib.Path(name).parts[-2]}:{cid}"
+                     for name, ids in raw.items() for cid in ids]
+            return sorted(set(cards))
         return [str(key) for key in raw]
     return [str(item) for item in raw]
 

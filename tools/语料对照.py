@@ -53,6 +53,11 @@ parser.add_argument("--差异名单", dest="差异名单", default="",
 args = parser.parse_args()
 
 out = Path(args.输出)
+# 摘要一律写成 `<输出>.sem`。以前传 `tools/基准/语料摘要.json` 会写出
+# `语料摘要.json.sem` 这种**野文件**：真正的基准没被刷新，下一批的差异核对就混进上一批的旧差异
+# （第 26 轮就这么踩过一次）。所以这里把 `.json` 后缀剥掉，按「基准名」而不是「文件名」理解。
+if out.suffix == ".json":
+    out = out.with_suffix("")
 # 跑语料时的过程输出写日志文件；但**判定结论要回到真终端**，否则「一致 N / 差异 M」
 # 会被重定向吞掉，当检查用时看不见。所以先留住真 stdout。
 REAL_STDOUT = sys.stdout
@@ -158,6 +163,8 @@ if not args.对照:
     sys.exit(0)
 
 baseline_path = Path(args.对照)
+if baseline_path.suffix == ".json":
+    baseline_path = baseline_path.with_suffix("")
 if not baseline_path.is_absolute():
     baseline_path = (ROOT / baseline_path).resolve()
 # 写摘要时会自动补 `.sem`（`<输出>.sem`），所以 `--对照` 也接受不带后缀的写法。

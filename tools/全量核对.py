@@ -4,8 +4,8 @@
 记得跑哪几支**——`tools/验证启动顺序.py` 就因此在十几轮改动里一次都没被跑过（它一直
 是通的，但没人知道该跑它）。**「全绿」不该是记忆，该是一个脚本。**
 
-    .venv/Scripts/python.exe -X utf8 tools/全量核对.py            # 必过 11 项（实测 67 秒）
-    .venv/Scripts/python.exe -X utf8 tools/全量核对.py --全量      # 17 项（实测 376 秒）
+    .venv/Scripts/python.exe -X utf8 tools/全量核对.py            # 必过 14 项（实测约 70 秒）
+    .venv/Scripts/python.exe -X utf8 tools/全量核对.py --全量      # 21 项（实测约 11 分钟，建议后台跑）
 
 每一支都在**独立进程**里跑，各自超时；逐条报结果，末尾给总账。任一失败则整体非零退出。
 
@@ -36,6 +36,7 @@ REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("数据审查（audit_data）", ("tools/audit_data.py",)),
     ("战斗说明审查", ("tools/audit_combat_descriptions.py",)),
     ("协议适配", ("tools/协议适配对照.py",)),
+    ("基准文件命名", ("tools/架构审查/检查基准文件.py",)),
     ("机械化棘轮", ("tools/机械化盘点.py",)),
 )
 
@@ -47,6 +48,7 @@ SLOW: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("查看页 3859 个实体", ("tools/查看结果对照.py",)),
     ("战报 1264 份", ("tools/战报对照.py",)),
     ("装配规划 28545 条", ("tools/装配规划对照.py",)),
+    ("交叉对局 3792 场", ("tools/交叉对局对照.py",)),
 )
 
 
