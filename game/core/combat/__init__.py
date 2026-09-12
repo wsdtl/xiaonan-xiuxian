@@ -44,6 +44,8 @@ from .builds import BUILD_SECTIONS as BUILD_SECTIONS
 from .builds import BuildContractError as BuildContractError
 from .builds import load_build_contracts as load_build_contracts
 from .builds import validate_builds as validate_builds
+from .card_text import render_body as render_body
+from .card_text import render_listeners as render_listeners
 from .service import CombatService as CombatService
 
 __all__ = [
@@ -69,5 +71,7 @@ __all__ = [
     "StatusResult",
     "generate_five_elements",
     "load_build_contracts",
+    "render_body",
+    "render_listeners",
     "validate_builds",
 ]

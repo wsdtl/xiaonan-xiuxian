@@ -69,9 +69,9 @@ def inspection(result: ItemInspectionResult):
     title, icon = _display_title(detail.category)
     related = {item.item_id: item for item in result.related_details}
     lines = (
-        _build_description_lines(detail)
+        _build_description_lines(detail, result.rendered)
         if detail.section in {"功法", "真意", "气机", "器律"}
-        else _definition_lines(detail.section, detail.fields, related)
+        else _definition_lines(detail.section, detail.fields, related, result.rendered)
     )
     reply = M.document().header(detail.name)
     # 构筑正文统一从说明字段进入详情区；其他实体仍使用短引言加结构化详情。

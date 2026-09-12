@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 
+from game.core.combat import render_body, render_listeners
 from game.core.item_catalog import (
     ItemCatalogService,
     ItemDetail,
@@ -37,6 +38,7 @@ class ItemInspectionFeature:
                 normalized,
                 detail=(detail := self._catalog.inspect_entity(normalized)),
                 related_details=self._related_details(detail),
+                rendered=_rendered_lines(detail),
             )
         except ItemNameAmbiguousError as exc:
             return ItemInspectionResult(normalized, candidates=exc.candidates)
@@ -72,6 +74,28 @@ def _entity_references(value: object) -> Iterator[str]:
             yield from _entity_references(child)
     elif isinstance(value, str) and value.isdigit() and len(value) == 6:
         yield value
+
+
+#: 正文由能力树现算的领域。构筑四类、丹药、战场环境走 `render_body`；
+#: 伤势的战斗状态走 `render_listeners`。其余领域没有能力树，正文在命令层成形。
+_ABILITY_TREE_SECTIONS = frozenset({"功法", "真意", "气机", "器律", "丹药", "战场环境"})
+
+
+def _rendered_lines(detail: ItemDetail) -> tuple[str, ...]:
+    """按领域把能力树渲染成规则正文。
+
+    放在玩法层而不是命令层：渲染器是战斗核心的公共能力，而命令层不得导入核心服务。
+    命令层只决定这些行**显示在哪**，不决定它们**怎么写**。
+    """
+
+    section = detail.section
+    if section in _ABILITY_TREE_SECTIONS:
+        return tuple(render_body(detail.fields)[0])
+    if section == "伤势":
+        state = detail.fields.get("战斗状态")
+        if isinstance(state, Mapping):
+            return tuple(render_listeners(state)[0])
+    return ()
 
 
 __all__ = ["ItemInspectionFeature"]

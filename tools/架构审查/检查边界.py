@@ -175,6 +175,32 @@ def check_core_internal_imports() -> list[Finding]:
     return findings
 
 
+def check_cmd_core_dependency() -> list[Finding]:
+    """命令层不得直接导入核心服务（见 `微服务边界规范.md` 第三节）。
+
+    命令层只消费玩法层已经给出的业务事实；需要核心能力时由玩法层代为取得、
+    把结果交出来。这条规则原先**没有任何检查**——`check_core_internal_imports`
+    只扫 `game/core` 与 `game/features`，`game/cmd` 不在范围内，于是「查看」曾经
+    直接导入战斗核心的渲染器（`game.core.combat.card_text`）而长期无人发现。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game/cmd"):
+        relative = _relative(path)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line, module in _imports(tree):
+            if module == "game.core" or module.startswith("game.core."):
+                findings.append(
+                    Finding(
+                        "命令层导入核心服务",
+                        relative,
+                        line,
+                        f"命令层不得导入 {module}；应由玩法层代为取得后交出结果",
+                    )
+                )
+    return findings
+
+
 def check_data_layout_hardcoding() -> list[Finding]:
     """业务服务不得硬编码 data 目录布局。"""
 
@@ -314,6 +340,7 @@ CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
     ("跨服务导入内部实现", check_core_internal_imports),
+    ("命令层导入核心服务", check_cmd_core_dependency),
     ("硬编码数据目录", check_data_layout_hardcoding),
     ("第二套 JSON 读取", check_single_json_reader),
     ("微服务包结构", check_service_doc_coverage),

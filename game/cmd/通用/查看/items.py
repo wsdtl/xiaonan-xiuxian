@@ -7,8 +7,6 @@ import re
 
 from message import M
 
-from game.core.combat.card_text import render_body, render_listeners
-
 from .utils import (
     _display_number,
     _number,
@@ -51,12 +49,13 @@ def _player_description(detail) -> str:
     return description.strip("。 ") + ("。" if description.strip("。 ") else "")
 
 
-def _build_description_lines(detail) -> tuple[str, ...]:
+def _build_description_lines(detail, rendered: tuple[str, ...] = ()) -> tuple[str, ...]:
     """构筑查看正文 = 卡头（人工写）+ 规则正文（由能力树现算）。
 
-    `说明` 只保存卡头风味简介。规则正文由 `game/core/combat/card_text.py` 从卡片自己的
-    能力树渲染，所以正文和 JSON 不可能对不上——以前 `说明` 里另存一份正文，漂移过两次
-    （引用了卡里不存在的专名、留下「按 JSON 能力执行」占位残句）。
+    `说明` 只保存卡头风味简介。规则正文由玩法层从卡片自己的能力树渲染好传进来
+    （渲染器是战斗核心的公共能力，命令层不导入核心服务），所以正文和 JSON 不可能
+    对不上——以前 `说明` 里另存一份正文，漂移过两次（引用了卡里不存在的专名、
+    留下「按 JSON 能力执行」占位残句）。
     """
 
     fields = detail.fields
@@ -84,7 +83,6 @@ def _build_description_lines(detail) -> tuple[str, ...]:
         body.pop()
     lines.extend(body)
 
-    rendered, _unknown = render_body(fields)
     lines.extend(rendered)
     return tuple(lines)
 
@@ -123,8 +121,13 @@ def _definition_lines(
     section: str,
     fields: Mapping[str, object],
     related: Mapping[str, object] | None = None,
+    rendered: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
-    """把 JSON 结构压成玩家能读懂的定义摘要，禁止泄露 mappingproxy。"""
+    """把 JSON 结构压成玩家能读懂的定义摘要，禁止泄露 mappingproxy。
+
+    `rendered` 是玩法层按能力树现算好的规则正文（丹药、战场环境、伤势会用到）；
+    命令层不自己渲染，也不导入核心服务。
+    """
     if section == "道侣":
         lines = []
         if "性别" in fields:
@@ -167,8 +170,7 @@ def _definition_lines(
         return tuple(lines)
     if section == "丹药":
         # 丹药正文同样由能力树现算：用途 → 战前生效 → 监听。
-        rendered, _unknown = render_body(fields)
-        return tuple(rendered)
+        return rendered
     if section == "基础物品":
         effect = fields.get("使用效果")
         if isinstance(effect, Mapping):
@@ -212,15 +214,11 @@ def _definition_lines(
         if isinstance(treatment, Mapping) and "每层所需轮数" in treatment:
             lines.append(f"疗伤：每层需要闭关{treatment['每层所需轮数']}轮")
         # 战斗状态里的 `监听` 是真正的时序规则，按同一套措辞写出来。
-        state = fields.get("战斗状态")
-        if isinstance(state, Mapping):
-            rendered, _unknown = render_listeners(state)
-            lines.extend(rendered)
+        lines.extend(rendered)
         return tuple(lines)
     if section == "战场环境":
         # 环境正文同样由能力树现算：`阶段 → 入阶能力 / 常驻监听`。
-        rendered, _unknown = render_body(fields)
-        return tuple(rendered)
+        return rendered
     if section == "丹方":
         lines = []
         for key in ("炼制难度", "炉法"):
