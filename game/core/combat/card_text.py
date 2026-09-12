@@ -805,6 +805,8 @@ class CardText:
             base = "自身当前精神"
         elif source == "自身已损失血气":
             base = "自身已损失的血气"
+        elif source == "自身已损失精神":
+            base = "自身已损失的精神"
         elif source == "目标当前血气":
             base = f"{owner}当前血气"
         elif source == "目标当前精神":
