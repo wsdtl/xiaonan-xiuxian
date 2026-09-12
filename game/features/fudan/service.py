@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from game.core.asset import AssetService, AssetStateError, InventoryAdjustment
 from game.core.character import CharacterCultivationError, CharacterService
 from game.core.companion import CompanionCultivationError, CompanionService
-from game.core.data import JsonDataError, JsonDataService, nonempty_text
+from game.core.data import JsonDataError, JsonDataService, nonempty_text, number
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -374,9 +374,7 @@ def _text(value: object, label: str) -> str:
 
 
 def _number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise MedicineFeatureError(f"{label}必须是数值")
-    return float(value)
+    return number(value, label, error=MedicineFeatureError)
 
 
 __all__ = ["MedicineFeature"]

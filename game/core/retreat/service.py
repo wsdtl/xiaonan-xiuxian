@@ -55,6 +55,7 @@ from .contracts import (
     RetreatStatus,
     RetreatUserSummary,
 )
+from game.core.data import boolean
 
 SESSION_STATE = "retreat_session"
 LATEST_STATE = "retreat_latest"
@@ -915,9 +916,7 @@ def _ratio(value: object, label: str) -> float:
 
 
 def _boolean(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise RetreatStateError(f"{label}必须是布尔值")
-    return value
+    return boolean(value, label, error=RetreatStateError)
 
 
 __all__ = ["RetreatService"]

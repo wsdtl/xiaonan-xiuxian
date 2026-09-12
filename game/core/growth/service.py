@@ -24,6 +24,7 @@ from .contracts import (
     RandomCultivationBuild,
     RealmDefinition,
 )
+from game.core.data import number as _number, sequence as _sequence, strict_text as _text
 
 _CATEGORIES = ("功法", "真意", "气机")
 
@@ -365,29 +366,11 @@ class GrowthService:
             raise RuntimeError("成长核心微服务尚未初始化")
 
 
-def _sequence(value: object, label: str) -> tuple[object, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError(f"{label}必须是数组")
-    return tuple(value)
-
-
 def _strings(value: object, label: str) -> tuple[str, ...]:
     result = tuple(_text(raw, label) for raw in _sequence(value, label))
     if not result:
         raise JsonDataError(f"{label}不能为空")
     return result
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空文本")
-    return value.strip()
-
-
-def _number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise JsonDataError(f"{label}必须是数值")
-    return float(value)
 
 
 __all__ = ["GrowthService"]

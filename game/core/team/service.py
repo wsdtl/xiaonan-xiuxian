@@ -36,6 +36,7 @@ from .contracts import (
     TeamServiceStatus,
     TeamSnapshot,
 )
+from game.core.data import boolean as _boolean
 
 TEAM_STATE = "team"
 INVITATION_STATE = "team_invite"
@@ -626,12 +627,6 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
 def _text(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise TeamRuleError("invalid_text")
-    return value
-
-
-def _boolean(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise JsonDataError(f"{label}必须是布尔值")
     return value
 
 

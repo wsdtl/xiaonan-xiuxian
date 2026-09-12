@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, strict_text as _text
 from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import ForgingAction, ForgingCopy
@@ -90,14 +90,6 @@ def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:
     conditions = {button["条件"] for button in buttons if button["条件"]}
     if conditions - {"可以开炉"}:
         raise JsonDataError("炼器按钮使用了未知条件")
-
-
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空文本")
-    return value.strip()
 
 
 __all__ = ["actions", "load_presentation"]

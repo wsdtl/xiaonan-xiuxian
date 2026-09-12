@@ -22,6 +22,7 @@ from .contracts import (
     RecoveryMedicine,
     RecoveryMedicineStack,
 )
+from game.core.data import boolean as _bool, number as _number
 
 
 class MedicineService:
@@ -457,12 +458,6 @@ def _strings(
     return result
 
 
-def _number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise JsonDataError(f"{label}必须是数值")
-    return float(value)
-
-
 def _number_range(value: object, label: str) -> tuple[float, float]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是两个数值")
@@ -474,12 +469,6 @@ def _number_range(value: object, label: str) -> tuple[float, float]:
 
 def _clean_number(value: float) -> int | float:
     return int(value) if value.is_integer() else round(value, 4)
-
-
-def _bool(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise JsonDataError(f"{label}必须是布尔值")
-    return value
 
 
 __all__ = ["MedicineService"]

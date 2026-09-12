@@ -20,6 +20,7 @@ from game.core.growth import GrowthService
 from game.core.pool import EXPAND_DEDUPLICATED, PoolRequest, PoolService
 
 from .contracts import EnemyDrop, EnemyGroup, EnemyInstance, EnemyReward, EnemyStatus
+from game.core.data import sequence as _sequence
 
 
 class EnemyService:
@@ -433,12 +434,6 @@ def _clamp_attribute(
     )
     rounded = round(result, 4)
     return int(rounded) if rounded.is_integer() else rounded
-
-
-def _sequence(value: object, label: str) -> tuple[object, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError(f"{label}必须是数组")
-    return tuple(value)
 
 
 def _texts(value: object, label: str) -> tuple[str, ...]:

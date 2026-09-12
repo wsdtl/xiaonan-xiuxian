@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from string import Formatter
 from types import MappingProxyType
 
-from game.core.data import JsonDataError
+from game.core.data import JsonDataError, strict_text as _text
 from game.features.presentation import require_mapping
 
 from .contracts import CompanionAction, CompanionCopy
@@ -148,12 +148,6 @@ def _template(value: object, label: str, fields: set[str]) -> str:
     if found != fields:
         raise JsonDataError(f"{label}占位符必须是：{'、'.join(sorted(fields)) or '无'}")
     return template
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空文本")
-    return value.strip()
 
 
 __all__ = ["CompanionButton", "load_companion_presentation", "render_action"]

@@ -62,6 +62,12 @@ from .contracts import (
     FormationStatus,
     FormationUnavailableError,
 )
+from game.core.data import (
+    number as _number,
+    sequence as _sequence,
+    strict_text,
+    strict_text as _text,
+)
 
 _CATEGORIES = ("兽宝", "灵矿", "灵植")
 _GRADES = ("黄", "玄", "地", "天", "圣")
@@ -1009,20 +1015,8 @@ def _formation_grade_name(grade_id: str) -> str:
         raise FormationError(f"未知阵法品级编号：{grade_id}") from exc
 
 
-def _sequence(value: object, label: str) -> tuple[object, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError(f"{label}必须是数组")
-    return tuple(value)
-
-
 def _texts(value: object, label: str) -> tuple[str, ...]:
     return tuple(_text(item, label) for item in _sequence(value, label))
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空文本")
-    return value.strip()
 
 
 def _speech(value: object, label: str) -> Mapping[str, str]:
@@ -1038,16 +1032,8 @@ def _request_text(value: object, label: str) -> str:
     return nonempty_text(value, label, error=FormationError)
 
 
-def _number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise JsonDataError(f"{label}必须是数值")
-    return float(value)
-
-
 def _payload_text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{label}必须是非空文本")
-    return value.strip()
+    return strict_text(value, label, error=ValueError)
 
 
 def _payload_positive_int(value: object, label: str) -> int:

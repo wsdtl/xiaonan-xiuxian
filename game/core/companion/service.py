@@ -59,6 +59,7 @@ from .contracts import (
     CompanionStatus,
     LocalCultivator,
 )
+from game.core.data import boolean, boolean as _bool
 
 RELATION_STATE = "companion_relation"
 ACTIVE_STATE = "companion_active"
@@ -1768,15 +1769,7 @@ def _state_number(value: object, label: str) -> int | float:
 
 
 def _state_bool(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise CompanionStateError(f"{label}必须是布尔值")
-    return value
-
-
-def _bool(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise JsonDataError(f"{label}必须是布尔值")
-    return value
+    return boolean(value, label, error=CompanionStateError)
 
 
 def _normalize(value: object) -> str:

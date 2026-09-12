@@ -59,6 +59,13 @@ from .contracts import (
     WeaponAdvance,
     WeaponStage,
 )
+from game.core.data import (
+    number,
+    number as _number,
+    sequence as _sequence,
+    strict_text,
+    strict_text as _text,
+)
 
 _LAW_STAGES = ("灵器", "法器", "法宝", "后天灵宝")
 _SECONDARY_COST = 1_000_000_000
@@ -959,9 +966,7 @@ def _payload_materials(
 
 
 def _payload_text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{label}必须是非空文本")
-    return value.strip()
+    return strict_text(value, label, error=ValueError)
 
 
 def _payload_positive_int(value: object, label: str) -> int:
@@ -1000,20 +1005,8 @@ def _entity_name(data: JsonDataService, item_id: str) -> str:
     return _text(data.entity("基础物品", item_id).get("名称"), f"物品 {item_id}.名称")
 
 
-def _sequence(value: object, label: str) -> tuple[object, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError(f"{label}必须是数组")
-    return tuple(value)
-
-
 def _texts(value: object, label: str) -> tuple[str, ...]:
     return tuple(_text(raw, label) for raw in _sequence(value, label))
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空文本")
-    return value.strip()
 
 
 def _speech(value: object, label: str) -> Mapping[str, str]:
@@ -1029,16 +1022,8 @@ def _request_text(value: object, label: str) -> str:
     return nonempty_text(value, label, error=ForgingError)
 
 
-def _number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise JsonDataError(f"{label}必须是数值")
-    return float(value)
-
-
 def _request_number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ForgingError(f"{label}必须是数值")
-    return float(value)
+    return number(value, label, error=ForgingError)
 
 
 def _integer_pair(value: object, label: str) -> tuple[int, int]:

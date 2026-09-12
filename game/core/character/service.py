@@ -66,6 +66,7 @@ from .contracts import (
     InventorySummary,
     WeaponProfile,
 )
+from game.core.data import boolean, boolean as _bool
 
 
 class CharacterService:
@@ -1415,12 +1416,6 @@ class CharacterService:
             raise RuntimeError("角色核心微服务尚未初始化")
 
 
-def _bool(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise JsonDataError(f"{label}必须是布尔值")
-    return value
-
-
 def _state_mapping(value: object, label: str) -> Mapping[str, object]:
     return mapping(value, label, error=CharacterStateError)
 
@@ -1539,9 +1534,7 @@ def _add_numbers(
 
 
 def _state_bool(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise CharacterStateError(f"{label}必须是布尔值")
-    return value
+    return boolean(value, label, error=CharacterStateError)
 
 
 def _user_ids(values: tuple[str, ...]) -> tuple[str, ...]:

@@ -55,6 +55,7 @@ from .contracts import (
     AlchemyStatus,
     AlchemyUnavailableError,
 )
+from game.core.data import sequence as _sequence, strict_text, strict_text as _text
 
 _CATEGORIES = ("恢复丹", "战丹", "突破丹", "特殊丹")
 _RECIPE_CATEGORIES = {"11": "恢复丹", "13": "战丹", "15": "突破丹", "17": "特殊丹"}
@@ -939,20 +940,8 @@ def _entity_name(data: JsonDataService, item_id: str) -> str:
     return _text(data.entity("基础物品", item_id).get("名称"), f"物品 {item_id}.名称")
 
 
-def _sequence(value: object, label: str) -> tuple[object, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError(f"{label}必须是数组")
-    return tuple(value)
-
-
 def _texts(value: object, label: str) -> tuple[str, ...]:
     return tuple(_text(raw, label) for raw in _sequence(value, label))
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空文本")
-    return value.strip()
 
 
 def _speech(value: object, label: str) -> Mapping[str, str]:
@@ -969,9 +958,7 @@ def _request_text(value: object, label: str) -> str:
 
 
 def _payload_text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{label}必须是非空文本")
-    return value.strip()
+    return strict_text(value, label, error=ValueError)
 
 
 def _payload_positive_int(value: object, label: str) -> int:

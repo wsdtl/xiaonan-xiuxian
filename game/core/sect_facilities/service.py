@@ -50,6 +50,7 @@ from .contracts import (
     SectForgingPreview,
     SectFormationPreview,
 )
+from game.core.data import boolean as _bool
 
 _FACILITY_TYPES = ("炼器", "炼丹", "炼阵")
 
@@ -708,12 +709,6 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)) or not value or any(not str(item).strip() for item in value):
         raise JsonDataError(f"{label}必须是非空字符串列表")
     return tuple(str(item).strip() for item in value)
-
-
-def _bool(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise JsonDataError(f"{label}必须是布尔值")
-    return value
 
 
 def _positive_map(value: object, label: str) -> dict[str, int]:
