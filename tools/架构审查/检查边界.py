@@ -774,6 +774,138 @@ def check_public_contracts_are_pure() -> list[Finding]:
     return findings
 
 
+# 组合根由名字装载，静态导入看不见它（见 系统架构.md 第四节）。这里只列「确实没有
+# 任何导入方、也确实该留」的模块；新增一条都要写清理由。
+UNREFERENCED_MODULE_ALLOWLIST = {
+    Path("game/app.py"): "唯一组合根，由 launch 侧按名字装载",
+}
+
+
+def _module_dotted(path: Path) -> str:
+    return ".".join(path.relative_to(PROJECT_ROOT).with_suffix("").parts)
+
+
+def _resolve_from(node: ast.ImportFrom, package: str) -> str:
+    """把 `from …` 解析成被导入模块的全名。
+
+    `from .utils import X` 里 `node.module` 只有 `utils`，不按包解析成全名，
+    就没法和 `game.cmd.通用.查看.utils` 对上，那样每个模块都会看着像孤儿。
+    """
+
+    base = node.module or ""
+    if not node.level:
+        return base
+    parts = package.split(".")
+    # level=1 指当前包，level=2 再上一层。
+    parts = parts[: len(parts) - (node.level - 1)]
+    return ".".join(parts + ([base] if base else []))
+
+
+def _docstring_nodes(tree: ast.AST) -> set[int]:
+    """找出文档字符串节点。
+
+    只是说明，不算引用。这条很要紧：本检查自己的 docstring 就举了
+    `game/cmd/通用/查看/combat.py` 当例子，若不排除，它会用自己的说明把那个
+    孤儿模块「引用」掉，于是永远抓不到——第一版就是这样漏报的。
+    """
+
+    found: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            continue
+        if not node.body:
+            continue
+        first = node.body[0]
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+        ):
+            found.add(id(first.value))
+    return found
+
+
+def _referenced_modules() -> tuple[set[str], dict[Path, str]]:
+    """返回（被静态导入的模块全名，各文件非 docstring 的字符串字面量文本）。"""
+
+    imported: set[str] = set()
+    strings: dict[Path, str] = {}
+    for root in ("game", "tools", "launch", "message", "tests"):
+        if not (PROJECT_ROOT / root).is_dir():
+            continue
+        for path in _python_files(root):
+            try:
+                tree = _parse(path)
+            except (SyntaxError, UnicodeDecodeError):
+                continue  # 解析不了的文件由 main 单独报，不在这里重复
+            package = _package_of(path)
+            docstrings = _docstring_nodes(tree)
+            literals: list[str] = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        imported.add(alias.name)
+                elif isinstance(node, ast.ImportFrom):
+                    base = _resolve_from(node, package)
+                    if base:
+                        imported.add(base)
+                        for alias in node.names:
+                            imported.add(f"{base}.{alias.name}")
+                elif (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and id(node) not in docstrings
+                ):
+                    literals.append(node.value)
+            strings[path] = "\n".join(literals)
+    return imported, strings
+
+
+def check_unreferenced_modules() -> list[Finding]:
+    """不得留下无人引用的模块。
+
+    典型来历：重构把调用方接到新实现上，旧实现留在原处。它不再被读到，却仍然长得
+    像一套基础设施——`game/cmd/通用/查看/combat.py` 就这样冒充了二十多个提交的
+    「第二套战斗渲染器」，让人对着两套实现判断该统一到哪一套，而正确处置是直接删。
+    死代码不会报错，只能靠查引用发现。
+
+    「被引用」取宽，宁可漏报也不误伤活模块，任一条成立即可：静态导入到该模块全名；
+    别处的字符串字面量里出现该模块全名或文件名（动态装载与配置表走这条路）。
+    """
+
+    imported, strings = _referenced_modules()
+    findings: list[Finding] = []
+    for path in _python_files("game"):
+        if path.name in {"__init__.py", "__main__.py"}:
+            continue  # 包入口与脚本入口本来就不必被导入
+        relative = _relative(path)
+        if relative in UNREFERENCED_MODULE_ALLOWLIST:
+            continue
+        if _module_dotted(path) in imported:
+            continue
+        referenced = False
+        for owner, text in strings.items():
+            if owner == path:
+                continue
+            if _module_dotted(path) in text or path.name in text:
+                referenced = True
+                break
+        if referenced:
+            continue
+        findings.append(
+            Finding(
+                "无人引用的模块",
+                relative,
+                1,
+                f"{_module_dotted(path)} 没有任何导入方；确认是死代码就直接删，"
+                f"确实要留就写进 UNREFERENCED_MODULE_ALLOWLIST 并写明理由",
+            )
+        )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -793,6 +925,7 @@ CHECKS = (
     ("评分进入运行时", check_scoring_outside_tools),
     ("微服务包结构", check_service_doc_coverage),
     ("后台例外边界", check_console_boundary),
+    ("无人引用的模块", check_unreferenced_modules),
 )
 
 
