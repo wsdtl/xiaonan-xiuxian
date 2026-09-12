@@ -31,6 +31,22 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 GAME = ROOT / "game"
 out = io.TextIOWrapper(open(ROOT / "_重复与耦合.txt", "wb"), encoding="utf-8")
 
+#: 算「分支点」时计入的节点：每个都代表一个决策点。
+BRANCH_NODES = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.ExceptHandler,
+                ast.IfExp, ast.BoolOp, ast.comprehension, ast.Match)
+
+
+def depth_of(node: ast.AST, level: int = 0) -> int:
+    """最大嵌套深度：只沿控制流语句往下算，普通表达式不算深。"""
+
+    deepest = level
+    for child in ast.iter_child_nodes(node):
+        step = level + 1 if isinstance(child, (ast.If, ast.For, ast.AsyncFor,
+                                              ast.While, ast.Try, ast.With,
+                                              ast.AsyncWith, ast.Match)) else level
+        deepest = max(deepest, depth_of(child, step))
+    return deepest
+
 
 def normalize(node: ast.AST) -> str:
     """归一化：丢弃标识符与字面量的具体值，只留结构。"""
@@ -131,10 +147,34 @@ def main() -> int:
             out.write(f"        …… 还有 {len(group) - 5} 处\n")
 
     out.write("\n" + "=" * 96 + "\n")
-    out.write("二、最长的 15 个函数（简化通常藏在这里）\n")
+    out.write("二、≥120 行的函数：行数之外还要看**分支密度**与嵌套深度\n")
     out.write("=" * 96 + "\n")
-    for rel, name, line, size in sorted(functions, key=lambda item: -item[3])[:15]:
-        out.write(f"  {size:>4} 行  {rel}:{line}  {name}\n")
+    out.write("行数本身不是判据。长度有两种，成分完全不同：\n")
+    out.write("  线性展开——一长串顺序处理，分支少、嵌套浅。长度来自「事情有几件」而不是\n")
+    out.write("    「逻辑有多绕」。典型：组合根（每服务一段构造 + 初始化 + 日志）、\n")
+    out.write("    按能力名平铺的 if 链（每个原子能力一条）。拆它只是把同样的展开搬走。\n")
+    out.write("  真复杂——分支密集、嵌套深，每个分支是一个决策点。这种才值得拆。\n\n")
+    out.write(f"{'行数':>5}{'语句':>6}{'分支':>6}{'深度':>5}{'分支/百行':>10}  函数\n")
+    long_functions = []
+    for rel, name, line, size in functions:
+        if size < 120:
+            continue
+        node = bodies[(rel, name, line)]
+        statements = sum(1 for item in ast.walk(node) if isinstance(item, ast.stmt))
+        branches = sum(1 for item in ast.walk(node) if isinstance(item, BRANCH_NODES))
+        long_functions.append((size, statements, branches, depth_of(node),
+                               branches / size * 100, rel, line, name))
+    for size, statements, branches, depth, density, rel, line, name in sorted(
+        long_functions, reverse=True
+    ):
+        out.write(f"{size:>5}{statements:>6}{branches:>6}{depth:>5}{density:>10.1f}"
+                  f"  {rel}:{line} {name}\n")
+    if long_functions:
+        average = sum(item[4] for item in long_functions) / len(long_functions)
+        out.write(f"\n  ≥120 行函数 {len(long_functions)} 个，共 "
+                  f"{sum(item[0] for item in long_functions)} 行；"
+                  f"平均分支密度 {average:.1f}\n")
+        out.write("  密度明显**低于**平均的是线性展开（别拆）；明显高于且嵌套深的才值得看。\n")
 
     out.write("\n" + "=" * 96 + "\n")
     out.write("三、耦合热点：被最多文件导入的 game 模块\n")
