@@ -1100,14 +1100,26 @@ class CardText:
         return f"将{source}的{self._select_skill(node['技能'])}复制给{destination}"
 
     def _ability_修改行动意图(self, node: Mapping) -> str:
-        target = self._target(node.get("目标")) if node.get("目标") else "自身"
-        field = {
-            "取消": "取消本次行动",
-            "行动": "改为指定的行动",
-            "目标": "改为指定的目标",
-            "技能": "改为指定的技能",
-        }.get(str(node.get("字段") or ""), str(node.get("字段") or ""))
-        return f"{target}的行动意图{field}"
+        """改的是**行动者那次行动**的意图，不是「〈目标〉的意图」。
+
+        `目标` 字段是「意图被改成的**新目标**」，不是意图的归属者。原先写成
+        `f"{target}的行动意图{field}"`，于是 `{字段: 取消}` 渲染成
+        「自身的行动意图取消本次行动」——而它取消的是**对手**的行动，
+        玩家读到的意思正好相反。所以主体一律用中性且准确的「该次行动」。
+        """
+
+        field = str(node.get("字段") or "")
+        if field == "取消":
+            return "取消该次行动"
+        if field == "行动":
+            return f"将该次行动改为{node.get('值') or '指定行动'}"
+        if field == "目标":
+            if not node.get("目标"):
+                return "将该次行动的目标改为本次事件的目标"
+            return f"将该次行动的目标改为{self._target(node.get('目标'))}"
+        if field == "技能":
+            return f"将该次行动的技能改为{self._select_skill(node['技能'])}"
+        return f"将该次行动的{field}改写"
 
     def _ability_转化事件(self, node: Mapping) -> str:
         return f"将本次事件转化为{node.get('事件')}"
