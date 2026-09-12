@@ -56,6 +56,7 @@ from game.core.sect_assets import SectAssetEntry, SectAssetService
 from game.core.world import LocationQuery, WorldService
 
 from .contracts import SectWarError, SectWarHistoryPage, SectWarStatus, SectWarView
+from game.core.data import strict_text as _text
 
 ENTITY_TYPE = "宗门战"
 STATE_TYPE = "sect_war"
@@ -1006,12 +1007,6 @@ def _expired(value):
         and bool(value.get("过期时间"))
         and _now() >= _time(value.get("过期时间"))
     )
-
-
-def _text(value, label):
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return value.strip()
 
 
 def _request_positive(value, label):

@@ -6,7 +6,12 @@ from collections.abc import Mapping, Sequence
 from math import ceil
 from types import MappingProxyType
 
-from game.core.data import JsonDataError, JsonDataService, positive_int as _positive_int
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    nonempty_text as _text,
+    positive_int as _positive_int,
+)
 from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
@@ -160,13 +165,6 @@ class LingcangFeature:
             or current.space_id != sect.cave_id
         ):
             raise LingcangFeatureError("只有身处本宗洞天时才能使用灵藏")
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return result
 
 
 def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:

@@ -73,6 +73,7 @@ from .contracts import (
     ExplorationStatus,
     ExplorationUserSummary,
 )
+from game.core.data import strict_text
 
 SESSION_STATE = "exploration_session"
 BATTLE_STATE = "exploration_battle"
@@ -1404,9 +1405,7 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
 
 
 def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ExplorationStateError(f"{label}必须是非空字符串")
-    return value.strip()
+    return strict_text(value, label, error=ExplorationStateError)
 
 
 def _user_id(value: object) -> str:

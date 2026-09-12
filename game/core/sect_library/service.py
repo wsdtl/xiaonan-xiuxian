@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from game.core.asset import AssetService
-from game.core.data import JsonDataError, JsonDataService, mapping, mapping as _json_mapping
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping,
+    mapping as _json_mapping,
+    sequence,
+)
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -224,9 +230,7 @@ def _mapping(value: object, label: str) -> Mapping[str, object]:
 
 
 def _slots(value: object, label: str) -> tuple[object, ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise SectLibraryError(f"{label}槽必须是数组")
-    return tuple(value)
+    return sequence(value, label, error=SectLibraryError)
 
 
 __all__ = ["SectLibraryService"]

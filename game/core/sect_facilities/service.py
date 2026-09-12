@@ -50,7 +50,7 @@ from .contracts import (
     SectForgingPreview,
     SectFormationPreview,
 )
-from game.core.data import boolean as _bool
+from game.core.data import boolean as _bool, nonempty_text as _text
 
 _FACILITY_TYPES = ("炼器", "炼丹", "炼阵")
 
@@ -696,13 +696,6 @@ class SectFacilityService:
     def _require(self) -> None:
         if not self._initialized:
             raise RuntimeError("宗门设施核心尚未初始化")
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return result
 
 
 def _texts(value: object, label: str) -> tuple[str, ...]:

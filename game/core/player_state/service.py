@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
 
-from game.core.data import ContractSet, JsonDataService, materialize, mapping
+from game.core.data import ContractSet, JsonDataService, materialize, mapping, strict_text
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -711,9 +711,7 @@ def _mapping(value: object, label: str) -> Mapping[str, Any]:
 
 
 def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise PlayerStateRuleError(f"{label}必须是非空字符串")
-    return value.strip()
+    return strict_text(value, label, error=PlayerStateRuleError)
 
 
 def _nonnegative_number(value: object, label: str) -> float:

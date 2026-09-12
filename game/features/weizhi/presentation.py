@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from string import Formatter
 from types import MappingProxyType
 
-from game.core.data import JsonDataError, positive_int as _positive_int
+from game.core.data import JsonDataError, positive_int as _positive_int, strict_text as _text
 from game.features.presentation import require_mapping
 
 from .contracts import PositionAction, PositionCopy
@@ -471,12 +471,6 @@ def _partial_template(
             f"{label}只能使用占位符：{'、'.join(sorted(allowed_fields)) or '无'}"
         )
     return template, found
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return value.strip()
 
 
 def _require_keys(value: Mapping[str, object], expected: set[str], label: str) -> None:

@@ -59,7 +59,7 @@ from .contracts import (
     CompanionStatus,
     LocalCultivator,
 )
-from game.core.data import boolean, boolean as _bool
+from game.core.data import boolean, boolean as _bool, strict_text as _text
 
 RELATION_STATE = "companion_relation"
 ACTIVE_STATE = "companion_active"
@@ -1729,12 +1729,6 @@ def _integer_range(value: object, label: str) -> tuple[int, int]:
     if minimum > maximum:
         raise JsonDataError(f"{label}下限不能大于上限")
     return minimum, maximum
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return value.strip()
 
 
 def _state_text(value: object, label: str) -> str:

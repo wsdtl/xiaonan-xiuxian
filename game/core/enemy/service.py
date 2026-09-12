@@ -20,7 +20,7 @@ from game.core.growth import GrowthService
 from game.core.pool import EXPAND_DEDUPLICATED, PoolRequest, PoolService
 
 from .contracts import EnemyDrop, EnemyGroup, EnemyInstance, EnemyReward, EnemyStatus
-from game.core.data import sequence as _sequence
+from game.core.data import sequence as _sequence, strict_text as _text
 
 
 class EnemyService:
@@ -441,12 +441,6 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
     if not result:
         raise JsonDataError(f"{label}不能为空")
     return result
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return value.strip()
 
 
 def _range(value: object, label: str) -> tuple[int, int]:

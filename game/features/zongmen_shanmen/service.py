@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from game.core.action_group import ActionGroupError, ActionGroupService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, nonempty_text as _text
 from game.core.location import (
     LocationConflictError,
     LocationService,
@@ -158,13 +158,6 @@ class GateFeature:
     def _require_initialized(self) -> None:
         if self._copy is None:
             raise RuntimeError("山门玩法尚未初始化")
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return result
 
 
 __all__ = ["GateFeature"]

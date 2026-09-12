@@ -66,7 +66,7 @@ from .contracts import (
     InventorySummary,
     WeaponProfile,
 )
-from game.core.data import boolean, boolean as _bool
+from game.core.data import boolean, boolean as _bool, strict_text
 
 
 class CharacterService:
@@ -1452,9 +1452,7 @@ def _state_mapping(value: object, label: str) -> Mapping[str, object]:
 
 
 def _state_text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise CharacterStateError(f"{label}必须是非空字符串")
-    return value.strip()
+    return strict_text(value, label, error=CharacterStateError)
 
 
 def _prepared_battle_medicine(

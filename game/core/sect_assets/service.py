@@ -47,6 +47,7 @@ from .contracts import (
     SectProductionAssetPlan,
     SectResourceGainPlan,
 )
+from game.core.data import nonempty_text as _rule_text
 
 LINGCANG_TYPE = "宗门灵藏"
 WANZHEN_TYPE = "宗门万珍殿"
@@ -899,13 +900,6 @@ def _material_contribution(
         raise SectAssetError(f"物品缺少有效{reference_field}")
     amount = Decimal(str(reference)) * price_multiplier / Decimal(divisor)
     return int(amount.to_integral_value(rounding=ROUND_FLOOR)) * quantity
-
-
-def _rule_text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}必须是非空字符串")
-    return result
 
 
 def _entity_name(data: JsonDataService, category: str, content_id: str) -> str:
