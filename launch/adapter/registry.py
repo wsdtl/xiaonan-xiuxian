@@ -52,19 +52,30 @@ def available_adapter_specs() -> dict[str, AdapterSpec]:
     """返回项目已接入的适配器清单。
 
     这里使用函数内导入，避免公共注册器导入时提前启动 QQ 或 Local 模块。
+    QQ 的 webhook（qq_wh）与 WebSocket（qq_ws）是两个独立驱动器，但共用
+    qq_protocol 里的同一份命令注册表、事件解析和回复管理器。
     """
 
-    from . import local, qq
+    from . import local, qq_wh, qq_ws
     from .local.manager import current_event as current_local_event
-    from .qq.manager import current_event
+    from .qq_protocol.manager import current_event, manager as qq_manager
 
     return {
         "qq": AdapterSpec(
             name="qq",
-            handler=qq.QqEventHandler,
-            manager=qq.manager,
+            handler=qq_wh.QqEventHandler,
+            manager=qq_manager,
             has_context=lambda: current_event.get() is not None,
-            http_mount=AdapterHttpMount(path=qq.QQ_EVENT_ROUTE, router=qq.router),
+            http_mount=AdapterHttpMount(
+                path=qq_wh.QQ_EVENT_ROUTE,
+                router=qq_wh.router,
+            ),
+        ),
+        "qq_ws": AdapterSpec(
+            name="qq_ws",
+            handler=qq_ws.QqWsEventHandler,
+            manager=qq_manager,
+            has_context=lambda: current_event.get() is not None,
         ),
         "local": AdapterSpec(
             name="local",
@@ -75,14 +86,41 @@ def available_adapter_specs() -> dict[str, AdapterSpec]:
     }
 
 
+# 入站传输开关的合法取值。
+QQ_TRANSPORTS: dict[str, tuple[str, ...]] = {
+    "webhook": ("qq", "local"),
+    "websocket": ("qq_ws", "local"),
+    "both": ("qq", "qq_ws", "local"),
+}
+
+# 未配置时的入站方式。开放平台回调是长期在用的路径，保持默认可以让升级
+# 驱动器这件事不影响线上；要切网关长连接时在 `.env` 显式写 websocket。
+DEFAULT_QQ_TRANSPORT = "webhook"
+
+
+def qq_transport() -> str:
+    """读取 QQ 入站传输开关，未配置时默认沿用 webhook。"""
+
+    from launch.config import config
+
+    value = str(
+        config.get("QQ_TRANSPORT", DEFAULT_QQ_TRANSPORT) or DEFAULT_QQ_TRANSPORT
+    ).strip().lower()
+    if value not in QQ_TRANSPORTS:
+        raise ValueError(
+            f"QQ_TRANSPORT 只能是 {'/'.join(QQ_TRANSPORTS)}，当前值是：{value}"
+        )
+    return value
+
+
 def enabled_adapter_names() -> list[str]:
     """返回当前运行时启用的适配器名称。
 
-    适配器数量很少且由代码明确控制；配置只控制业务模块，不在 `.env`
-    里再引入一套容易失控的驱动器开关。
+    驱动器清单由代码登记，配置只决定 QQ 走哪一种入站传输；`local` 始终
+    启用，天道后台和托管依赖它派发命令。
     """
 
-    return ["qq", "local"]
+    return list(QQ_TRANSPORTS[qq_transport()])
 
 
 def enabled_adapter_specs() -> list[AdapterSpec]:

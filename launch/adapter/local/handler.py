@@ -12,15 +12,12 @@ from launch.log import C, logger
 from launch.message_events import emit_message_event, event_from_incoming
 
 from ..base_handler import BaseMessageHandler
-from ..command_guard import CommandGuardContext, run_command_guards
 from ..context import (
     CONVERSATION_PRIVATE,
     MessageContext,
     ReplyTarget,
-    reset_current_message_context,
-    set_current_message_context,
 )
-from ..depends import call_with_dependencies
+from ..shared_dispatch import MessageDispatchMixin
 from .event import LocalCommandEvent, local_command_event
 from .manager import LocalDispatchResult, current_event, manager
 
@@ -50,7 +47,7 @@ class LocalCommandMatch:
     match: re.Match | None = None
 
 
-class LocalEventHandler(BaseMessageHandler):
+class LocalEventHandler(MessageDispatchMixin, BaseMessageHandler):
     """本地触发文本驱动器。"""
 
     command_rules: ClassVar[dict[str, list[LocalCommandRule]]] = {}
@@ -122,65 +119,27 @@ class LocalEventHandler(BaseMessageHandler):
                 return result
 
             execution_plan = LocalEventHandler._execution_plan(matched)
-            if await LocalEventHandler._guards_blocked(execution_plan, event):
+            if await LocalEventHandler._guards_blocked(
+                execution_plan,
+                event,
+                message_context=LocalEventHandler._message_context,
+                manager=manager,
+            ):
                 return result
 
             for item in execution_plan:
-                await LocalEventHandler._call_rule(item, event)
+                await LocalEventHandler._call_rule(
+                    item,
+                    event,
+                    message_context=LocalEventHandler._message_context,
+                    manager=manager,
+                    raw_message=event.raw_message,
+                )
 
             return result
         finally:
             current_event.reset(event_token)
             manager.reset_result(result_token)
-
-    @staticmethod
-    async def _guard_blocked(item: LocalCommandMatch, event: LocalCommandEvent) -> bool:
-        """执行一条待调用规则自己的命令守卫。"""
-
-        message_context = LocalEventHandler._message_context(item, event)
-        context_token = set_current_message_context(message_context)
-        try:
-            decision = await run_command_guards(
-                CommandGuardContext(
-                    message_context=message_context,
-                    command_metadata=item.rule.metadata,
-                )
-            )
-            if not decision.blocked:
-                return False
-
-            if decision.reply is not None:
-                await manager.send(decision.reply)
-            return True
-        finally:
-            reset_current_message_context(context_token)
-
-    @staticmethod
-    def _execution_plan(
-        matched: list[LocalCommandMatch],
-    ) -> list[LocalCommandMatch]:
-        """按 block 规则截取本次消息真正可能执行的回调。"""
-
-        planned: list[LocalCommandMatch] = []
-        block_priority: int | None = None
-        for item in matched:
-            if block_priority is not None and item.rule.priority < block_priority:
-                break
-            planned.append(item)
-            if item.rule.block:
-                block_priority = item.rule.priority
-        return planned
-
-    @staticmethod
-    async def _guards_blocked(
-        items: list[LocalCommandMatch], event: LocalCommandEvent
-    ) -> bool:
-        """先校验全部待执行回调，避免守卫失败前出现部分业务副作用。"""
-
-        for item in items:
-            if await LocalEventHandler._guard_blocked(item, event):
-                return True
-        return False
 
     @staticmethod
     def fullmatch(
@@ -234,23 +193,6 @@ class LocalEventHandler(BaseMessageHandler):
         )
 
     @staticmethod
-    def _callback_wrapper(
-        commands: list,
-        registrar: Callable,
-        priority: int,
-        block: bool,
-        metadata: dict[str, Any] | None,
-    ) -> Callable:
-        """把已校验的注册项绑定到业务回调。"""
-
-        def wrapper(func: Callable) -> Callable:
-            for command in commands:
-                registrar(command, func, priority, block, metadata)
-            return func
-
-        return wrapper
-
-    @staticmethod
     async def _match_event(event: LocalCommandEvent) -> list[LocalCommandMatch]:
         """按本地消息正文匹配已注册命令。"""
 
@@ -280,30 +222,6 @@ class LocalEventHandler(BaseMessageHandler):
 
         matched.sort(key=lambda item: (-item.rule.priority, item.rule.order))
         return matched
-
-    @staticmethod
-    async def _call_rule(item: LocalCommandMatch, event: LocalCommandEvent) -> None:
-        """把本地事件上下文转换成业务函数可接收的参数。"""
-
-        message_context = LocalEventHandler._message_context(item, event)
-        context_token = set_current_message_context(message_context)
-        try:
-            await call_with_dependencies(
-                item.rule.func,
-                {
-                    "user_id": message_context.user_id,
-                    "message": item.message,
-                    "manager": manager,
-                    "cmd": item.command,
-                    "raw_message": event.raw_message,
-                    "message_context": message_context,
-                    "sender_name": message_context.sender_name,
-                    "reply_target": message_context.reply_target,
-                    "match": item.match,
-                },
-            )
-        finally:
-            reset_current_message_context(context_token)
 
     @staticmethod
     def _message_context(
@@ -534,14 +452,3 @@ class LocalEventHandler(BaseMessageHandler):
         if any(not isinstance(command, re.Pattern) for command in commands):
             raise TypeError("regex 注册器只支持 re.Pattern")
         return commands
-
-    @staticmethod
-    def _short_text(value: object, limit: int = 80) -> str:
-        """压缩日志正文长度。"""
-
-        text = re.sub(r"\s+", " ", str(value or "")).strip()
-        if not text:
-            return "-"
-        if len(text) <= limit:
-            return text
-        return f"{text[: limit - 1]}..."

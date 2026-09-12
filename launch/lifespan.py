@@ -34,11 +34,16 @@ class LifecycleCleanupError(RuntimeError):
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """FastAPI 生命周期。
 
-    启动：挂载适配器、启动调度器、按优先级运行启动回调。
-    关闭：关闭调度器、按优先级运行关闭回调、关闭适配器。
+    启动：调度器 → 业务启动回调（含业务服务装配）→ 挂载并启动驱动器。
+    关闭：按相反顺序——驱动器、调度器、业务关闭回调、静态资源与运行锁。
+
+    驱动器必须最后启动：它一开始收事件就会调用业务回调，而业务回调依赖
+    启动回调装配好的微服务。调度器必须早于业务启动回调，否则会调用
+    `Scheduler.instance.add_job` 的那些回调会静默失效。
     """
 
     cleanup_errors: list[Exception] = []
+    started_adapters: list[type] = []
     runtime_guard.acquire()
     try:
         async with AsyncExitStack() as cleanup:
@@ -49,36 +54,47 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
                 cleanup_errors,
             )
 
-            adapters = _mount_app(app)
-            for adapter in adapters:
-                cleanup.push_async_callback(
-                    _capture_cleanup,
-                    f"适配器 {adapter.__name__}",
-                    adapter.shutdown,
-                    cleanup_errors,
-                )
-                await adapter.run()
-
+            # 关闭顺序靠 AsyncExitStack 逆序保证：驱动器先停（不再有新事件
+            # 进来）、再停调度器、最后跑业务关闭回调并释放业务服务。
             disconnect_callbacks = OnEvent.ordered_callbacks(OnEvent.disconnect_list)
             cleanup.push_async_callback(
                 _capture_callbacks,
                 disconnect_callbacks,
                 cleanup_errors,
             )
-
-            # AsyncExitStack 逆序清理：调度器必须先停，后台作业才不会在
-            # 数据库等业务服务释放后继续访问它们。
-            # 调度器的三个动作都是同步 API，不需要再包一层协程。
+            cleanup.push_async_callback(
+                _capture_adapters_shutdown,
+                started_adapters,
+                cleanup_errors,
+            )
             cleanup.callback(
                 _capture_sync_cleanup,
                 "调度器",
                 _shutdown_schedulers,
                 cleanup_errors,
             )
+
+            # 启动顺序：调度器 → 业务启动回调 → 驱动器启动。三段各有硬理由：
+            #
+            # - 调度器先于业务回调：托管恢复等回调会调用
+            #   `Scheduler.instance.add_job`，调度器未运行时它们静默返回，
+            #   重启后托管计划就恢复不了。
+            # - 驱动器最后启动：它一开始收事件就会调用业务回调，而业务回调
+            #   统一通过 `current_game_services()` 取服务，服务未装配时直接抛
+            #   RuntimeError，启动窗口内到达的玩家消息每条都会失败。
+            #
+            # 业务服务的装配本身是优先级最高的启动回调（game/app.py），所以
+            # 它自然排在托管恢复之前。调度器启动是同步 API，不需要包协程。
             _start_schedulers()
-            _add_scheduler_jobs()
 
             await _run_callbacks(OnEvent.ordered_callbacks(OnEvent.connect_list))
+
+            _add_scheduler_jobs()
+
+            adapters = _mount_app(app)
+            for adapter in adapters:
+                started_adapters.append(adapter)
+                await adapter.run()
 
             logger.opt(colors=True).success(f"{C.ok('FastAPI 服务启动成功')}")
             yield
@@ -148,6 +164,23 @@ async def _run_callbacks(callbacks: Iterable[Callable]) -> None:
         result = callback()
         if inspect.isawaitable(result):
             await result
+
+
+async def _capture_adapters_shutdown(
+    adapters: list[type], cleanup_errors: list[Exception]
+) -> None:
+    """停止已经启动的驱动器；单项失败不能阻断后续清理。
+
+    逆序关闭：启动顺序是"业务服务 → 调度器 → 驱动器"，关闭必须严格相反，
+    后启动的驱动器先停，避免关闭阶段仍有新事件进入正在释放的业务服务。
+    """
+
+    for adapter in reversed(adapters):
+        await _capture_cleanup(
+            f"驱动器 {adapter.__name__}",
+            adapter.shutdown,
+            cleanup_errors,
+        )
 
 
 async def _capture_callbacks(

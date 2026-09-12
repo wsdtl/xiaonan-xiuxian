@@ -91,6 +91,7 @@ bash start.sh
 .venv/Scripts/python.exe -X utf8 tools/架构审查/检查构筑形状.py
 .venv/Scripts/python.exe -X utf8 tools/验证控制台媒体.py
 .venv/Scripts/python.exe -X utf8 tools/验证驱动器派发.py
+.venv/Scripts/python.exe -X utf8 tools/验证启动顺序.py
 .venv/Scripts/python.exe -X utf8 tools/验证QQ传输开关.py
 .venv/Scripts/python.exe -X utf8 tools/验证QQ双驱动器生命周期.py
 .venv/Scripts/python.exe -X utf8 tools/验证QQWebSocket.py
@@ -113,6 +114,7 @@ bash start.sh
 
 - `验证控制台媒体.py`：控制台图片物化、落盘与引用清理的行为契约；
 - `验证驱动器派发.py`：QQ webhook、QQ WebSocket 与 Local 三个驱动器在共享派发逻辑上的一致性与截断符契约；
+- `验证启动顺序.py`：框架生命周期顺序——驱动器晚于业务服务启动、调度器早于业务启动回调、静态资源与 QQ 入口确实挂载；
 - `验证QQ传输开关.py`：`QQ_TRANSPORT` 各取值、未配置时的默认值（webhook）、非法值必须报错，以及两个 QQ 驱动器共用同一个回复管理器；
 - `验证QQ双驱动器生命周期.py`：`both` 模式下两种启停顺序，共享运行时都不会被提前拆掉；
 - `验证QQWebSocket.py`：回环假网关上的握手、鉴权、心跳、命令派发、回复载荷与 Resume 全链路；

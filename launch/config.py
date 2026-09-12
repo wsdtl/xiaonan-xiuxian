@@ -76,12 +76,24 @@ ROUTER_ENV_KEYS = {
 }
 
 
+# 通信驱动器配置在 .env 里的键名。
+#
+# 驱动器清单本身由代码登记，这里只放"启用哪些"和驱动器自己的协议参数。
+# 框架不猜测业务含义，所以这些键不进入 config.custom。
+ADAPTER_ENV_KEYS = {
+    "QQ_TRANSPORT",
+    "QQ_WS_GATEWAY_URL",
+    "QQ_WS_INTENTS",
+}
+
+
 # 项目已经认识的配置键名；其他 .env 项会进入 config.custom。
 SYSTEM_ENV_KEYS = (
     PROJECT_ENV_KEYS
     | SERVER_ENV_KEYS
     | LOG_ENV_KEYS
     | ROUTER_ENV_KEYS
+    | ADAPTER_ENV_KEYS
 )
 
 

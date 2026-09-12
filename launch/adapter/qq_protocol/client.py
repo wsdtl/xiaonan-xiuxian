@@ -95,6 +95,33 @@ class QqOpenApiClient:
             log_title="QQ 按钮回调已确认",
         )
 
+    def get_gateway_info(self) -> dict:
+        """获取 WebSocket 网关地址、分片建议和连接数限制。
+
+        这是 WebSocket 传输唯一的建连前置请求，走同一条 OpenAPI 鉴权和
+        重试规则，因此 access token 与 HTTP 连接池和回复链路完全共用。
+        """
+
+        result = self._get_openapi("/gateway/bot", log_title="QQ 网关地址获取成功")
+        url = str(result.get("url") or "").strip()
+        if not url:
+            raise RuntimeError(
+                f"QQ 网关接口未返回 url：{json.dumps(result, ensure_ascii=False)}"
+            )
+
+        limit = (
+            result.get("session_start_limit")
+            if isinstance(result.get("session_start_limit"), dict)
+            else {}
+        )
+        shards = _positive_int(result.get("shards"), 1)
+        return {
+            "url": url,
+            "shards": shards,
+            "remaining": _positive_int(limit.get("remaining"), 0, allow_zero=True),
+            "max_concurrency": _positive_int(limit.get("max_concurrency"), 1),
+        }
+
     def upload_c2c_image(self, user_id: str, image_bytes: bytes) -> str:
         """上传 C2C 私聊图片，返回发消息接口可使用的 file_info。"""
 
@@ -162,6 +189,11 @@ class QqOpenApiClient:
         """调用 QQ OpenAPI，遇到 token 失效时刷新后重试一次。"""
 
         return self._request_openapi("POST", path, payload, log_title)
+
+    def _get_openapi(self, path: str, log_title: str) -> dict:
+        """调用 QQ OpenAPI 的 GET 接口。"""
+
+        return self._request_openapi("GET", path, {}, log_title)
 
     def _put_openapi(self, path: str, payload: dict, log_title: str) -> dict:
         """调用 QQ OpenAPI PUT 接口，遇到 token 失效时刷新后重试一次。"""
@@ -408,6 +440,18 @@ class QqOpenApiClient:
         if len(text) <= head + tail + 3:
             return text
         return f"{text[:head]}...{text[-tail:]}"
+
+
+def _positive_int(value: object, default: int, *, allow_zero: bool = False) -> int:
+    """把网关返回的数值字段安全转成正整数。"""
+
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    if number < 0 or (number == 0 and not allow_zero):
+        return default
+    return number
 
 
 class QqOpenApiError(RuntimeError):
