@@ -35,7 +35,7 @@ REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("单元测试", ("-m", "pytest", "-q",)),
     ("数据审查（audit_data）", ("tools/audit_data.py",)),
     ("战斗说明审查", ("tools/audit_combat_descriptions.py",)),
-    ("协议适配（21 例）", ("tools/协议适配对照.py",)),
+    ("协议适配（44 例）", ("tools/协议适配对照.py",)),
 )
 
 #: 慢项：语料通道与历史数据审查。改数据、改渲染、改战斗时必须跑。

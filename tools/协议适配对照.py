@@ -96,7 +96,94 @@ def _cases() -> list[tuple[str, object]]:
         ("载荷/图片", lambda: payload.image("base64-abc")),
         ("载荷/原始", lambda: payload.raw({"content": "x", "msg_type": 0})),
     ]
+    return cases + _inbound_cases()
+
+
+def _inbound_cases() -> list[tuple[str, object]]:
+    """入站解析的兼容样本。
+
+    样本按代码里的回退链造：`author` 的多种编号字段与名字层级、群事件类型的多个名字、
+    mention 的 `is_you` 两种写法、按钮回调里 `resolved` 与文档拼写 `resoloved`。
+    其中「应当成功」的几条由 `main()` 里的自检门把关——解析不出事件就拒绝写基准。
+    """
+
+    from launch.adapter.qq_protocol.event import (
+        normalize_content,
+        parse_interaction_event,
+        parse_message_event,
+    )
+
+    def message(**data: object) -> dict:
+        return {"t": "C2C_MESSAGE_CREATE", "d": data}
+
+    def group(**data: object) -> dict:
+        return {"t": "GROUP_AT_MESSAGE_CREATE", "d": data}
+
+    base = {"id": "MSG-1", "content": "查看 100005", "author": {"id": "u-1"}}
+
+    cases: list[tuple[str, object]] = [
+        # --- 应当成功：私聊 ---
+        ("入站/私聊基本", lambda: parse_message_event(message(**base), bot_name="晓楠")),
+        ("入站/私聊-author.user_openid", lambda: parse_message_event(
+            message(id="MSG-2", content="查看 100005", author={"user_openid": "u-2"}), bot_name="晓楠")),
+        ("入站/私聊-author.member_openid", lambda: parse_message_event(
+            message(id="MSG-3", content="查看 100005", author={"member_openid": "u-3"}), bot_name="晓楠")),
+        # --- 应当成功：群聊（群编号的两种字段） ---
+        ("入站/群聊-group_openid", lambda: parse_message_event(
+            group(**base, group_openid="g-1"), bot_name="晓楠")),
+        ("入站/群聊-group_id", lambda: parse_message_event(
+            group(**base, group_id="g-2"), bot_name="晓楠")),
+        # --- 应当失败：缺件与不认识的体裁 ---
+        ("入站/群聊缺群编号", lambda: parse_message_event(group(**base), bot_name="晓楠")),
+        ("入站/缺正文", lambda: parse_message_event(
+            message(id="MSG-4", author={"id": "u-1"}), bot_name="晓楠")),
+        ("入站/缺消息编号", lambda: parse_message_event(
+            message(content="查看 100005", author={"id": "u-1"}), bot_name="晓楠")),
+        ("入站/缺发送者", lambda: parse_message_event(
+            message(id="MSG-5", content="查看 100005"), bot_name="晓楠")),
+        ("入站/不认识的体裁", lambda: parse_message_event(
+            {"t": "SOMETHING_ELSE", "d": base}, bot_name="晓楠")),
+        ("入站/d 不是对象", lambda: parse_message_event(
+            {"t": "C2C_MESSAGE_CREATE", "d": "not-a-dict"}, bot_name="晓楠")),
+        ("入站/空 payload", lambda: parse_message_event({}, bot_name="晓楠")),
+        # --- 正文归一：mention 的两种 is_you 写法与机器人名匹配 ---
+        ("正文/纯文本", lambda: normalize_content("查看 100005", event_type="C2C_MESSAGE_CREATE")),
+        ("正文/开头 at 机器人-bool", lambda: normalize_content(
+            "<@BOT> 查看 100005", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[{"id": "BOT", "is_you": True, "user_id": "bot-1"}], bot_name="晓楠")),
+        ("正文/开头 at 机器人-字符串 is_you", lambda: normalize_content(
+            "<@BOT> 查看 100005", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[{"id": "BOT", "is_you": "true", "user_id": "bot-1"}], bot_name="晓楠")),
+        ("正文/开头 at 缺 is_you", lambda: normalize_content(
+            "<@BOT> 查看 100005", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[{"id": "BOT", "user_id": "bot-1"}], bot_name="晓楠")),
+        ("正文/开头 at 按名字匹配", lambda: normalize_content(
+            "<@晓楠> 查看 100005", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[{"id": "BOT", "user_id": "bot-1"}], bot_name="晓楠")),
+        ("正文/中间 at 别人保留为参数", lambda: normalize_content(
+            "查看 <@OTHER>", event_type="GROUP_AT_MESSAGE_CREATE",
+            mentions=[{"id": "OTHER", "is_you": False, "user_id": "u-9"}], bot_name="晓楠")),
+        ("正文/mentions 不是列表", lambda: normalize_content(
+            "<@BOT> 查看", event_type="GROUP_AT_MESSAGE_CREATE", mentions="x", bot_name="晓楠")),
+        # --- 按钮回调：resolved 与文档拼写 resoloved ---
+        ("按钮/resolved 写法", lambda: parse_interaction_event(
+            {"t": "INTERACTION_CREATE", "d": {"id": "IA-1", "group_openid": "g-1"}},
+            {"button_data": "查看 100005", "resolved": {"user_id": "u-1"}})),
+        ("按钮/resoloved 写法", lambda: parse_interaction_event(
+            {"t": "INTERACTION_CREATE", "d": {"id": "IA-2", "group_openid": "g-1"}},
+            {"button_data": "查看 100005", "resoloved": {"user_id": "u-2"}})),
+        ("按钮/群成员编号", lambda: parse_interaction_event(
+            {"t": "INTERACTION_CREATE", "d": {"id": "IA-3", "group_openid": "g-1"}},
+            {"button_data": "查看 100005", "group_member_openid": "u-3"})),
+        ("按钮/缺按钮数据", lambda: parse_interaction_event(
+            {"t": "INTERACTION_CREATE", "d": {"id": "IA-4", "group_openid": "g-1"}},
+            {"resolved": {"user_id": "u-1"}})),
+    ]
     return cases
+
+
+#: 自检门：这些样本必须解析出事件，否则说明样本形状不对，基准不该写。
+MUST_SUCCEED = ("入站/私聊基本", "入站/群聊-group_openid", "正文/纯文本")
 
 
 def digest() -> tuple[dict[str, object], list[str]]:
@@ -121,6 +208,12 @@ def main() -> int:
     print(f"{len(summary)} 例，其中抛错 {len(raised)} 例（抛错也会进摘要）")
     for line in raised[:10]:
         print(f"  {line}")
+
+    # 自检门：样本形状不对时，摘要会记一堆 None，那种基准不如不写。
+    blank = [name for name in MUST_SUCCEED if summary.get(name) in (None, {"异常": None})]
+    if blank:
+        print(f"自检未过：{ '、'.join(blank) } 没解析出内容，样本形状不对，拒绝写基准")
+        return 2
 
     baseline = pathlib.Path(args.基准)
     if args.写基准:
