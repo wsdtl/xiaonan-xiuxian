@@ -149,17 +149,18 @@ def main() -> int:
     if args.差异名单:
         listing = pathlib.Path(args.差异名单)
         listing.parent.mkdir(parents=True, exist_ok=True)
-        # 差异条目的左方就是被改的构筑卡（`功法:400001 vs 真意:700001`），
-        # 顺手把左方卡片集去重列出，大批次验收时能一眼核「差异 ⊆ 授权集」。
-        left = sorted({key.split(" vs ")[0] for key in changed})
+        # 差异条目的**两侧都可能是被改的卡**：右方是三张固定对手，它们自己也可能在授权集里。
+        # 只取左方会在「对手也被授权」时把正常的连锁变化报成越界（第 36 轮踩过：
+        # 5896 条差异全是连锁，两侧都非授权的是 0 条），所以取两侧并集。
+        involved = sorted({part for key in changed for part in key.split(" vs ")})
         listing.write_text(
             json.dumps(
-                {"差异": changed, "差异卡": left, "新增": added, "缺失": removed},
+                {"差异": changed, "差异卡": involved, "新增": added, "缺失": removed},
                 ensure_ascii=False, indent=1,
             ) + "\n",
             encoding="utf-8",
         )
-        print(f"  完整差异清单已写入 {listing}（涉及左方卡片 {len(left)} 张）")
+        print(f"  完整差异清单已写入 {listing}（涉及卡片 {len(involved)} 张，两侧并集）")
     return 1 if (changed or added or removed or failures) else 0
 
 
