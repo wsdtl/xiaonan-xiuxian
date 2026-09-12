@@ -53,7 +53,9 @@ def load_cards(path: pathlib.Path) -> list[str]:
                 return [str(item) for item in raw[key]]
         if raw and all(isinstance(value, list) for value in raw.values()):
             # 也吃 `换源恢复.py --授权集` 的格式：{"data/战斗/内容/真意/真意-绝境.json": ["410129", …]}
-            cards = [f"{pathlib.Path(name).parts[-2]}:{cid}"
+            # 体裁取**文件名前缀**（`器律-时序.json` → 器律）。按目录倒数第二段取会在器律上错：
+            # 器律在 `data/炼器/内容/` 下，那一段是「内容」，于是器律卡被记成 `内容:700001`。
+            cards = [f"{pathlib.Path(name).stem.split('-')[0]}:{cid}"
                      for name, ids in raw.items() for cid in ids]
             return sorted(set(cards))
         return [str(key) for key in raw]
