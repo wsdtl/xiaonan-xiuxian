@@ -90,6 +90,8 @@ def main() -> int:
     parser.add_argument("--基准", default=str(DEFAULT_BASELINE), help="入库基准摘要")
     parser.add_argument("--写基准", action="store_true", help="把当前摘要写进 --基准")
     parser.add_argument("--数据", default=str(ROOT / "data"), help="要跑的数据目录")
+    parser.add_argument("--差异名单", default="",
+                        help="把完整差异清单写到这个文件（大批次逐条验收用；终端只列前 20 条）")
     args = parser.parse_args()
 
     root = pathlib.Path(args.数据)
@@ -144,6 +146,15 @@ def main() -> int:
                 print(f"      {line}")
     if len(changed) > 20:
         print(f"  …… 其余 {len(changed) - 20} 条差异从略")
+    if args.差异名单:
+        listing = pathlib.Path(args.差异名单)
+        listing.parent.mkdir(parents=True, exist_ok=True)
+        listing.write_text(
+            json.dumps({"差异": changed, "新增": added, "缺失": missing},
+                       ensure_ascii=False, indent=1) + "\n",
+            encoding="utf-8",
+        )
+        print(f"  完整差异清单已写入 {listing}（{len(changed)} 条）")
     for key in added[:10]:
         print(f"  [新增] {key}")
     for key in missing[:10]:

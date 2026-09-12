@@ -106,6 +106,8 @@ def main() -> int:
     parser.add_argument("--数据", help="要跑的数据目录；默认 data，或环境变量 CORPUS_DATA")
     parser.add_argument("--写基准", action="store_true", help="把当前摘要写进入库基准")
     parser.add_argument("--允许失败", action="store_true", help="有战斗抛错时也写摘要")
+    parser.add_argument("--差异名单", default="",
+                        help="把完整差异清单写到这个文件（大批次逐条验收用；终端只列前 40 条）")
     args = parser.parse_args()
 
     data_dir = pathlib.Path(
@@ -187,6 +189,17 @@ def main() -> int:
         print(f"    {key}: {expected[key]} -> {sem[key]}")
     if len(changed) > 40:
         print(f"    …… 差异共 {len(changed)} 条，只列前 40")
+    if args.差异名单:
+        listing = pathlib.Path(args.差异名单)
+        listing.parent.mkdir(parents=True, exist_ok=True)
+        # 键是 `体裁:编号`，顺手把左方卡片去重列出，大批次一眼核「差异 ⊆ 授权集」。
+        cards = sorted({":".join(key.split(":")[:2]) for key in changed if ":" in key})
+        listing.write_text(
+            json.dumps({"差异": changed, "差异卡": cards, "新增": added, "缺失": removed},
+                       ensure_ascii=False, indent=1) + "\n",
+            encoding="utf-8",
+        )
+        print(f"    完整差异清单已写入 {listing}（{len(changed)} 条）")
     for key in added[:20]:
         print(f"    新增 {key}")
     for key in removed[:20]:
