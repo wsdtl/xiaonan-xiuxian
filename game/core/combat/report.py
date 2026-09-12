@@ -51,24 +51,16 @@ def build_battle_report(
     generated_at: str | None = None,
     scene: str = "青岚山演武台",
 ) -> dict[str, Any]:
-    """生成 `晓楠修仙.战报.v1`；前端不再解释战斗事件。"""
+    """生成 `晓楠修仙.战报.v1`；前端不再解释战斗事件。
 
-    if len(participants) < 2:
-        raise ValueError("战报至少需要两名参战者")
-    if len({value.id for value in participants}) != len(participants):
-        raise ValueError("战报参战者 ID 不能重复")
+    本函数只做校验、取色、按段拼装；每一段各自成函数（见下方 `_*_section` 与
+    `_event_*`）。战报的字段形状是**对外契约**，改这里等于改前端要看的东西。
+    """
+
     left_results = outcome.left_results
     right_results = outcome.right_results
     outcome_results = (*left_results, *right_results)
-    outcome_ids = {value.id for value in outcome_results}
-    participant_ids = {value.id for value in participants}
-    if participant_ids != outcome_ids:
-        raise ValueError("战报参战者必须与战斗结果中的全部参战者一致")
-    outcome_by_id = {value.id: value for value in outcome_results}
-    for participant in participants:
-        result = outcome_by_id[participant.id]
-        if int(participant.level) != result.level or str(participant.combatant_type) != result.combatant_type:
-            raise ValueError(f"战报参战者类别或等级与战斗结果不一致：{participant.name}")
+    _validate_report_participants(participants, outcome_results)
 
     palette = catalog.participant_colors
     participant_colors = {
@@ -77,7 +69,85 @@ def build_battle_report(
     }
     participants_by_id = {value.id: value for value in participants}
     formations_by_id = {value.formation_id: value for value in outcome.formations}
-    event_reports = [
+    event_reports = _event_reports(
+        outcome, participants_by_id, participant_colors, formations_by_id, catalog
+    )
+    filters = _event_filters(catalog, event_reports)
+    winner_ids, winner_names, winner_id = _winner_section(
+        outcome, left_results, right_results, outcome_results, participants_by_id
+    )
+    participant_reports = _participant_reports(
+        participants, participant_colors, outcome, winner_ids, catalog
+    )
+    result_title = _result_title(outcome, winner_names)
+    left_names = _side_names(participants_by_id, left_results)
+    right_names = _side_names(participants_by_id, right_results)
+
+    report = {
+        "schema": catalog.report_schema,
+        "generated_at": generated_at
+        or datetime.now().astimezone().isoformat(timespec="seconds"),
+        "scene": scene,
+        "headline": f"{left_names} 对阵 {right_names}",
+        "system": dict(catalog.system),
+        "result": _result_section(
+            outcome,
+            title=result_title,
+            winner_id=winner_id,
+            winner_ids=winner_ids,
+            event_count=len(event_reports),
+            seed=seed,
+        ),
+        "view_modes": catalog.view_modes,
+        "filters": filters,
+        "participants": participant_reports,
+        "events": event_reports,
+    }
+    if outcome.field is not None:
+        report["field"] = _field_report(outcome.field, outcome.events)
+    if outcome.formations:
+        report["formations"] = [
+            _formation_report(value, outcome.events) for value in outcome.formations
+        ]
+    return report
+
+
+def _validate_report_participants(
+    participants: Sequence[RuntimeBattleReportParticipant],
+    outcome_results: Sequence[Any],
+) -> None:
+    """战报的参战者必须与战斗结果**完全对得上**：数量、编号、类别与等级。"""
+
+    if len(participants) < 2:
+        raise ValueError("战报至少需要两名参战者")
+    if len({value.id for value in participants}) != len(participants):
+        raise ValueError("战报参战者 ID 不能重复")
+    outcome_ids = {value.id for value in outcome_results}
+    participant_ids = {value.id for value in participants}
+    if participant_ids != outcome_ids:
+        raise ValueError("战报参战者必须与战斗结果中的全部参战者一致")
+    outcome_by_id = {value.id: value for value in outcome_results}
+    for participant in participants:
+        result = outcome_by_id[participant.id]
+        if (
+            int(participant.level) != result.level
+            or str(participant.combatant_type) != result.combatant_type
+        ):
+            raise ValueError(
+                f"战报参战者类别或等级与战斗结果不一致：{participant.name}"
+            )
+
+
+def _event_reports(
+    outcome: CombatResult,
+    participants_by_id: Mapping[str, RuntimeBattleReportParticipant],
+    participant_colors: Mapping[str, str],
+    formations_by_id: Mapping[str, Any],
+    catalog: BattleReportCatalog,
+) -> list[dict[str, Any]]:
+    """逐个事件转写；序号从 1 起。"""
+
+    return [
         _event_report(
             event,
             index + 1,
@@ -88,6 +158,13 @@ def build_battle_report(
         )
         for index, event in enumerate(outcome.events)
     ]
+
+
+def _event_filters(
+    catalog: BattleReportCatalog, event_reports: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """事件分类筛选器：`all` 取全部条数，其余按分类计数补齐。"""
+
     category_counts = Counter(event["category"] for event in event_reports)
     filters = []
     for definition in catalog.category_definitions:
@@ -100,6 +177,17 @@ def build_battle_report(
                 else category_counts.get(category_id, 0),
             }
         )
+    return filters
+
+
+def _winner_section(
+    outcome: CombatResult,
+    left_results: Sequence[Any],
+    right_results: Sequence[Any],
+    outcome_results: Sequence[Any],
+    participants_by_id: Mapping[str, RuntimeBattleReportParticipant],
+) -> tuple[set[str], list[str], str]:
+    """返回（胜方编号集合、胜者名、胜者编号）。平局时集合为空。"""
 
     left_ids = {value.id for value in left_results}
     right_ids = {value.id for value in right_results}
@@ -116,7 +204,19 @@ def build_battle_report(
         if value.id in winner_ids
     ]
     winner_id = outcome.winner_id or ""
-    participant_reports = [
+    return winner_ids, winner_names, winner_id
+
+
+def _participant_reports(
+    participants: Sequence[RuntimeBattleReportParticipant],
+    participant_colors: Mapping[str, str],
+    outcome: CombatResult,
+    winner_ids: set[str],
+    catalog: BattleReportCatalog,
+) -> list[dict[str, Any]]:
+    """逐个参战者转写；胜负标签按平局 / 在胜方 / 其余三档。"""
+
+    return [
         _participant_report(
             value,
             number=index + 1,
@@ -127,53 +227,51 @@ def build_battle_report(
         )
         for index, value in enumerate(participants)
     ]
-    result_title = (
-        "胜负未分"
-        if outcome.draw
-        else f"{'、'.join(winner_names)}取胜"
-    )
-    left_names = "、".join(
-        participants_by_id[value.id].name for value in left_results
-    )
-    right_names = "、".join(
-        participants_by_id[value.id].name for value in right_results
-    )
 
-    report = {
-        "schema": catalog.report_schema,
-        "generated_at": generated_at or datetime.now().astimezone().isoformat(timespec="seconds"),
-        "scene": scene,
-        "headline": f"{left_names} 对阵 {right_names}",
-        "system": dict(catalog.system),
-        "result": {
-            "code": (
-                "draw"
-                if outcome.draw
-                else "victory"
-                if outcome.winner_side == "left"
-                else "defeat"
-            ),
-            "title": result_title,
-            "description": f"历经 {outcome.actions} 次行动，{result_title}。",
-            "actions": outcome.actions,
-            "event_count": len(event_reports),
-            "trigger_count": outcome.trigger_activations,
-            "winner_id": winner_id or None,
-            "winner_ids": [value.id for value in outcome_results if value.id in winner_ids],
-            "seed": seed,
-        },
-        "view_modes": catalog.view_modes,
-        "filters": filters,
-        "participants": participant_reports,
-        "events": event_reports,
+
+def _result_title(outcome: CombatResult, winner_names: Sequence[str]) -> str:
+    return "胜负未分" if outcome.draw else f"{'、'.join(winner_names)}取胜"
+
+
+def _side_names(
+    participants_by_id: Mapping[str, RuntimeBattleReportParticipant],
+    results: Sequence[Any],
+) -> str:
+    return "、".join(participants_by_id[value.id].name for value in results)
+
+
+def _result_section(
+    outcome: CombatResult,
+    *,
+    title: str,
+    winner_id: str,
+    winner_ids: set[str],
+    event_count: int,
+    seed: int | None,
+) -> dict[str, Any]:
+    """战报的结论块：前端只看这里判胜负。"""
+
+    return {
+        "code": (
+            "draw"
+            if outcome.draw
+            else "victory"
+            if outcome.winner_side == "left"
+            else "defeat"
+        ),
+        "title": title,
+        "description": f"历经 {outcome.actions} 次行动，{title}。",
+        "actions": outcome.actions,
+        "event_count": event_count,
+        "trigger_count": outcome.trigger_activations,
+        "winner_id": winner_id or None,
+        "winner_ids": [
+            value.id
+            for value in (*outcome.left_results, *outcome.right_results)
+            if value.id in winner_ids
+        ],
+        "seed": seed,
     }
-    if outcome.field is not None:
-        report["field"] = _field_report(outcome.field, outcome.events)
-    if outcome.formations:
-        report["formations"] = [
-            _formation_report(value, outcome.events) for value in outcome.formations
-        ]
-    return report
 
 
 def _field_report(
