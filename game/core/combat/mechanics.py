@@ -11,6 +11,86 @@ from .contracts import BattleEvent
 from .models import CombatObject, EventFrame, Fighter, Skill, StatusState
 
 
+class _ListenerSink:
+    """监听汇总口：把各处声明的监听收成「事件 → 监听列表」，并算好排序键与名额键。
+
+    单独成一个对象是因为五路来源（被动、状态、战场环境、战斗对象、战场规则）都要往
+    同一张表里写，而键的构造规则只该有一份。
+    """
+
+    def __init__(
+        self,
+        engine: Any,
+        order: tuple[str, ...],
+        participant_order: Mapping[str, int],
+    ) -> None:
+        self.engine = engine
+        self.order = order
+        self.participant_order = participant_order
+        self.grouped: dict[str, list[tuple[Any, ...]]] = {}
+
+    def add(
+        self,
+        owner: Fighter,
+        listener_id: str,
+        node: Mapping[str, Any],
+        *,
+        source_ability: str = "",
+        settlement_order: int = 1,
+        build_order: int = 0,
+        item_id: str = "",
+        ability_order: int = 0,
+        effect_order: int = 0,
+        source_category: str = "功法",
+        build_instance: str = "",
+        element_composition: Mapping[str, float] | None = None,
+    ) -> None:
+        """收一条监听；没有 `事件` 的节点不是监听，直接丢。"""
+
+        event_name = str(node.get("事件") or "")
+        if not event_name:
+            return
+        values = {
+            "来源层级升序": self.engine._source_layer(source_category),
+            "监听优先级降序": -int(node.get("优先级", 0)),
+            "结算顺序升序": int(settlement_order),
+            "参战位序": self.participant_order.get(
+                owner.id, len(self.participant_order)
+            ),
+            "装配位序": int(build_order),
+            "物品编号": str(item_id),
+            "能力序号": (int(ability_order), int(effect_order)),
+        }
+        activation_id = (
+            f"{build_instance}:{item_id}:{listener_id}:{ability_order}:{effect_order}"
+            if item_id
+            else f"{build_instance}:{listener_id}"
+        )
+        # `每次行动最多触发` 的名额属于**声明**，不属于那一张卡：同一个修士带两张
+        # 同名词条时，它们是同一条声明，共用同一个名额（游戏王 HOPT 的口径）。
+        # 所以名额键里刻意不含 `build_instance`——那才是区分「第几张」的东西，
+        # 含上它等于每张卡各给一个名额，卡面写的「每行动只能使用1次」就被翻倍了。
+        # 名额**按修士**算，不跨方合并：对面的同名词条是另一份名额。
+        activation_budget = (
+            f"{item_id}:{listener_id}:{ability_order}:{effect_order}"
+            if item_id
+            else listener_id
+        )
+        key = tuple(values[field] for field in self.order) + (activation_id,)
+        self.grouped.setdefault(event_name, []).append(
+            (
+                key,
+                owner,
+                activation_id,
+                activation_budget,
+                str(source_ability),
+                str(build_instance),
+                node,
+                dict(element_composition or {"无相": 100}),
+            )
+        )
+
+
 class AbilityRuntime:
     """只实现组合语义，不决定具体功法内容。"""
 
@@ -262,85 +342,33 @@ class AbilityRuntime:
 
         if not context.listener_index_dirty:
             return context.listener_index
+        sink = _ListenerSink(
+            engine=self,
+            order=tuple(self.catalog.timing["事件监听"]["排序"]),
+            participant_order=context.fighter_order,
+        )
+        self._collect_fighter_listeners(context, sink)
+        self._collect_field_listeners(context, sink)
+        self._collect_object_listeners(context, sink)
+        self._collect_rule_listeners(context, sink)
+        context.listener_index = {
+            event_name: tuple(sorted(values, key=lambda item: item[0]))
+            for event_name, values in sink.grouped.items()
+        }
+        context.listener_index_dirty = False
+        return context.listener_index
 
-        listener_order = tuple(self.catalog.timing["事件监听"]["排序"])
-        grouped: dict[
-            str,
-            list[
-                tuple[
-                    tuple[Any, ...],
-                    Fighter,
-                    str,
-                    str,
-                    str,
-                    str,
-                    Mapping[str, Any],
-                    Mapping[str, float],
-                ]
-            ],
-        ] = {}
-        participant_order = context.fighter_order
+    def _collect_fighter_listeners(self, context, sink: _ListenerSink) -> None:
+        """修士自带的监听：被动槽位在前，状态（战丹、长期伤势）在后。
 
-        def add_listener(
-            owner: Fighter,
-            listener_id: str,
-            node: Mapping[str, Any],
-            *,
-            source_ability: str = "",
-            settlement_order: int = 1,
-            build_order: int = 0,
-            item_id: str = "",
-            ability_order: int = 0,
-            effect_order: int = 0,
-            source_category: str = "功法",
-            build_instance: str = "",
-            element_composition: Mapping[str, float] | None = None,
-        ) -> None:
-            event_name = str(node.get("事件") or "")
-            if not event_name:
-                return
-            values = {
-                "来源层级升序": self._source_layer(source_category),
-                "监听优先级降序": -int(node.get("优先级", 0)),
-                "结算顺序升序": int(settlement_order),
-                "参战位序": participant_order.get(owner.id, len(participant_order)),
-                "装配位序": int(build_order),
-                "物品编号": str(item_id),
-                "能力序号": (int(ability_order), int(effect_order)),
-            }
-            activation_id = (
-                f"{build_instance}:{item_id}:{listener_id}:{ability_order}:{effect_order}"
-                if item_id
-                else f"{build_instance}:{listener_id}"
-            )
-            # `每次行动最多触发` 的名额属于**声明**，不属于那一张卡：同一个修士带两张
-            # 同名词条时，它们是同一条声明，共用同一个名额（游戏王 HOPT 的口径）。
-            # 所以名额键里刻意不含 `build_instance`——那才是区分「第几张」的东西，
-            # 含上它等于每张卡各给一个名额，卡面写的「每行动只能使用1次」就被翻倍了。
-            # 名额**按修士**算，不跨方合并：对面的同名词条是另一份名额。
-            activation_budget = (
-                f"{item_id}:{listener_id}:{ability_order}:{effect_order}"
-                if item_id
-                else listener_id
-            )
-            key = tuple(values[field] for field in listener_order) + (activation_id,)
-            grouped.setdefault(event_name, []).append(
-                (
-                    key,
-                    owner,
-                    activation_id,
-                    activation_budget,
-                    str(source_ability),
-                    str(build_instance),
-                    node,
-                    dict(element_composition or {"无相": 100}),
-                )
-            )
+        两者留在同一个循环里是有意的：键值完全相同的那两条，最终靠稳定排序保持这个
+        先后；拆成两遍遍历修士就会把次序换掉。
+        """
 
         for owner in context.fighters:
             for passive in owner.passives:
                 for mechanism_id, node in self._passive_listener_nodes(passive):
-                    add_listener(
+                    sink.add(
                         owner,
                         mechanism_id,
                         node,
@@ -357,7 +385,7 @@ class AbilityRuntime:
             for status in owner.statuses:
                 item_id = str(status.values.get("战丹编号") or status.name)
                 for index, node in enumerate(status.listeners):
-                    add_listener(
+                    sink.add(
                         owner,
                         f"{status.name}:{index}",
                         node,
@@ -367,25 +395,34 @@ class AbilityRuntime:
                         source_category="战丹",
                         build_instance=str(status.build_instance or ""),
                     )
-        if context.field is not None:
-            field = context.field
-            for index, node in enumerate(field.stage.passive_abilities):
-                add_listener(
-                    field.source,
-                    f"环境:{field.definition.environment_id}:{field.stage_index}:{index}",
-                    node,
-                    source_ability=field.stage.name,
-                    settlement_order=0,
-                    item_id=f"环境:{field.definition.environment_id}",
-                    ability_order=index,
-                    source_category="战场环境",
-                )
+
+    def _collect_field_listeners(self, context, sink: _ListenerSink) -> None:
+        """战场环境本阶的常驻监听。"""
+
+        if context.field is None:
+            return
+        field = context.field
+        for index, node in enumerate(field.stage.passive_abilities):
+            sink.add(
+                field.source,
+                f"环境:{field.definition.environment_id}:{field.stage_index}:{index}",
+                node,
+                source_ability=field.stage.name,
+                settlement_order=0,
+                item_id=f"环境:{field.definition.environment_id}",
+                ability_order=index,
+                source_category="战场环境",
+            )
+
+    def _collect_object_listeners(self, context, sink: _ListenerSink) -> None:
+        """战斗对象（召唤物一类）自己的监听；已失效的不收。"""
+
         for obj in context.combat_objects.values():
             if not obj.active:
                 continue
             owner = context.fighter_by_id(obj.owner_id) or context.left
             for index, node in enumerate(obj.listeners):
-                add_listener(
+                sink.add(
                     owner,
                     f"{obj.id}:{index}",
                     node,
@@ -394,10 +431,14 @@ class AbilityRuntime:
                     ability_order=index,
                     source_category="战斗对象",
                 )
+
+    def _collect_rule_listeners(self, context, sink: _ListenerSink) -> None:
+        """战场规则声明的监听，归属写明的来源修士。"""
+
         for index, rule in enumerate(context.battle_rules):
             owner = context.fighter_by_id(str(rule.get("来源") or "")) or context.left
             for listener_index, node in enumerate(rule.get("监听") or ()):
-                add_listener(
+                sink.add(
                     owner,
                     f"战场:{index}:{listener_index}",
                     node,
@@ -406,13 +447,6 @@ class AbilityRuntime:
                     ability_order=listener_index,
                     source_category="战场规则",
                 )
-
-        context.listener_index = {
-            event_name: tuple(sorted(values, key=lambda item: item[0]))
-            for event_name, values in grouped.items()
-        }
-        context.listener_index_dirty = False
-        return context.listener_index
 
     def _source_layer(self, source: str) -> int:
         layers = self.catalog.timing.get("来源层级") or ()
