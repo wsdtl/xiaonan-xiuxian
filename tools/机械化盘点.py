@@ -64,6 +64,7 @@ def entropy(counter: collections.Counter) -> float:
 def scan() -> dict[str, object]:
     events: collections.Counter = collections.Counter()
     verbs: collections.Counter = collections.Counter()
+    sources: collections.Counter = collections.Counter()
     limits: collections.Counter = collections.Counter()
     event_cards: dict[str, set[str]] = collections.defaultdict(set)
     verb_cards: dict[str, set[str]] = collections.defaultdict(set)
@@ -86,6 +87,10 @@ def scan() -> dict[str, object]:
             if isinstance(ability, str) and ability and ability not in STRUCTURAL:
                 verbs[ability] += 1
                 verb_cards[ability].add(card_id)
+            if ability == "读取数值":
+                # 第三条轴动的是「缩放从哪来」而不是动词本身：卡内计数器是现状，
+                # 换成对方属性 / 事件数值 / 已损失血气比才是散开。
+                sources[str(node.get("来源") or "（未写）")] += 1
             for value in node.values():
                 walk(value, card_id)
         elif isinstance(node, list):
@@ -121,6 +126,9 @@ def scan() -> dict[str, object]:
         "触发时点": axis(events, top_event),
         "效果动词": axis(verbs, top_verb),
         "限额形态": axis(limits, limits.most_common(1)[0][0] if limits else ""),
+        "缩放来源": axis(
+            sources, sources.most_common(1)[0][0] if sources else ""
+        ),
         "卡级": {
             "单一触发卡": single_trigger,
             "单一触发占比": round(single_trigger / total_cards, 4) if total_cards else 0.0,
@@ -138,7 +146,7 @@ def scan() -> dict[str, object]:
 
 def render(reading: dict[str, object], detail: bool) -> None:
     print(f"卡数 {reading['卡数']}")
-    for name in ("触发时点", "效果动词", "限额形态"):
+    for name in ("触发时点", "效果动词", "限额形态", "缩放来源"):
         row = reading[name]
         print(
             f"  {name}：最大项 {row['最大项']} {row['最大项次数']} 次"
@@ -187,7 +195,7 @@ def main() -> int:
         return 2
 
     worse: list[str] = []
-    for name in ("触发时点", "效果动词", "限额形态"):
+    for name in ("触发时点", "效果动词", "限额形态", "缩放来源"):
         now, was = stored[name], expected[name]
         if now["最大项占比"] > was["最大项占比"] + SHARE_TOLERANCE:
             worse.append(
