@@ -439,8 +439,10 @@ class BattleContext:
     events: list[BattleEvent] = dataclass_field(default_factory=list)
     action_number: int = 0
     engine: BattleEngine | None = None
-    trigger_counts: dict[tuple[str, str], int] = dataclass_field(default_factory=dict)
-    battle_trigger_counts: dict[tuple[str, str], int] = dataclass_field(default_factory=dict)
+    #: 键是（修士 id, 词条, 监听声明）；键长不固定，所以用变长元组。
+    #: 追加攻击也往这里记账，它用的是（来源 id, "追加攻击"）。
+    trigger_counts: dict[tuple[str, ...], int] = dataclass_field(default_factory=dict)
+    battle_trigger_counts: dict[tuple[str, ...], int] = dataclass_field(default_factory=dict)
     event_depth: int = 0
     ability_depth: int = 0
     triggered_skill_depth: int = 0

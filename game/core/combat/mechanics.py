@@ -266,7 +266,18 @@ class AbilityRuntime:
         listener_order = tuple(self.catalog.timing["事件监听"]["排序"])
         grouped: dict[
             str,
-            list[tuple[tuple[Any, ...], Fighter, str, str, str, Mapping[str, Any], Mapping[str, float], Mapping[str, Any]]],
+            list[
+                tuple[
+                    tuple[Any, ...],
+                    Fighter,
+                    str,
+                    str,
+                    str,
+                    str,
+                    Mapping[str, Any],
+                    Mapping[str, float],
+                ]
+            ],
         ] = {}
         participant_order = context.fighter_order
 
@@ -302,12 +313,23 @@ class AbilityRuntime:
                 if item_id
                 else f"{build_instance}:{listener_id}"
             )
+            # `每次行动最多触发` 的名额属于**声明**，不属于那一张卡：同一个修士带两张
+            # 同名词条时，它们是同一条声明，共用同一个名额（游戏王 HOPT 的口径）。
+            # 所以名额键里刻意不含 `build_instance`——那才是区分「第几张」的东西，
+            # 含上它等于每张卡各给一个名额，卡面写的「每行动只能使用1次」就被翻倍了。
+            # 名额**按修士**算，不跨方合并：对面的同名词条是另一份名额。
+            activation_budget = (
+                f"{item_id}:{listener_id}:{ability_order}:{effect_order}"
+                if item_id
+                else listener_id
+            )
             key = tuple(values[field] for field in listener_order) + (activation_id,)
             grouped.setdefault(event_name, []).append(
                 (
                     key,
                     owner,
                     activation_id,
+                    activation_budget,
                     str(source_ability),
                     str(build_instance),
                     node,
@@ -416,14 +438,24 @@ class AbilityRuntime:
         context.event_depth += 1
         try:
             listeners = self._compiled_listeners(context).get(kind, ())
-            for _, owner, activation_id, source_ability, build_instance, node, composition in listeners:
+            for (
+                _,
+                owner,
+                activation_id,
+                activation_budget,
+                source_ability,
+                build_instance,
+                node,
+                composition,
+            ) in listeners:
                 if not self._listener_relation_matches(context, owner, frame, node):
                     continue
                 if not self._conditions_allow(
                     context, owner, frame.target, node.get("条件") or (), frame.amount, frame.facts, tuple(frame.tags)
                 ):
                     continue
-                activation = (owner.id, activation_id)
+                # 名额按（修士, 词条, 声明）算，不按卡的第几张算。
+                activation = (owner.id, activation_budget)
                 if activation in context.trigger_stack:
                     continue
                 per_action = int(node.get("每次行动最多触发", 0) or 0)
