@@ -765,6 +765,8 @@ class AlchemyService:
             raise RuntimeError("炼丹核心微服务尚未初始化")
 
 
+# 本函数与 `game/core/forging/service.py` 的同名函数**逐字相同**（差异只有换行格式）。
+# 两处必须同步修改：只改一处，炼器与炼丹的「最省匹配」就会悄悄分叉。
 def _minimum_cost_matching(
     item_ids: tuple[str, ...],
     slot_count: int,
