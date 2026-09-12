@@ -67,6 +67,7 @@ def scan() -> dict[str, object]:
     limits: collections.Counter = collections.Counter()
     event_cards: dict[str, set[str]] = collections.defaultdict(set)
     verb_cards: dict[str, set[str]] = collections.defaultdict(set)
+    card_events: dict[str, set[str]] = collections.defaultdict(set)
     total_cards = 0
 
     def walk(node: object, card_id: str) -> None:
@@ -77,6 +78,7 @@ def scan() -> dict[str, object]:
                 if isinstance(name, str) and name:
                     events[name] += 1
                     event_cards[name].add(card_id)
+                    card_events[card_id].add(name)
                 # 限额写在**监听节点**上，不在主动技能里——第一版放错了地方，读数是 0。
                 for key in ("每次行动最多触发", "每场战斗最多触发"):
                     if key in node:
@@ -98,7 +100,11 @@ def scan() -> dict[str, object]:
 
     top_event = events.most_common(1)[0][0] if events else ""
     top_verb = verbs.most_common(1)[0][0] if verbs else ""
-    pattern_cards = len(event_cards.get(top_event, set()) & verb_cards.get(top_verb, set()))
+    # 卡级：一张卡的监听节点里，触发时点只有一种的，叫「单一触发卡」。
+    # 早先我量的是「同时出现过最大事件与最大动词的卡」，那张表读成 60%——但一张卡有
+    # 近十个监听节点，两者都出现太容易，那个口径把「都出现过」当成了「都是这个」。
+    single_trigger = sum(1 for names in card_events.values() if len(names) == 1)
+    multi_trigger = sum(1 for names in card_events.values() if len(names) > 1)
 
     def axis(counter: collections.Counter, top: str) -> dict[str, object]:
         total = sum(counter.values())
@@ -115,11 +121,12 @@ def scan() -> dict[str, object]:
         "触发时点": axis(events, top_event),
         "效果动词": axis(verbs, top_verb),
         "限额形态": axis(limits, limits.most_common(1)[0][0] if limits else ""),
-        "最集中模式": {
-            "事件": top_event,
-            "动词": top_verb,
-            "卡数": pattern_cards,
-            "占比": round(pattern_cards / total_cards, 4) if total_cards else 0.0,
+        "卡级": {
+            "单一触发卡": single_trigger,
+            "单一触发占比": round(single_trigger / total_cards, 4) if total_cards else 0.0,
+            "多时点卡": multi_trigger,
+            "最大事件": top_event,
+            "最大动词": top_verb,
         },
         "_分布": {
             "触发时点": events.most_common(),
@@ -137,10 +144,10 @@ def render(reading: dict[str, object], detail: bool) -> None:
             f"  {name}：最大项 {row['最大项']} {row['最大项次数']} 次"
             f"，占比 {row['最大项占比']:.1%}，熵 {row['熵']:.3f}，词表用到 {row['种数']} 种"
         )
-    pattern = reading["最集中模式"]
+    card = reading["卡级"]
     print(
-        f"  最集中模式：{pattern['事件']} + {pattern['动词']}"
-        f" → {pattern['卡数']} 张（{pattern['占比']:.1%}）"
+        f"  卡级：触发时点只有一种的卡 {card['单一触发卡']} 张"
+        f"（{card['单一触发占比']:.1%}），多时点卡 {card['多时点卡']} 张"
     )
     if detail:
         for name, rows in reading["_分布"].items():
@@ -189,10 +196,11 @@ def main() -> int:
             )
         elif now["熵"] < was["熵"] - ENTROPY_TOLERANCE:
             worse.append(f"{name} 更单调：熵 {was['熵']:.3f} → {now['熵']:.3f}")
-    now_pattern, was_pattern = stored["最集中模式"], expected["最集中模式"]
-    if now_pattern["占比"] > was_pattern["占比"] + SHARE_TOLERANCE:
+    now_card, was_card = stored["卡级"], expected["卡级"]
+    if now_card["单一触发占比"] > was_card["单一触发占比"] + SHARE_TOLERANCE:
         worse.append(
-            f"最集中模式变多了：{was_pattern['占比']:.1%} → {now_pattern['占比']:.1%}"
+            f"单一触发卡变多了：{was_card['单一触发占比']:.1%}"
+            f" → {now_card['单一触发占比']:.1%}"
         )
 
     print()
@@ -201,8 +209,8 @@ def main() -> int:
         for line in worse:
             print(f"  {line}")
         return 1
-    print(f"不比基线更集中（基线：{was_pattern['事件']} + {was_pattern['动词']}"
-          f" = {was_pattern['占比']:.1%}）")
+    print(f"不比基线更集中（基线单一触发卡 {was_card['单一触发占比']:.1%}，"
+          f"最大事件 {was_card['最大事件']}，最大动词 {was_card['最大动词']}）")
     return 0
 
 
