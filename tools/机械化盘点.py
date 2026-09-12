@@ -40,6 +40,15 @@ SURFACES = (
     ("器律", "炼器/内容/器律-*.json"),
 )
 
+#: 引擎 `_value_read` 支持的读取来源（见 `game/core/combat/mechanics.py`）。
+#: 盘点里少了哪一个，就是「空着的机制」——负责人口径：没有的机制可以考虑用上。
+ENGINE_ORIGINS = (
+    "固定值", "自身属性", "效果来源属性", "目标属性", "事件事实", "本次数值",
+    "保存结果", "战斗记录", "构筑计量", "状态层数", "行动条", "技能冷却",
+    "自身当前血气", "目标当前血气", "自身当前精神", "目标当前精神",
+    "自身已损失血气", "目标已损失血气", "自身已损失精神", "目标已损失精神",
+)
+
 #: 结构件：装配、遍历、取值、判定——它们说明「怎么算」，不说明「打出什么」。
 STRUCTURAL = frozenset({
     "选择目标", "顺序执行", "事务执行", "遍历目标", "读取数值", "条件执行",
@@ -144,6 +153,44 @@ def scan() -> dict[str, object]:
     }
 
 
+def gaps() -> dict[str, object]:
+    """空位：引擎支持、但全库没在用的机制。
+
+    负责人口径是「**每个机制尽量要平均，没有的机制可以考虑使用上**」——所以读数不能只报
+    「哪里挤」，还要报「哪里空着」。只报事实，不自动判定好坏。
+    """
+    origins: collections.Counter[str] = collections.Counter()
+    fields: collections.Counter[str] = collections.Counter()
+    tags: collections.Counter[str] = collections.Counter()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            if node.get("能力") == "读取数值":
+                origins[str(node.get("来源") or "固定值")] += 1
+                for key in ("百分比", "最低值", "最高值", "固定值"):
+                    if key in node:
+                        fields[key] += 1
+            value = node.get("标签")
+            if isinstance(value, list):
+                # 标签挂在很多种节点上，**必须分开数**：`主动技能` 的标签是技能标签（词表），
+                # `修改战斗关联`/`修改事件标签` 的标签是另一套东西。混在一起会把
+                # 「技能标签只有 1 种」这个真问题掩盖成「113 种、很丰富」。
+                for item in value:
+                    tags[f"{node.get('能力') or '（无名）'}·{item}"] += 1
+            for nested in node.values():
+                walk(nested)
+        elif isinstance(node, list):
+            for nested in node:
+                walk(nested)
+
+    for _section, pattern in SURFACES:
+        for path in sorted(ROOT.glob(f"data/{pattern}")):
+            for entry in json.loads(path.read_text(encoding="utf-8")):
+                walk(entry)
+    unused = [name for name in ENGINE_ORIGINS if name not in origins]
+    return {"未用来源": unused, "字段": fields, "标签": tags}
+
+
 def render(reading: dict[str, object], detail: bool) -> None:
     print(f"卡数 {reading['卡数']}")
     for name in ("触发时点", "效果动词", "限额形态", "缩放来源"):
@@ -157,6 +204,21 @@ def render(reading: dict[str, object], detail: bool) -> None:
         f"  卡级：触发时点只有一种的卡 {card['单一触发卡']} 张"
         f"（{card['单一触发占比']:.1%}），多时点卡 {card['多时点卡']} 张"
     )
+    hole = gaps()
+    print(f"  空位：未启用的读取来源 {len(hole['未用来源'])} 种"
+          f"（{' '.join(hole['未用来源']) or '无'}）")
+    used = " · ".join(f"{key} {hole['字段'][key]}" for key in ("百分比", "最低值", "最高值", "固定值"))
+    print(f"  读取数值 字段用量：{used}")
+    if hole["标签"]:
+        skill_tags = {k.split("·", 1)[1]: v for k, v in hole["标签"].items()
+                      if k.startswith("主动技能·")}
+        other = sum(v for k, v in hole["标签"].items() if not k.startswith("主动技能·"))
+        print(f"  技能标签（主动技能）：{len(skill_tags)} 种"
+              f" · {' '.join(f'{k} {v}' for k, v in sorted(skill_tags.items(), key=lambda kv: -kv[1])[:6]) or '无'}")
+        print(f"  其它标签（战斗关联/事件标签/条件…）：{other} 个 · "
+              f"{len(hole['标签']) - len(skill_tags)} 种")
+    else:
+        print("  技能标签词表：**一个都没在用**")
     if detail:
         for name, rows in reading["_分布"].items():
             print(f"\n===== {name} =====")
