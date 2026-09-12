@@ -65,6 +65,19 @@ PARTNER = {
     "技能冷却变化后": "技能冷却完成后",
     "状态层数变化后": "移除状态后",
 }
+
+#: 没有 `前/后` 配对时退而求其次的**语义相近**时点。前 61 张走上面的严格配对清完了，
+#: 剩下 16 张卡在的事件（`受到伤害后` / `资源变化后` / `资源消耗前`…）引擎里确实没有对偶事件，
+#: 就用这张表给它们第二个反应时机——每一对都写清"为什么这两个时点相关"。
+SECOND_ORDER = {
+    "受到伤害后": "恢复后",        # 挨打之后的一口气：受创与回复相邻
+    "资源变化后": "行动结束",      # 行动内的资源起伏，在结算时反映
+    "资源消耗前": "资源恢复前",    # 消耗与恢复是同一条资源线的两端
+    "关联变化后": "状态层数变化后",  # 关联与状态层数都是"挂在你身上的东西变了"
+    "行动决策前": "行动决策后",    # 决策前预判、决策后追认
+    "技能施放失败后": "技能冷却完成后",  # 失败与冷却完成都是"技能这一格的状态变了"
+    "行动开始": "行动结束",        # 一次行动的头与尾
+}
 #: 回响里要减半的数值字段。
 HALVE_FIELDS = ("数值", "层数")
 #: `转移伤害` 只允许挂在这两个事件的监听里（`game/core/combat/builds.py` 的 `_validate_event_binding`）。
@@ -117,6 +130,30 @@ def load_mutable_events() -> dict[str, set[str]]:
         if isinstance(entry, dict):
             table[str(name)] = {str(item) for item in entry.get("可修改") or ()}
     return table
+
+
+def prune_illegal(node: object, partner: str, mutable: dict[str, set[str]]) -> object:
+    """剪掉在 `partner` 事件上不合法的那**一个**能力，其余保留（返回 None 表示整块删掉）。
+
+    第 41 轮的做法：三道锁只针对特定能力（`转移伤害` / `抵挡致命伤害` / 五个改事件的），
+    所以不必整张卡放弃——回响里把那一个能力剪掉，其它效果照旧。剪完为空则放弃这张卡。
+    """
+    if isinstance(node, dict):
+        name = str(node.get("能力") or "")
+        if name in EVENT_LOCKED and partner not in EVENT_LOCKED[name]:
+            return None
+        if name in MUTATION_FIELDS and MUTATION_FIELDS[name] not in mutable.get(partner, set()):
+            return None
+        pruned: dict = {}
+        for key, value in node.items():
+            kept = prune_illegal(value, partner, mutable)
+            if kept is not None:
+                pruned[key] = kept
+        return pruned
+    if isinstance(node, list):
+        kept_items = [prune_illegal(item, partner, mutable) for item in node]
+        return [item for item in kept_items if item is not None]
+    return node
 
 
 def locked_in(node: object) -> str | None:
@@ -199,7 +236,8 @@ def main() -> int:
                 if not (len(info["事件"]) <= 1 and len(info["来源"]) <= 1 and len(info["限额"]) <= 1):
                     continue
                 event = next(iter(info["事件"]))
-                partner = PARTNER.get(event)
+                # 先用严格配对（`X前`/`X后`），没有再退到语义相近的时点。
+                partner = PARTNER.get(event) or SECOND_ORDER.get(event)
                 if partner is None:
                     skipped[f"{event}（无配对）"] += 1
                     continue
@@ -207,16 +245,10 @@ def main() -> int:
                 echo["事件"] = partner
                 echo[CAP_FIELD] = 1
                 halve(echo.get("效果") or [])
-                locked = locked_in(echo.get("效果") or [])
-                if locked and partner not in EVENT_LOCKED[locked]:
-                    skipped[f"含{locked}、配对事件不合法"] += 1
-                    continue
-                blocked = [
-                    name for name in mutations_in(echo.get("效果") or [])
-                    if MUTATION_FIELDS[name] not in mutable.get(partner, set())
-                ]
-                if blocked:
-                    skipped[f"含{blocked[0]}、{partner} 不可修改该字段"] += 1
+                # 先剪掉在配对事件上不合法的能力（三道锁），再检查回响是否还有内容。
+                echo["效果"] = prune_illegal(echo.get("效果") or [], partner, mutable)
+                if not echo["效果"]:
+                    skipped[f"剪完为空（原含 {locked_in(info['首个监听']) or '改事件能力'}）"] += 1
                     continue
                 # 挂到该卡第一个「被动技能」的效果列表末尾（监听节点都住在那里；
                 # `能力[].效果[0]` 必须是监听节点，所以只能**追加**、不能插到最前）。
