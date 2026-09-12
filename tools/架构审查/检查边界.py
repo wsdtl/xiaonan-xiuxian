@@ -464,6 +464,104 @@ def check_contracts_file_purpose() -> list[Finding]:
     return findings
 
 
+#: 命令层里只允许做纯适配的模块名（见 `微服务边界规范.md` 第三节）。
+COMMAND_ADAPTER_MODULES = frozenset({"reply.py", "input.py"})
+
+#: 组合根 `game/app.py` 的入口函数。适配模块不得取得它们。
+COMPOSITION_ROOT_ENTRIES = frozenset({
+    "build_game_services",
+    "current_game_services",
+    "initialize_game_services",
+    "shutdown_game_services",
+})
+
+
+def check_command_adapter_purity() -> list[Finding]:
+    """命令层的 `reply.py` / `input.py` 是纯适配模块，不得取得组合根服务。
+
+    见 `微服务边界规范.md` 第三节。它们一旦拿到服务，就会开始从状态版本、编号关系
+    或资产明细里推断业务事实——而结论必须由玩法公共结果给出。
+
+    只按**模块名**判，不按内容猜：命令组件的回调写在 `__init__.py`，那里本来就要
+    取服务；`reply.py`/`input.py` 是可选存在的适配模块，存在就必须是纯的。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game/cmd"):
+        if path.name not in COMMAND_ADAPTER_MODULES:
+            continue
+        relative = _relative(path)
+        tree = _parse(path)
+        for line, module in _imports(tree):
+            if module == "game.app" or module.startswith("game.app."):
+                findings.append(
+                    Finding("适配模块取得组合根", relative, line,
+                            f"reply.py/input.py 不得导入 {module}；结论由玩法公共结果给出")
+                )
+        for node in ast.walk(tree):
+            name = ""
+            if isinstance(node, ast.Name):
+                name = node.id
+            elif isinstance(node, ast.Attribute):
+                name = node.attr
+            if name in COMPOSITION_ROOT_ENTRIES:
+                findings.append(
+                    Finding("适配模块取得组合根", relative, node.lineno,
+                            f"reply.py/input.py 不得调用 {name}；结论由玩法公共结果给出")
+                )
+    return findings
+
+
+#: 目录遍历调用。核心只允许 JSON 读取器按读取规则遍历，其余代码一律走数据服务。
+DIRECTORY_TRAVERSAL_CALLS = frozenset({
+    "glob", "rglob", "iterdir", "walk", "scandir", "listdir",
+})
+
+#: 允许遍历目录的位置。`files.py` 是唯一按读取规则遍历正式 JSON 的地方；
+#: 后台控制台的 `media.py` 清理的是它自己的媒体目录（`/game-console/media/`），
+#: 不是游戏数据，属于 `game/cmd/说明.md` 里那条后台例外。
+DIRECTORY_TRAVERSAL_ALLOWLIST = {
+    Path("game/core/data/files.py"),
+    Path("game/cmd/后台/天道后台/media.py"),
+}
+
+
+def check_data_directory_traversal() -> list[Finding]:
+    """业务代码不得自己遍历或拆解 data 目录（见 `微服务边界规范.md` 第四节）。
+
+    读取正式 JSON 只有一条路：`JsonDataService` 按 `读取规则.json` 建立实体索引与
+    资源池，其他服务按数据集名、实体类别或资源池查询。自己 `glob`/`iterdir` 会绕开
+    规则匹配与归档，等于长出第二套数据入口。
+
+    本规则与「硬编码数据目录」（拦路径字面量）、「第二套 JSON 读取」（拦 `json.load`）
+    合起来，才覆盖规范第四节「不得在自身代码中遍历或拆解数据目录」整句。
+    `tools` 不在扫描范围——它按许可能访问内部实现。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game"):
+        relative = _relative(path)
+        if relative in DIRECTORY_TRAVERSAL_ALLOWLIST:
+            continue
+        tree = _parse(path)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if isinstance(func, ast.Attribute):
+                name = func.attr
+            elif isinstance(func, ast.Name):
+                name = func.id
+            else:
+                continue
+            if name in DIRECTORY_TRAVERSAL_CALLS:
+                findings.append(
+                    Finding("遍历数据目录", relative, node.lineno,
+                            f"不得自行 {name}；正式 JSON 只能由 game/core/data 按读取规则建立索引")
+                )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -472,8 +570,10 @@ CHECKS = (
     ("核心命名空间转发服务", check_core_namespace),
     ("运行期依赖 tools", check_game_tools_dependency),
     ("命令层导入核心服务", check_cmd_core_dependency),
+    ("适配模块取得组合根", check_command_adapter_purity),
     ("contracts.py 无新类型", check_contracts_file_purpose),
     ("硬编码数据目录", check_data_layout_hardcoding),
+    ("遍历数据目录", check_data_directory_traversal),
     ("第二套 JSON 读取", check_single_json_reader),
     ("微服务包结构", check_service_doc_coverage),
     ("后台例外边界", check_console_boundary),
