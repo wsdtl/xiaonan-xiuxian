@@ -457,6 +457,21 @@ class AbilityRuntime:
                     context.current_build_instance = previous_instance
                     context.current_element_composition = previous_composition
                     context.trigger_stack.discard(activation)
+            # 转化目标若已经在结算栈上，这次转化没有意义——那等于重入一个正在结算
+            # 的事件。此时**放弃转化**，让原事件按自己的语义继续结算。
+            #
+            # 之所以不抛错：成环不是单张卡的错，而是两张卡对向作用的结果
+            # （例：己方「反哺」把敌方恢复转成护盾，那个护盾又引出一次恢复，
+            # 被敌方的「反哺」再转成护盾）。「每次行动最多触发」是按监听实例
+            # 算的，双方各一个实例就合法地触发两次，足够闭环。作者在本地看不到
+            # 这个环，所以语义只能由引擎定；而定成「炸掉整场战斗」意味着
+            # 带这套构筑的玩家每打一架都报错。
+            # 跳过仍然留痕：`事实` 里记下被放弃的目标事件，便于事后审。
+            if frame.transformed_kind and frame.transformed_kind in {
+                item.kind for item in context.event_stack
+            }:
+                frame.facts["转化跳过"] = frame.transformed_kind
+                frame.transformed_kind = None
             if frame.transformed_kind:
                 frame.facts["原事件"] = frame.kind
                 frame.facts["事件"] = frame.transformed_kind
@@ -477,10 +492,6 @@ class AbilityRuntime:
                     )
                 )
             if frame.transformed_kind:
-                transformed_chain = [item.kind for item in context.event_stack]
-                if frame.transformed_kind in transformed_chain:
-                    chain = " -> ".join((*transformed_chain, frame.transformed_kind))
-                    raise RuntimeError(f"战斗事件转化形成循环：{chain}")
                 converted = self._dispatch_event(
                     context,
                     kind=frame.transformed_kind,
