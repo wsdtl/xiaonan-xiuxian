@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -562,6 +563,116 @@ def check_data_directory_traversal() -> list[Finding]:
     return findings
 
 
+#: `random` 模块里可以用的东西：带种子的实例类型。其余（便捷函数与直接再导入）
+#: 用的是全局无种子 RNG，结果不可复现——重现不了的平衡测量与语料对照等于没有。
+RANDOM_ALLOWED = frozenset({"Random", "SystemRandom"})
+
+#: 战斗引擎只允许在本包内被提到；`simulate_teams` 只允许在定义处与唯一入口处出现。
+COMBAT_PACKAGE = Path("game/core/combat")
+COMBAT_ENTRY_MODULE = Path("game/core/combat/service.py")
+COMBAT_ENGINE_NAMES = frozenset({"BattleEngine"})
+COMBAT_RUN_NAMES = frozenset({"simulate_teams"})
+
+#: 评分与平衡模拟只属于 `tools`（见 `系统架构.md` 第一节第 4 条）。
+#: **按名字判，不扫源码正文**——`generating` 里含 "rating"、五行相生的 `root_score`
+#: 是战斗规则计算，扫正文会把它们全误报。
+SCORING_NAME = re.compile(r"评分|平衡|(^|_)score($|_)|(^|_)scoring($|_)|(^|_)balance($|_)", re.I)
+
+
+def check_random_seeding() -> list[Finding]:
+    """随机必须走带种子的实例，不得用 `random` 模块的便捷函数。
+
+    见 `微服务边界规范.md` 第五节「随机服务必须返回或接受种子，保证结果可复现」。
+    `random.choice()` / `random.random()` 走的是全局 RNG：同一次运行里先后顺序会
+    影响结果，换一次运行就对不上，重现不了的东西没法当基准。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game"):
+        relative = _relative(path)
+        tree = _parse(path)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "random":
+                for alias in node.names:
+                    if alias.name not in RANDOM_ALLOWED:
+                        findings.append(
+                            Finding("随机未带种子", relative, node.lineno,
+                                    f"不得再导入 random.{alias.name}；请用 random.Random(种子)")
+                        )
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                owner = node.func.value
+                if isinstance(owner, ast.Name) and owner.id == "random" \
+                        and node.func.attr not in RANDOM_ALLOWED:
+                    findings.append(
+                        Finding("随机未带种子", relative, node.lineno,
+                                f"不得调用 random.{node.func.attr}()；请用 random.Random(种子)")
+                    )
+    return findings
+
+
+def check_combat_single_entry() -> list[Finding]:
+    """战斗入口唯一：不得出现第二套战斗入口（见 `系统架构.md` 第四节）。
+
+    这是硬条件，不给例外。唯一入口是 `game/core/combat/service.py` 的 `CombatService`；
+    其余玩法只能注入 `CombatService` 并提交 `CombatRequest`。自己驱动 `BattleEngine`
+    或直接调 `simulate_teams` 都会绕开它的装配、快照与战报协议。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game"):
+        relative = _relative(path)
+        for node in ast.walk(_parse(path)):
+            names: list[str] = []
+            if isinstance(node, ast.Name):
+                names.append(node.id)
+            elif isinstance(node, ast.Attribute):
+                names.append(node.attr)
+            for name in names:
+                if name in COMBAT_ENGINE_NAMES and COMBAT_PACKAGE not in relative.parents:
+                    findings.append(
+                        Finding("第二套战斗入口", relative, node.lineno,
+                                f"不得在战斗包外使用 {name}；只能注入 CombatService")
+                    )
+                elif name in COMBAT_RUN_NAMES and relative not in {
+                    COMBAT_ENTRY_MODULE, COMBAT_PACKAGE / "engine.py",
+                }:
+                    findings.append(
+                        Finding("第二套战斗入口", relative, node.lineno,
+                                f"不得直接调用 {name}；唯一入口是 CombatService")
+                    )
+    return findings
+
+
+def check_scoring_outside_tools() -> list[Finding]:
+    """评分、平衡模拟不得进入运行时（见 `系统架构.md` 第一节第 4 条、第四节）。
+
+    「目录规范、发布校核、评分、平衡模拟和内容生成只属于 `tools`」，而「评分进入
+    运行时」被明确列为架构错误。判据只取**目录名、模块名与顶层函数名**，不扫正文。
+    """
+
+    findings: list[Finding] = []
+    for path in sorted((PROJECT_ROOT / "game").rglob("*")):
+        if SKIP_PARTS & set(path.parts):
+            continue
+        relative = _relative(path)
+        if path.is_dir() or path.suffix == ".py":
+            if SCORING_NAME.search(path.stem):
+                findings.append(
+                    Finding("评分进入运行时", relative, 1,
+                            "评分与平衡模拟只属于 tools；运行时不解释内容评分")
+                )
+        if path.suffix != ".py":
+            continue
+        for node in _parse(path).body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                    and SCORING_NAME.search(node.name):
+                findings.append(
+                    Finding("评分进入运行时", relative, node.lineno,
+                            f"顶层函数 {node.name} 属于评分/平衡模拟，应放 tools")
+                )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -575,6 +686,9 @@ CHECKS = (
     ("硬编码数据目录", check_data_layout_hardcoding),
     ("遍历数据目录", check_data_directory_traversal),
     ("第二套 JSON 读取", check_single_json_reader),
+    ("随机未带种子", check_random_seeding),
+    ("第二套战斗入口", check_combat_single_entry),
+    ("评分进入运行时", check_scoring_outside_tools),
     ("微服务包结构", check_service_doc_coverage),
     ("后台例外边界", check_console_boundary),
 )
