@@ -1308,37 +1308,4 @@ def render_listeners(
     return tuple(lines), tuple(renderer.unknown)
 
 
-#: 选择器类节点：它们没有独立句式，由 `_target` 渲染成目标短语。
-_SELECTOR_ABILITIES = frozenset({"选择目标", "选择技能", "选择状态"})
-
-
-def render_node(
-    node: Mapping[str, object],
-    entity: Mapping[str, object] | None = None,
-) -> str:
-    """渲染**单个**节点，返回一段正文：效果、条件、选择器或数值。
-
-    与 `render_body`（按整个实体）配套：`查看` 里要单独显示嵌套节点时走这里，
-    而不是在命令层再写一套。**同一个词表必须只有一套措辞**——两套渲染器会在
-    新增原子能力时分叉，一处加、另一处静默漏。
-
-    分派覆盖渲染器内部的四种形状：`_condition_*`（条件）、`_ability_*`（效果与数值）、
-    选择器（`选择目标`/`选择技能`/`选择状态`）。
-
-    **装配根不算句式**：`主动技能`/`被动技能`/`固定属性加成` 是能力树的结构节点，
-    单独渲染只会得到未支持标记——`body()` 按结构处理它们，不要喂给本函数。
-
-    `entity` 提供计量与状态的上下文（节点引用 `构筑计量` 或状态名时需要）；
-    节点自成一体时可省略。
-    """
-
-    renderer = CardText(entity or {})
-    ability = str(node.get("能力") or "")
-    if getattr(renderer, f"_condition_{ability}", None) is not None:
-        return renderer._condition(node)
-    if ability in _SELECTOR_ABILITIES:
-        return renderer._target(node)
-    return renderer._effect(node)
-
-
 __all__ = ["CardText", "render_body", "render_listeners"]
