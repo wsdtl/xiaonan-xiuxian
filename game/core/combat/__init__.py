@@ -46,6 +46,7 @@ from .builds import load_build_contracts as load_build_contracts
 from .builds import validate_builds as validate_builds
 from .card_text import render_body as render_body
 from .card_text import render_listeners as render_listeners
+from .card_text import render_node as render_node
 from .service import CombatService as CombatService
 
 __all__ = [
@@ -73,5 +74,6 @@ __all__ = [
     "load_build_contracts",
     "render_body",
     "render_listeners",
+    "render_node",
     "validate_builds",
 ]
