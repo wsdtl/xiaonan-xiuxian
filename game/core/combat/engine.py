@@ -251,12 +251,26 @@ class BattleEngine(AbilityRuntime):
             for member in members:
                 member.inventory = shared
 
-    @staticmethod
-    def _build_formation(definition: PreparedFormation) -> RuntimeFormation:
+    def _formation_base_cycle(self) -> int:
+        """阵法轮转的**基准周期**，来自 `时序.json -> 阵法轮转.基准周期`。
+
+        这个数原先写死在这里（`math.ceil(12 * …)`）。它是负载节奏的数——各品级靠
+        `传导` 缩放它，黄/玄/地/天分别是 1.0/1.45/2.1/3.05，于是首轮落在
+        第 12/9/6/4 行动——所以它和 `伤害.json` 的那几个闸是同一类东西，放数据里。
+        """
+
+        section = self.catalog.timing.get("阵法轮转") or {}
+        return max(1, int(section.get("基准周期", 12)))
+
+    def _build_formation(self, definition: PreparedFormation) -> RuntimeFormation:
         stage = definition.stages[0]
         interval = max(
             1,
-            math.ceil(12 * stage.cycle_multiplier / max(1.0, definition.transmission)),
+            math.ceil(
+                self._formation_base_cycle()
+                * stage.cycle_multiplier
+                / max(1.0, definition.transmission)
+            ),
         )
         return RuntimeFormation(definition, definition.capacity, interval)
 
@@ -552,7 +566,7 @@ class BattleEngine(AbilityRuntime):
             interval = max(
                 1,
                 math.ceil(
-                    12
+                    self._formation_base_cycle()
                     * stage.cycle_multiplier
                     / max(1.0, formation.definition.transmission)
                 ),

@@ -483,8 +483,11 @@ def _validate_timing(value: Mapping[str, Any]) -> None:
     ):
         raise ValueError("时序.事件监听.排序必须完整且不可重复")
     formation = _mapping(value["阵法轮转"], "时序.阵法轮转")
-    if set(formation) != {"执行时点", "双方结算", "冲击判定", "排序"}:
+    if set(formation) != {"执行时点", "双方结算", "冲击判定", "排序", "基准周期"}:
         raise ValueError("时序.阵法轮转字段必须完整")
+    # 基准周期是各品级阵法的轮转基准，再由 `传导` 与阶段倍率缩放；
+    # 原先写死在 engine.py 里，放进数据后成为可调闸。
+    _positive_int(formation["基准周期"], "时序.阵法轮转.基准周期")
     if formation["执行时点"] != {"事件": "行动结束", "阶段": "事件完成后"}:
         raise ValueError("阵法必须在行动结束事件完成后轮转")
     if formation["双方结算"] != {"读取快照": "同一战场", "提交方式": "同时"}:
@@ -575,6 +578,16 @@ def _positive_number(value: Any, path: str, *, allow_zero: bool = False) -> floa
     if result < 0 or (result == 0 and not allow_zero):
         raise ValueError(f"{path}必须{'非负' if allow_zero else '大于零'}")
     return result
+
+
+def _positive_int(value: Any, path: str) -> int:
+    """正整数校验。`bool` 是 `int` 的子类，必须显式排除。"""
+
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{path}必须是整数")
+    if value <= 0:
+        raise ValueError(f"{path}必须大于零")
+    return value
 
 
 def _mapping(value: Any, path: str) -> Mapping[str, Any]:
