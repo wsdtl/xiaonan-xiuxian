@@ -724,9 +724,60 @@ class CharacterService:
         grade_id: str,
         slot: int,
     ) -> CharacterEquipPlan:
-        """验证道藏所有权，并生成一个人物修行槽替换。"""
+        """验证道藏所有权，并生成一个人物修行槽替换。
 
-        self._require_initialized()
+        五个阶段各自成函数：校验入参（`_equip_target`）、读修行快照
+        （`_equip_slots`，顺带做槽位范围与重复装配检查）、写槽并查构筑相冲
+        （`_equip_conflict`）、取内容来源（`_equip_source`，功法查道藏所有权、
+        真意与气机扣一份储备）、组装计划。装回去的槽位与相冲判定都在这里，
+        顺序不要调换——相冲是拿**装好之后**的构筑算的。
+        """
+
+        normalized_user_id, normalized_category, normalized_content_id, grade = (
+            self._equip_target(user_id, category, slot, content_id, grade_id)
+        )
+        snapshot, cultivation, slots = await self._equip_slots(
+            normalized_user_id, normalized_category, slot
+        )
+        replaced = self._equip_replaced(
+            normalized_category, normalized_content_id, grade.grade_id, slots, slot
+        )
+        slots[slot - 1] = {
+            "编号": normalized_content_id,
+            "品级": grade.grade_id,
+        }
+        cultivation[normalized_category] = slots
+        self._equip_conflict(cultivation)
+        content_name, reserve_operation = await self._equip_source(
+            normalized_user_id, normalized_category, normalized_content_id, grade.grade_id
+        )
+        replaced_id, replaced_grade_id = self._equip_replaced_ids(replaced)
+        return CharacterEquipPlan(
+            normalized_category,
+            slot,
+            normalized_content_id,
+            content_name,
+            grade.grade_id,
+            replaced_id,
+            replaced_grade_id,
+            StateMutation(
+                normalized_user_id,
+                "cultivation",
+                "main",
+                cultivation,
+                snapshot.version,
+            ),
+            reserve_operation,
+        )
+
+    def _equip_target(
+        self, user_id: str, category: str, slot: int, content_id: str, grade_id: str
+    ):
+        """入参校验：编号、类别、槽位，并把实体记录与品级取出来。
+
+        实体记录与品级放在同一个 `try` 里，报错统一转成修行错误——这一段别拆开。
+        """
+
         normalized_user_id = _required_user_id(user_id)
         normalized_category = str(category or "").strip()
         if normalized_category not in {"功法", "真意", "气机"}:
@@ -745,45 +796,48 @@ class CharacterService:
             grade = self._asset.grade(grade_id)
         except (AssetStateError, JsonDataError, ValueError) as exc:
             raise CharacterCultivationError(str(exc)) from exc
+        return normalized_user_id, normalized_category, normalized_content_id, grade
+
+    async def _equip_slots(self, user_id: str, category: str, slot: int):
+        """读修行快照并取出该类别的槽位；顺手校验槽位号在范围内。"""
+
         snapshot = await self._database.get(
-            StateAddress(normalized_user_id, "cultivation", "main")
+            StateAddress(user_id, "cultivation", "main")
         )
         if snapshot is None:
             raise CharacterStateError("人物缺少修行槽状态")
         cultivation = dict(_state_mapping(snapshot.value, "cultivation/main"))
-        slots = list(
-            _state_slots(cultivation.get(normalized_category), normalized_category)
-        )
+        slots = list(_state_slots(cultivation.get(category), category))
         if slot > len(slots):
-            raise CharacterCultivationError(
-                f"{normalized_category}槽位只有{len(slots)}个"
-            )
+            raise CharacterCultivationError(f"{category}槽位只有{len(slots)}个")
+        return snapshot, cultivation, slots
+
+    def _equip_replaced(
+        self, category: str, content_id: str, grade_id: str, slots: list, slot: int
+    ):
+        """同一个内容不能占两个槽，也不能重复装进同一个槽；返回被替换的那个槽。"""
+
         for equipped_slot, raw in enumerate(slots, start=1):
             if raw is None or equipped_slot == slot:
                 continue
-            equipped = _state_mapping(raw, f"{normalized_category}槽[{equipped_slot}]")
-            if (
-                _state_text(equipped.get("编号"), f"{normalized_category}槽.编号")
-                == normalized_content_id
-            ):
+            equipped = _state_mapping(raw, f"{category}槽[{equipped_slot}]")
+            if _state_text(equipped.get("编号"), f"{category}槽.编号") == content_id:
                 raise CharacterCultivationError(
-                    f"该{normalized_category}已装配在{equipped_slot}号槽"
+                    f"该{category}已装配在{equipped_slot}号槽"
                 )
         replaced = slots[slot - 1]
         if replaced is not None:
             replaced_value = _state_mapping(replaced, "原修行槽")
             if (
-                _state_text(replaced_value.get("编号"), "原修行槽.编号")
-                == normalized_content_id
-                and _state_text(replaced_value.get("品级"), "原修行槽.品级")
-                == grade.grade_id
+                _state_text(replaced_value.get("编号"), "原修行槽.编号") == content_id
+                and _state_text(replaced_value.get("品级"), "原修行槽.品级") == grade_id
             ):
                 raise CharacterCultivationError("该槽位已经装配相同内容")
-        slots[slot - 1] = {
-            "编号": normalized_content_id,
-            "品级": grade.grade_id,
-        }
-        cultivation[normalized_category] = slots
+        return replaced
+
+    def _equip_conflict(self, cultivation: dict) -> None:
+        """按装好之后的构筑查相冲。"""
+
         build = {
             name: tuple(
                 str(entry["编号"])
@@ -796,59 +850,39 @@ class CharacterService:
         conflict = self._growth.build_conflict(build)
         if conflict is not None:
             raise CharacterCultivationError(f"该构筑触发相冲：{conflict}")
+
+    async def _equip_source(
+        self, user_id: str, category: str, content_id: str, grade_id: str
+    ):
+        """内容从哪来：功法查道藏所有权；真意与气机扣一份储备。"""
+
         try:
-            if normalized_category == "功法":
+            if category == "功法":
                 ownership = await self._asset.cultivation_ownership(
-                    normalized_user_id,
-                    normalized_category,
-                    normalized_content_id,
-                    grade.grade_id,
+                    user_id, category, content_id, grade_id
                 )
-                content_name = ownership.name
-                reserve_operation = None
-            else:
-                reserve = await self._asset.plan_cultivation_reserve_change(
-                    normalized_user_id,
-                    category=normalized_category,
-                    content_id=normalized_content_id,
-                    grade_id=grade.grade_id,
-                    quantity_delta=-1,
-                )
-                content_name = reserve.stack.name
-                reserve_operation = reserve.operation
+                return ownership.name, None
+            reserve = await self._asset.plan_cultivation_reserve_change(
+                user_id,
+                category=category,
+                content_id=content_id,
+                grade_id=grade_id,
+                quantity_delta=-1,
+            )
+            return reserve.stack.name, reserve.operation
         except (AssetStateError, ValueError) as exc:
             raise CharacterCultivationError(str(exc)) from exc
-        replaced_id = (
-            ""
-            if replaced is None
-            else _state_text(
-                _state_mapping(replaced, "原修行槽").get("编号"), "原修行槽.编号"
-            )
-        )
-        replaced_grade_id = (
-            ""
-            if replaced is None
-            else _state_text(
-                _state_mapping(replaced, "原修行槽").get("品级"),
-                "原修行槽.品级",
-            )
-        )
-        return CharacterEquipPlan(
-            normalized_category,
-            slot,
-            normalized_content_id,
-            content_name,
-            grade.grade_id,
-            replaced_id,
-            replaced_grade_id,
-            StateMutation(
-                normalized_user_id,
-                "cultivation",
-                "main",
-                cultivation,
-                snapshot.version,
-            ),
-            reserve_operation,
+
+
+    def _equip_replaced_ids(self, replaced: object) -> tuple[str, str]:
+        """被替换槽位的编号与品级；空槽给空串。"""
+
+        if replaced is None:
+            return "", ""
+        value = _state_mapping(replaced, "原修行槽")
+        return (
+            _state_text(value.get("编号"), "原修行槽.编号"),
+            _state_text(value.get("品级"), "原修行槽.品级"),
         )
 
     async def plan_spirit_stone_change(
