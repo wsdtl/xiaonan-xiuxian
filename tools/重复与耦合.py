@@ -48,9 +48,13 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 GAME = ROOT / "game"
 out = io.TextIOWrapper(open(ROOT / "_重复与耦合.txt", "wb"), encoding="utf-8")
 
-#: 算「分支点」时计入的节点：每个都代表一个决策点。
-BRANCH_NODES = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.ExceptHandler,
-                ast.IfExp, ast.BoolOp, ast.comprehension, ast.Match)
+#: **决策点**：每个都要求读代码的人分一次叉。
+DECISION_NODES = (ast.If, ast.IfExp, ast.BoolOp, ast.ExceptHandler, ast.Match)
+#: **循环**：控制流，但读起来是「对每个元素做同一件事」，不是分叉。
+#: 早先把 `comprehension` 混进决策点，于是 `build_battle_report` 的 38 个「分支」
+#: 里有 19 个是列表推导，密度虚报一倍；`exploration.start`（495 行）也是这样被
+#: 排到榜首的，实际它几乎全是循环。
+LOOP_NODES = (ast.For, ast.AsyncFor, ast.While, ast.comprehension)
 
 
 def depth_of(node: ast.AST, level: int = 0) -> int:
@@ -208,33 +212,36 @@ def main() -> int:
             out.write(f"        …… 还有 {len(group) - 5} 处\n")
 
     out.write("\n" + "=" * 96 + "\n")
-    out.write("二、≥120 行的函数：行数之外还要看**分支密度**与嵌套深度\n")
+    out.write("二、≥120 行的函数：行数之外还要看**决策密度**与嵌套深度\n")
     out.write("=" * 96 + "\n")
     out.write("行数本身不是判据。长度有两种，成分完全不同：\n")
-    out.write("  线性展开——一长串顺序处理，分支少、嵌套浅。长度来自「事情有几件」而不是\n")
+    out.write("  线性展开——一长串顺序处理，决策少、嵌套浅。长度来自「事情有几件」而不是\n")
     out.write("    「逻辑有多绕」。典型：组合根（每服务一段构造 + 初始化 + 日志）、\n")
-    out.write("    按能力名平铺的 if 链（每个原子能力一条）。拆它只是把同样的展开搬走。\n")
-    out.write("  真复杂——分支密集、嵌套深，每个分支是一个决策点。这种才值得拆。\n\n")
-    out.write(f"{'行数':>5}{'语句':>6}{'分支':>6}{'深度':>5}{'分支/百行':>10}  函数\n")
+    out.write("    按能力名平铺的 if 链（每个原子能力一条）、按元素逐个处理的循环。\n")
+    out.write("  真复杂——决策密集、嵌套深，每处都要分一次叉。这种才值得拆。\n")
+    out.write("**决策**与**循环**分开数：列表推导与 for 是「对每个元素做同一件事」，读起来不\n")
+    out.write("分叉，混进决策点会把数据整形代码误报成复杂代码（密度虚高约一倍）。\n\n")
+    out.write(f"{'行数':>5}{'语句':>6}{'决策':>6}{'循环':>6}{'深度':>5}{'决策/百行':>11}  函数\n")
     long_functions = []
     for rel, name, line, size in functions:
         if size < 120:
             continue
         node = bodies[(rel, name, line)]
         statements = sum(1 for item in ast.walk(node) if isinstance(item, ast.stmt))
-        branches = sum(1 for item in ast.walk(node) if isinstance(item, BRANCH_NODES))
-        long_functions.append((size, statements, branches, depth_of(node),
-                               branches / size * 100, rel, line, name))
-    for size, statements, branches, depth, density, rel, line, name in sorted(
+        decisions = sum(1 for item in ast.walk(node) if isinstance(item, DECISION_NODES))
+        loops = sum(1 for item in ast.walk(node) if isinstance(item, LOOP_NODES))
+        long_functions.append((decisions / size * 100, size, statements, decisions,
+                               loops, depth_of(node), rel, line, name))
+    for density, size, statements, decisions, loops, depth, rel, line, name in sorted(
         long_functions, reverse=True
     ):
-        out.write(f"{size:>5}{statements:>6}{branches:>6}{depth:>5}{density:>10.1f}"
-                  f"  {rel}:{line} {name}\n")
+        out.write(f"{size:>5}{statements:>6}{decisions:>6}{loops:>6}{depth:>5}"
+                  f"{density:>11.1f}  {rel}:{line} {name}\n")
     if long_functions:
-        average = sum(item[4] for item in long_functions) / len(long_functions)
-        out.write(f"\n  ≥120 行函数 {len(long_functions)} 个，共 "
-                  f"{sum(item[0] for item in long_functions)} 行；"
-                  f"平均分支密度 {average:.1f}\n")
+        average = sum(item[0] for item in long_functions) / len(long_functions)
+        total_lines = sum(item[1] for item in long_functions)
+        out.write(f"\n  ≥120 行函数 {len(long_functions)} 个，共 {total_lines} 行；"
+                  f"平均决策密度 {average:.1f}\n")
         out.write("  密度明显**低于**平均的是线性展开（别拆）；明显高于且嵌套深的才值得看。\n")
 
     out.write("\n" + "=" * 96 + "\n")
