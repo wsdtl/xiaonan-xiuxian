@@ -73,6 +73,15 @@ def _python_files(root: str) -> Iterator[Path]:
         yield path
 
 
+def _parse(path: Path) -> ast.Module:
+    """读并解析，**带上文件名**。
+
+    `ast.parse` 不带 `filename` 时，出错只会说 `<unknown>`，据此找不到是哪个文件。
+    """
+
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
 def _imports(tree: ast.AST) -> Iterator[tuple[int, str]]:
     """产出 (行号, 被导入的模块名)。"""
 
@@ -102,7 +111,7 @@ def check_dynamic_imports() -> list[Finding]:
             if relative in DYNAMIC_IMPORT_ALLOWLIST:
                 continue
             source = path.read_text(encoding="utf-8")
-            tree = ast.parse(source)
+            tree = ast.parse(source, filename=str(path))
             for node in ast.walk(tree):
                 names: list[str] = []
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
@@ -129,7 +138,7 @@ def check_framework_dependency() -> list[Finding]:
     findings: list[Finding] = []
     for root in FRAMEWORK_ROOTS:
         for path in _python_files(root):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = _parse(path)
             for line, module in _imports(tree):
                 top = module.split(".")[0]
                 if top in {"game", "tools"}:
@@ -152,7 +161,7 @@ def check_core_internal_imports() -> list[Finding]:
         for path in _python_files(root):
             relative = _relative(path)
             owner = _package_of(path)
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = _parse(path)
             for line, module in _imports(tree):
                 if not module.startswith("game.core."):
                     continue
@@ -187,7 +196,7 @@ def check_cmd_core_dependency() -> list[Finding]:
     findings: list[Finding] = []
     for path in _python_files("game/cmd"):
         relative = _relative(path)
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse(path)
         for line, module in _imports(tree):
             if module == "game.core" or module.startswith("game.core."):
                 findings.append(
@@ -242,7 +251,7 @@ def check_single_json_reader() -> list[Finding]:
             if relative.parts[:3] == ("game", "core", "data"):
                 continue
             source = path.read_text(encoding="utf-8")
-            tree = ast.parse(source)
+            tree = ast.parse(source, filename=str(path))
             for node in ast.walk(tree):
                 detail: str | None = None
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
@@ -308,7 +317,7 @@ def check_console_boundary() -> list[Finding]:
             continue
         relative = _relative(path)
         source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        tree = ast.parse(source, filename=str(path))
         for line, module in _imports(tree):
             # 维护者入口不读游戏规则、玩家资产、战斗事实，也不使用游戏配置：
             # 消息观察库路径由控制台自己从框架自定义项解析。
@@ -348,7 +357,7 @@ def check_core_upward_dependency() -> list[Finding]:
     findings: list[Finding] = []
     for path in _python_files("game/core"):
         relative = _relative(path)
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse(path)
         for line, module in _imports(tree):
             for upper in ("game.features", "game.cmd"):
                 if module == upper or module.startswith(upper + "."):
@@ -363,12 +372,107 @@ def check_core_upward_dependency() -> list[Finding]:
     return findings
 
 
+def check_core_namespace() -> list[Finding]:
+    """`game/core/__init__.py` 只保留命名空间，不转发具体服务。
+
+    见 `系统架构.md` 第四节、`微服务边界规范.md` 第三节。它是「不许有第二套门面」
+    的守卫：这里一旦开始转发，调用方就多出一条与「从各核心包顶层导入」并行的路径，
+    边界随之失效。相对导入也算转发——`from .pool import …` 转的就是核心子包。
+    """
+
+    findings: list[Finding] = []
+    path = PROJECT_ROOT / "game" / "core" / "__init__.py"
+    if not path.is_file():
+        return findings
+    relative = _relative(path)
+    tree = _parse(path)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "game.core" or alias.name.startswith("game.core."):
+                    findings.append(
+                        Finding("核心命名空间转发服务", relative, node.lineno,
+                                f"不得在此导入 {alias.name}；具体服务从各自包顶层导入")
+                    )
+        elif isinstance(node, ast.ImportFrom):
+            if node.level or (node.module or "").startswith("game.core"):
+                target = "." * node.level + (node.module or "")
+                findings.append(
+                    Finding("核心命名空间转发服务", relative, node.lineno,
+                            f"不得在此转发 {target}；具体服务从各自包顶层导入")
+                )
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if not any(isinstance(item, ast.Name) and item.id == "__all__" for item in targets):
+                continue
+            value = node.value
+            if not (isinstance(value, ast.List) and not value.elts):
+                findings.append(
+                    Finding("核心命名空间转发服务", relative, node.lineno,
+                            "__all__ 必须为空：本包是命名空间，不导出具体服务")
+                )
+    return findings
+
+
+def check_game_tools_dependency() -> list[Finding]:
+    """`game` 不得导入 `tools`（见 `系统架构.md` 第四节）。
+
+    `tools` 是维护期代码（审查、测量、一次性迁移）。运行期依赖它会把维护脚本拖进
+    游戏进程，也会把「tools 可以访问内部实现」这条单向许可变成双向耦合。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game"):
+        relative = _relative(path)
+        tree = _parse(path)
+        for line, module in _imports(tree):
+            if module == "tools" or module.startswith("tools."):
+                findings.append(
+                    Finding("运行期依赖 tools", relative, line,
+                            f"game 不得导入 {module}；维护代码不进运行期")
+                )
+    return findings
+
+
+def check_contracts_file_purpose() -> list[Finding]:
+    """`contracts.py` 只在包内确实定义了新类型时才建立。
+
+    见 `微服务边界规范.md` 第二节：`contracts.py` 不是必备文件，只做「再导出核心契约」
+    的它会是死代码，还会改掉命令层原有的异常语义（玩法再导出核心错误时不必自建文件）。
+    """
+
+    findings: list[Finding] = []
+    for root in ("game/core", "game/features"):
+        for path in _python_files(root):
+            if path.name != "contracts.py":
+                continue
+            tree = _parse(path)
+            defines_type = any(
+                isinstance(node, ast.ClassDef)
+                or (
+                    isinstance(node, ast.AnnAssign)
+                    and isinstance(node.target, ast.Name)
+                    and "TypeAlias" in ast.unparse(node.annotation)
+                )
+                for node in tree.body
+            )
+            if not defines_type:
+                findings.append(
+                    Finding("contracts.py 没有定义新类型", _relative(path), 1,
+                            "只再导出核心契约的 contracts.py 是死代码，应当删除")
+                )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
     ("跨服务导入内部实现", check_core_internal_imports),
     ("核心引用上层", check_core_upward_dependency),
+    ("核心命名空间转发服务", check_core_namespace),
+    ("运行期依赖 tools", check_game_tools_dependency),
     ("命令层导入核心服务", check_cmd_core_dependency),
+    ("contracts.py 无新类型", check_contracts_file_purpose),
     ("硬编码数据目录", check_data_layout_hardcoding),
     ("第二套 JSON 读取", check_single_json_reader),
     ("微服务包结构", check_service_doc_coverage),
@@ -378,8 +482,25 @@ CHECKS = (
 
 def main() -> int:
     all_findings: list[Finding] = []
-    for _name, check in CHECKS:
-        all_findings.extend(check())
+    for name, check in CHECKS:
+        try:
+            all_findings.extend(check())
+        except SyntaxError as exc:
+            # 解析不了的文件不能让整支审查死掉：那会把后面所有检查一起藏起来，
+            # 而「审查通过」正是大家据以放心的东西。带 BOM 的 UTF-8 源码就会这样。
+            location = Path(str(exc.filename or "?"))
+            try:
+                location = _relative(location)
+            except ValueError:
+                pass  # 不在工程内（例如 `<unknown>`），原样保留
+            all_findings.append(
+                Finding(
+                    name,
+                    location,
+                    int(exc.lineno or 0),
+                    f"无法解析：{exc.msg}（源码必须是无 BOM 的 UTF-8）",
+                )
+            )
     if not all_findings:
         print(f"架构边界审查通过：{len(CHECKS)} 项检查")
         return 0
