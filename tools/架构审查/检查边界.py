@@ -673,6 +673,107 @@ def check_scoring_outside_tools() -> list[Finding]:
     return findings
 
 
+def _declares_mutable_dataclass(node: ast.ClassDef) -> bool:
+    """裸 `@dataclass` 与 `@dataclass()` 都默认可变；只有 `frozen=True` 才是快照。"""
+
+    for decorator in node.decorator_list:
+        if isinstance(decorator, ast.Name) and decorator.id == "dataclass":
+            return True
+        if isinstance(decorator, ast.Call):
+            func = decorator.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+            if name != "dataclass":
+                continue
+            for keyword in decorator.keywords:
+                if keyword.arg == "frozen":
+                    return not bool(getattr(keyword.value, "value", False))
+            return True
+    return False
+
+
+def _runtime_types() -> dict[str, str]:
+    """全库**可变运行对象**的名字 -> 所属包。
+
+    必须全库取，不能按包取：`features/chakan_wupin` 里一个运行期模块都没有，
+    而它要防的 `Fighter` 住在 `game/core/combat` ——按包取会把它整个跳过，
+    检查看着通过、其实什么都没查。（这个坑是反向验证抓出来的。）
+    """
+
+    table: dict[str, str] = {}
+    for root in ("game/core", "game/features"):
+        for package in sorted((PROJECT_ROOT / root).iterdir()):
+            if not package.is_dir() or SKIP_PARTS & set(package.parts):
+                continue
+            for module in sorted(package.glob("*.py")):
+                if module.stem not in INTERNAL_MODULES | BOUND_INTERNAL_MODULES:
+                    continue
+                for node in _parse(module).body:
+                    if isinstance(node, ast.ClassDef) and _declares_mutable_dataclass(node):
+                        table[node.name] = _relative(package).as_posix()
+    return table
+
+
+def check_public_contracts_are_pure() -> list[Finding]:
+    """公共契约与包顶层导出不得引用可变运行对象（见 `微服务边界规范.md` 第五节）。
+
+    「不得返回 `Fighter`、`BattleContext`、`StatusState` 等可变运行对象」——规范举的
+    这三个例子，正是 `game/core/combat/models.py` 里非 frozen 的那批。运行对象可变，
+    递出去调用方就能原地改战斗事实，绕开事务与校验。
+
+    只查 `contracts.py` 与包顶层 `__init__.py`：`service.py` 内部构造 prepared 快照
+    是正常的，不该拦。契约正文里认名字（Name/Attribute），`__init__.py` 只认
+    `__all__` 里的字符串——否则文档字符串里提到类型名也会误报。
+    """
+
+    runtime = _runtime_types()
+    findings: list[Finding] = []
+    for root in ("game/core", "game/features"):
+        for package in sorted((PROJECT_ROOT / root).iterdir()):
+            if not package.is_dir() or SKIP_PARTS & set(package.parts):
+                continue
+            contracts = package / "contracts.py"
+            if contracts.is_file():
+                relative = _relative(contracts)
+                for node in ast.walk(_parse(contracts)):
+                    label = ""
+                    if isinstance(node, ast.Name):
+                        label = node.id
+                    elif isinstance(node, ast.Attribute):
+                        label = node.attr
+                    if label in runtime:
+                        findings.append(
+                            Finding(
+                                "公共契约引用运行期对象", relative, node.lineno,
+                                f"不得在公共契约里出现 {label}；它是 {runtime[label]} 的"
+                                f"可变运行对象",
+                            )
+                        )
+            init = package / "__init__.py"
+            if init.is_file():
+                relative = _relative(init)
+                for node in _parse(init).body:
+                    if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                        continue
+                    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                    if not any(
+                        isinstance(item, ast.Name) and item.id == "__all__"
+                        for item in targets
+                    ):
+                        continue
+                    if not isinstance(node.value, ast.List):
+                        continue
+                    for element in node.value.elts:
+                        if isinstance(element, ast.Constant) and element.value in runtime:
+                            findings.append(
+                                Finding(
+                                    "包顶层导出运行期对象", relative, node.lineno,
+                                    f"不得再导出 {element.value}；它是 "
+                                    f"{runtime[element.value]} 的可变运行对象",
+                                )
+                            )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -682,6 +783,7 @@ CHECKS = (
     ("运行期依赖 tools", check_game_tools_dependency),
     ("命令层导入核心服务", check_cmd_core_dependency),
     ("适配模块取得组合根", check_command_adapter_purity),
+    ("公共契约引用运行期对象", check_public_contracts_are_pure),
     ("contracts.py 无新类型", check_contracts_file_purpose),
     ("硬编码数据目录", check_data_layout_hardcoding),
     ("遍历数据目录", check_data_directory_traversal),
