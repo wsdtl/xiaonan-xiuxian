@@ -35,6 +35,7 @@ from game.core.database import (
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
+    activation_payload,
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
@@ -348,7 +349,7 @@ class FormationService:
                 "阵藏现数量": reserve.quantity_after,
                 "投入": {key: actual[key] for key in _CATEGORIES},
                 "材料": [_material_payload(item) for item in preview.materials],
-                "先天灵宝": _activation_payload(activation),
+                "先天灵宝": activation_payload(activation),
                 "灵宝效果": modifiers,
             }
             receipt = await self._database.commit(
@@ -902,19 +903,6 @@ def _material_payload(value: FormationMaterial) -> dict[str, object]:
         "编号": value.item_id,
         "品级": value.grade_id,
         "数量": value.quantity,
-    }
-
-
-def _activation_payload(
-    activation: InnateTreasureActivation | None,
-) -> dict[str, str] | None:
-    if activation is None:
-        return None
-    return {
-        "编号": activation.treasure_id,
-        "名称": activation.name,
-        "权柄": activation.authority,
-        "结果": activation.summary,
     }
 
 

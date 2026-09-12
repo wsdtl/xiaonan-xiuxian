@@ -36,6 +36,7 @@ from game.core.injury import PLAYER_KEY, InjuryService, companion_subject
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
+    activation_payload,
 )
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService, StateTransitionCommand
@@ -279,7 +280,7 @@ class RetreatService:
                     "疗养进度倍率": treatment_multiplier,
                 },
                 "功法感悟": self._precompute_insights(source, insight_attempts),
-                "先天灵宝": _activation_payload(activation),
+                "先天灵宝": activation_payload(activation),
             }
             active = await self._companion.active(user_id)
             if active is not None:
@@ -797,19 +798,6 @@ def _injury_changes(values) -> list[dict[str, object]]:
         }
         for value in values
     ]
-
-
-def _activation_payload(
-    activation: InnateTreasureActivation | None,
-) -> dict[str, str] | None:
-    if activation is None:
-        return None
-    return {
-        "编号": activation.treasure_id,
-        "名称": activation.name,
-        "权柄": activation.authority,
-        "结果": activation.summary,
-    }
 
 
 def _payload_activation(value: object) -> InnateTreasureActivation | None:

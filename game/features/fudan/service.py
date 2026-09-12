@@ -17,6 +17,7 @@ from game.core.database import (
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
+    activation_payload,
 )
 from game.core.medicine import MedicineError, MedicineService, PreparedBattleMedicine
 from game.core.player_state import PlayerStateService
@@ -193,7 +194,7 @@ class MedicineFeature:
                 "变化前": before,
                 "变化后": after,
                 "实际恢复": recovered,
-                "先天灵宝": _activation_payload(activation),
+                "先天灵宝": activation_payload(activation),
             }
             receipt = await self._database.commit(
                 TransactionCommand(
@@ -334,19 +335,6 @@ def _use_result(value: Mapping[str, object], *, replayed: bool) -> MedicineUseRe
         replayed,
         _payload_activation(value.get("先天灵宝")),
     )
-
-
-def _activation_payload(
-    activation: InnateTreasureActivation | None,
-) -> dict[str, str] | None:
-    if activation is None:
-        return None
-    return {
-        "编号": activation.treasure_id,
-        "名称": activation.name,
-        "权柄": activation.authority,
-        "结果": activation.summary,
-    }
 
 
 def _payload_activation(value: object) -> InnateTreasureActivation | None:

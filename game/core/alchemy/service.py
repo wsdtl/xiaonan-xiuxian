@@ -33,6 +33,7 @@ from game.core.database import (
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
+    activation_payload,
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
@@ -383,7 +384,7 @@ class AlchemyService:
                 "现数量": output.after_quantity,
                 "药引": _material_payload(preview.beast_material),
                 "辅材": [_material_payload(item) for item in preview.herb_materials],
-                "先天灵宝": _activation_payload(activation),
+                "先天灵宝": activation_payload(activation),
             }
             receipt = await self._database.commit(
                 TransactionCommand(
@@ -868,19 +869,6 @@ def _material_payload(material: AlchemyMaterial) -> dict[str, object]:
         "用途": material.role,
         "药脉": material.trait,
         "关系": material.relation,
-    }
-
-
-def _activation_payload(
-    activation: InnateTreasureActivation | None,
-) -> dict[str, str] | None:
-    if activation is None:
-        return None
-    return {
-        "编号": activation.treasure_id,
-        "名称": activation.name,
-        "权柄": activation.authority,
-        "结果": activation.summary,
     }
 
 

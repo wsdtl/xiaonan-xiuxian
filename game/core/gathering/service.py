@@ -33,6 +33,7 @@ from game.core.database import (
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
+    activation_payload,
 )
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService, StateTransitionCommand
@@ -241,7 +242,7 @@ class GatheringService:
                 "采集单位": unit_count,
                 "宗门采集倍率": gathering_multiplier,
                 "灵宝增益比例": treasure_ratio,
-                "先天灵宝": _activation_payload(activation),
+                "先天灵宝": activation_payload(activation),
                 "预定收获": self._precompute_items(
                     mode,
                     pool_names,
@@ -724,19 +725,6 @@ def _apply_treasure_bonus(
         )
         for item in items
     )
-
-
-def _activation_payload(
-    activation: InnateTreasureActivation | None,
-) -> dict[str, str] | None:
-    if activation is None:
-        return None
-    return {
-        "编号": activation.treasure_id,
-        "名称": activation.name,
-        "权柄": activation.authority,
-        "结果": activation.summary,
-    }
 
 
 def _payload_activation(value: object) -> InnateTreasureActivation | None:
