@@ -1280,36 +1280,120 @@ class BattleEngine(AbilityRuntime):
         ignore_cooldown=False,
         multiplier=1.0,
     ):
+        """施放一门技能：过闸、付代价、跑效果、落冷却；任一步失败都按原因播报。"""
+
         if (
             skill is None
             or skill.disabled
             or (skill.use_limit and skill.uses >= skill.use_limit)
         ):
             return False
-        if self._action_restricted(actor, "技能"):
-            context.event(
-                "技能施放失败后",
-                actor,
-                target,
-                f"{skill.name}受禁制无法施展",
-                values={"技能": skill.name, "技能键": skill.key, "原因": "行动限制"},
-            )
-            return False
-        if not ignore_cooldown and actor.cooldowns.get(skill.key, 0) > 0:
-            return False
         spirit_cost = self._skill_spirit_cost(actor, skill)
-        if not ignore_cost and actor.spirit < spirit_cost:
-            context.event(
-                "技能施放失败后",
-                actor,
-                target,
-                f"{skill.name}精神不足",
-                values={"技能": skill.name, "技能键": skill.key, "原因": "精神不足"},
+        if self._skill_cast_refused(
+            context,
+            actor,
+            target,
+            skill,
+            spirit_cost,
+            ignore_cost=ignore_cost,
+            ignore_cooldown=ignore_cooldown,
+        ):
+            return False
+        frame = self._announce_skill_cast(
+            context,
+            actor,
+            target,
+            skill,
+            spirit_cost,
+            triggered=triggered,
+            kind="技能施放前",
+        )
+        if frame.cancelled:
+            self._skill_cast_failed(
+                context, actor, target, skill, "被取消", tags=skill.tags
             )
             return False
-        frame = self._dispatch_event(
+        target = frame.target
+        snapshot = self._transaction_snapshot(context)
+        if not self._pay_skill_costs(
             context,
-            kind="技能施放前",
+            actor,
+            target,
+            skill,
+            spirit_cost,
+            snapshot,
+            ignore_cost=ignore_cost,
+        ):
+            return False
+        success = self._run_skill_effects(context, actor, target, skill, multiplier)
+        if not success and skill.rollback_on_failure:
+            self._restore_transaction(context, snapshot)
+            self._skill_cast_failed(
+                context, actor, target, skill, "技能前置条件未满足", tags=skill.tags
+            )
+            return False
+        cooldown = self._skill_cooldown(actor, skill)
+        if not ignore_cooldown:
+            self._apply_skill_cooldown(actor, skill, cooldown)
+        skill.uses += 1
+        self._announce_skill_cast(
+            context,
+            actor,
+            target,
+            skill,
+            spirit_cost,
+            triggered=triggered,
+            kind="技能施放后",
+        )
+        return success
+
+    def _skill_cast_refused(
+        self,
+        context,
+        actor,
+        target,
+        skill,
+        spirit_cost,
+        *,
+        ignore_cost,
+        ignore_cooldown,
+    ) -> bool:
+        """过不了闸返回 `True` 并播报原因；冷却未好是**静默**拒绝，不播报。"""
+
+        if self._action_restricted(actor, "技能"):
+            self._skill_cast_failed(context, actor, target, skill, "行动限制")
+            return True
+        if not ignore_cooldown and actor.cooldowns.get(skill.key, 0) > 0:
+            return True
+        if not ignore_cost and actor.spirit < spirit_cost:
+            self._skill_cast_failed(context, actor, target, skill, "精神不足")
+            return True
+        return False
+
+    def _skill_cast_failed(
+        self, context, actor, target, skill, reason: str, *, tags=()
+    ) -> None:
+        """播报一次施放失败。原因写在 values 里，前端按它取文案。"""
+
+        self._dispatch_event(
+            context,
+            kind="技能施放失败后",
+            source=actor,
+            target=target,
+            values={"技能": skill.name, "技能键": skill.key, "原因": reason},
+            tags=tags,
+        )
+
+    def _announce_skill_cast(
+        self, context, actor, target, skill, spirit_cost, *, triggered, kind
+    ):
+        """播报一次施放事件，返回事件帧。「施放前」与「施放后」同构，只有 kind 不同，
+        所以载荷只写一份——两处各写一份时，改了一个必忘另一个。
+        """
+
+        return self._dispatch_event(
+            context,
+            kind=kind,
             source=actor,
             target=target,
             values={
@@ -1320,51 +1404,46 @@ class BattleEngine(AbilityRuntime):
             },
             tags=skill.tags,
         )
-        if frame.cancelled:
-            self._dispatch_event(
-                context,
-                kind="技能施放失败后",
-                source=actor,
-                target=target,
-                values={"技能": skill.name, "技能键": skill.key, "原因": "被取消"},
-                tags=skill.tags,
-            )
+
+    def _pay_skill_costs(
+        self, context, actor, target, skill, spirit_cost, snapshot, *, ignore_cost
+    ) -> bool:
+        """先付精神、再付额外代价；任一项不足就回滚本次事务并播报。"""
+
+        if ignore_cost:
+            return True
+        if spirit_cost > 0 and not self._ability_consume_resource(
+            context,
+            actor,
+            actor,
+            {
+                "目标": {"能力": "选择目标", "范围": "自身"},
+                "资源": "精神",
+                "数值": spirit_cost,
+                "不足时是否失败": True,
+            },
+            1,
+        ):
+            self._restore_transaction(context, snapshot)
             return False
-        target = frame.target
-        snapshot = self._transaction_snapshot(context)
-        if not ignore_cost:
-            if spirit_cost > 0 and not self._ability_consume_resource(
-                context,
-                actor,
-                actor,
-                {
-                    "目标": {"能力": "选择目标", "范围": "自身"},
-                    "资源": "精神",
-                    "数值": spirit_cost,
-                    "不足时是否失败": True,
-                },
-                1,
+        for cost in skill.costs:
+            if not self._execute_mechanism(
+                context, actor, target, dict(cost), skill.multiplier
             ):
                 self._restore_transaction(context, snapshot)
+                self._skill_cast_failed(
+                    context, actor, target, skill, "额外代价不足", tags=skill.tags
+                )
                 return False
-            for cost in skill.costs:
-                if not self._execute_mechanism(
-                    context, actor, target, dict(cost), skill.multiplier
-                ):
-                    self._restore_transaction(context, snapshot)
-                    self._dispatch_event(
-                        context,
-                        kind="技能施放失败后",
-                        source=actor,
-                        target=target,
-                        values={
-                            "技能": skill.name,
-                            "技能键": skill.key,
-                            "原因": "额外代价不足",
-                        },
-                        tags=skill.tags,
-                    )
-                    return False
+        return True
+
+    def _run_skill_effects(self, context, actor, target, skill, multiplier) -> bool:
+        """跑完技能的全部效果，返回是否全部成功。
+
+        期间把「当前能力 / 构筑实例 / 五行构成」换成这门技能的，好让效果里的取值
+        读到正确的来源；无论成败都在 `finally` 里还原。
+        """
+
         actor.current_skill = skill.key
         previous_composition = context.current_element_composition
         previous_ability = context.current_ability
@@ -1390,51 +1469,31 @@ class BattleEngine(AbilityRuntime):
             context.current_ability = previous_ability
             context.current_build_instance = previous_instance
             context.current_element_composition = previous_composition
-        if not success and skill.rollback_on_failure:
-            self._restore_transaction(context, snapshot)
-            self._dispatch_event(
-                context,
-                kind="技能施放失败后",
-                source=actor,
-                target=target,
-                values={
-                    "技能": skill.name,
-                    "技能键": skill.key,
-                    "原因": "技能前置条件未满足",
-                },
-                tags=skill.tags,
-            )
-            return False
+        return success
+
+    def _skill_cooldown(self, actor, skill) -> int:
+        """这门技能本次要落的冷却行动数（已按冷却缩减与余数处理折算）。"""
+
         reduction = self._clamp(self._percent(actor, "冷却缩减"), -5, 0.8)
         raw_cooldown = skill.cooldown_actions * (1 - reduction)
         rounding = self.catalog.action_rules["技能冷却"]["余数处理"]
-        cooldown = max(
+        return max(
             0,
             math.ceil(raw_cooldown) if rounding == "向上取整" else int(raw_cooldown),
         )
-        if not ignore_cooldown and cooldown:
-            actor.cooldowns[skill.key] = cooldown
-            if skill.cooldown_group:
-                for other in actor.skills:
-                    if other.cooldown_group == skill.cooldown_group:
-                        actor.cooldowns[other.key] = max(
-                            actor.cooldowns.get(other.key, 0), cooldown
-                        )
-        skill.uses += 1
-        self._dispatch_event(
-            context,
-            kind="技能施放后",
-            source=actor,
-            target=target,
-            values={
-                "技能": skill.name,
-                "技能键": skill.key,
-                "精神消耗": spirit_cost,
-                "行动类型": "触发技能" if triggered else "技能",
-            },
-            tags=skill.tags,
-        )
-        return success
+
+    def _apply_skill_cooldown(self, actor, skill, cooldown: int) -> None:
+        """落冷却；带冷却组的技能会把同组技能一起压到不低于本次冷却。"""
+
+        if not cooldown:
+            return
+        actor.cooldowns[skill.key] = cooldown
+        if skill.cooldown_group:
+            for other in actor.skills:
+                if other.cooldown_group == skill.cooldown_group:
+                    actor.cooldowns[other.key] = max(
+                        actor.cooldowns.get(other.key, 0), cooldown
+                    )
 
     def _basic_attack(self, context, source, target):
         if self._action_restricted(source, "普通攻击"):
