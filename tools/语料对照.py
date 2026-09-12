@@ -48,6 +48,8 @@ parser.add_argument("--数据", dest="数据", default="",
                     help="要跑的数据目录；默认 data，或环境变量 CORPUS_DATA")
 parser.add_argument("--允许失败", dest="允许失败", action="store_true",
                     help="有战斗抛错时也写摘要；默认拒绝，避免把坏状态当基准")
+parser.add_argument("--差异名单", dest="差异名单", default="",
+                    help="把完整差异清单写到这个文件（大批次逐条验收用）")
 args = parser.parse_args()
 
 out = Path(args.输出)
@@ -178,6 +180,20 @@ for label, keys in (("差异", changed[:40]), ("新增", added[:20]), ("缺失",
     for key in keys:
         was = baseline.get(key, "（无）")
         report(f"    {label} {key}: {was} -> {sem.get(key, '（无）')}")
+if args.差异名单:
+    # 大批次（例如全量映射批 640 条）靠截图核不完，把完整清单落盘再逐条比对。
+    listing = Path(args.差异名单)
+    listing.parent.mkdir(parents=True, exist_ok=True)
+    listing.write_text(
+        json.dumps(
+            {"差异": sorted(changed), "新增": sorted(added), "缺失": sorted(removed)},
+            ensure_ascii=False,
+            indent=1,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    report(f"   完整差异清单已写入 {listing}")
 if len(changed) > 40:
     report(f"    …… 差异共 {len(changed)} 条，只列前 40")
 
