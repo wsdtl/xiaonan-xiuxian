@@ -10,7 +10,16 @@ from typing import TYPE_CHECKING
 
 from game.core.asset import AssetService, AssetStateError
 from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
-from game.core.data import JsonDataError, JsonDataService, materialize
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping,
+    mapping as _mapping,
+    materialize,
+    nonnegative_int,
+    positive_int,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -1406,12 +1415,6 @@ class CharacterService:
             raise RuntimeError("角色核心微服务尚未初始化")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _bool(value: object, label: str) -> bool:
     if not isinstance(value, bool):
         raise JsonDataError(f"{label}必须是布尔值")
@@ -1419,9 +1422,7 @@ def _bool(value: object, label: str) -> bool:
 
 
 def _state_mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise CharacterStateError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=CharacterStateError)
 
 
 def _state_text(value: object, label: str) -> str:
@@ -1470,21 +1471,15 @@ def _clean_number(value: float) -> int | float:
 
 
 def _state_positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise CharacterStateError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=CharacterStateError)
 
 
 def _state_nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise CharacterStateError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=CharacterStateError)
 
 
 def _nonnegative_request_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise CharacterCultivationError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=CharacterCultivationError)
 
 
 def _request_int(value: object, label: str) -> int:
@@ -1600,12 +1595,6 @@ def _strings(value: object) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return ()
     return tuple(str(item).strip() for item in value if str(item).strip())
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _number(value: object, label: str) -> int | float:

@@ -9,7 +9,15 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 
 from game.core.action_group import ActionGroupError, ActionGroupService
-from game.core.data import JsonDataError, JsonDataService, materialize
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    materialize,
+    nonempty_text as _text,
+    nonnegative_int as _nonnegative_int,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     SharedEntityMutation,
@@ -867,12 +875,6 @@ def _session_from_value(value: Mapping[str, object]) -> HostingSession:
     )
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _string_mapping(value: object, label: str) -> dict[str, str]:
     raw = _mapping(value, label)
     result = {str(key): str(item or "").strip() for key, item in raw.items()}
@@ -888,25 +890,6 @@ def _strings(value: object, label: str) -> tuple[str, ...]:
     if not result or any(not item for item in result):
         raise JsonDataError(f"{label}不能包含空值")
     return result
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
-
-
-def _nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise JsonDataError(f"{label}必须是非负整数")
-    return value
 
 
 def _mode(value: object) -> str:

@@ -29,7 +29,16 @@ from game.core.combat import (
     CombatService,
 )
 from game.core.companion import CompanionService
-from game.core.data import JsonDataError, JsonDataService, materialize
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    materialize,
+    nonnegative_int as _nonnegative,
+    nonnegative_int as _stored_nonnegative,
+    positive_int,
+    positive_int as _positive,
+)
 from game.core.database import (
     DatabaseService,
     SettlementTransactionPlan,
@@ -999,40 +1008,14 @@ def _expired(value):
     )
 
 
-def _mapping(value, label):
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _text(value, label):
     if not isinstance(value, str) or not value.strip():
         raise JsonDataError(f"{label}必须是非空字符串")
     return value.strip()
 
 
-def _positive(value, label):
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
-
-
-def _nonnegative(value, label):
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise JsonDataError(f"{label}必须是非负整数")
-    return value
-
-
 def _request_positive(value, label):
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise SectWarError(f"{label}必须是正整数")
-    return value
-
-
-def _stored_nonnegative(value, label):
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise JsonDataError(f"{label}必须是非负整数")
-    return value
+    return positive_int(value, label, error=SectWarError)
 
 
 def _stored_texts(value, label):

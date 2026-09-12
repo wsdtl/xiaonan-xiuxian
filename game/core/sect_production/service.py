@@ -9,7 +9,14 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 
 from game.core.asset import AssetService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    nonempty_text as _text,
+    nonnegative_int,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -400,35 +407,14 @@ def _time(value, label):
     return _utc(result)
 
 
-def _mapping(value, label):
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _texts(value, label):
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是字符串数组")
     return tuple(_text(item, label) for item in value)
 
 
-def _text(value, label):
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
-
-
-def _positive_int(value, label):
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
-
-
 def _nonnegative_int(value, label):
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise SectProductionError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=SectProductionError)
 
 
 def _positive_float(value, label):

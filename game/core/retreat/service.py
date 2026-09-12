@@ -16,7 +16,14 @@ from game.core.activity import (
 from game.core.asset import AssetService, CultivationAcquisition
 from game.core.character import CharacterService
 from game.core.companion import CompanionService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping,
+    nonempty_text,
+    nonnegative_int,
+    positive_int,
+)
 from game.core.database import (
     DatabaseService,
     SettlementTransactionPlan,
@@ -858,9 +865,7 @@ def _parse_time(value: object, label: str) -> datetime:
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise RetreatStateError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=RetreatStateError)
 
 
 def _sequence(
@@ -878,10 +883,7 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
 
 
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise RetreatStateError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=RetreatStateError)
 
 
 def _user_id(value: object) -> str:
@@ -892,15 +894,11 @@ def _user_id(value: object) -> str:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise RetreatStateError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=RetreatStateError)
 
 
 def _nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise RetreatStateError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=RetreatStateError)
 
 
 def _number(value: object, label: str) -> int | float:

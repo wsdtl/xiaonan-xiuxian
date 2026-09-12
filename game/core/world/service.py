@@ -6,7 +6,7 @@ from collections import deque
 from collections.abc import Mapping, Sequence
 from itertools import pairwise
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, positive_int as _positive_int
 
 from .contracts import (
     JourneyPlan,
@@ -599,12 +599,6 @@ def _axis_range(value: object, label: str) -> tuple[int, int]:
     if not _ordered_pair(value):
         raise JsonDataError(f"{label}必须是两个顺序整数")
     return (value[0], value[1])
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _coordinates(

@@ -29,7 +29,14 @@ from game.core.combat import (
     CombatService,
 )
 from game.core.companion import CompanionService
-from game.core.data import JsonDataError, JsonDataService, materialize
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping,
+    materialize,
+    nonnegative_int,
+    positive_int,
+)
 from game.core.database import (
     DatabaseService,
     SettlementTransactionPlan,
@@ -1378,9 +1385,7 @@ def _parse_time(value: object, label: str) -> datetime:
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise ExplorationStateError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=ExplorationStateError)
 
 
 def _sequence(
@@ -1412,15 +1417,11 @@ def _user_id(value: object) -> str:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ExplorationStateError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=ExplorationStateError)
 
 
 def _nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ExplorationStateError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=ExplorationStateError)
 
 
 def _number(value: object, label: str) -> int | float:

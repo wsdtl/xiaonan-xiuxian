@@ -7,7 +7,7 @@ from math import ceil
 from types import MappingProxyType
 
 from game.core.character import CharacterService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, positive_int as _positive_int
 from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
@@ -248,12 +248,6 @@ def _text(value: object, label: str) -> str:
     if not result:
         raise JsonDataError(f"{label}必须是非空字符串")
     return result
-
-
-def _positive_int(value: object, label: str, error=JsonDataError) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise error(f"{label}必须是正整数")
-    return value
 
 
 def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:

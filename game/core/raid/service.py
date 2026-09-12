@@ -18,7 +18,7 @@ from game.core.asset import AssetService, InventoryAdjustment
 from game.core.character import CharacterService
 from game.core.combat import CombatGroupSpec, CombatRequest, CombatService
 from game.core.companion import CompanionService
-from game.core.data import JsonDataError, JsonDataService, materialize
+from game.core.data import JsonDataError, JsonDataService, materialize, nonempty_text, positive_int
 from game.core.database import (
     DatabaseService,
     SettlementTransactionPlan,
@@ -432,10 +432,7 @@ def _unit_range(value, path: str, default: tuple[int, int]) -> tuple[int, int]:
 
 
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise RaidError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=RaidError)
 
 
 def _users(values: object) -> tuple[str, ...]:
@@ -466,9 +463,7 @@ def _session_id(owner: str, request_id: str) -> str:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise RaidError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=RaidError)
 
 
 def _started(value: Mapping[str, object], *, replayed: bool) -> RaidStarted:

@@ -7,7 +7,12 @@ from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 from uuid import NAMESPACE_URL, uuid5
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -612,12 +617,6 @@ def _invitation(
     )
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _texts(value: object, label: str) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise TeamRuleError("team_snapshot_invalid")
@@ -627,12 +626,6 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
 def _text(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise TeamRuleError("invalid_text")
-    return value
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
     return value
 
 

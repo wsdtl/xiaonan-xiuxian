@@ -4,7 +4,7 @@ from collections.abc import Mapping
 
 from game.core.asset import AssetService, InventoryAdjustment, InventoryChangeError
 from game.core.character import CharacterCultivationError, CharacterService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, nonempty_text as _text
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -84,13 +84,6 @@ class YixingFeature:
 
 def _result(value: Mapping[str, object], replayed: bool) -> YixingResult:
     return YixingResult(str(value.get("人物名称") or ""), str(value.get("原性别") or ""), str(value.get("新性别") or ""), str(value.get("丹药名称") or ""), replayed)
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
 
 
 __all__ = ["YixingFeature"]

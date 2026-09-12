@@ -15,7 +15,7 @@ from game.core.combat import (
     CombatService,
 )
 from game.core.companion import CompanionService
-from game.core.data import JsonDataError, JsonDataService, materialize
+from game.core.data import JsonDataError, JsonDataService, materialize, nonempty_text, positive_int
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -274,10 +274,7 @@ def _utc(value: object) -> datetime:
 
 
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise DuelError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=DuelError)
 
 
 def _texts(value: object, label: str) -> tuple[str, ...]:
@@ -287,6 +284,4 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise DuelError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=DuelError)

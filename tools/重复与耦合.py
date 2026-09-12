@@ -10,10 +10,14 @@
     .venv/Scripts/python.exe -X utf8 tools/重复与耦合.py
     # 报告写到 _重复与耦合.txt（根目录 _* 不入库）
 
-**读数的坑**：归一化抹掉了异常类型与字面量，所以「结构相同」不等于「可以合并」。
-例：60 处 `_positive_int` 看着逐字相同，实际分别抛 `JsonDataError`、`AssetStateError`
-等**各服务自己的错误类型**——那是有意设计（命令层捕获的就是各服务的错误）。
-第一段给的是**去重上限**，不是能直接删掉的量；动手前必须逐组看清差异。
+**读数的坑（两种口径都要看）**：宽松口径把所有标识符与字面量都抹成同形，于是
+「结构相同」既不等于「同一个函数」，也不等于「可以合并」——它会把**不同的校验器**
+并成一组：`_positive_int`（`value < 1`）、`_nonnegative_int`（`value < 0`）、
+`_number`（`float`）、`_bool`，以及 60 处里各服务自己的错误类型，看着全都一样。
+照宽松口径去合并就是静默的行为错误。
+
+所以报告给两个数：**严格口径**（只抹异常类名，判定、比较常量与消息一律保留）才是
+能动手的量；**宽松口径**只是去重上限。动手前仍要逐组看清差异。
 
 **已知的负结果**（量过、不用再查）：`game.app` 被 41 个文件导入，但**全在 `game/cmd`**
 （38 个 `__init__.py` + `access_guard`/`site`/`runtime`），`features` 与 `core` 一处都
@@ -79,6 +83,42 @@ def normalize(node: ast.AST) -> str:
     return ast.dump(Normalizer().visit(copied))
 
 
+def normalize_strict(node: ast.AST) -> str:
+    """严格归一化：只抹掉异常类名与注解，判定、比较常量、消息文本一律保留。
+
+    这一口径下被判为重复的，差异就只剩「抛哪个异常」——那才是真能合并的组。
+    文档字符串在这里去掉：有的副本写了、有的没写，不该因此分成两组。
+    """
+
+    class Strict(ast.NodeTransformer):
+        def visit_arg(self, item: ast.arg) -> ast.AST:
+            item.annotation = None
+            return item
+
+        def visit_Raise(self, item: ast.Raise) -> ast.AST:
+            if isinstance(item.exc, ast.Call) and isinstance(item.exc.func, ast.Name):
+                if item.exc.func.id != "error":  # 已经参数化的副本不必再抹
+                    item.exc.func = ast.Name(id="E", ctx=ast.Load())
+            return self.generic_visit(item)
+
+        def visit_FunctionDef(self, item: ast.FunctionDef) -> ast.AST:
+            item.name = "_"
+            item.decorator_list = []
+            item.returns = None
+            item.body = [
+                child for child in item.body
+                if not (isinstance(child, ast.Expr)
+                        and isinstance(child.value, ast.Constant))
+            ]
+            return self.generic_visit(item)
+
+        def visit_AsyncFunctionDef(self, item: ast.AsyncFunctionDef) -> ast.AST:
+            return self.visit_FunctionDef(item)  # type: ignore[arg-type]
+
+    copied = ast.parse(ast.unparse(node))
+    return ast.dump(Strict().visit(copied))
+
+
 def collect():
     functions: list[tuple[str, str, int, int]] = []
     bodies: dict[tuple[str, str, int], ast.AST] = {}
@@ -121,26 +161,34 @@ def main() -> int:
     functions, bodies, imports, package_imports = collect()
 
     out.write("=" * 96 + "\n")
-    out.write("一、重复函数体（归一化后相同，按可省行数排序）\n")
+    out.write("一、重复函数体（按可省行数排序）\n")
     out.write("=" * 96 + "\n")
     groups: dict[str, list[tuple[str, str, int, int]]] = collections.defaultdict(list)
+    loose: dict[str, list[tuple[str, str, int, int]]] = collections.defaultdict(list)
     for rel, name, line, size in functions:
         node = bodies[(rel, name, line)]
-        groups[normalize(node)].append((rel, name, line, size))
+        groups[normalize_strict(node)].append((rel, name, line, size))
+        loose[normalize(node)].append((rel, name, line, size))
     duplicates = sorted(
         (group for group in groups.values() if len(group) > 1),
-        key=lambda group: -(len(group) - 1) * group[0][3],
+        key=lambda group: -(len(group) - 1) * (group[0][3] - 1),
     )
-    saved = sum((len(group) - 1) * group[0][3] for group in duplicates)
+    loose_duplicates = [group for group in loose.values() if len(group) > 1]
+    # 每个副本换成一行导入，所以每组省 (副本数-1) × (行数-1)。
+    saved = sum((len(group) - 1) * (group[0][3] - 1) for group in duplicates)
+    loose_saved = sum((len(group) - 1) * (group[0][3] - 1) for group in loose_duplicates)
     out.write(
-        f"函数总数 {len(functions)}；重复组 {len(duplicates)} 组；"
-        f"涉及函数 {sum(len(group) for group in duplicates)} 个；"
-        f"**结构级**去重上限约 {saved} 行\n"
+        f"函数总数 {len(functions)}；严格口径重复组 {len(duplicates)} 组"
+        f"（涉及函数 {sum(len(group) for group in duplicates)} 个）；"
+        f"宽松口径 {len(loose_duplicates)} 组。\n"
     )
-    out.write("注意：归一化抹掉了异常类型与字面量，所以这个数是上限，不是可直接删的量。\n\n")
+    out.write(
+        f"**能动手的量**：严格口径去重上限约 {saved} 行；"
+        f"宽松口径给的 {loose_saved} 行是上限，不可直接照做（见开头两种口径的说明）。\n\n"
+    )
     for group in duplicates[:20]:
         rel, name, line, size = group[0]
-        out.write(f"  {len(group)} 处 × {size} 行 = 省 {(len(group) - 1) * size} 行   [{name}]\n")
+        out.write(f"  {len(group)} 处 × {size} 行 = 省 {(len(group) - 1) * (size - 1)} 行   [{name}]\n")
         for item in group[:5]:
             out.write(f"        {item[0]}:{item[2]}\n")
         if len(group) > 5:

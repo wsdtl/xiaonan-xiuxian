@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, mapping, nonempty_text, positive_int
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -1258,9 +1258,7 @@ def _cultivation_state_key(category: str, content_id: str, grade_id: str) -> str
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise AssetStateError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=AssetStateError)
 
 
 def _sequence(
@@ -1275,17 +1273,11 @@ def _sequence(
 
 
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise AssetStateError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=AssetStateError)
 
 
 def _required_text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise InventoryChangeError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=InventoryChangeError)
 
 
 def _normalize(value: object) -> str:
@@ -1303,9 +1295,7 @@ def _decimal(value: object, label: str) -> Decimal:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise AssetStateError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=AssetStateError)
 
 
 def _nonnegative_decimal(value: object, label: str) -> int:

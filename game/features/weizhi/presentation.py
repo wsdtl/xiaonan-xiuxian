@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from string import Formatter
 from types import MappingProxyType
 
-from game.core.data import JsonDataError
+from game.core.data import JsonDataError, positive_int as _positive_int
 from game.features.presentation import require_mapping
 
 from .contracts import PositionAction, PositionCopy
@@ -471,12 +471,6 @@ def _partial_template(
             f"{label}只能使用占位符：{'、'.join(sorted(allowed_fields)) or '无'}"
         )
     return template, found
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _text(value: object, label: str) -> str:

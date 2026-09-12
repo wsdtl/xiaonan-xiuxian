@@ -9,7 +9,7 @@ from dataclasses import replace
 
 from game.core.character import CharacterService
 from game.core.companion import CompanionService, LocalCultivator
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, positive_int as _positive_int
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
@@ -474,12 +474,6 @@ class PositionFeature:
                     )
                 )
         return tuple(result)
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _sign(value: int) -> int:

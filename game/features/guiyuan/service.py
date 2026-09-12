@@ -4,7 +4,7 @@ from collections.abc import Mapping
 
 from game.core.asset import AssetService, InventoryAdjustment, InventoryChangeError
 from game.core.companion import CompanionCultivationError, CompanionService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, nonempty_text as _text
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -110,13 +110,6 @@ class GuiyuanFeature:
 
 def _result(payload: Mapping[str, object], replayed: bool) -> GuiyuanResult:
     return GuiyuanResult(str(payload.get("道侣名称") or ""), str(payload.get("类别") or ""), int(payload.get("数量") or 0), str(payload.get("丹药名称") or ""), replayed)
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
 
 
 __all__ = ["GuiyuanFeature"]

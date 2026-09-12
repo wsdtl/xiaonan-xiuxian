@@ -6,7 +6,14 @@ from collections.abc import Mapping, Sequence
 
 from game.core.asset import AssetService
 from game.core.combat import CombatStatusSpec
-from game.core.data import JsonDataError, JsonDataService, SchemaValidator, materialize
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    SchemaValidator,
+    mapping as _mapping,
+    materialize,
+    nonempty_text as _text,
+)
 
 from .contracts import (
     BattleMedicine,
@@ -429,12 +436,6 @@ class MedicineService:
             raise RuntimeError("丹药核心微服务尚未初始化")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _mappings(value: object, label: str) -> tuple[Mapping[str, object], ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是对象数组")
@@ -473,13 +474,6 @@ def _number_range(value: object, label: str) -> tuple[float, float]:
 
 def _clean_number(value: float) -> int | float:
     return int(value) if value.is_integer() else round(value, 4)
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
 
 
 def _bool(value: object, label: str) -> bool:

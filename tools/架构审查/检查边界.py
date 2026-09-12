@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import re
 import sys
 from collections.abc import Iterator
@@ -774,6 +775,102 @@ def check_public_contracts_are_pure() -> list[Finding]:
     return findings
 
 
+#: 字段取值校验的唯一实现（见 `系统架构.md` 第四节）。命令层不得导入核心服务，
+#: 所以 `game/cmd` 里的副本按边界留在本地，不在本检查范围内。
+FIELD_VALIDATOR_PATH = Path("game/core/data/fields.py")
+
+
+def _erase_raise_target(node: ast.AST) -> ast.AST:
+    """把所有 `raise X(...)` 的 X 抹成同一个占位符：唯一的差异就是抛哪个异常。"""
+
+    class Erase(ast.NodeTransformer):
+        def visit_Raise(self, item: ast.Raise) -> ast.AST:
+            if isinstance(item.exc, ast.Call):
+                item.exc.func = ast.Name(id="E", ctx=ast.Load())
+            return self.generic_visit(item)
+
+    return Erase().visit(node)
+
+
+def _body_shape(node: ast.FunctionDef) -> str:
+    """函数体（去掉文档字符串）的结构签名。深拷贝，别改到原节点。"""
+
+    shell = copy.deepcopy(node)
+    shell.body = [
+        item for item in shell.body
+        if not (isinstance(item, ast.Expr) and isinstance(item.value, ast.Constant))
+    ]
+    shell.name = "_"
+    shell.decorator_list = []
+    shell.returns = None
+    shell.args = ast.arguments(
+        posonlyargs=[], args=[], vararg=None, kwonlyargs=[],
+        kw_defaults=[], kwarg=None, defaults=[],
+    )
+    return ast.dump(
+        _erase_raise_target(ast.fix_missing_locations(shell)), annotate_fields=False
+    )
+
+
+def _field_validator_shapes() -> dict[str, str]:
+    """共享字段校验的形状。**从实现自己算**，判据与实现同源，不会各自漂移。"""
+
+    return {
+        node.name: _body_shape(node)
+        for node in _parse(PROJECT_ROOT / FIELD_VALIDATOR_PATH).body
+        if isinstance(node, ast.FunctionDef) and not node.name.startswith("_")
+    }
+
+
+def check_field_validators_are_shared() -> list[Finding]:
+    """字段取值校验不得各服务再抄一遍（见 `系统架构.md` 第四节）。
+
+    正整数 / 非负整数 / 对象 / 非空文本这四个判定原先在服务里各抄一份，严口径量下来
+    116 处，彼此只差抛哪个异常——`bool` 是 `int` 的子类要先排除这一条就抄了 57 遍，
+    修好一处不会传给另外 56 处。现在只有 `game/core/data/fields.py` 一份实现，
+    域错误用 `error=` 传。
+
+    判定用**整个函数体的形状**是否与共享实现逐节点相同，不用「体里有没有某条
+    `raise`」——`_sequence`（数组+非空）与 `_speech`（还查键集合）体里都含有一条
+    同消息的 raise，那是不相干的校验器，按消息判会误报。委托式的一行包装体形状
+    不同，因此不会报警——那正是允许的写法。
+    """
+
+    lookup = {shape: name for name, shape in _field_validator_shapes().items()}
+    if not lookup:
+        return [
+            Finding(
+                "字段校验重写",
+                FIELD_VALIDATOR_PATH,
+                1,
+                "共享实现里认不出任何校验函数，检查无从判定",
+            )
+        ]
+    findings: list[Finding] = []
+    for root in ("game/core", "game/features"):
+        for path in _python_files(root):
+            relative = _relative(path)
+            if relative.as_posix() == FIELD_VALIDATOR_PATH.as_posix():
+                continue
+            for node in ast.walk(_parse(path)):
+                if not isinstance(node, ast.FunctionDef):
+                    continue
+                if [item.arg for item in node.args.args][:2] != ["value", "label"]:
+                    continue
+                helper = lookup.get(_body_shape(node))
+                if helper:
+                    findings.append(
+                        Finding(
+                            "字段校验重写",
+                            relative,
+                            node.lineno,
+                            f"{node.name} 又写了一遍 {helper}；改用 "
+                            f"game.core.data 的 {helper}，域错误用 error= 传",
+                        )
+                    )
+    return findings
+
+
 # 组合根由名字装载，静态导入看不见它（见 系统架构.md 第四节）。这里只列「确实没有
 # 任何导入方、也确实该留」的模块；新增一条都要写清理由。
 UNREFERENCED_MODULE_ALLOWLIST = {
@@ -926,6 +1023,7 @@ CHECKS = (
     ("微服务包结构", check_service_doc_coverage),
     ("后台例外边界", check_console_boundary),
     ("无人引用的模块", check_unreferenced_modules),
+    ("字段校验重写", check_field_validators_are_shared),
 )
 
 

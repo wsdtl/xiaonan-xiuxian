@@ -12,7 +12,17 @@ from datetime import datetime, timedelta, timezone
 from game.core.asset import AssetService, InventoryAdjustment
 from game.core.character import CharacterService
 from game.core.companion import CompanionService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping,
+    mapping as _rule_mapping,
+    nonempty_text,
+    nonempty_text as _rule_text,
+    nonnegative_int,
+    positive_int,
+    positive_int as _rule_positive_int,
+)
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -776,9 +786,7 @@ def _parse_time(value: object, label: str) -> datetime:
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise GatheringStateError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=GatheringStateError)
 
 
 def _sequence(
@@ -796,10 +804,7 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
 
 
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise GatheringStateError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=GatheringStateError)
 
 
 def _user_id(value: object) -> str:
@@ -810,15 +815,11 @@ def _user_id(value: object) -> str:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise GatheringStateError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=GatheringStateError)
 
 
 def _nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise GatheringStateError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=GatheringStateError)
 
 
 def _number(value: object, label: str) -> int | float:
@@ -841,25 +842,6 @@ def _scaled_quantity(value: int, multiplier: float, source: random.Random) -> in
     if fraction and source.random() < fraction:
         quantity += 1
     return max(1, quantity)
-
-
-def _rule_mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
-def _rule_text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
-
-
-def _rule_positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 __all__ = ["GatheringService"]

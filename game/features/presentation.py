@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
 
-from game.core.data import JsonDataError
+from game.core.data import JsonDataError, mapping as require_mapping
 
 # 按钮 JSON 的固定字段；顺序即投影顺序。
 BUTTON_KEYS = ("页面", "条件", "编号", "名称", "命令", "行为", "样式")
@@ -30,14 +30,6 @@ BUTTON_KEYS_WITHOUT_CONDITION = ("页面", "编号", "名称", "命令", "行为
 POSITIONED_BUTTON_KEYS = ("位置", "编号", "名称", "命令", "行为", "样式")
 
 Button = Mapping[str, str]
-
-
-def require_mapping(value: object, label: str) -> Mapping[str, Any]:
-    """要求 `value` 是对象；否则指出具体配置路径。"""
-
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
 
 
 def require_sequence(value: object, label: str) -> Sequence[Any]:

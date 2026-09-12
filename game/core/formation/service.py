@@ -14,7 +14,16 @@ from game.core.asset import (
     InventoryAdjustment,
     InventoryChangeError,
 )
-from game.core.data import ContractSet, JsonDataError, JsonDataService
+from game.core.data import (
+    ContractSet,
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    nonempty_text,
+    nonnegative_int,
+    positive_int,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -1000,12 +1009,6 @@ def _formation_grade_name(grade_id: str) -> str:
         raise FormationError(f"未知阵法品级编号：{grade_id}") from exc
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _sequence(value: object, label: str) -> tuple[object, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是数组")
@@ -1032,22 +1035,13 @@ def _speech(value: object, label: str) -> Mapping[str, str]:
 
 
 def _request_text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise FormationError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=FormationError)
 
 
 def _number(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise JsonDataError(f"{label}必须是数值")
     return float(value)
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _payload_text(value: object, label: str) -> str:
@@ -1057,15 +1051,11 @@ def _payload_text(value: object, label: str) -> str:
 
 
 def _payload_positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ValueError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=ValueError)
 
 
 def _payload_nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=ValueError)
 
 
 __all__ = ["FormationService"]

@@ -5,7 +5,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     LocationMutation,
@@ -340,18 +345,6 @@ class LocationService:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("玩家位置核心微服务尚未初始化")
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _text(value: object, label: str) -> str:

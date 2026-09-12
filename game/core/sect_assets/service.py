@@ -12,7 +12,13 @@ from game.core.character import (
     CharacterService,
     CharacterStateError,
 )
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    positive_int,
+    positive_int as _rule_positive_int,
+)
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -860,12 +866,6 @@ class SectAssetService:
             raise RuntimeError("宗门公共资产核心尚未初始化")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _texts(value: object, label: str) -> tuple[str, ...]:
     if (
         not isinstance(value, Sequence)
@@ -877,9 +877,7 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise SectAssetError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=SectAssetError)
 
 
 def _required_category(value: str, allowed: tuple[str, ...]) -> str:
@@ -908,12 +906,6 @@ def _rule_text(value: object, label: str) -> str:
     if not result:
         raise JsonDataError(f"{label}必须是非空字符串")
     return result
-
-
-def _rule_positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _entity_name(data: JsonDataService, category: str, content_id: str) -> str:

@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from game.core.asset import AssetService, InventoryAdjustment, InventoryChangeError
 from game.core.character import CharacterCultivationError, CharacterService
 from game.core.companion import CompanionCultivationError, CompanionService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, nonempty_text as _text
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -121,13 +121,6 @@ class ButianFeature:
 
 def _result(value: Mapping[str, object], replayed: bool) -> ButianResult:
     return ButianResult(str(value.get("目标") or ""), str(value.get("目标名称") or ""), str(value.get("境界") or ""), str(value.get("属性") or ""), float(value.get("数值") or 0), str(value.get("丹药名称") or ""), replayed)
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
 
 
 __all__ = ["ButianFeature"]

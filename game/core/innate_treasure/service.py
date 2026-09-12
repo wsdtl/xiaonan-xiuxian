@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 
-from game.core.data import ContractSet, JsonDataError, JsonDataService
+from game.core.data import (
+    ContractSet,
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    nonempty_text,
+    positive_int as _positive_int,
+)
 from game.core.database import DatabaseService, StateAddress, StateMutation
 
 from .contracts import (
@@ -264,23 +271,8 @@ def _treasure(treasure_id: str, value: object) -> InnateTreasure:
     )
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise InnateTreasureError(f"{label}不能为空")
-    return result
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
+    return nonempty_text(value, label, error=InnateTreasureError)
 
 
 def _positive_number(value: object, label: str) -> float:

@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
 
-from game.core.data import ContractSet, JsonDataService, materialize
+from game.core.data import ContractSet, JsonDataService, materialize, mapping
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -707,9 +707,7 @@ def _dictionary_list(value: object, label: str) -> tuple[Mapping[str, Any], ...]
 
 
 def _mapping(value: object, label: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping):
-        raise PlayerStateRuleError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=PlayerStateRuleError)
 
 
 def _text(value: object, label: str) -> str:

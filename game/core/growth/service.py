@@ -7,7 +7,13 @@ import random
 import secrets
 from collections.abc import Mapping, Sequence
 
-from game.core.data import ContractSet, JsonDataError, JsonDataService
+from game.core.data import (
+    ContractSet,
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    positive_int as _positive_int,
+)
 from game.core.pool import EXPAND_DEDUPLICATED, PoolRequest, PoolService
 
 from .contracts import (
@@ -359,12 +365,6 @@ class GrowthService:
             raise RuntimeError("成长核心微服务尚未初始化")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _sequence(value: object, label: str) -> tuple[object, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是数组")
@@ -388,12 +388,6 @@ def _number(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise JsonDataError(f"{label}必须是数值")
     return float(value)
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 __all__ = ["GrowthService"]

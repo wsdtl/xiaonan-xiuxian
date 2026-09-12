@@ -5,7 +5,13 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    nonempty_text as _text,
+    positive_int as _positive_int,
+)
 from game.core.growth import GrowthService
 from game.core.world import WorldService
 
@@ -146,25 +152,6 @@ class CultivationTransferService:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("修为转移核心微服务尚未初始化")
-
-
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
-def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
 
 
 def _rate(value: object, label: str) -> int:

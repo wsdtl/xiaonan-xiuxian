@@ -12,7 +12,7 @@ from game.core.cultivation_transfer import (
     CultivationTransferError,
     CultivationTransferService,
 )
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, nonempty_text, nonnegative_int
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -341,16 +341,11 @@ def _mode(value: object) -> str:
 
 
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise TongquetaiError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=TongquetaiError)
 
 
 def _nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise TongquetaiError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=TongquetaiError)
 
 
 __all__ = ["TongquetaiFeature"]

@@ -4,7 +4,7 @@ from collections.abc import Mapping
 
 from game.core.asset import AssetService, InventoryAdjustment
 from game.core.character import CharacterService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataError, JsonDataService, nonempty_text, positive_int
 from game.core.database import (
     DatabaseService,
     StateAddress,
@@ -123,13 +123,8 @@ def _bounded(value: object, maximum: int, label: str) -> int:
 
 
 def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise GiftError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=GiftError)
 
 
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise GiftError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=GiftError)

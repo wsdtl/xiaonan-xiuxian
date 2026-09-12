@@ -6,7 +6,12 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from uuid import NAMESPACE_URL, uuid5
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -945,21 +950,9 @@ class SectService:
             raise RuntimeError("宗门核心微服务尚未初始化")
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _text(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise SectError("invalid_text")
-    return value
-
-
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
     return value
 
 

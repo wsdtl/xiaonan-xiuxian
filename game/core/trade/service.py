@@ -8,7 +8,14 @@ from math import ceil
 
 from game.core.asset import AssetService, AssetStateError
 from game.core.character import CharacterCultivationError, CharacterService
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import (
+    JsonDataError,
+    JsonDataService,
+    mapping as _mapping,
+    nonempty_text,
+    nonnegative_int as _nonnegative_int,
+    positive_int as _positive_int,
+)
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -367,12 +374,6 @@ def _catalogs(
     return result
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _strings(value: object, label: str) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是字符串数组")
@@ -382,23 +383,8 @@ def _strings(value: object, label: str) -> tuple[str, ...]:
     return result
 
 
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
-
-
-def _nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise JsonDataError(f"{label}必须是非负整数")
-    return value
-
-
 def _text(value: object, label: str) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise TradeError(f"{label}不能为空")
-    return result
+    return nonempty_text(value, label, error=TradeError)
 
 
 __all__ = ["TradeService"]

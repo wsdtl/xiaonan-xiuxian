@@ -9,7 +9,17 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from types import MappingProxyType
 
 from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
-from game.core.data import ContractSet, JsonDataError, JsonDataService
+from game.core.data import (
+    ContractSet,
+    JsonDataError,
+    JsonDataService,
+    mapping,
+    mapping as _mapping,
+    nonnegative_int,
+    nonnegative_int as _nonnegative_int,
+    positive_int,
+    positive_int as _positive_int,
+)
 from game.core.database import DatabaseService, StateAddress, StateMutation
 from game.core.forging import ForgingService
 from game.core.growth import GrowthService
@@ -1606,9 +1616,7 @@ def _add_numbers(
 
 
 def _request_nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise CompanionCultivationError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=CompanionCultivationError)
 
 
 def _request_ratio(value: object, label: str) -> float:
@@ -1663,16 +1671,8 @@ def _state_affection(value: object, label: str) -> Decimal:
     return _quantize(result)
 
 
-def _mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    return value
-
-
 def _state_mapping(value: object, label: str) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise CompanionStateError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=CompanionStateError)
 
 
 def _state_five_elements(value: object) -> dict[str, float]:
@@ -1747,18 +1747,6 @@ def _optional_text(value: object) -> str:
     return str(value or "").strip()
 
 
-def _positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise JsonDataError(f"{label}必须是正整数")
-    return value
-
-
-def _nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise JsonDataError(f"{label}必须是非负整数")
-    return value
-
-
 def _number(value: object, label: str) -> int | float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise JsonDataError(f"{label}必须是数值")
@@ -1766,15 +1754,11 @@ def _number(value: object, label: str) -> int | float:
 
 
 def _state_positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise CompanionStateError(f"{label}必须是正整数")
-    return value
+    return positive_int(value, label, error=CompanionStateError)
 
 
 def _state_nonnegative_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise CompanionStateError(f"{label}必须是非负整数")
-    return value
+    return nonnegative_int(value, label, error=CompanionStateError)
 
 
 def _state_number(value: object, label: str) -> int | float:

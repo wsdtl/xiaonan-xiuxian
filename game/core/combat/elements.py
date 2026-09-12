@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Mapping
 from typing import Any
+from game.core.data import mapping
 
 ELEMENTS = ("木", "火", "土", "金", "水")
 
@@ -57,9 +58,7 @@ def _relation_map(value: Any, label: str) -> dict[str, str]:
 
 
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping):
-        raise TypeError(f"{label}必须是对象")
-    return value
+    return mapping(value, label, error=TypeError)
 
 
 def _number(value: Any, label: str) -> float:
