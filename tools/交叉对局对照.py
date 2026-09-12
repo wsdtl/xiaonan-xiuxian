@@ -92,6 +92,8 @@ def main() -> int:
     parser.add_argument("--基准", default=str(DEFAULT_BASELINE))
     parser.add_argument("--写基准", action="store_true")
     parser.add_argument("--数据", default=str(DATA))
+    parser.add_argument("--差异名单", default="",
+                        help="把完整差异清单写到这个文件（大批次逐条验收用）")
     args = parser.parse_args()
     data_dir = pathlib.Path(args.数据).resolve()
 
@@ -143,6 +145,20 @@ def main() -> int:
     print(f"对照 {baseline}（{len(expected)} 条）：差异 {len(changed)} · 新增 {len(added)} · 缺失 {len(removed)}")
     for key in changed[:20]:
         print(f"  [差异] {key}")
+    if args.差异名单:
+        listing = pathlib.Path(args.差异名单)
+        listing.parent.mkdir(parents=True, exist_ok=True)
+        # 差异条目的左方就是被改的构筑卡（`功法:400001 vs 真意:700001`），
+        # 顺手把左方卡片集去重列出，大批次验收时能一眼核「差异 ⊆ 授权集」。
+        left = sorted({key.split(" vs ")[0] for key in changed})
+        listing.write_text(
+            json.dumps(
+                {"差异": changed, "差异卡": left, "新增": added, "缺失": removed},
+                ensure_ascii=False, indent=1,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        print(f"  完整差异清单已写入 {listing}（涉及左方卡片 {len(left)} 张）")
     return 1 if (changed or added or removed or failures) else 0
 
 
