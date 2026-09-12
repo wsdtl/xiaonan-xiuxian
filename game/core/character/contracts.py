@@ -58,7 +58,7 @@ class CharacterCreationResult:
     realm_id: str
     realm_name: str
     birth_xy: tuple[int, int]
-    initial_items: tuple[tuple[str, str, int], ...]
+    initial_items: tuple[tuple[str, str, str, int], ...]
     replayed: bool
 
 

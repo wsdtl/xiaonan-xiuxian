@@ -1253,11 +1253,8 @@ class CharacterService:
         _mapping(creation.get("初始出生地"), "人物.json.创建.初始出生地")
         _mapping(creation.get("初始本命武器"), "人物.json.创建.初始本命武器")
         _initial_items(self._role_rule)
-        for item_id, grade, _ in _initial_items(self._role_rule):
-            try:
-                self._data.entity("基础物品", item_id)
-            except JsonDataError:
-                self._data.entity("丹药", item_id)
+        for dataset, item_id, grade, _ in _initial_items(self._role_rule):
+            self._data.entity(dataset, item_id)
             if grade not in self._grade_values:
                 raise JsonDataError(f"人物初始物品使用未知品级：{item_id} -> {grade}")
         if not self._attributes:
@@ -1606,27 +1603,39 @@ def _request_ratio(value: object, label: str) -> float:
     return float(value)
 
 
-def _initial_items(role_rule: Mapping[str, object]) -> tuple[tuple[str, str, int], ...]:
-    raw_items = role_rule.get("基础物品")
+def _initial_items(
+    role_rule: Mapping[str, object],
+) -> tuple[tuple[str, str, str, int], ...]:
+    """人物初始物品，每项形如 `(数据集, 编号, 品级, 数量)`。
+
+    数据集由**数据自己声明**：初始物品可以来自任何数据集（现在是丹药），Python 不猜。
+    校验与创建共用这一处解析。
+    """
+
+    raw_items = role_rule.get("初始物品")
     if not isinstance(raw_items, Sequence) or isinstance(raw_items, (str, bytes)):
-        raise JsonDataError("人物.json.物品必须是字典列表")
-    result: list[tuple[str, str, int]] = []
+        raise JsonDataError("人物.json.初始物品必须是字典列表")
+    result: list[tuple[str, str, str, int]] = []
     for index, raw in enumerate(raw_items):
-        entry = _mapping(raw, f"人物.json.物品[{index}]")
+        entry = _mapping(raw, f"人物.json.初始物品[{index}]")
+        dataset = str(entry.get("数据集") or "").strip()
         item_id = str(entry.get("编号") or "").strip()
         grade = str(entry.get("品级") or "").strip()
         quantity = entry.get("数量")
         if (
-            not item_id
+            not dataset
+            or not item_id
             or not grade
             or isinstance(quantity, bool)
             or not isinstance(quantity, int)
             or quantity < 1
         ):
-            raise JsonDataError(f"人物.json.物品[{index}]字段无效")
-        result.append((item_id, grade, quantity))
-    if len({(item_id, grade) for item_id, grade, _ in result}) != len(result):
-        raise JsonDataError("人物.json.物品不能重复同一编号和品级")
+            raise JsonDataError(f"人物.json.初始物品[{index}]字段无效")
+        result.append((dataset, item_id, grade, quantity))
+    if len({(dataset, item_id, grade) for dataset, item_id, grade, _ in result}) != len(
+        result
+    ):
+        raise JsonDataError("人物.json.初始物品不能重复同一数据集、编号和品级")
     return tuple(result)
 
 

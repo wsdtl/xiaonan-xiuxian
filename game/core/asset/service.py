@@ -155,7 +155,7 @@ class AssetService:
         self._require_initialized()
         normalized_user_id = _required_text(user_id, "user_id")
         normalized_item_id = _required_text(item_id, "物品编号")
-        item_name = _entity_name(self._data, "基础物品", normalized_item_id)
+        item_name = _inventory_name(self._data, normalized_item_id)
         addresses = tuple(
             StateAddress(
                 normalized_user_id,
@@ -187,7 +187,7 @@ class AssetService:
     def initial_inventory_mutations(
         self,
         user_id: str,
-        items: Sequence[tuple[str, str, int]],
+        items: Sequence[tuple[str, str, str, int]],
     ) -> tuple[StateMutation, ...]:
         """为创建人物事务生成由资产核心负责的初始背包状态。"""
 
@@ -195,7 +195,8 @@ class AssetService:
         normalized_user_id = _required_text(user_id, "user_id")
         result: list[StateMutation] = []
         seen: set[tuple[str, str]] = set()
-        for item_id, grade_id, quantity in items:
+        for dataset, item_id, grade_id, quantity in items:
+            normalized_dataset = _required_text(dataset, "初始物品.数据集")
             normalized_item_id = _required_text(item_id, "初始物品.编号")
             normalized_grade_id = self.grade(grade_id).grade_id
             if (
@@ -204,7 +205,7 @@ class AssetService:
                 or quantity < 1
             ):
                 raise InventoryChangeError("初始物品数量必须是正整数")
-            _entity_name(self._data, "基础物品", normalized_item_id)
+            _entity_name(self._data, normalized_dataset, normalized_item_id)
             key = (normalized_item_id, normalized_grade_id)
             if key in seen:
                 raise InventoryChangeError(
@@ -242,7 +243,7 @@ class AssetService:
             delta = adjustment.quantity_delta
             if isinstance(delta, bool) or not isinstance(delta, int) or delta == 0:
                 raise InventoryChangeError("库存变化数量必须是非零整数")
-            _entity_name(self._data, "基础物品", item_id)
+            _inventory_name(self._data, item_id)
             key = (item_id, grade_id)
             totals[key] = totals.get(key, 0) + delta
         totals = {key: delta for key, delta in totals.items() if delta}
@@ -273,7 +274,7 @@ class AssetService:
                 version = snapshot.version
             after = before + totals[(item_id, grade_id)]
             if after < 0:
-                item_name = _entity_name(self._data, "基础物品", item_id)
+                item_name = _inventory_name(self._data, item_id)
                 grade_name = self._grades[grade_id].name
                 raise InventoryChangeError(
                     f"{grade_name}{item_name}数量不足：现有{before}，需要{-totals[(item_id, grade_id)]}"
@@ -293,7 +294,7 @@ class AssetService:
             changes.append(
                 InventoryChange(
                     item_id,
-                    _entity_name(self._data, "基础物品", item_id),
+                    _inventory_name(self._data, item_id),
                     self._grades[grade_id],
                     before,
                     after,
@@ -860,7 +861,7 @@ class AssetService:
         grade_id, grade_name = self._grade(value.get("品级"))
         quantity = _positive_int(value.get("数量"), "普通物品.数量")
         _expect_key(snapshot, f"{content_id}:{grade_id}")
-        name = _entity_name(self._data, "基础物品", content_id)
+        name = _inventory_name(self._data, content_id)
         subcategory = self._match_subcategory(category, "编号类别", number_category)
         return AssetEntry(
             category,
@@ -1236,6 +1237,24 @@ def _entity_name(data: JsonDataService, section: str, content_id: str) -> str:
     except JsonDataError as exc:
         raise AssetStateError(f"资产引用不存在：{section} {content_id}") from exc
     return _required_entity_text(value, "名称", f"{section} {content_id}")
+
+
+
+
+#: 能进纳戒的数据集。解析只此一处——原先 5 处各写死「基础物品」，于是任何非基础物品的
+#: 库存条目（丹药）一读栈就抛「实体不存在」。数据里每个物品只属于一个数据集，依次试即可。
+INVENTORY_SECTIONS = ("基础物品", "丹药")
+
+
+def _inventory_name(data: JsonDataService, item_id: str) -> str:
+    """按能进纳戒的数据集依次解析物品名。"""
+
+    for section in INVENTORY_SECTIONS:
+        try:
+            return _entity_name(data, section, item_id)
+        except (JsonDataError, AssetStateError):
+            continue
+    raise AssetStateError(f"纳戒物品不存在：{item_id}")
 
 
 def _required_entity_text(value: Mapping[str, object], field: str, label: str) -> str:
