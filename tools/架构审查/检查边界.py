@@ -336,10 +336,38 @@ def check_console_boundary() -> list[Finding]:
     return findings
 
 
+def check_core_upward_dependency() -> list[Finding]:
+    """核心服务不得引用 `features` 或 `cmd`（见 `微服务边界规范.md` 第三节）。
+
+    依赖方向是单向的：`cmd -> features -> core`。核心反过来引用上层，等于把玩法与
+    命令语义拖进公共地基，「核心可被任何玩法复用」也就不再成立。
+
+    `game/app.py` 是组合根，它**本来就要**导入 features；本规则只扫 `game/core`。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game/core"):
+        relative = _relative(path)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line, module in _imports(tree):
+            for upper in ("game.features", "game.cmd"):
+                if module == upper or module.startswith(upper + "."):
+                    findings.append(
+                        Finding(
+                            "核心引用上层",
+                            relative,
+                            line,
+                            f"核心服务不得引用 {module}；方向只能是 cmd -> features -> core",
+                        )
+                    )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
     ("跨服务导入内部实现", check_core_internal_imports),
+    ("核心引用上层", check_core_upward_dependency),
     ("命令层导入核心服务", check_cmd_core_dependency),
     ("硬编码数据目录", check_data_layout_hardcoding),
     ("第二套 JSON 读取", check_single_json_reader),
