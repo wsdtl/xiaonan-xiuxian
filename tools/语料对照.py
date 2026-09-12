@@ -1,15 +1,28 @@
 """战斗语料跑器：逐卡对战，输出「抹名语义摘要」用于改动前后的对照。
 
 摘要抹掉一切名字，只留 事件种类/来源/目标/数值 与终局资源，所以：
-**纯改名改动应当 1264/1264 一致；有差异就是真的改了行为。**
 
-    .venv/Scripts/python.exe -u tools/语料对照.py _改前
-    # 改动后
+    纯改名、搬位置这类**结构等价**改动 → 摘要应 1264/1264 一致；
+    有差异就是真的改了行为。
+
+    # 生成摘要（默认写到根目录的临时文件，被 .gitignore 忽略）
     .venv/Scripts/python.exe -u tools/语料对照.py _改后
-    # 或直接跑另一份数据目录做对照
+
+    # 与已入库的基准对照；有差异就非零退出，可以直接当检查用
+    .venv/Scripts/python.exe -u tools/语料对照.py --对照 tools/基准/语料摘要.sem
+
+    # 或跑另一份数据目录（改平衡后重新取基准时用）
     $env:CORPUS_DATA = "<另一份 data 目录>"
+
+**它不是平衡的评审。** 平衡改动（`伤害.json` 的闸、卡的数值）会让 1264 条摘要
+全部变化——那时它的用途是「确认变化范围符合预期」，不是「确认没变」。
+基准本身是 `tools/基准/语料摘要.sem`（入库跟踪，48 KB），所以换一个会话也能直接对照。
+基准只在**零抛错**时才会写：把带错误的运行固化成基准，等于把坏状态当成正确。
 """
 
+from __future__ import annotations
+
+import argparse
 import asyncio
 import copy
 import dataclasses
@@ -24,8 +37,28 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-out = Path(sys.argv[1] if len(sys.argv) > 1 else ROOT / "_语料.json")
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "语料摘要.json"
+
+parser = argparse.ArgumentParser()
+parser.add_argument("输出", nargs="?", default=str(ROOT / "_语料.json"),
+                    help="摘要写到 <输出>.sem（默认根目录临时文件，不入库）")
+parser.add_argument("--对照", dest="对照", default="",
+                    help="与这份基准摘要对照；有差异则非零退出")
+parser.add_argument("--数据", dest="数据", default="",
+                    help="要跑的数据目录；默认 data，或环境变量 CORPUS_DATA")
+parser.add_argument("--允许失败", dest="允许失败", action="store_true",
+                    help="有战斗抛错时也写摘要；默认拒绝，避免把坏状态当基准")
+args = parser.parse_args()
+
+out = Path(args.输出)
+# 跑语料时的过程输出写日志文件；但**判定结论要回到真终端**，否则「一致 N / 差异 M」
+# 会被重定向吞掉，当检查用时看不见。所以先留住真 stdout。
+REAL_STDOUT = sys.stdout
 sys.stdout = io.TextIOWrapper(open(ROOT / "_语料日志.txt", "wb"), encoding="utf-8", write_through=True)
+
+
+def report(*values: object) -> None:
+    print(*values, file=REAL_STDOUT)
 
 from game.app import build_game_services  # noqa: E402
 from game.core.combat.contracts import (  # noqa: E402
@@ -34,7 +67,7 @@ from game.core.combat.contracts import (  # noqa: E402
     CombatRequest,
 )
 
-DATA_DIR = Path(os.environ.get("CORPUS_DATA", ROOT / "data")).resolve()
+DATA_DIR = Path(args.数据 or os.environ.get("CORPUS_DATA") or ROOT / "data").resolve()
 
 ATTRS = {
     "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
@@ -86,7 +119,7 @@ def semantic(raw: dict) -> str:
 
 
 sem: dict[str, str] = {}
-failures = 0
+failures: list[str] = []
 for section, cid in corpus:
     key = f"{section}:{cid}"
     try:
@@ -100,9 +133,52 @@ for section, cid in corpus:
         sem[key] = semantic(raw)
     except Exception as exc:  # noqa: BLE001
         sem[key] = f"错误: {type(exc).__name__}: {exc}"
-        failures += 1
+        failures.append(f"{key}\t{type(exc).__name__}: {exc}")
 
+core.database.close()
+
+print(f"{len(sem)} 条，失败 {len(failures)} 条；数据目录 {DATA_DIR}")
+for line in failures[:20]:
+    print("  抛错 " + line)
+report(f"{len(sem)} 条，失败 {len(failures)} 条；数据目录 {DATA_DIR}")
+
+if failures and not args.允许失败:
+    report("有战斗抛错，拒绝写摘要（会把坏状态固化成基准）；确有需要加 --允许失败")
+    sys.exit(2)
+
+Path(str(out) + ".sem").parent.mkdir(parents=True, exist_ok=True)
 Path(str(out) + ".sem").write_text(
     json.dumps(sem, ensure_ascii=False, indent=0, sort_keys=True), encoding="utf-8"
 )
-print(f"{out}: {len(sem)} 条，失败 {failures} 条；数据目录 {DATA_DIR}")
+print(f"摘要写入 {out}.sem")
+
+if not args.对照:
+    sys.exit(0)
+
+baseline_path = Path(args.对照)
+if not baseline_path.is_absolute():
+    baseline_path = (ROOT / baseline_path).resolve()
+# 写摘要时会自动补 `.sem`（`<输出>.sem`），所以 `--对照` 也接受不带后缀的写法。
+if not baseline_path.exists() and Path(str(baseline_path) + ".sem").exists():
+    baseline_path = Path(str(baseline_path) + ".sem")
+if not baseline_path.exists():
+    report(f"基准不存在：{baseline_path}")
+    sys.exit(2)
+
+baseline: dict[str, str] = json.loads(baseline_path.read_text(encoding="utf-8"))
+same = [key for key in sem if key in baseline and baseline[key] == sem[key]]
+changed = [key for key in sem if key in baseline and baseline[key] != sem[key]]
+added = [key for key in sem if key not in baseline]
+removed = [key for key in baseline if key not in sem]
+
+report("")
+report(f"对照 {baseline_path}（{len(baseline)} 条）")
+report(f"  一致 {len(same)} · 差异 {len(changed)} · 新增 {len(added)} · 缺失 {len(removed)}")
+for label, keys in (("差异", changed[:40]), ("新增", added[:20]), ("缺失", removed[:20])):
+    for key in keys:
+        was = baseline.get(key, "（无）")
+        report(f"    {label} {key}: {was} -> {sem.get(key, '（无）')}")
+if len(changed) > 40:
+    report(f"    …… 差异共 {len(changed)} 条，只列前 40")
+
+sys.exit(1 if (changed or added or removed) else 0)
