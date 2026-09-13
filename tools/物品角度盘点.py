@@ -9,6 +9,10 @@
 
 "每件物品的作用角度都不一样"= 这四个维度的**组合**要散开，而不是全挤在
 「立即 · 自身 · 恢复 · 瞬时」这一格上。
+
+**作用对象只数效果落点**：`目标` 字段按父能力的类别分桶（见 `原子能力.json`），
+类别 `效果` 的才是落点；类别 `数值` / `条件` / `组合` 的只是读数（读血气、读状态、遍历），
+不算作用对象。早先混在一起，读数会把"自身"撑大、把集中点盖住。
 """
 
 from __future__ import annotations
@@ -48,11 +52,14 @@ FOE = {"敌方", "全部敌方", "当前目标"}
 EVENT = {"事件来源", "事件承受者"}
 EVERY = {"全体", "全部"}
 CONTROL_STATUS = {"控制", "眩晕", "禁锢", "沉默", "嘲讽", "混乱"}
+KIND = {str(k): str((v or {}).get("类别") or "") for k, v in json.loads(
+    (ROOT / "data/战斗/定义/原子能力.json").read_text(encoding="utf-8")).items()}
 
 
-def families_of(effects: object) -> tuple[set[str], set[str], bool, set[str]]:
+def families_of(effects: object) -> tuple[set[str], set[str], set[str], bool, set[str]]:
     families: set[str] = set()
-    scopes: set[str] = set()
+    effect_scopes: set[str] = set()
+    read_scopes: set[str] = set()
     has_listener = False
     events: set[str] = set()
 
@@ -73,21 +80,26 @@ def families_of(effects: object) -> tuple[set[str], set[str], bool, set[str]]:
                     families.add("控制")
                 elif category == "负面":
                     families.add("减益")
-            scope = None
+            # `目标` 字段按父能力的类别分桶：效果类才是效果落点，数值/条件/组合类只是读数。
+            target = node.get("目标")
+            if isinstance(target, dict):
+                scope = str(target.get("范围") or "")
+                if scope:
+                    (effect_scopes if KIND.get(ability) == "效果" else read_scopes).add(scope)
             if ability == "选择目标":
                 scope = str(node.get("范围") or "")
-            elif isinstance(node.get("目标"), dict):
-                scope = str(node["目标"].get("范围") or "")
-            if scope:
-                scopes.add(scope)
-            for value in node.values():
+                if scope:
+                    effect_scopes.add(scope)
+            for key, value in node.items():
+                if key == "目标" and isinstance(value, dict):
+                    continue
                 walk(value)
         elif isinstance(node, list):
             for value in node:
                 walk(value)
 
     walk(effects)
-    return families, scopes, has_listener, events
+    return families, effect_scopes, read_scopes, has_listener, events
 
 
 def object_of(scopes: set[str]) -> str:
@@ -111,7 +123,7 @@ def main() -> int:
             for entry in entries:
                 if not isinstance(entry, dict) or field not in entry:
                     continue
-                families, scopes, has_listener, _events = families_of(entry[field])
+                families, effect_scopes, read_scopes, has_listener, _events = families_of(entry[field])
                 effect_type = ""
                 if isinstance(entry[field], dict):
                     effect_type = str(entry[field].get("类型") or "")
@@ -119,7 +131,8 @@ def main() -> int:
                     str(entry.get("编号") or ""),
                     str(entry.get("名称") or ""),
                     "预置" if has_listener else "立即",
-                    object_of(scopes) if scopes else "自身",
+                    object_of(effect_scopes) if effect_scopes else (
+                        object_of(read_scopes) if read_scopes else "自身"),
                     "+".join(sorted(families)) or effect_type or "（无）",
                     "整场监听" if has_listener else "瞬时",
                 ))
