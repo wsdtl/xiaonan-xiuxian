@@ -1,4 +1,4 @@
-"""物品角度总表：把涉战物品（战丹 · 战场环境 · 长期伤势）逐件列出四维签名，供人过目。
+﻿"""物品角度总表：把涉战物品（战丹 · 战场环境 · 长期伤势）逐件列出四维签名，供人过目。
 
 四维（判据来自 `data/战斗/规则/说明.md -> 真意与器律的监听分工` 的同族口径，负责人已确认）：
 
@@ -118,7 +118,7 @@ def rows_for(path: pathlib.Path, field: str, *, seasonal: bool = False) -> list[
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        payload = entry.get(field)
+        payload = entry.get(field) if field else entry
         if payload is None:
             continue
         info = analyse(payload)
@@ -166,7 +166,7 @@ def main() -> int:
 
     伤势: list[dict] = []
     for path in sorted(ROOT.glob("data/角色/内容/伤势.json")):
-        伤势.extend(rows_for(path, "能力"))
+        伤势.extend(rows_for(path, None))
     groups.append(("长期伤势", 伤势))
 
     lines: list[str] = ["# 物品角度总表（待重新设计）", "",
