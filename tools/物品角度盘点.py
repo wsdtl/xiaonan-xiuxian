@@ -71,7 +71,11 @@ def families_of(effects: object) -> tuple[set[str], set[str], set[str], bool, se
                 has_listener = True
                 events.add(str(node.get("事件") or ""))
             if ability in FAMILY:
-                families.add(FAMILY[ability])
+                # `恢复资源` 按资源分：血气/精神是恢复，护盾是保命（`获得护盾` 不是原子能力）。
+                if ability == "恢复资源" and str(node.get("资源") or "") == "护盾":
+                    families.add("保命")
+                else:
+                    families.add(FAMILY[ability])
             status = node.get("状态")
             if ability == "添加状态" and isinstance(status, dict):
                 name = str(status.get("名称") or "")

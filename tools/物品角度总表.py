@@ -98,7 +98,11 @@ def analyse(effects: object) -> dict:
             if ability == "固定属性加成":
                 attributes += 1  # 气机的唯一动作：属性写在节点里，不在 战前状态.属性
             if ability in FAMILY:
-                families.add(FAMILY[ability])
+                # `恢复资源` 按资源分：血气/精神是恢复，护盾是保命（`获得护盾` 不是原子能力）。
+                if ability == "恢复资源" and str(node.get("资源") or "") == "护盾":
+                    families.add("保命")
+                else:
+                    families.add(FAMILY[ability])
             if ability in {"修改构筑计量", "增加状态层数"}:
                 layers += 1
             status = node.get("状态")
