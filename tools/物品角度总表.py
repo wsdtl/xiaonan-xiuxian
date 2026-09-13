@@ -1,4 +1,4 @@
-﻿"""物品角度总表：把涉战物品（战丹 · 战场环境 · 长期伤势）逐件列出四维签名，供人过目。
+"""物品角度总表：把涉战物品（战丹 · 战场环境 · 长期伤势）逐件列出四维签名，供人过目。
 
 四维（判据来自 `data/战斗/规则/说明.md -> 真意与器律的监听分工` 的同族口径，负责人已确认）：
 
@@ -30,6 +30,11 @@ FAMILY = {
     "消耗资源": "代价", "转移资源": "资源转换", "资源转移": "资源转换",
     "修改构筑计量": "计量", "保存结果": "计量", "修改战斗关联": "规则改写",
     "切换形态": "规则改写", "修改状态层数": "增益", "修改状态持续": "增益",
+    # 早先漏掉这三个：用了原子能力却进不了表（120120 大衍观澜丹 / 120054 同袍代劫丹 /
+    # 120073 同袍叠城丹）。`记录`类归"规则改写"（它改变后续判定的依据）；
+    # `转移状态`归"保命"（把同袍的劫移到自己身上就是护人）。
+    "记录战斗事实": "规则改写", "记录结果": "规则改写", "转移状态": "保命",
+    "复制状态": "增益", "延长状态": "增益", "回放效果": "规则改写",
 }
 SELF_SCOPE = {"自身", "主人"}
 ALLY_SCOPE = {"己方", "全部己方", "其他己方", "关联对象"}
@@ -39,6 +44,21 @@ EVERY_SCOPE = {"全体", "全部"}
 NARRATIVE_EVENTS = {"战斗开始", "战斗结束", "战斗对象入场后", "战斗对象退场后",
                     "战场规则变化后", "形态切换后", "复活后", "行动开始", "行动结束",
                     "行动决策前", "行动决策后"}
+
+
+ATOMS = {str(k) for k in json.loads(
+    (ROOT / "data/战斗/定义/原子能力.json").read_text(encoding="utf-8"))}
+
+
+def uses_atom(node: object) -> bool:
+    """范围判据（负责人定）：**只留"使用了战斗原子能力"的内容实例**；配方与人物已去掉。"""
+    if isinstance(node, dict):
+        if node.get("能力") in ATOMS:
+            return True
+        return any(uses_atom(value) for value in node.values())
+    if isinstance(node, list):
+        return any(uses_atom(value) for value in node)
+    return False
 
 
 def analyse(effects: object) -> dict[str, set[str] | bool | int]:
@@ -123,6 +143,9 @@ def rows_for(path: pathlib.Path, field: str, *, seasonal: bool = False) -> list[
             continue
         info = analyse(payload)
         families = set(info["族"])  # type: ignore[arg-type]
+        # 范围：只留用了战斗原子能力的实例（配方/人物已按负责人口径去掉）。
+        if not (uses_atom(payload) or uses_atom(entry.get("战斗状态"))):
+            continue
         # 战前状态的 `属性` 也是"手段"（基础档战丹就是纯属性增益，能力树里什么都没有）。
         for holder in (payload, (payload or {}).get("战前状态") if isinstance(payload, dict) else None,
                        entry.get("战斗状态")):
