@@ -69,6 +69,36 @@ def profile(entry: dict) -> dict[str, set]:
     return {"事件": events, "来源": sources, "限额": caps, "标签": tags, "监听": listeners}
 
 
+def corpus_origins() -> set[str]:
+    """全库（不只四类构筑卡）用到的读取来源。
+
+    空位审计原来只扫 `SOURCES` 那四类卡，于是战丹/伤势/战场环境里用到的来源仍被报成"没人用"
+    （`目标当前护盾` 就栽在这上面）。空位说的是**全库**，就得扫全库。
+    """
+
+    used: set[str] = set()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            if node.get("能力") == "读取数值" and node.get("来源"):
+                used.add(str(node["来源"]))
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    for path in sorted(ROOT.glob("data/**/*.json")):
+        if "/定义/" in path.as_posix():
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        walk(document)
+    return used
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--明细", action="store_true", help="列出模子卡最集中的文件")
@@ -113,7 +143,9 @@ def main() -> int:
         if collapsed[key]:
             print(f"  {key:<24}{collapsed[key]:>5} 张  {collapsed[key] / total:>6.1%}")
 
-    unused = [name for name in ENGINE_ORIGINS if name not in origins]
+    # 空位说的是**全库**，所以用 corpus_origins()（四类卡之外还有战丹/伤势/战场环境）。
+    used_origins = set(origins) | corpus_origins()
+    unused = [name for name in ENGINE_ORIGINS if name not in used_origins]
     print(f"\n空位：引擎支持但全库没人用的读取来源 {len(unused)} 种 —— {' '.join(unused) or '无'}")
     print(f"主动技能标签词表：{len(tag_counter)} 种"
           f" —— {' '.join(f'{k}×{v}' for k, v in tag_counter.most_common(8)) or '无'}")
