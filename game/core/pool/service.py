@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import secrets
+from collections.abc import Sequence
 from threading import RLock
 
 from game.core.data import JsonDataService
@@ -98,6 +99,50 @@ class PoolService:
             candidate_count=len(candidates),
             entries=tuple(entries),
         )
+
+    def draw_pools(
+        self,
+        file_ids: Sequence[str],
+        *,
+        count: int,
+        seed: int,
+        replace: bool = False,
+    ) -> tuple[str, ...]:
+        """从这些资源池文件里抽 `count` 个稳定身份，**集合由池子自己声明**。
+
+        调用方**不许**说集合：说了就可能说错（实测：把 `丹药池`（丹药）当基础物品抽，
+        21 个地点的敌人一生成就崩，探索与讨伐整条进不去）。带权重的集合按权重抽，
+        没声明权重的集合按等概率——两者同一个抽样器，权重缺省为 1。
+        """
+
+        if not self._initialized:
+            raise RuntimeError("资源池微服务尚未初始化")
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            raise ValueError("抽取数量必须是正整数")
+        seed_value = _seed(seed)
+        candidates: list[PoolEntry] = []
+        seen: set[str] = set()
+        for file_id in file_ids:
+            section = self._data.pool_section(str(file_id))
+            weights = self._weights.get(section) or {}
+            for entity_id in self._data.pool_members((str(file_id),), section):
+                if entity_id in seen:
+                    continue
+                seen.add(entity_id)
+                candidates.append(
+                    PoolEntry(entity_id=entity_id, weight=int(weights.get(entity_id, 1)))
+                )
+        if not candidates:
+            joined = "、".join(str(value) for value in file_ids) or "<空>"
+            raise ValueError(f"资源池为空：{joined}")
+        entries = inverse_weighted_sample(
+            random.Random(seed_value),
+            tuple(candidates),
+            tuple(entry.weight for entry in candidates),
+            count=count,
+            replace=replace,
+        )
+        return tuple(entry.entity_id for entry in entries)
 
     def draw_item_category(
         self, category: str, *, seed: int, count: int = 1

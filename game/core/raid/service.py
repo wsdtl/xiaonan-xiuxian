@@ -30,6 +30,7 @@ from game.core.database import (
 from game.core.enemy import EnemyGroup, EnemyService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService, StateTransitionCommand
+from game.core.pool import PoolService
 from game.core.world import LocationQuery, WorldService
 
 from .contracts import (
@@ -67,6 +68,7 @@ class RaidService:
         combat: CombatService | None = None,
         activity: ActivityLifecycleService | None = None,
         asset: AssetService | None = None,
+        pool: PoolService | None = None,
     ) -> None:
         self._data = data
         self._enemy = enemy
@@ -79,20 +81,27 @@ class RaidService:
         self._combat = combat
         self._activity = activity
         self._asset = asset
+        self._pool = pool
         self._initialized = False
         self._rules: Mapping[str, object] = {}
         self._state_id = ""
+        self._max_participants = 0
 
     def initialize(self) -> None:
         if self._initialized:
             raise RuntimeError("讨伐核心已经初始化")
         if not self._enemy.status().initialized:
             raise RuntimeError("敌人核心必须先于讨伐核心启动")
+        if self._pool is None or not self._pool.status().initialized:
+            raise RuntimeError("资源池微服务必须先于讨伐核心启动")
         rules = self._data.dataset("玩法规则").get("讨伐")
         if not isinstance(rules, Mapping):
             raise JsonDataError("玩法/讨伐/规则/讨伐.json 必须是对象")
         self._rules = dict(rules)
         self._state_id = _text(self._rules.get("行为状态"), "讨伐.行为状态")
+        self._max_participants = positive_int(
+            self._rules.get("最多参与用户"), "讨伐.最多参与用户"
+        )
         self._initialized = True
 
     def definition(self, raid_id: str) -> RaidDefinition:
@@ -222,8 +231,8 @@ class RaidService:
         if not location.location_key or "讨伐" not in location.available_functions:
             raise RaidError("当前地点没有开放讨伐")
         raid_id = f"{_text(location.location_key, '地点编号')}讨伐"
-        if len(participants) > 15:
-            raise RaidError("讨伐参与用户不能超过15人")
+        if len(participants) > self._max_participants:
+            raise RaidError(f"讨伐参与用户不能超过{self._max_participants}人")
         definition = self.definition(raid_id)
         seed = command.seed if command.seed is not None else _seed(owner, command.request_id)
         started_at = _time(command.started_at or datetime.now(UTC))
@@ -398,8 +407,11 @@ class RaidService:
         self._require_initialized()
 
     def _boss_reward(self, definition: RaidDefinition, seed: int) -> tuple[str, str, int]:
-        candidates = self._data.pool_members(definition.reward_pool, "基础物品")
-        item_id = random.Random(seed ^ 0xA5A5A5A5).choice(candidates)
+        # `奖励池` 按**池子自己声明的集合**抽（登记表里是丹药），原先硬写基础物品，
+        # 于是讨伐在生成阶段就报「资源池集合不匹配」——这条路只有真跑才看得出来。
+        item_id = self._pool.draw_pools(
+            definition.reward_pool, count=1, seed=seed ^ 0xA5A5A5A5
+        )[0]
         grade_id = self._asset.draw_drop_grade(seed=seed ^ 0x5A5A5A5A).grade_id
         return item_id, grade_id, 1
 

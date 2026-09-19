@@ -144,7 +144,17 @@ class AbilityRuntime:
     ) -> bool:
         depth_limit = int(self.catalog.action_rules.get("能力链深度上限", self.MAX_ABILITY_DEPTH))
         if context.ability_depth >= depth_limit:
-            raise RuntimeError("战斗能力链超过安全深度")
+            # 到顶不是报错，是**这一层不再往下执行**：一条合法但很深的连锁（返照家族的
+            # `资变` ↔ `伤后` 自环会跨 9 张真意叠上去）不该让整场战斗炸掉。留痕，便于事后审。
+            frame = self._current_event(context)
+            if frame is not None:
+                frame.facts["能力链跳过"] = True
+            context.last_result = {
+                "成功": False,
+                "能力链跳过": True,
+                "执行器": "未执行",
+            }
+            return False
         node = self.catalog.parse_node(effect)
         effective = dict(effect)
         if (
@@ -488,8 +498,9 @@ class AbilityRuntime:
 
     def _dispatch_event(self, context, *, kind, source, target, amount=0.0, values=None, tags=(), record=True):
         depth_limit = int(self.catalog.action_rules.get("事件链深度上限", self.MAX_EVENT_DEPTH))
-        if context.event_depth >= depth_limit:
-            raise RuntimeError("战斗事件链超过安全深度")
+        # 到顶之后**这次事件照旧发生、照旧进战报，只是不再往下触发监听**——见
+        # `data/战斗/规则/说明.md` 的「两条链的上限」。留痕：事实里记 `链深度跳过`。
+        over_depth = context.event_depth >= depth_limit
         self.catalog.require_event(kind)
         facts = dict(values or {})
         facts.setdefault("事件", kind)
@@ -498,11 +509,13 @@ class AbilityRuntime:
         facts.setdefault("行动者", source.id)
         facts.setdefault("原始数值", float(amount))
         facts.setdefault("当前数值", float(amount))
+        if over_depth:
+            facts["链深度跳过"] = True
         frame = EventFrame(kind, source, target, facts, set(tags))
         context.event_stack.append(frame)
         context.event_depth += 1
         try:
-            listeners = self._compiled_listeners(context).get(kind, ())
+            listeners = () if over_depth else self._compiled_listeners(context).get(kind, ())
             for (
                 _,
                 owner,
@@ -1415,7 +1428,8 @@ class AbilityRuntime:
 
     def _ability_modify_event_value(self, context, source, target, effect, multiplier, **kwargs):
         frame = self._current_event(context)
-        self._require_event_mutation(frame, "当前数值")
+        if not self._event_mutation_allowed(frame, "当前数值"):
+            return False
         if self._event_rewrite_denied(context, frame, "数值"):
             return False
         amount = self._resolve_value(context, effect.get("数值"), source, target, kwargs.get("event_amount", frame.amount), frame.facts) * multiplier
@@ -1426,7 +1440,8 @@ class AbilityRuntime:
     def _ability_modify_event_target(self, context, source, target, effect, multiplier, **_):
         del multiplier
         frame = self._current_event(context)
-        self._require_event_mutation(frame, "目标")
+        if not self._event_mutation_allowed(frame, "目标"):
+            return False
         if self._event_rewrite_denied(context, frame, "目标"):
             return False
         values = self._select_targets(context, source, target, effect.get("目标"))
@@ -1439,7 +1454,8 @@ class AbilityRuntime:
     def _ability_modify_event_tags(self, context, source, target, effect, multiplier, **_):
         del source, target, multiplier
         frame = self._current_event(context)
-        self._require_event_mutation(frame, "标签")
+        if not self._event_mutation_allowed(frame, "标签"):
+            return False
         if self._event_rewrite_denied(context, frame, "标签"):
             return False
         values = {str(value) for value in effect.get("标签") or ()}
@@ -1451,7 +1467,8 @@ class AbilityRuntime:
     def _ability_cancel_event(self, context, source, target, effect, multiplier, **_):
         del source, target, effect, multiplier
         frame = self._current_event(context)
-        self._require_event_mutation(frame, "取消")
+        if not self._event_mutation_allowed(frame, "取消"):
+            return False
         if self._event_rewrite_denied(context, frame, "取消"):
             return False
         frame.cancelled = True
@@ -1609,17 +1626,31 @@ class AbilityRuntime:
     def _ability_transform_event(self, context, source, target, effect, multiplier, **_):
         del multiplier
         frame = self._current_event(context)
-        self._require_event_mutation(frame, "类型")
-        if self._event_rewrite_denied(context, frame, "转化"):
-            return False
         destination = str(effect.get("事件") or "")
         self.catalog.require_event(destination)
-        resource_gain_events = {"恢复前", "获得护盾前", "资源恢复前"}
-        if frame.kind not in resource_gain_events or destination not in resource_gain_events:
-            raise ValueError(f"事件 {frame.kind} 不能转化为 {destination}：两者没有共同结算语义")
+        if frame is None:
+            return False
+        # 转化只在三种「资源到手之前」的事件之间有共同结算语义。**不合法就拒绝这次转化
+        # 并留痕，不抛错**：同一个能力在别的上下文里可能合法（效果会被保存后回放，
+        # 回放时的当前事件与声明时不同），一条录下来的效果回放到别的时点，不该把整场
+        # 战斗炸掉。与「事件链到顶不再往下触发」同一口径。
+        if not self._event_mutation_allowed(frame, "类型"):
+            return False
+        if self._event_rewrite_denied(context, frame, "转化"):
+            return False
+        transformable = self._transformable_events()
+        if frame.kind not in transformable or destination not in transformable:
+            self._refuse_event_mutation(frame, f"{frame.kind} 不能转化为 {destination}")
+            return False
         frame.transformed_kind = destination
         self._dispatch_event(context, kind="事件转化后", source=source, target=target, values={"原事件": frame.kind, "新事件": destination})
         return True
+
+    @staticmethod
+    def _transformable_events() -> frozenset[str]:
+        """可以互相转化的三种事件：都在「资源还没到手」之前，语义可换。"""
+
+        return frozenset({"恢复前", "获得护盾前", "资源恢复前"})
 
     def _ability_modify_judgement(self, context, source, target, effect, multiplier, **_):
         del source, target, multiplier
@@ -2243,10 +2274,26 @@ class AbilityRuntime:
             raise ValueError(f"当前事件不是{expected}")
         return frame
 
-    def _require_event_mutation(self, frame, field):
+    def _event_mutation_allowed(self, frame, field) -> bool:
+        """这次改写事件在白名单里吗；不在就**拒绝并留痕**（见 `_refuse_event_mutation`）。
+
+        白名单本身是数据（`定义/事件.json` 的 `可修改`），它拦的是「作者写错了挂钩的事件」；
+        运行期还会遇到**声明合法、落到别的时点却越界**的情形（保存下来的效果被回放时，
+        当前事件与声明时不同）。后者不该把整场战斗炸掉，所以运行期是拒绝 + 事实留痕，
+        作者写错则由静态判据当场报出来。
+        """
+
         contract = self.catalog.require_event(frame.kind)
-        if field not in set(contract.get("可修改") or ()):
-            raise ValueError(f"事件 {frame.kind} 不允许修改{field}")
+        if field in set(contract.get("可修改") or ()):
+            return True
+        self._refuse_event_mutation(frame, f"事件 {frame.kind} 不允许修改{field}")
+        return False
+
+    @staticmethod
+    def _refuse_event_mutation(frame, reason: str) -> None:
+        """把「这次改写被拒」记进事件事实，战报与事后审都看得到。"""
+
+        frame.facts["改写非法"] = reason
 
     def _judgement(self, context, kind, chance, roll=None):
         overrides = context.judgement_overrides.get(kind) or context.judgement_overrides.get("任意") or []

@@ -94,7 +94,8 @@ EVENT_LOCKED = {
 }
 
 #: **事件字段可修改性**：这几条能力要求当前事件的 `可修改` 里含对应字段
-#: （`mechanics.py` 的 `_require_event_mutation`），字段白名单写在
+#: （`mechanics.py` 的 `_event_mutation_allowed`，第 90 轮起越界是「拒绝 + 留痕」，
+#: 不再是抛错），字段白名单写在
 #: `data/战斗/定义/事件.json` 的每个事件上。第 40 轮踩过：`恢复前 → 恢复后` 的配对让
 #: `真意:410398` 在交叉对局里抛 `事件 恢复后 不允许修改取消`（`恢复后` 的 `可修改` 是空的）。
 MUTATION_FIELDS = {

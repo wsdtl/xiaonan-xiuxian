@@ -519,6 +519,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         combat,
         activity,
         asset,
+        pool,
     )
     raid.initialize()
     logger.opt(colors=True).success(C.ok("讨伐编组核心微服务已启动"))

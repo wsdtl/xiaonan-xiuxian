@@ -17,7 +17,7 @@ from game.core.data import (
 )
 from game.core.forging import ForgingService
 from game.core.growth import GrowthService
-from game.core.pool import EXPAND_DEDUPLICATED, PoolRequest, PoolService
+from game.core.pool import PoolService
 
 from .contracts import EnemyDrop, EnemyGroup, EnemyInstance, EnemyReward, EnemyStatus
 from game.core.data import sequence as _sequence, strict_text as _text
@@ -377,15 +377,12 @@ class EnemyService:
             pool_names.extend(_texts(extra, f"{name}.丹药池"))
         drops: list[EnemyDrop] = []
         for pool_name in pool_names:
-            item_id = self._pool.draw(
-                PoolRequest(
-                    section="基础物品",
-                    count=1,
-                    mode=EXPAND_DEDUPLICATED,
-                    file_ids=(pool_name,),
-                    seed=source.getrandbits(64),
-                )
-            ).entity_ids[0]
+            # 每个池子按**它自己声明的集合**抽：兽宝是基础物品、丹药池是丹药。
+            # 这里原先一律当基础物品抽（`section="基础物品"`），于是带丹药池的敌人
+            # 一生成就报「资源池集合不匹配」——83 个敌方池里有 21 个整条进不去。
+            item_id = self._pool.draw_pools(
+                (pool_name,), count=1, seed=source.getrandbits(64)
+            )[0]
             grade = self._asset.draw_drop_grade(seed=source.getrandbits(64))
             drops.append(EnemyDrop(item_id, grade.grade_id, 1))
         return EnemyReward(stones, weapon_exp, tuple(drops))

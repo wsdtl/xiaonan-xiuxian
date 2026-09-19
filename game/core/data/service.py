@@ -166,6 +166,21 @@ class JsonDataService:
         )
         return tuple(entity_id for entity_id, _ in values)
 
+    def pool_section(self, file_id: str) -> str:
+        """这个资源池文件属于哪个集合。
+
+        **集合是池子自己声明的，不是调用方猜的**：`丹药池` 里的池子是丹药、`兽宝池`
+        里的是基础物品。调用方硬写一个集合就会挑错池子（实测：把丹药池当基础物品抽，
+        21 个地点的敌人一生成就报「资源池集合不匹配」，探索与讨伐整条进不去）。
+        """
+
+        loaded = self._require_loaded()
+        document = loaded.catalog.content_file(str(file_id))
+        pool = loaded.pool_definitions.get(document.file_id)
+        if pool is None:
+            raise JsonDataError(f"内容文件不是资源池：{document.relative_path}")
+        return pool.section
+
     def pool_fields(
         self,
         file_ids: Sequence[str],

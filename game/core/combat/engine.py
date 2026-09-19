@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import math
 import random
+import sys
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -33,6 +34,10 @@ from .models import (
 )
 
 
+#: 递归派发用的进程递归下限：两层链的上限写在数据里，帧数要跟得上（见 `__init__`）。
+RECURSION_LIMIT = 8000
+
+
 def _line_rules(
     node: Mapping[str, Any],
     layer: Mapping[str, Mapping[str, Any]],
@@ -57,7 +62,12 @@ class BattleEngine(AbilityRuntime):
 
     def __init__(self, combat_rules: Mapping[str, Any] | None = None) -> None:
         rules = dict(combat_rules or {})
-        # 构筑模板库由 `template_data.py` 生成，经基石字典传进来；不参与 JSON 校验。
+        # 事件与能力是**递归派发**的：一层连锁要吃掉好几个 Python 帧。两条链的上限写在
+        # 数据里（`规则/行动.json`），所以进程的递归上限必须跟着抬——否则一条合法但很深的
+        # 连锁（返照家族的 `资变` ↔ `伤后` 自环，15 组讨伐实测到事件 141 层 / 能力 244 层）
+        # 会先撞上 Python 的 1000 帧上限，报 `RecursionError` 而不是走引擎自己的墙。
+        if sys.getrecursionlimit() < RECURSION_LIMIT:
+            sys.setrecursionlimit(RECURSION_LIMIT)
         templates = rules.pop("构筑模板库", None)
         self.catalog = CombatCatalog.from_mapping(rules, templates)
         self.damage = DamageEngine(self.catalog.damage_rules, self.catalog.attributes)
