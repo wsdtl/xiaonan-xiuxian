@@ -42,11 +42,13 @@ def _line_rules(
     node: Mapping[str, Any],
     layer: Mapping[str, Mapping[str, Any]],
     path: str,
+    *,
+    carrier: str = "行",
 ) -> dict[str, dict]:
-    """装配一行能力自带的规则（行级）；没有就返回空字典。
+    """装配一处 `规则[]`；没有就返回空字典。
 
-    行级规则与单位级规则**同一张登记表、同一个字段名、同一个形状**，区别只在载体：
-    单位级跟参战者上战场，行级跟这一行走。
+    载体的名字不决定语义，只决定**这份规则跟谁生灭**：`单位` 跟参战者（写在根能力
+    `规则文本` 或被动技能行上），`行` 跟那一条技能行（写在主动技能行上）。
     """
 
     from .rules import RULE_FIELD, parse_rule_entries
@@ -54,7 +56,7 @@ def _line_rules(
     entries = node.get(RULE_FIELD)
     if not entries:
         return {}
-    return parse_rule_entries(entries, layer, carrier="行", path=path)
+    return parse_rule_entries(entries, layer, carrier=carrier, path=path)
 
 
 class BattleEngine(AbilityRuntime):
@@ -977,7 +979,10 @@ class BattleEngine(AbilityRuntime):
             shield=self._clamp(
                 snapshot.shield, 0, max(0.0, attributes.get("护盾上限", 0))
             ),
-            statuses=[StatusState.from_dict(value) for value in snapshot.statuses],
+            statuses=[
+                self._status_with_rules(value, f"{snapshot.name}.战前状态")
+                for value in snapshot.statuses
+            ],
             skills=list(skills),
             passives=list(passives),
             rules=dict(rules),
@@ -1243,12 +1248,28 @@ class BattleEngine(AbilityRuntime):
             )
         )
 
-    @staticmethod
-    def _assemble_passive_skill(instance, index, node, attributes, skills, passives, rules):
-        del attributes, skills, rules
+    def _assemble_passive_skill(self, instance, index, node, attributes, skills, passives, rules):
+        """装配一条被动；被动行上还能挂**单位级规则**（锁定技的第二种写法）。
+
+        被动本来就是必发、不可禁用的，所以它是锁定技最自然的落脚处：规则跟着这条被动
+        一起进战斗，效果管线里的取消 / 转化 / 无效都碰不到它。规则并进参战者的规则表，
+        与写在 `规则文本` 上的完全等价——**写在哪只影响正文印在哪，不影响语义**。
+        """
+
+        del attributes, skills
         source_name = str(instance.get("功法") or instance.get("名称") or "能力")
         source_id = str(instance.get("编号") or source_name)
         born_order = int(instance.get("出生序号", 0))
+        parsed = _line_rules(
+            node,
+            self.catalog.rule_layer,
+            f"{source_name}.{node.get('名称') or '被动技能'}.规则",
+            carrier="单位",
+        )
+        for rule_name, rule in parsed.items():
+            if rule_name in rules:
+                raise ValueError(f"同一条单位级规则在一张卡里写了两遍：{rule_name}")
+            rules[rule_name] = rule
         for effect_index, raw in enumerate(node.get("效果") or ()):
             passives.append(
                 {

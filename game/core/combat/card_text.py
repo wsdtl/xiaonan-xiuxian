@@ -398,7 +398,8 @@ class CardText:
 
         lines: list[str] = []
         # 规则段（效果外文本）排在最前：它不是效果，是这场战斗里「引擎怎么看这张卡」。
-        rules = self._rules(rulings_nodes)
+        # 被动行上写的单位级规则也在这里出现（写在哪儿不影响语义，见 `_rules`）。
+        rules = self._rules([*rulings_nodes, *passives])
         if rules:
             lines.append("规则：")
             lines.extend(rules)
@@ -434,6 +435,10 @@ class CardText:
 
         这样卡面上的「不可被指定（来源：敌方）」与引擎里真正读的那条规则是同一处声明——
         手写规则文本迟早会与行为漂开，而这正是负责人最不能接受的那种漂。
+
+        **单位级规则有三处写法**（根能力 `规则文本`、被动技能行、状态定义），三处都进
+        这一段：写在哪个节点上只影响它跟谁生灭，不影响读者该看到什么。状态带的那一份
+        另在状态句子里再印一次——它跟状态走，读者得知道这一点。
         """
 
         lines: list[str] = []
@@ -1528,7 +1533,12 @@ class CardText:
         attributes = holder.get("属性")
         if isinstance(attributes, Mapping) and attributes:
             detail.append(_join([self._attribute_change(key, value) for key, value in attributes.items()]))
-        return f"{target}获得[{name}]" + (f"（{_join(detail)}）" if detail else "")
+        sentence = f"{target}获得[{name}]" + (f"（{_join(detail)}）" if detail else "")
+        # 状态自带的单位级规则：它**跟状态一起生灭**，所以印在状态这句里，不并进规则段。
+        carried = self._rules([holder])
+        if carried:
+            return sentence + "，同时" + "；".join(text.lstrip("•").rstrip("。") for text in carried) + "。"
+        return sentence
 
     def _attribute_change(self, key: object, value: object) -> str:
         number = float(value)

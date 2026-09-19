@@ -13,6 +13,9 @@
 **标准探针场景覆盖到了哪些请求标签，`rules.INTERCEPTION_POINTS` 里逐个声明**；
 登记一条落在覆盖范围外的规则，`检查规则层.py` 会要求先扩探针场景（那是代码）。
 
+最后还有一条**载体等价**检查：同一条规则写在三种已有载体上（根能力 `规则文本`、被动技能行、
+状态定义），行为必须一样；状态带的那一份还必须**跟状态一起失效**——写在哪只影响跟谁生灭。
+
     .venv/Scripts/python.exe -X utf8 tools/验证规则层.py
 
 **退出码：0 = 全部成立，1 = 有规则名不副实。**
@@ -409,6 +412,92 @@ def _overreach(engine, name: str, rule: dict) -> str | None:
     return f"{name}：条件不匹配的请求也被拦（{'、'.join(mutated)}）"
 
 
+def _carrier_cards(entry: dict) -> dict[str, dict]:
+    """同一份规则引用的三种写法（都是已有机制，没有新机制）。"""
+
+    def 挂规则的被动() -> dict:
+        node = _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "记录战斗事实",
+                    "归属": {"能力": "选择目标", "范围": "自身"},
+                    "名称": "探针",
+                    "值": 1,
+                    "方式": "追加",
+                    "保留数量": 1,
+                }
+            ],
+            name="探针载规则",
+        )
+        node["规则"] = [entry]
+        return node
+
+    def 带规则的状态(持续单位: str, 剩余行动: int) -> dict:
+        return _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "添加状态",
+                    "目标": {"能力": "选择目标", "范围": "自身"},
+                    "状态": {
+                        "名称": "探针锁势",
+                        "类别": "正面",
+                        "持续单位": 持续单位,
+                        "剩余行动": 剩余行动,
+                        "规则": [entry],
+                    },
+                }
+            ],
+            name="探针挂势",
+        )
+
+    return {
+        "规则文本": _card(_rules(entry)),
+        "被动技能": _card(挂规则的被动()),
+        "状态·整场战斗": _card(带规则的状态("整场战斗", 1)),
+        "状态·1 行动": _card(带规则的状态("状态承受者行动", 1)),
+    }
+
+
+def _carrier_check(engine, layer: dict[str, dict]) -> list[str]:
+    """**写在哪不影响语义**：同一份规则挂在三种已有载体上，行为必须一样。
+
+    单位级规则有三种写法——卡面根能力 `规则文本`、被动技能行、状态定义。前两种跟参战者
+    一起进战斗，第三种跟状态一起生灭。判据要成立两件事：三处写法挡住的东西一样；状态
+    带的那份**状态一走就失效**（否则「跟状态生灭」只是文档里的一句话）。
+    """
+
+    entry = {"名称": "不可被指定", "来源": "敌方"}
+    if "不可被指定" not in layer:
+        return []
+    problems: list[str] = []
+    打手 = _fighter("L1", _card(_strike_skill()))
+    基准 = _damage_taken(_run(engine, 打手, _fighter("R1", None)), "R1")
+    if 基准 <= 0:
+        return ["载体探针没有区分度：没有规则时目标也没挨打"]
+    结果: dict[str, float] = {}
+    for 名, 卡 in _carrier_cards(entry).items():
+        try:
+            结果[名] = _damage_taken(
+                _run(engine, _fighter("L1", _card(_strike_skill())), _fighter("R1", 卡)),
+                "R1",
+            )
+        except Exception as exc:  # noqa: BLE001
+            problems.append(f"{名} 写法跑不起来（{type(exc).__name__}: {exc}）")
+    for 名 in ("规则文本", "被动技能", "状态·整场战斗"):
+        if 名 in 结果 and 结果[名] != 0:
+            problems.append(f"{名} 写法没挡住：目标受到伤害 {结果[名]:.0f}")
+    if "状态·1 行动" in 结果 and 结果["状态·1 行动"] <= 0:
+        problems.append("状态带的那份规则没有跟状态一起失效")
+    print(
+        "  三种写法（没有规则时受伤害 "
+        f"{基准:.0f}）："
+        + " · ".join(f"{名} {值:.0f}" for 名, 值 in 结果.items())
+    )
+    return problems
+
+
 def main() -> int:
     layer = json.loads(REGISTRY.read_text(encoding="utf-8"))
     services = build_game_services()
@@ -442,6 +531,8 @@ def main() -> int:
                 print(f"  {'':<16} 条件不匹配的请求：{'误拦' if overreach else '放过'}")
                 if overreach:
                     problems.append(overreach)
+        print("规则层载体验证：写在哪不影响语义")
+        problems.extend(_carrier_check(engine, layer))
     finally:
         services.core.database.close()
     if problems:

@@ -1036,7 +1036,7 @@ class AbilityRuntime:
                 duration = max(1, math.ceil(duration * (1.0 - self._clamp(self._percent(destination, "韧性"), 0.0, 0.9))))
                 duration_limit = int(destination.battle_profile.get("控制持续上限", 0))
                 definition["剩余行动"] = min(duration, duration_limit) if duration_limit else duration
-            status = StatusState.from_dict(definition)
+            status = self._status_with_rules(definition, f"{context.current_ability}.状态")
             allow_cross_build = bool(definition.get("允许跨构筑", False))
             existing = next(
                 (
@@ -1118,7 +1118,9 @@ class AbilityRuntime:
                     value["来源名称"] = source.name
                     value["来源能力"] = context.current_ability
                     value["构筑实例"] = self._build_instance(context, value)
-                    target.statuses.append(StatusState.from_dict(value))
+                    target.statuses.append(
+                        self._status_with_rules(value, f"{context.current_ability}.生成状态")
+                    )
                     context.mark_listener_index_dirty()
                 self._run_effects(context, source, target, reaction.get("效果") or (), multiplier)
                 self._dispatch_event(
@@ -2040,6 +2042,33 @@ class AbilityRuntime:
             return 0.0
         return {"总和": sum(data), "最小": min(data), "最大": max(data), "平均": sum(data) / len(data), "不同值数量": float(len(set(data)))}.get(mode, 0.0)
 
+    def _status_with_rules(self, definition: Mapping[str, Any], path: str):
+        """把状态定义里的 `规则[]` 一并解析，再建 `StatusState`。
+
+        状态是**锁定技的第三种写法**：作者把单位级规则写在状态定义里，状态挂上就生效、
+        状态一没就失效（规则本身仍不进效果管线）。解析放在这里而不是模型里，是因为
+        只有运行期拿得到规则层登记表与报错路径。
+        """
+
+        from .models import StatusState
+        from .rules import RULE_FIELD, parse_rule_entries
+
+        entries = definition.get(RULE_FIELD)
+        rules = (
+            parse_rule_entries(
+                entries,
+                self.catalog.rule_layer,
+                carrier="单位",
+                path=path,
+            )
+            if entries
+            else {}
+        )
+        status = StatusState.from_dict(definition)
+        if rules:
+            status.rules.update(rules)
+        return status
+
     def _source_relation(self, context, source, candidate) -> str:
         """规则里的 `来源关系` 看的是「谁在动手」，所以只分自身 / 己方 / 敌方。"""
 
@@ -2065,6 +2094,10 @@ class AbilityRuntime:
         `container` 是**规则写在谁身上**（参战者，或一条技能行）；`owner` 是条件求值时的
         「来源」（通常就是持有者）。按优先级升序问；后问的规则只有在先成立的那条允许被它
         改写（`可改写`）时才能改变结论——所以优先级与可改写都真有语义。
+
+        **单位级规则有三处写法**：卡面根能力 `规则文本`、被动技能行、状态定义（见
+        `data/战斗/说明.md`）。前两处在装配期就并进`参战者.规则`；状态带的那一份
+        **跟状态一起生灭**，所以每次问的时候从在场状态里现取。
         """
 
         rules = [
@@ -2072,6 +2105,12 @@ class AbilityRuntime:
             for rule in (getattr(container, "rules", None) or {}).values()
             if str(rule.get("拦截点") or "") == point
         ]
+        for status in getattr(container, "statuses", None) or ():
+            rules.extend(
+                rule
+                for rule in (getattr(status, "rules", None) or {}).values()
+                if str(rule.get("拦截点") or "") == point
+            )
         if not rules:
             return False
         subject = owner if owner is not None else container

@@ -114,6 +114,9 @@ class StatusState:
     action_limits: tuple[str, ...] = ()
     effect_immunities: tuple[str, ...] = ()
     listeners: tuple[Mapping[str, Any], ...] = ()
+    #: 状态自带的**单位级规则**（`规则层.json` 的登记项）：状态在就生效、状态一走就失效。
+    #: 规则本身不走效果管线，所以效果里的「取消 / 转化 / 无效」碰不到它。
+    rules: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     values: dict[str, Any] = dataclass_field(default_factory=dict)
     expire_with_source: bool = False
 
@@ -121,7 +124,7 @@ class StatusState:
     def from_dict(cls, value: Mapping[str, Any]) -> StatusState:
         allowed = {
             "名称", "类别", "剩余行动", "来源", "来源名称", "来源能力", "构筑实例", "属性", "层数",
-            "层数上限", "标签", "持续单位", "行动限制", "效果免疫", "监听", "记录",
+            "层数上限", "标签", "持续单位", "行动限制", "效果免疫", "监听", "规则", "记录",
             "来源退场时移除", "叠加范围", "重复方式", "允许跨构筑", "是否控制", "控制基础命中率",
         }
         unknown = set(value) - allowed
@@ -148,7 +151,7 @@ class StatusState:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "名称": self.name,
             "类别": self.category,
             "剩余行动": self.remaining_turns,
@@ -167,6 +170,14 @@ class StatusState:
             "记录": copy.deepcopy(self.values),
             "来源退场时移除": self.expire_with_source,
         }
+        # 只有真带规则的状态才多这个键：这条 `to_dict` 会进事件事实（`复制状态` 把状态定义
+        # 整个记进去），多一个恒为空数组的键会让所有战报的摘要漂掉。
+        if self.rules:
+            result["规则"] = [
+                {"名称": name, **dict(rule.get("参数") or {})}
+                for name, rule in self.rules.items()
+            ]
+        return result
 
 
 @dataclass

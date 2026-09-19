@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from collections.abc import Mapping, Sequence
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 for _path in (str(ROOT), str(ROOT / "tools")):
@@ -129,19 +130,53 @@ def check_probe_coverage(layer: dict[str, dict]) -> list[str]:
 
 
 def check_render_path(layer: dict[str, dict]) -> list[str]:
-    """每条规则都渲染得出来：拿一张探针卡跑真渲染器。"""
+    """每条规则在三处写法上都渲染得出来：根能力 `规则文本`、被动技能行、状态定义。"""
 
     from game.core.combat.card_text import render_body
     from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY, rule_card_text
 
     unit = [name for name, definition in layer.items() if str(definition.get("归属")) == "单位"]
     line = [name for name, definition in layer.items() if str(definition.get("归属")) == "行"]
+    unit_entries = [{"名称": name} for name in unit]
+    line_entries = [{"名称": name} for name in line]
     probe = {
         "能力": [
+            {"能力": RULE_TEXT_ABILITY, RULE_FIELD: unit_entries},
+            # 单位级规则的第二种写法：被动技能行自己的 `规则[]`。
             {
-                "能力": RULE_TEXT_ABILITY,
-                RULE_FIELD: [{"名称": name} for name in unit],
-            }
+                "能力": "被动技能",
+                "名称": "探针载规则",
+                "结算顺序": 1,
+                "规则": unit_entries,
+                "效果": [
+                    {
+                        "能力": "监听事件",
+                        "事件": "战斗开始",
+                        "阵营关系": "自身",
+                        "效果": [
+                            {
+                                "能力": "记录战斗事实",
+                                "归属": {"能力": "选择目标", "范围": "自身"},
+                                "名称": "探针",
+                                "值": 1,
+                                "方式": "追加",
+                                "保留数量": 1,
+                            },
+                            # 第三种写法：状态定义里的 `规则[]`（跟状态一起生灭）。
+                            {
+                                "能力": "添加状态",
+                                "目标": {"能力": "选择目标", "范围": "自身"},
+                                "状态": {
+                                    "名称": "探针锁势",
+                                    "类别": "正面",
+                                    "持续单位": "整场战斗",
+                                    RULE_FIELD: unit_entries,
+                                },
+                            },
+                        ],
+                    }
+                ],
+            },
         ]
         + [
             {
@@ -181,7 +216,12 @@ def check_render_path(layer: dict[str, dict]) -> list[str]:
 
 
 def check_content_uses(layer: dict[str, dict]) -> list[str]:
-    """两个方向：内容用的规则要登记过、载体要写对。"""
+    """两个方向：内容用的规则要登记过、写法要落在引擎真的会读的地方。
+
+    单位级规则有三种写法：根能力 `规则文本`、被动技能行、状态定义。**状态定义里那一份
+    由引擎在「添加状态」与「状态反应生成状态」两处解析**，所以判据也要走遍整棵能力树，
+    不能只看根上的那几个节点。
+    """
 
     from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY
 
@@ -198,16 +238,52 @@ def check_content_uses(layer: dict[str, dict]) -> list[str]:
             if name not in allowed:
                 problems.append(f"{source} 的 {where} 用了未登记的{expected}级规则：{name or '<空>'}")
 
+    def walk(node, source: str, where: str, *, 状态定义: bool = False) -> None:
+        if isinstance(node, Mapping):
+            ability = str(node.get("能力") or "")
+            entries = node.get(RULE_FIELD) if RULE_FIELD in node else None
+            # `修改战场规则` 的 `规则` 是**战场规则本体**（带监听的那个对象），
+            # 不是规则层的一份规则引用——同名不同物，这里不能按载体算。
+            if ability == "修改战场规则":
+                entries = None
+            if entries is not None or 状态定义:
+                if 状态定义 or ability in {RULE_TEXT_ABILITY, "被动技能"}:
+                    read(f"{where}.规则", entries, "单位", source)
+                elif ability == "主动技能":
+                    read(f"{where}.规则", entries, "行", source)
+                elif entries:
+                    problems.append(
+                        f"{source} 的 {where}（{ability or '<无能力>'}）写了规则，"
+                        "但引擎不读这个位置的规则：单位级写 `规则文本` / 被动技能 / 状态定义，行级写主动技能"
+                    )
+            for key, value in node.items():
+                walk(value, source, f"{where}.{key}", 状态定义=(key == "状态" and isinstance(value, Mapping)))
+        elif isinstance(node, Sequence) and not isinstance(node, (str, bytes)):
+            for index, item in enumerate(node):
+                walk(item, source, f"{where}[{index}]")
+
     for filename, entry in _cards():
-        for node in entry.get("能力") or ():
-            if not isinstance(node, dict):
-                continue
-            if node.get("能力") == RULE_TEXT_ABILITY:
-                read("规则文本", node.get(RULE_FIELD), "单位", filename)
-            elif node.get(RULE_FIELD):
-                read(str(node.get("能力")), node.get(RULE_FIELD), "行", filename)
+        for index, node in enumerate(entry.get("能力") or ()):
+            walk(node, filename, f"能力[{index}]")
+    for index, reaction in enumerate(_status_reactions()):
+        for key in ("生成状态",):
+            value = reaction.get(key)
+            if isinstance(value, Mapping):
+                read(f"状态反应[{index}].{key}.规则", value.get(RULE_FIELD), "单位", "状态反应.json")
     print(f"  内容用到单位级规则 {counts['单位']} 次 · 行级规则 {counts['行']} 次")
     return problems
+
+
+def _status_reactions() -> list[dict]:
+    """`规则/状态反应.json`：状态反应的 `生成状态` 也可能带规则。"""
+
+    path = ROOT / "data" / "战斗" / "规则" / "状态反应.json"
+    if not path.exists():
+        return []
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(value, Mapping):
+        value = value.get("状态反应") or []
+    return [dict(item) for item in value if isinstance(item, Mapping)]
 
 
 CHECKS = (
