@@ -265,14 +265,19 @@ COMMON_KEYS = frozenset({
 
 
 def _rule_files() -> list[pathlib.Path]:
-    """`data/` 里四类面中「规则」面下的全部 JSON（定义面是按表遍历的词表，不在判定内）。"""
+    """`data/` 里「规则」面下的全部 JSON（定义面是按表遍历的词表，不在判定内）。
+
+    `规则` 那一层可能在大类目录下（`宗门/规则/…`），也可能在组件目录下
+    （`玩法/队伍/规则/…`、`物品/炼丹/规则/…`）。**`展示/规则/` 不是规则面**——那是
+    展示层按节/键取的叙事模板与措辞表，归展示契约管。
+    """
 
     目标: list[pathlib.Path] = []
     for path in sorted(DATA.rglob("*.json")):
         if path.name == "组件.json":
             continue
         段 = path.relative_to(DATA).parts
-        if len(段) < 3 or 段[1] != "规则":
+        if len(段) < 3 or "规则" not in 段[1:-1] or "展示" in 段[1:-1]:
             continue
         目标.append(path)
     return 目标
@@ -327,21 +332,20 @@ def check_unread_rule_keys(source: str) -> list[str]:
     一条规则只有在**有人读**的时候才算规则。没人读的键既不约束代码，也看不出代码到底
     按什么裁定——它是「声明了却没人执行」的谎，比没有更坏。
 
-    判据是保守的三条：键名作为字符串字面量出现在 `game`/`launch`/`message` 里，或者
-    能被源码里的 f-string 拼出来（`f"{prefix}系数"`），或者是读取器与展示层的通用键。
+    判据是保守的三条：键名作为字符串字面量出现在 `game`/`launch`/`message`（以及
+    `tools`/`tests`——工具与测试也算消费者）里，或者能被源码里的 f-string 拼出来
+    （`f"{prefix}系数"`），或者是读取器与展示层的通用键。
     **只判 `规则/` 面**：`定义/` 是按表遍历的词表，`护盾加成` 在代码里 0 次字面量却被
-    16 个数据文件引用，按这条判会误删属性。
+    16 个数据文件引用，按这条判会误删属性；`展示/规则/` 也不是规则面。
 
     顶层键**全部**没人读的文件会额外点名——那是整份声明没人执行（`灵兽修炼.json`、
-    `境界突破.json`、`同行.json` 都属于这一类）。
+    `境界突破.json`、`同行.json`、`炼丹/规则/战丹.json` 都属于这一类）。
     """
 
-    SKIP = {"__pycache__", ".venv", ".git"}
-    _ = SKIP
     字面量 = set(re.findall(r'"([^"\n]{1,24})"', source)) | set(
         re.findall(r"'([^'\n]{1,24})'", source)
     )
-    for 根 in ("launch", "message"):
+    for 根 in ("launch", "message", "tools", "tests"):
         目录 = PROJECT_ROOT / 根
         if not 目录.is_dir():
             continue

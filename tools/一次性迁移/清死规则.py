@@ -53,17 +53,27 @@ DATA = ROOT / "data"
 #:   （必成功、永久属性只加不减、每个目标境界一条记录）全在 `character/service.py` 里写死。
 #: * `战斗/定义/五行.json`：它是 `战斗/规则/五行.json` 的影子副本，`load_battle_foundation`
 #:   先合并 `战斗定义` 再用 `战斗规则.五行` **覆盖**掉同名的 `五行` 键，所以这份从不生效。
+#: * `物品/炼丹/规则/战丹.json`：整份只有一条 `强度规则`（强度 ↔ 允许炼制难度）。`炼药规则`
+#:   这份数据集只被取过 `丹则` / `炉法` / `难度` / `归脉`（`alchemy/service.py`），
+#:   战丹的战前寄存规则读的是 `服丹规则.服丹.战丹`（`medicine/service.py`），是另一份。
 死文件 = (
     "世界/位置/规则/同行.json",
     "角色/规则/成长/灵兽修炼.json",
     "角色/规则/突破/境界突破.json",
     "战斗/定义/五行.json",
+    "物品/炼丹/规则/战丹.json",
 )
 
 
-def 源码文本() -> str:
+#: 运行时报文里出现的键才算「有人读」的**必要条件**，工具与测试里出现的也算消费者——
+#: 改数据前先看这几处。
+运行期根 = ("game", "launch", "message")
+工具根 = ("tools", "tests")
+
+
+def 源码文本(根s: tuple[str, ...]) -> str:
     片段: list[str] = []
-    for 根 in ("game", "launch", "message"):
+    for 根 in 根s:
         for p in (ROOT / 根).rglob("*.py"):
             if "__pycache__" not in p.parts:
                 片段.append(p.read_text(encoding="utf-8"))
@@ -74,7 +84,7 @@ def 动态模板() -> list[re.Pattern[str]]:
     """把含占位符的字符串字面量变成正则：键匹配得上就说明它可能是被拼出来的。"""
 
     模板: list[re.Pattern[str]] = []
-    for 根 in ("game", "launch", "message"):
+    for 根 in 运行期根:
         for p in (ROOT / 根).rglob("*.py"):
             if "__pycache__" in p.parts:
                 continue
@@ -131,12 +141,13 @@ def main() -> int:
     parser.add_argument("--落盘", action="store_true", help="写回 data/（默认只报）")
     args = parser.parse_args()
 
-    文 = 源码文本()
+    文 = 源码文本(运行期根) + "\n" + 源码文本(工具根)
     字面量 = set(re.findall(r'"([^"\n]{1,24})"', 文)) | set(re.findall(r"'([^'\n]{1,24})'", 文))
     模板 = 动态模板()
 
     行: list[str] = []
     删键总数 = 0
+    清空文件: list[str] = []
     for 相对 in 死文件:
         p = DATA / 相对
         if p.is_file():
@@ -147,12 +158,16 @@ def main() -> int:
     面文件 = sorted(p for p in DATA.rglob("*.json") if p.name != "组件.json")
     for p in 面文件:
         段 = p.relative_to(DATA).parts
-        if len(段) < 3 or 段[1] != "规则":
+        # `规则` 面可能在第二层（组件名与大类同名）或第三层（大类/组件/规则）；
+        # **`展示/` 底下也有一个叫 `规则` 的子目录**（叙事模板与措辞表），那不是规则面。
+        if len(段) < 3 or "规则" not in 段[1:-1] or "展示" in 段[1:-1]:
             continue
         文档 = json.loads(p.read_text(encoding="utf-8"))
         新文档, 删除 = 清(文档, 字面量, 模板)
         if 新文档 is 空壳:
-            raise SystemExit(f"{p.relative_to(DATA).as_posix()} 会被清空，请把它加进 死文件")
+            # 顶层键全死 = 整份文件没人读，交给 死文件 处理（本轮先报出来）。
+            清空文件.append(p.relative_to(DATA).as_posix())
+            continue
         if not 删除:
             continue
         删键总数 += len(set(删除))
@@ -165,6 +180,10 @@ def main() -> int:
     报告 = pathlib.Path(__file__).resolve().with_name("清死规则清单.txt")
     报告.write_text("\n".join(行) + "\n", encoding="utf-8")
     print(f"删键 {删键总数} 个 · 明细见 {报告.relative_to(ROOT).as_posix()}")
+    if 清空文件:
+        print("顶层键全死、该整份删掉的文件（加进 死文件 再跑）：")
+        for x in 清空文件:
+            print("  ", x)
     print(f"（{'已落盘' if args.落盘 else '只报，未写盘'}）")
     return 0
 
