@@ -26,6 +26,7 @@ message/                    通用消息协议
 static/game-console/        控制台前端
 static/battle-report/       战报前端
 static/world-map/           全境地势、南北地界、道路与地点地图
+static/说明.md              前端约定：页面归属、缓存与版本、页面策略、样式与信任边界
 tools/                      游戏外校核、维护脚本、迁移清单与归档验证件
 tools/公式预览/              已归档的 QQ 消息协议兼容性验证组件（默认不装载）
 ```

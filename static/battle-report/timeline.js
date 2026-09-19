@@ -3,7 +3,7 @@ import {
   renderFacts,
   renderSnapshotParticipant,
   safeToken,
-} from "./ui.js?v=20";
+} from "./ui.js";
 
 export function renderCompactTimeline(segment, ui, loadComparison) {
   const mode = ui.modes[0];

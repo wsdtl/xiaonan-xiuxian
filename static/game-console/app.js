@@ -297,6 +297,9 @@
     bubble.className = "bubble";
     const content = document.createElement("div");
     content.className = "message-content";
+    // content_html 由后台投影（presentation.py）转义后给出：它只认自己拼的标签，
+    // 文本一律过 html.escape，链接另过 _safe_url。所以这里用 innerHTML 是安全的；
+    // 回退分支只能拿 content 原文自己转义。
     content.innerHTML = record.content_html || escapeHtml(record.content || "");
     renderFormulas(content);
     bubble.appendChild(content);

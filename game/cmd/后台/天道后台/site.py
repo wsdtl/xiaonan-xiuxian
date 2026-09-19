@@ -19,6 +19,27 @@ from .presentation import record_payload
 router = APIRouter(prefix="/game-console")
 INDEX_HTML = static_path("game-console", "index.html")
 
+#: 天道后台页面的内容安全策略。
+#:
+#: 舆图页面一直有自限策略，后台页面此前**一条都没有**——后台是能下发命令的入口，
+#: 更该锁住脚本来源。这里放开的三处都是页面真实需要的：
+#: `cdn.jsdelivr.net` 供 KaTeX 的样式、脚本与字体（两个文件都带 `integrity`，
+#: 改过内容就加载不出来）；`img-src` 放开 http/https，因为消息图片允许外链
+#: （本地图片已经由消息媒体目录物化成 `/game-console/media/`）。
+#: 数学公式的行内样式走的是 CSSOM，不需要 `style-src 'unsafe-inline'`。
+CONSOLE_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://cdn.jsdelivr.net; "
+    "style-src 'self' https://cdn.jsdelivr.net; "
+    "font-src 'self' data: https://cdn.jsdelivr.net; "
+    "img-src 'self' data: http: https:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -229,6 +250,7 @@ def _session_payload(session: ConsoleSession) -> dict[str, object]:
 def _no_store_headers() -> dict[str, str]:
     return {
         "Cache-Control": "no-store",
+        "Content-Security-Policy": CONSOLE_CSP,
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "same-origin",
         "X-Frame-Options": "DENY",

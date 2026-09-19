@@ -2,7 +2,7 @@ import {
   applyVisual,
   renderCompactTimeline,
   renderDetailedTimeline,
-} from "./timeline.js?v=20";
+} from "./timeline.js";
 import {
   activateMotion,
   controlButton,
@@ -11,7 +11,7 @@ import {
   renderParticipantRecord,
   renderStatusGroup,
   safeToken,
-} from "./ui.js?v=20";
+} from "./ui.js";
 
 const root = document.querySelector("#reportRoot");
 const announcer = node("p", "visually-hidden", "");
