@@ -9,6 +9,7 @@ from game.core.data import JsonDataService, materialize
 from game.core.formation import FormationNodeRules
 
 from .executors import EXECUTOR_CATEGORIES
+from .rules import validate_rule_layer
 from .schema import RuleSchemaValidator
 
 #: 属性口径：引擎**怎么读**这个属性。基准就是属性自己的 `默认值`
@@ -146,6 +147,8 @@ def validate_battle_foundation(
     # 不展开就会被当成非法节点挡掉（实测会让启动失败）。
     validator.templates = dict(templates or {})
     validator.validate_definitions("战斗定义.原子能力")
+    validate_rule_layer(value.get("规则层") or {}, abilities)
+    _validate_rule_text_carrier(abilities)
     _validate_battle_environments(environments, validator)
     if not isinstance(formation_rules, FormationNodeRules):
         raise TypeError("战斗核心缺少阵法节点运行契约")
@@ -157,6 +160,23 @@ def validate_battle_foundation(
     missing = set(EXECUTOR_CATEGORIES) - declared
     if missing:
         raise ValueError(f"执行器没有原子能力声明：{'、'.join(sorted(missing))}")
+
+
+def _validate_rule_text_carrier(abilities: Mapping[str, Any]) -> None:
+    """规则文本只做载体这一件事：它存在，且带着 `规则` 字段。
+
+    「规则文本只能挂在卡面根部」不在这里判：装配执行器只在根部被查表，
+    嵌进效果里会直接撞上「未实现装配执行器」，那是响的。
+    """
+
+    from .rules import RULE_TEXT_ABILITY, RULE_TEXT_FIELD
+
+    definition = abilities.get(RULE_TEXT_ABILITY)
+    if not isinstance(definition, Mapping):
+        raise ValueError(f"原子能力缺少规则文本载体：{RULE_TEXT_ABILITY}")
+    fields = _mapping(definition.get("字段") or {}, f"原子能力.{RULE_TEXT_ABILITY}.字段")
+    if RULE_TEXT_FIELD not in fields:
+        raise ValueError(f"原子能力.{RULE_TEXT_ABILITY}必须声明 {RULE_TEXT_FIELD} 字段")
 
 
 def _validate_attribute_definitions(attributes: Mapping[str, Any]) -> None:

@@ -7,6 +7,7 @@ from types import MappingProxyType
 EXECUTOR_CATEGORIES = MappingProxyType(
     {
         "装配属性": frozenset({"装配"}),
+        "装配规则": frozenset({"装配"}),
         "装配主动技能": frozenset({"装配"}),
         "装配被动技能": frozenset({"装配"}),
         "顺序执行": frozenset({"组合"}),

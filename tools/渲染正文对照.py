@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT))
 
 from game.core.combat import render_body, render_listeners  # noqa: E402
 from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
+from 规则层 import load_rule_layer  # noqa: E402
 
 DATA = ROOT / "data"
 BASELINE = ROOT / "tools/基准/渲染正文摘要.json"
@@ -73,7 +74,7 @@ def digest(root: pathlib.Path) -> tuple[dict[str, object], list[str]]:
             if key in summary:
                 key = f"{key}#{index}"
             try:
-                lines, misses = render_body(card)
+                lines, misses = render_body(card, load_rule_layer())
                 # 长期伤势的规则挂在 `战斗状态.监听` 上，体裁与卡片不同，单独走一条。
                 if not lines:
                     state = card.get("战斗状态")

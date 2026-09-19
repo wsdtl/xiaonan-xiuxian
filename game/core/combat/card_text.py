@@ -17,6 +17,7 @@ import json
 from collections.abc import Mapping, Sequence
 
 from .mechanics import DEFAULT_TARGET_SCOPE
+from .rules import RULE_TEXT_ABILITY, RULE_TEXT_FIELD
 
 #: 事件名 -> 玩家读的时机短语。事件表里的名字是引擎口径，这里是文本口径。
 EVENT_PHRASES = {
@@ -301,8 +302,11 @@ CONDITION_RENDERERS: dict[str, str] = {
 class CardText:
     """一张卡（或一枚战丹、一条伤势）的规则正文渲染器。"""
 
-    def __init__(self, entity: Mapping[str, object]):
+    def __init__(self, entity: Mapping[str, object], rule_layer: Mapping[str, object] | None = None):
         self.entity = entity
+        #: 规则层登记表（`data/战斗/定义/规则层.json`）。规则段必须由它渲染，
+        #: 拿不到就报「缺少登记表」，不悄悄少印一段。
+        self.rule_layer: dict[str, Mapping] = dict(rule_layer or {})
         self.unknown: list[str] = []
         self.counters: dict[str, Mapping] = {}
         self.statuses: dict[str, Mapping] = {}
@@ -382,15 +386,22 @@ class CardText:
         actives = [item for item in abilities if item.get("能力") == "主动技能"]
         passives = [item for item in abilities if item.get("能力") == "被动技能"]
         statics = [item for item in abilities if item.get("能力") == "固定属性加成"]
+        rulings_nodes = [item for item in abilities if item.get("能力") == RULE_TEXT_ABILITY]
         others = [
             item
             for item in abilities
-            if item.get("能力") not in ("主动技能", "被动技能", "固定属性加成")
+            if item.get("能力")
+            not in ("主动技能", "被动技能", "固定属性加成", RULE_TEXT_ABILITY)
         ]
         for item in others:
             self._flag("构筑根能力", str(item.get("能力")))
 
         lines: list[str] = []
+        # 规则段（效果外文本）排在最前：它不是效果，是这场战斗里「引擎怎么看这张卡」。
+        rules = self._rules(rulings_nodes)
+        if rules:
+            lines.append("规则：")
+            lines.extend(rules)
         if actives:
             lines.append("主动：")
             for index, skill in enumerate(actives, 1):
@@ -418,6 +429,67 @@ class CardText:
             lines.extend(rulings)
         return tuple(lines)
 
+    def _rules(self, nodes: Sequence[Mapping]) -> list[str]:
+        """规则段：**规则文本由登记表渲染，卡面一个字都不手写**。
+
+        这样卡面上的「不可被指定（来源：敌方）」与引擎里真正读的那条规则是同一处声明——
+        手写规则文本迟早会与行为漂开，而这正是负责人最不能接受的那种漂。
+        """
+
+        lines: list[str] = []
+        seen: set[str] = set()
+        for node in nodes:
+            entries = node.get(RULE_TEXT_FIELD)
+            if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
+                continue
+            if not self.rule_layer:
+                lines.append("•" + self._flag("规则文本", "缺少登记表"))
+                return lines
+            for raw in entries:
+                if not isinstance(raw, Mapping):
+                    continue
+                name = str(raw.get("名称") or "").strip()
+                if not name or name in seen:
+                    continue
+                seen.add(name)
+                params = {
+                    str(key): value
+                    for key, value in raw.items()
+                    if key != "名称"
+                }
+                lines.append("•" + self._rule_text(name, params))
+        return lines
+
+    def _line_rules(self, node: Mapping) -> list[str]:
+        """行级规则（登记表里 `归属: 行` 的那些）：字段为真就印出登记表的卡面文案。
+
+        行级规则与单位级规则走同一张登记表，所以「哪一行有什么锁」也是数据说了算，
+        渲染器不认识任何具体规则名。
+        """
+
+        sentences: list[str] = []
+        for name, definition in self.rule_layer.items():
+            if str(dict(definition).get("归属") or "") != "行":
+                continue
+            if not node.get(str(name)):
+                continue
+            sentences.append(self._rule_text(str(name), {}))
+        return sentences
+
+    def _rule_text(self, name: str, params: Mapping[str, Any]) -> str:
+        """按登记表的卡面模板拼规则句；参数缺省时回落到登记的默认值。"""
+
+        from .rules import rule_card_text
+
+        definition = dict(self.rule_layer.get(name) or {})
+        declared = dict(definition.get("字段") or {})
+        filled = {
+            str(field): params.get(field, spec.get("默认"))
+            for field, spec in declared.items()
+        }
+        filled = {key: value for key, value in filled.items() if value is not None}
+        return rule_card_text(name, filled, self.rule_layer) + "。"
+
     def _affinity(self, nodes: Sequence[Mapping]) -> list[str]:
         """气机：契合一条，只写固定属性加成，不谈过程。"""
 
@@ -444,6 +516,7 @@ class CardText:
         title = [f"耗神{_number(skill['精神消耗'])}"] if "精神消耗" in skill else []
         if "冷却行动" in skill:
             title.append(f"冷却{_number(skill['冷却行动'])}行动")
+        title.extend(text.rstrip("。") for text in self._line_rules(skill))
         lines = [f"{_ordinal(index)}[{name}]：" + ("，".join(title) + "。" if title else "")]
         condition = []
         attempt = skill.get("使用次数")
@@ -508,6 +581,7 @@ class CardText:
 
         lines = [self._trigger(node) + "，依次执行："]
         caps = self._listener_caps(node)
+        caps.extend(text.rstrip("。") for text in self._line_rules(node))
         if caps:
             lines.append("；".join(caps) + "。")
         lines.extend(self._sequence(node.get("效果")))
@@ -1923,10 +1997,17 @@ class CardText:
         return ""
 
 
-def render_body(entity: Mapping[str, object]) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """渲染一份实体的规则正文，返回 (行, 未支持项)。"""
+def render_body(
+    entity: Mapping[str, object],
+    rule_layer: Mapping[str, object] | None = None,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """渲染一份实体的规则正文，返回 (行, 未支持项)。
 
-    renderer = CardText(entity)
+    带 `规则文本` 的实体必须把规则层登记表传进来（引擎的 `catalog.rule_layer`）：
+    规则段的文字由登记表渲染，缺了它只会渲染成「缺少登记表」，不会静默少印一段。
+    """
+
+    renderer = CardText(entity, rule_layer)
     return renderer.body(), tuple(renderer.unknown)
 
 

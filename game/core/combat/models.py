@@ -34,6 +34,8 @@ class CombatCatalog:
     environment_rules: Mapping[str, Any]
     five_elements: Mapping[str, Any]
     formation_rules: FormationNodeRules
+    #: 规则层登记表（`data/战斗/定义/规则层.json`）：单位级规则在装配期按它解析。
+    rule_layer: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
     #: 构筑模板库。放在最后并给默认值，让既有构造点不必都改。
     #: 模板引用在**装载期**已展开（见 `service.expand_build_section`），所以引擎
     #: 解析时不需要再用它；保留字段是为了让基线与诊断能看到当前模板库。
@@ -63,6 +65,7 @@ class CombatCatalog:
             environment_rules=dict(source.get("环境规则") or {}),
             five_elements=dict(source.get("五行") or {}),
             formation_rules=source["阵法规则"],
+            rule_layer=dict(source.get("规则层") or {}),
             templates=dict(templates or {}),
         )
 
@@ -183,6 +186,7 @@ class Skill:
     tags: tuple[str, ...] = ()
     costs: tuple[Mapping[str, Any], ...] = ()
     disabled: bool = False
+    rule_locked: bool = False
     uses: int = 0
     use_limit: int = 0
     cooldown_group: str = ""
@@ -213,6 +217,8 @@ class Fighter:
     statuses: list[StatusState] = dataclass_field(default_factory=list)
     skills: list[Skill] = dataclass_field(default_factory=list)
     passives: list[dict[str, Any]] = dataclass_field(default_factory=list)
+    #: 规则层的单位级规则：`规则名 -> 参数`（见 `data/战斗/定义/规则层.json`）。
+    rules: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     cooldowns: dict[str, int] = dataclass_field(default_factory=dict)
     inventory: dict[str, int] = dataclass_field(default_factory=dict)
     inventory_owner_id: str = ""
@@ -249,6 +255,20 @@ class Fighter:
         for status in self.statuses:
             result += float(status.modifiers.get(key, 0.0)) * max(1, status.stacks)
         return result
+
+    def rule(self, name: str) -> dict[str, Any] | None:
+        """读一条单位级规则；没有声明就返回 `None`（规则层不为任何人兜底）。"""
+
+        return self.rules.get(str(name))
+
+    def rule_source_matches(self, name: str, relation: str) -> bool:
+        """这条规则的 `来源` 是否覆盖某种关系（`自身` / `己方` / `敌方`）。"""
+
+        params = self.rule(name)
+        if params is None:
+            return False
+        declared = str(params.get("来源") or "任意")
+        return declared == "任意" or declared == relation
 
     @property
     def alive(self) -> bool:

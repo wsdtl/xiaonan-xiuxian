@@ -110,6 +110,7 @@ class BattleEngine(AbilityRuntime):
         self._skill_selector_handlers = {"选择技能": self._skills_select}
         self._assembly_handlers = {
             "装配属性": self._assemble_attributes,
+            "装配规则": self._assemble_rules,
             "装配主动技能": self._assemble_active_skill,
             "装配被动技能": self._assemble_passive_skill,
         }
@@ -515,6 +516,12 @@ class BattleEngine(AbilityRuntime):
             },
         )
         actual_target = context.fighter_by_id(intent.target_id) or target
+        # 规则层：对「不可被指定」的对象，普通攻击的目标决策也要挡住——效果层已经拦过
+        # 一次（`_target_select`），但普攻的伤害不走效果选目标那条路。挡住的方式是
+        # 把这次行动取消（走既有的「行动跳过后」分支），不是让伤害落空：
+        # 前者在战报里读作「他没能出手」，后者读作「打中但没伤害」，那是两回事。
+        if actual_target is not None and self._rule_blocks_targeting(context, actual_target, actor):
+            intent.cancelled = True
         if intent.cancelled or self._action_restricted(actor, "行动"):
             context.event(
                 "行动跳过后",
@@ -914,7 +921,7 @@ class BattleEngine(AbilityRuntime):
     def _build_fighter(self, snapshot: RuntimeCombatantSnapshot) -> Fighter:
         attributes = self._normalize_attributes(snapshot.attributes)
         attributes["攻击"] = attributes.get("攻击", 0) + float(snapshot.weapon_attack)
-        skills, passives = self._technique_rules(list(snapshot.techniques), attributes)
+        skills, passives, rules = self._technique_rules(list(snapshot.techniques), attributes)
         attributes = self._normalize_attributes(attributes)
         health_max = max(1.0, attributes.get("血气上限", 1))
         spirit_max = max(0.0, attributes.get("精神上限", 0))
@@ -938,6 +945,7 @@ class BattleEngine(AbilityRuntime):
             statuses=[StatusState.from_dict(value) for value in snapshot.statuses],
             skills=list(skills),
             passives=list(passives),
+            rules=dict(rules),
             cooldowns={str(k): max(0, int(v)) for k, v in snapshot.cooldowns.items()},
             inventory={str(k): max(0, int(v)) for k, v in snapshot.inventory.items()},
             inventory_owner_id=str(snapshot.inventory_owner_id),
@@ -1119,6 +1127,7 @@ class BattleEngine(AbilityRuntime):
 
     def _technique_rules(self, techniques, attributes):
         skills, passives = [], []
+        rules: dict[str, dict] = {}
         for instance in sorted(
             techniques, key=lambda value: int(value.get("出生序号", 0))
         ):
@@ -1128,7 +1137,7 @@ class BattleEngine(AbilityRuntime):
                 handler = self._assembly_handlers.get(executor)
                 if handler is None:
                     raise ValueError(f"战斗核心未实现装配执行器：{executor}")
-                handler(instance, index, node, attributes, skills, passives)
+                handler(instance, index, node, attributes, skills, passives, rules)
         skills.sort(key=self._skill_order_key)
         passives.sort(
             key=lambda value: (
@@ -1139,20 +1148,38 @@ class BattleEngine(AbilityRuntime):
                 int(value.get("效果序号", 0)),
             )
         )
-        return tuple(skills), tuple(passives)
+        return tuple(skills), tuple(passives), rules
 
     @staticmethod
-    def _assemble_attributes(instance, index, node, attributes, skills, passives):
-        del index, skills, passives
+    def _assemble_attributes(instance, index, node, attributes, skills, passives, rules):
+        del index, skills, passives, rules
         multiplier = float(instance.get("威力倍率", 1))
         for key, value in dict(node.get("属性") or {}).items():
             attributes[str(key)] = (
                 attributes.get(str(key), 0) + float(value) * multiplier
             )
 
+    def _assemble_rules(self, instance, index, node, attributes, skills, passives, rules):
+        """装配卡面的规则文本：`规则[]` 里的每条都要是登记过的单位级规则。
+
+        参数在这里就校验完（`rules.parse_unit_rules` 对着登记表查），所以重复声明、
+        未登记规则、未声明参数都会在**装配期**直接报错，不会带进战斗。
+        """
+
+        del index, attributes, skills, passives
+        from .rules import RULE_TEXT_FIELD, parse_unit_rules
+
+        source_name = str(instance.get("功法") or instance.get("名称") or "能力")
+        parsed = parse_unit_rules(
+            node.get(RULE_TEXT_FIELD),
+            self.catalog.rule_layer,
+            path=f"{source_name}.规则文本.{RULE_TEXT_FIELD}",
+        )
+        rules.update(parsed)
+
     @staticmethod
-    def _assemble_active_skill(instance, index, node, attributes, skills, passives):
-        del attributes, passives
+    def _assemble_active_skill(instance, index, node, attributes, skills, passives, rules):
+        del attributes, passives, rules
         source_name = str(instance.get("功法") or instance.get("名称") or "能力")
         source_id = str(instance.get("编号") or source_name)
         skills.append(
@@ -1174,6 +1201,7 @@ class BattleEngine(AbilityRuntime):
                 use_limit=max(0, int(node.get("使用次数", 0))),
                 cooldown_group=str(node.get("共享冷却") or ""),
                 rollback_on_failure=bool(node.get("失败时回滚", False)),
+                rule_locked=bool(node.get("不可禁用", False)),
                 element_composition=copy.deepcopy(
                     dict(node.get("属性构成") or instance.get("属性构成") or {"无相": 100})
                 ),
@@ -1181,8 +1209,8 @@ class BattleEngine(AbilityRuntime):
         )
 
     @staticmethod
-    def _assemble_passive_skill(instance, index, node, attributes, skills, passives):
-        del attributes, skills
+    def _assemble_passive_skill(instance, index, node, attributes, skills, passives, rules):
+        del attributes, skills, rules
         source_name = str(instance.get("功法") or instance.get("名称") or "能力")
         source_id = str(instance.get("编号") or source_name)
         born_order = int(instance.get("出生序号", 0))

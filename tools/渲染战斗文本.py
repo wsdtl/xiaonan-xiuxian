@@ -30,6 +30,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from game.core.combat.card_text import render_body, render_listeners  # noqa: E402
 from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
+from 规则层 import load_rule_layer  # noqa: E402
 
 DATA = ROOT / "data"
 SURFACES = (
@@ -115,7 +116,7 @@ def main() -> int:
             if wanted and identity not in wanted:
                 continue
             total += 1
-            lines, misses = render_body(card)
+            lines, misses = render_body(card, load_rule_layer())
             # 长期伤势的规则挂在 `战斗状态.监听` 上，体裁与卡片不同，单独走一条。
             if not lines:
                 state = card.get("战斗状态")

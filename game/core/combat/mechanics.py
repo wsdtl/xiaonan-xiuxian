@@ -1264,6 +1264,11 @@ class AbilityRuntime:
         mode = str(effect.get("方式") or "增加")
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
+            # 规则层：`不受行动条提前` 只挡「增加」，延后照旧——名字就是行为。
+            if mode == "增加" and destination.rule_source_matches(
+                "不受行动条提前", self._source_relation(context, source, destination)
+            ):
+                continue
             before = context.action_progress.get(destination.id, 0.0)
             if cost and before < amount:
                 return False
@@ -1488,6 +1493,10 @@ class AbilityRuntime:
                 field = str(effect.get("字段") or "")
                 mode = str(effect.get("方式") or "设置")
                 value = effect.get("值")
+                # 规则层：行级 `不可禁用`。只有「禁用」这一个方向被挡，
+                # 改冷却/名称/倍率照旧——锁的是封禁，不是整行。
+                if field == "禁用" and bool(value) and skill.rule_locked:
+                    continue
                 attr = {"名称": "name", "精神消耗": "spirit_cost", "冷却行动": "cooldown_actions", "释放顺序": "release_order", "威力倍率": "multiplier", "禁用": "disabled", "目标标签": "tags", "效果": "effects"}.get(field)
                 if attr is None:
                     raise ValueError(f"技能字段不能修改：{field}")
@@ -1956,6 +1965,27 @@ class AbilityRuntime:
             return 0.0
         return {"总和": sum(data), "最小": min(data), "最大": max(data), "平均": sum(data) / len(data), "不同值数量": float(len(set(data)))}.get(mode, 0.0)
 
+    def _source_relation(self, context, source, candidate) -> str:
+        """规则里的 `来源` 看的是「谁在动手」，所以只分自身 / 己方 / 敌方。"""
+
+        if source is None or candidate is None:
+            return "任意"
+        if source is candidate:
+            return "自身"
+        return "己方" if source.side == candidate.side else "敌方"
+
+    def _rule_blocks_targeting(self, context, candidate, source) -> bool:
+        """`不可被指定`：按来源关系挡住候选；自身与规则未覆盖的关系照旧可选。"""
+
+        if source is candidate:
+            return False
+        params = candidate.rule("不可被指定")
+        if params is None:
+            return False
+        return candidate.rule_source_matches(
+            "不可被指定", self._source_relation(context, source, candidate)
+        )
+
     def _select_targets(self, context, source, target, value):
         """解析一个「目标/来源目标/归属」字段。
 
@@ -2066,6 +2096,13 @@ class AbilityRuntime:
         status_name = str(selector.get("拥有状态") or "")
         if status_name:
             candidates = [value for value in candidates if any(status.name == status_name for status in value.statuses)]
+        # 规则层：`不可被指定` 把候选按来源关系挡掉。规则是常驻事实，所以这里只判合法性，
+        # 不产生事件、也不进战报的事件明细（它不是「发生了什么」，是「本来就不能选他」）。
+        candidates = [
+            value
+            for value in candidates
+            if not self._rule_blocks_targeting(context, value, source)
+        ]
         order = str(selector.get("排序") or "默认")
         if order == "随机":
             candidates = list(candidates)
