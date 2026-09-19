@@ -254,6 +254,123 @@ def check_contract_placement() -> list[str]:
     return problems
 
 
+#: 读取器与展示层按约定读的通用键，不要求逐处出现字面量。
+COMMON_KEYS = frozenset({
+    "说明", "名称", "编号", "组件", "读取规则", "路径", "结构", "数据集", "实体类别",
+    "编号类别", "池", "字段", "类型", "类别", "必填", "可选", "默认", "选项", "权重",
+    "顺序", "排序", "标签", "备注", "资源池字段", "扫描目录", "分组", "标题", "文本",
+    "条件", "效果", "范围", "对象", "数值", "描述", "启用", "颜色", "图标", "分页",
+    "按钮", "动作", "命令", "参数", "提示", "值", "键", "内容",
+})
+
+
+def _rule_files() -> list[pathlib.Path]:
+    """`data/` 里四类面中「规则」面下的全部 JSON（定义面是按表遍历的词表，不在判定内）。"""
+
+    目标: list[pathlib.Path] = []
+    for path in sorted(DATA.rglob("*.json")):
+        if path.name == "组件.json":
+            continue
+        段 = path.relative_to(DATA).parts
+        if len(段) < 3 or 段[1] != "规则":
+            continue
+        目标.append(path)
+    return 目标
+
+
+def _all_keys(node: object, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
+    """列出文档里所有键的路径（含嵌套），用于逐键判「有没有人读」。"""
+
+    路径: list[tuple[str, ...]] = []
+    if isinstance(node, dict):
+        for 键, 值 in node.items():
+            路径.append(prefix + (str(键),))
+            路径.extend(_all_keys(值, prefix + (str(键),)))
+    elif isinstance(node, list):
+        for 项 in node:
+            路径.extend(_all_keys(项, prefix))
+    return 路径
+
+
+def _dynamic_key_patterns() -> list[re.Pattern[str]]:
+    """把源码里含占位符的 f-string 变成正则：匹配得上的键可能是被拼出来读的。
+
+    `growth/service.py` 就是 `late.get(f"{prefix}系数")` —— 静态看 `中段系数` 不在
+    任何字面量里，实际却真的被读。模板让它留在数据里，宁可漏删不可误删。
+    """
+
+    模板: list[re.Pattern[str]] = []
+    for 根 in ("game", "launch", "message"):
+        目录 = PROJECT_ROOT / 根
+        if not 目录.is_dir():
+            continue
+        for path in sorted(目录.rglob("*.py")):
+            if "__pycache__" in path.parts or ".venv" in path.parts:
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.JoinedStr):
+                    continue
+                文 = ""
+                for 段 in node.values:
+                    if isinstance(段, ast.Constant) and isinstance(段.value, str):
+                        文 += 段.value
+                    else:
+                        文 += "\x00"
+                if "\x00" in 文 and len(文.replace("\x00", "")) >= 1:
+                    模板.append(re.compile("^" + re.escape(文).replace("\x00", ".*") + "$"))
+    return 模板
+
+
+def check_unread_rule_keys(source: str) -> list[str]:
+    """规则文件里不得留下没人读的键（第 83 轮负责人口径：没用的规则删掉）。
+
+    一条规则只有在**有人读**的时候才算规则。没人读的键既不约束代码，也看不出代码到底
+    按什么裁定——它是「声明了却没人执行」的谎，比没有更坏。
+
+    判据是保守的三条：键名作为字符串字面量出现在 `game`/`launch`/`message` 里，或者
+    能被源码里的 f-string 拼出来（`f"{prefix}系数"`），或者是读取器与展示层的通用键。
+    **只判 `规则/` 面**：`定义/` 是按表遍历的词表，`护盾加成` 在代码里 0 次字面量却被
+    16 个数据文件引用，按这条判会误删属性。
+
+    顶层键**全部**没人读的文件会额外点名——那是整份声明没人执行（`灵兽修炼.json`、
+    `境界突破.json`、`同行.json` 都属于这一类）。
+    """
+
+    SKIP = {"__pycache__", ".venv", ".git"}
+    _ = SKIP
+    字面量 = set(re.findall(r'"([^"\n]{1,24})"', source)) | set(
+        re.findall(r"'([^'\n]{1,24})'", source)
+    )
+    for 根 in ("launch", "message"):
+        目录 = PROJECT_ROOT / 根
+        if not 目录.is_dir():
+            continue
+        for path in sorted(目录.rglob("*.py")):
+            文 = path.read_text(encoding="utf-8")
+            字面量 |= set(re.findall(r'"([^"\n]{1,24})"', 文))
+            字面量 |= set(re.findall(r"'([^'\n]{1,24})'", 文))
+    模板 = _dynamic_key_patterns()
+
+    def 有读者(名: str) -> bool:
+        return 名 in 字面量 or 名 in COMMON_KEYS or any(t.match(名) for t in 模板)
+
+    problems: list[str] = []
+    for path in _rule_files():
+        文档 = json.loads(path.read_text(encoding="utf-8"))
+        相对 = path.relative_to(PROJECT_ROOT).as_posix()
+        顶层 = list(文档) if isinstance(文档, dict) else []
+        死键 = [".".join(键) for 键 in _all_keys(文档) if not 有读者(键[-1])]
+        if 顶层 and all(not 有读者(str(名)) for 名 in 顶层):
+            problems.append(f"{相对}：整份没人读（顶层键 {len(顶层)} 个全无消费者），确认作废就删掉")
+            continue
+        if 死键:
+            problems.append(
+                f"{相对}：{len(死键)} 个键没人读（{'、'.join(sorted(set(死键))[:6])}"
+                f"{'…' if len(死键) > 6 else ''}）——接上消费者，或者删掉这条声明"
+            )
+    return problems
+
+
 def check_dataset_consumers(source: str) -> list[str]:
     """找出无消费者的非池数据集。
 
@@ -325,6 +442,7 @@ def main() -> int:
     住处 = check_contract_placement()
     布局 = check_category_layout()
     功能 = check_component_function_docs()
+    死规则 = check_unread_rule_keys(source)
     print()
     if 布局:
         print(f"大类布局问题 {len(布局)} 处：")
@@ -350,6 +468,14 @@ def main() -> int:
         print("契约是裁定参数，该住 定义/ 或 规则/；内容/ 只放实体与资源池。")
         return 1
     print("字段契约都住在 定义/ 或 规则/")
+    if 死规则:
+        print(f"没人读的规则 {len(死规则)} 份：")
+        for item in 死规则:
+            print(f"  {item}")
+        print()
+        print("一条规则只有在有人读的时候才算规则；没人读的声明接上消费者或者删掉。")
+        return 1
+    print("规则文件里的键都有消费者")
     if problems:
         print(f"无消费者数据集 {len(problems)} 项：")
         for item in problems:
