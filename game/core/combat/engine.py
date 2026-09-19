@@ -33,6 +33,25 @@ from .models import (
 )
 
 
+def _line_rules(
+    node: Mapping[str, Any],
+    layer: Mapping[str, Mapping[str, Any]],
+    path: str,
+) -> dict[str, dict]:
+    """装配一行能力自带的规则（行级）；没有就返回空字典。
+
+    行级规则与单位级规则**同一张登记表、同一个字段名、同一个形状**，区别只在载体：
+    单位级跟参战者上战场，行级跟这一行走。
+    """
+
+    from .rules import RULE_FIELD, parse_rule_entries
+
+    entries = node.get(RULE_FIELD)
+    if not entries:
+        return {}
+    return parse_rule_entries(entries, layer, carrier="行", path=path)
+
+
 class BattleEngine(AbilityRuntime):
     """执行自动战斗；所有内容规则均来自传入的 JSON 目录。"""
 
@@ -520,7 +539,13 @@ class BattleEngine(AbilityRuntime):
         # 一次（`_target_select`），但普攻的伤害不走效果选目标那条路。挡住的方式是
         # 把这次行动取消（走既有的「行动跳过后」分支），不是让伤害落空：
         # 前者在战报里读作「他没能出手」，后者读作「打中但没伤害」，那是两回事。
-        if actual_target is not None and self._rule_blocks_targeting(context, actual_target, actor):
+        if actual_target is not None and self._rules_deny(
+            context,
+            actual_target,
+            "被选为目标",
+            owner=actor,
+            tags=(f"来源关系:{self._source_relation(context, actor, actual_target)}",),
+        ):
             intent.cancelled = True
         if intent.cancelled or self._action_restricted(actor, "行动"):
             context.event(
@@ -1162,23 +1187,23 @@ class BattleEngine(AbilityRuntime):
     def _assemble_rules(self, instance, index, node, attributes, skills, passives, rules):
         """装配卡面的规则文本：`规则[]` 里的每条都要是登记过的单位级规则。
 
-        参数在这里就校验完（`rules.parse_unit_rules` 对着登记表查），所以重复声明、
-        未登记规则、未声明参数都会在**装配期**直接报错，不会带进战斗。
+        参数与条件在装配期就校验完（对着登记表展开），所以重复声明、未登记规则、
+        未声明参数、越界取值都会在这里直接报错，不会带进战斗。
         """
 
         del index, attributes, skills, passives
-        from .rules import RULE_TEXT_FIELD, parse_unit_rules
+        from .rules import RULE_FIELD, RULE_TEXT_ABILITY, parse_rule_entries
 
         source_name = str(instance.get("功法") or instance.get("名称") or "能力")
-        parsed = parse_unit_rules(
-            node.get(RULE_TEXT_FIELD),
+        parsed = parse_rule_entries(
+            node.get(RULE_FIELD),
             self.catalog.rule_layer,
-            path=f"{source_name}.规则文本.{RULE_TEXT_FIELD}",
+            carrier="单位",
+            path=f"{source_name}.{RULE_TEXT_ABILITY}.{RULE_FIELD}",
         )
         rules.update(parsed)
 
-    @staticmethod
-    def _assemble_active_skill(instance, index, node, attributes, skills, passives, rules):
+    def _assemble_active_skill(self, instance, index, node, attributes, skills, passives, rules):
         del attributes, passives, rules
         source_name = str(instance.get("功法") or instance.get("名称") or "能力")
         source_id = str(instance.get("编号") or source_name)
@@ -1201,7 +1226,7 @@ class BattleEngine(AbilityRuntime):
                 use_limit=max(0, int(node.get("使用次数", 0))),
                 cooldown_group=str(node.get("共享冷却") or ""),
                 rollback_on_failure=bool(node.get("失败时回滚", False)),
-                rule_locked=bool(node.get("不可禁用", False)),
+                rules=_line_rules(node, self.catalog.rule_layer, f"{source_name}.规则"),
                 element_composition=copy.deepcopy(
                     dict(node.get("属性构成") or instance.get("属性构成") or {"无相": 100})
                 ),

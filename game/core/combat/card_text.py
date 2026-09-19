@@ -17,7 +17,7 @@ import json
 from collections.abc import Mapping, Sequence
 
 from .mechanics import DEFAULT_TARGET_SCOPE
-from .rules import RULE_TEXT_ABILITY, RULE_TEXT_FIELD
+from .rules import RULE_FIELD, RULE_TEXT_ABILITY
 
 #: 事件名 -> 玩家读的时机短语。事件表里的名字是引擎口径，这里是文本口径。
 EVENT_PHRASES = {
@@ -439,11 +439,11 @@ class CardText:
         lines: list[str] = []
         seen: set[str] = set()
         for node in nodes:
-            entries = node.get(RULE_TEXT_FIELD)
+            entries = node.get(RULE_FIELD)
             if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
                 continue
             if not self.rule_layer:
-                lines.append("•" + self._flag("规则文本", "缺少登记表"))
+                lines.append("•" + self._flag(RULE_TEXT_ABILITY, "缺少登记表"))
                 return lines
             for raw in entries:
                 if not isinstance(raw, Mapping):
@@ -461,19 +461,23 @@ class CardText:
         return lines
 
     def _line_rules(self, node: Mapping) -> list[str]:
-        """行级规则（登记表里 `归属: 行` 的那些）：字段为真就印出登记表的卡面文案。
+        """行级规则：这一行自己的 `规则[]` 里每条都印出登记表的卡面文案。
 
-        行级规则与单位级规则走同一张登记表，所以「哪一行有什么锁」也是数据说了算，
-        渲染器不认识任何具体规则名。
+        行级与单位级**同一张登记表、同一个字段名、同一个形状**，所以渲染器照样不认识
+        任何具体规则名——加一条行级规则同样不用改这里。
         """
 
+        if not self.rule_layer and node.get(RULE_FIELD):
+            return [self._flag(RULE_TEXT_ABILITY, "缺少登记表")]
         sentences: list[str] = []
-        for name, definition in self.rule_layer.items():
-            if str(dict(definition).get("归属") or "") != "行":
+        for raw in node.get(RULE_FIELD) or ():
+            if not isinstance(raw, Mapping):
                 continue
-            if not node.get(str(name)):
+            name = str(raw.get("名称") or "").strip()
+            if not name:
                 continue
-            sentences.append(self._rule_text(str(name), {}))
+            params = {str(key): value for key, value in raw.items() if key != "名称"}
+            sentences.append(self._rule_text(name, params))
         return sentences
 
     def _rule_text(self, name: str, params: Mapping[str, Any]) -> str:

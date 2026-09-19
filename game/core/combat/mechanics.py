@@ -1264,9 +1264,18 @@ class AbilityRuntime:
         mode = str(effect.get("方式") or "增加")
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
-            # 规则层：`不受行动条提前` 只挡「增加」，延后照旧——名字就是行为。
-            if mode == "增加" and destination.rule_source_matches(
-                "不受行动条提前", self._source_relation(context, source, destination)
+            # 规则层：`行动条被改写` 拦截点。挡的是这一次改写，不是「这个人不许被推」。
+            if self._rules_deny(
+                context,
+                destination,
+                "行动条被改写",
+                owner=source,
+                tags=(
+                    f"方式:{mode}",
+                    f"来源关系:{self._source_relation(context, source, destination)}",
+                ),
+                values={"数值": amount * 100},
+                amount=amount * 100,
             ):
                 continue
             before = context.action_progress.get(destination.id, 0.0)
@@ -1385,9 +1394,30 @@ class AbilityRuntime:
             changed = True
         return changed
 
+    def _event_rewrite_denied(self, context, frame, kind: str) -> bool:
+        """规则层：`事件被改写` 拦截点——问**这件事的承受者**愿不愿意被改写。
+
+        语义是「关于我的事件不能被取消/转化/改数值」，所以问的是 `frame.target`，
+        请求编码成标签 `改写:取消`、`改写:转化`、`改写:数值`、`改写:目标`、`改写:标签`。
+        """
+
+        if frame is None or frame.target is None:
+            return False
+        return self._rules_deny(
+            context,
+            frame.target,
+            "事件被改写",
+            owner=frame.target,
+            tags=(f"改写:{kind}",),
+            values=dict(frame.facts or {}),
+            amount=float(frame.amount or 0.0),
+        )
+
     def _ability_modify_event_value(self, context, source, target, effect, multiplier, **kwargs):
         frame = self._current_event(context)
         self._require_event_mutation(frame, "当前数值")
+        if self._event_rewrite_denied(context, frame, "数值"):
+            return False
         amount = self._resolve_value(context, effect.get("数值"), source, target, kwargs.get("event_amount", frame.amount), frame.facts) * multiplier
         mode = str(effect.get("方式") or "设置")
         frame.facts["当前数值"] = max(0.0, amount if mode == "设置" else frame.amount + amount if mode == "增加" else frame.amount - amount if mode == "减少" else frame.amount * amount / 100.0)
@@ -1397,6 +1427,8 @@ class AbilityRuntime:
         del multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "目标")
+        if self._event_rewrite_denied(context, frame, "目标"):
+            return False
         values = self._select_targets(context, source, target, effect.get("目标"))
         if not values:
             return False
@@ -1408,6 +1440,8 @@ class AbilityRuntime:
         del source, target, multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "标签")
+        if self._event_rewrite_denied(context, frame, "标签"):
+            return False
         values = {str(value) for value in effect.get("标签") or ()}
         mode = str(effect.get("方式") or "添加")
         frame.tags = values if mode == "设置" else frame.tags - values if mode == "移除" else frame.tags | values
@@ -1418,6 +1452,8 @@ class AbilityRuntime:
         del source, target, effect, multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "取消")
+        if self._event_rewrite_denied(context, frame, "取消"):
+            return False
         frame.cancelled = True
         frame.facts["已取消"] = True
         return True
@@ -1493,9 +1529,15 @@ class AbilityRuntime:
                 field = str(effect.get("字段") or "")
                 mode = str(effect.get("方式") or "设置")
                 value = effect.get("值")
-                # 规则层：行级 `不可禁用`。只有「禁用」这一个方向被挡，
-                # 改冷却/名称/倍率照旧——锁的是封禁，不是整行。
-                if field == "禁用" and bool(value) and skill.rule_locked:
+                # 规则层：`技能被改写` 拦截点。规则写在**这一行技能**自己身上。
+                shown = "真" if value is True else "假" if value is False else str(value)
+                if self._rules_deny(
+                    context,
+                    skill,
+                    "技能被改写",
+                    owner=fighter,
+                    tags=(f"字段:{field}", f"方式:{mode}", f"值:{shown}"),
+                ):
                     continue
                 attr = {"名称": "name", "精神消耗": "spirit_cost", "冷却行动": "cooldown_actions", "释放顺序": "release_order", "威力倍率": "multiplier", "禁用": "disabled", "目标标签": "tags", "效果": "effects"}.get(field)
                 if attr is None:
@@ -1568,6 +1610,8 @@ class AbilityRuntime:
         del multiplier
         frame = self._current_event(context)
         self._require_event_mutation(frame, "类型")
+        if self._event_rewrite_denied(context, frame, "转化"):
+            return False
         destination = str(effect.get("事件") or "")
         self.catalog.require_event(destination)
         resource_gain_events = {"恢复前", "获得护盾前", "资源恢复前"}
@@ -1966,7 +2010,7 @@ class AbilityRuntime:
         return {"总和": sum(data), "最小": min(data), "最大": max(data), "平均": sum(data) / len(data), "不同值数量": float(len(set(data)))}.get(mode, 0.0)
 
     def _source_relation(self, context, source, candidate) -> str:
-        """规则里的 `来源` 看的是「谁在动手」，所以只分自身 / 己方 / 敌方。"""
+        """规则里的 `来源关系` 看的是「谁在动手」，所以只分自身 / 己方 / 敌方。"""
 
         if source is None or candidate is None:
             return "任意"
@@ -1974,17 +2018,51 @@ class AbilityRuntime:
             return "自身"
         return "己方" if source.side == candidate.side else "敌方"
 
-    def _rule_blocks_targeting(self, context, candidate, source) -> bool:
-        """`不可被指定`：按来源关系挡住候选；自身与规则未覆盖的关系照旧可选。"""
+    def _rules_deny(
+        self,
+        context,
+        container,
+        point: str,
+        *,
+        owner=None,
+        tags: tuple = (),
+        values=None,
+        amount: float = 0.0,
+    ) -> bool:
+        """问一个载体的规则：这次改写/选定被拒绝了吗。
 
-        if source is candidate:
+        `container` 是**规则写在谁身上**（参战者，或一条技能行）；`owner` 是条件求值时的
+        「来源」（通常就是持有者）。按优先级升序问；后问的规则只有在先成立的那条允许被它
+        改写（`可改写`）时才能改变结论——所以优先级与可改写都真有语义。
+        """
+
+        rules = [
+            rule
+            for rule in (getattr(container, "rules", None) or {}).values()
+            if str(rule.get("拦截点") or "") == point
+        ]
+        if not rules:
             return False
-        params = candidate.rule("不可被指定")
-        if params is None:
-            return False
-        return candidate.rule_source_matches(
-            "不可被指定", self._source_relation(context, source, candidate)
-        )
+        subject = owner if owner is not None else container
+        rules.sort(key=lambda rule: int(rule.get("优先级") or 0))
+        verdict = None
+        decision = None
+        for rule in rules:
+            if verdict is not None and str(rule.get("名称")) not in tuple(verdict.get("可改写") or ()):
+                continue
+            if not self._conditions_allow(
+                context,
+                subject,
+                subject,
+                rule.get("条件") or (),
+                amount,
+                dict(values or {}),
+                tuple(tags),
+            ):
+                continue
+            verdict = rule
+            decision = str(rule.get("处置") or "")
+        return decision == "拒绝"
 
     def _select_targets(self, context, source, target, value):
         """解析一个「目标/来源目标/归属」字段。
@@ -2096,12 +2174,18 @@ class AbilityRuntime:
         status_name = str(selector.get("拥有状态") or "")
         if status_name:
             candidates = [value for value in candidates if any(status.name == status_name for status in value.statuses)]
-        # 规则层：`不可被指定` 把候选按来源关系挡掉。规则是常驻事实，所以这里只判合法性，
+        # 规则层：`被选为目标` 拦截点。规则是常驻事实，所以这里只判合法性，
         # 不产生事件、也不进战报的事件明细（它不是「发生了什么」，是「本来就不能选他」）。
         candidates = [
             value
             for value in candidates
-            if not self._rule_blocks_targeting(context, value, source)
+            if not self._rules_deny(
+                context,
+                value,
+                "被选为目标",
+                owner=source,
+                tags=(f"来源关系:{self._source_relation(context, source, value)}",),
+            )
         ]
         order = str(selector.get("排序") or "默认")
         if order == "随机":

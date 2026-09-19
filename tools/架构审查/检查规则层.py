@@ -1,16 +1,19 @@
-"""规则层审查：效果之外的规则必须「登记过、有实现、渲染得出来、内容只用登记过的」。
+"""规则层审查：效果之外的规则必须「登记得下、条件站得住、渲染得出来、内容只用登记过的」。
 
 规则层是 `data/战斗/定义/规则层.json`，代码侧是 `game/core/combat/rules.py` 的
-`RULE_CONSUMERS`（消费者 -> 归属）。这条判据做**双向核对**，与 `检查原子能力.py` 同一个路子：
+**拦截点表** `INTERCEPTION_POINTS`。这一层的设计目标是**加一条规则和加一张功法一样简单**：
+一条规则 = 一个拦截点 + 一组条件 + 一个处置，条件用已登记的条件原子写，参数用 `$字段`
+占位。于是判据也必须是通用的——**不为任何具体规则写一条判据**，只核五件事：
 
-1. **登记 -> 实现**：每条规则的消费者必须在 `RULE_CONSUMERS` 里，且归属与消费者一致；
-2. **实现 -> 登记**：`RULE_CONSUMERS` 里每个消费者都得有规则用（没人用的消费者是死代码）；
-3. **行级规则接上词汇表**：`归属: 行` 的规则名必须真的是某个原子能力声明的字段
-   （启动期也拦，这里给它一个不依赖服务的入口）；
-4. **渲染路径**：每条规则都有卡面文案，且 `card_text` 真的能按登记表把它渲染出来
-   （拿一张探针卡跑一遍真渲染器，不是查表）；
-5. **内容只用登记过的**：六面卡片里出现的 `规则文本.规则[].名称` 必须是登记过的单位级规则，
-   行的规则字段必须对应登记过的行级规则——两个方向都查。
+1. **登记表自洽**：直接跑启动期那份校验（归属 / 拦截点 / 处置 / 优先级 / 可改写 / 卡面 /
+   条件真的按原子能力契约校验 / 参数不许有死项 / **条件不许为空** / 行级载体必须真有
+   技能行读它），两处同一个函数，不留缝。
+2. **拦截点在实现表里，且方向一致**：`INTERCEPTION_POINTS` 里每个拦截点都要有规则用它
+   （没人用的拦截点是死代码），每条规则的载体必须是该拦截点认的载体。
+3. **能被标准探针覆盖**：规则条件匹配的标签必须落在该拦截点的「探针标签」里，
+   否则「加规则自动获得行为验证」不成立——这时要么改条件，要么扩探针场景（那是代码）。
+4. **渲染路径**：每条规则都渲染得出来（拿探针卡跑一遍真渲染器）。
+5. **内容只用登记过的**：六面卡片与战场环境里出现的规则名必须是登记过的，且载体写对。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查规则层.py
 
@@ -54,71 +57,91 @@ def _cards():
 
 
 def check_registry(layer: dict[str, dict]) -> list[str]:
-    """登记表自洽：直接跑启动期那一份校验（归属/消费者/优先级/可改写/卡面/字段类型）。
+    """登记表自洽：跑启动期那份校验（含条件的原子能力契约校验）。"""
 
-    启动期拦的是「游戏起不来」，这里拦的是「判据跑不动」——两处用同一个函数，
-    所以不会出现「启动拦得住、判据看不见」的缝。
-    """
-
+    from game.core.combat.foundation import rule_validator
     from game.core.combat.rules import validate_rule_layer
 
+    validator = rule_validator(
+        {
+            "原子能力": _abilities(),
+            "属性": json.loads((ROOT / "data" / "战斗" / "定义" / "属性.json").read_text(encoding="utf-8")),
+            "资源": json.loads((ROOT / "data" / "战斗" / "定义" / "资源.json").read_text(encoding="utf-8")),
+            "事件": json.loads((ROOT / "data" / "战斗" / "定义" / "事件.json").read_text(encoding="utf-8")),
+        }
+    )
     try:
-        validate_rule_layer(layer, _abilities())
+        validate_rule_layer(layer, _abilities(), validator)
     except (TypeError, ValueError) as exc:
         return [str(exc)]
     return []
 
 
-def check_consumers(layer: dict[str, dict]) -> list[str]:
-    """登记 <-> 实现 的双向核对。"""
+def check_interception_points(layer: dict[str, dict]) -> list[str]:
+    """拦截点与实现表双向核对：没人用的拦截点是死代码。"""
 
-    from game.core.combat.rules import RULE_CONSUMERS
+    from game.core.combat.rules import INTERCEPTION_POINTS
 
     problems: list[str] = []
+    used = {str(definition.get("拦截点") or "") for definition in layer.values()}
+    for name in sorted(set(INTERCEPTION_POINTS) - used):
+        problems.append(f"拦截点没有任何规则用它：{name}（要么登记一条规则，要么删掉实现）")
     for name, definition in sorted(layer.items()):
-        consumer = str(definition.get("消费者") or "")
-        owner = str(definition.get("归属") or "")
-        if consumer not in RULE_CONSUMERS:
-            problems.append(f"{name} 的消费者没有实现：{consumer or '<空>'}")
-        elif RULE_CONSUMERS[consumer] != owner:
-            problems.append(
-                f"{name} 的归属与消费者不一致：{consumer} 属于 {RULE_CONSUMERS[consumer]}，登记写 {owner}"
-            )
-    used = {str(definition.get("消费者") or "") for definition in layer.values()}
-    for consumer in sorted(set(RULE_CONSUMERS) - used):
-        problems.append(f"消费者没有任何规则用它：{consumer}（要么登记一条规则，要么删掉实现）")
+        point = INTERCEPTION_POINTS.get(str(definition.get("拦截点") or ""))
+        if point is None:
+            continue  # 登记表自洽那一项已经报过
+        if str(definition.get("归属") or "") not in point.carriers:
+            problems.append(f"{name} 的载体与拦截点不符：{definition.get('拦截点')}")
     return problems
 
 
-def check_line_rules_in_vocabulary(layer: dict[str, dict]) -> list[str]:
-    """行级规则的字段必须在原子能力里声明过。"""
+def check_probe_coverage(layer: dict[str, dict]) -> list[str]:
+    """标准探针必须覆盖每条规则的条件标签，否则「加规则自动获得行为验证」不成立。
 
-    abilities = _abilities()
-    declared = {
-        field
-        for definition in abilities.values()
-        for field in dict(definition.get("字段") or {})
-    }
-    return [
-        f"行级规则 {name} 没有对应的原子能力字段（先在 原子能力.json 里声明字段）"
-        for name, definition in sorted(layer.items())
-        if str(definition.get("归属") or "") == "行" and name not in declared
-    ]
+    两种载体一视同仁：行级规则也要能落进行为判据的场景里（`不可禁用` 的条件就是
+    `字段:禁用` + `值:真`），否则一条行级规则可以带着没人验的条件进库。
+    """
+
+    from game.core.combat.rules import INTERCEPTION_POINTS, expand_rule, probe_tags
+
+    problems: list[str] = []
+    for name, definition in sorted(layer.items()):
+        point = INTERCEPTION_POINTS.get(str(definition.get("拦截点") or ""))
+        if point is None:
+            continue  # 登记表自洽那一项已经报过
+        defaults = {
+            str(field): spec.get("默认")
+            for field, spec in dict(definition.get("字段") or {}).items()
+        }
+        # 挑一个能让条件全部成立的取值：选项里第一个非空值
+        for field, spec in dict(definition.get("字段") or {}).items():
+            options = [str(item) for item in spec.get("选项") or []]
+            if options:
+                defaults[field] = options[0]
+        rule = expand_rule(name, defaults, layer)
+        missing = probe_tags(rule) - set(point.probe_tags)
+        if missing:
+            problems.append(
+                f"{name} 的条件标签超出标准探针场景：{'、'.join(sorted(missing))}"
+                f"（拦截点 {definition.get('拦截点')} 的探针标签：{'、'.join(point.probe_tags)}）"
+            )
+    return problems
 
 
 def check_render_path(layer: dict[str, dict]) -> list[str]:
-    """每条规则都要能真的渲染出来：拿探针卡跑一遍真渲染器。"""
+    """每条规则都渲染得出来：拿一张探针卡跑真渲染器。"""
 
     from game.core.combat.card_text import render_body
-    from game.core.combat.rules import RULE_TEXT_ABILITY, RULE_TEXT_FIELD, rule_card_text
-
-    from 规则层 import load_rule_layer  # noqa: F401  （确保工具侧读得到同一份文件）
+    from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY, rule_card_text
 
     unit = [name for name, definition in layer.items() if str(definition.get("归属")) == "单位"]
     line = [name for name, definition in layer.items() if str(definition.get("归属")) == "行"]
     probe = {
         "能力": [
-            {"能力": RULE_TEXT_ABILITY, RULE_TEXT_FIELD: [{"名称": name} for name in unit]},
+            {
+                "能力": RULE_TEXT_ABILITY,
+                RULE_FIELD: [{"名称": name} for name in unit],
+            }
         ]
         + [
             {
@@ -133,7 +156,7 @@ def check_render_path(layer: dict[str, dict]) -> list[str]:
                         "数值": 1,
                     }
                 ],
-                name: True,
+                RULE_FIELD: [{"名称": name}],
             }
             for index, name in enumerate(line)
         ],
@@ -149,7 +172,7 @@ def check_render_path(layer: dict[str, dict]) -> list[str]:
         defaults = {
             str(field): spec.get("默认")
             for field, spec in dict(definition.get("字段") or {}).items()
-            if spec.get("默认") is not None
+            if spec.get("默认") not in (None, "")
         }
         expected = rule_card_text(name, defaults, layer)
         if expected not in text:
@@ -158,42 +181,39 @@ def check_render_path(layer: dict[str, dict]) -> list[str]:
 
 
 def check_content_uses(layer: dict[str, dict]) -> list[str]:
-    """两个方向：内容用的规则要登记过；登记的行级规则字段不许被用在别处。"""
+    """两个方向：内容用的规则要登记过、载体要写对。"""
 
-    from game.core.combat.rules import RULE_TEXT_ABILITY, RULE_TEXT_FIELD
+    from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY
 
     unit = {name for name, definition in layer.items() if str(definition.get("归属")) == "单位"}
     line = {name for name, definition in layer.items() if str(definition.get("归属")) == "行"}
-    allowed = {
-        str(field)
-        for definition in _abilities().values()
-        for field in dict(definition.get("字段") or {})
-    }
     problems: list[str] = []
     counts = {"单位": 0, "行": 0}
+
+    def read(where: str, entries, expected: str, source: str) -> None:
+        for item in entries or ():
+            name = str(dict(item).get("名称") or "")
+            allowed = unit if expected == "单位" else line
+            counts[expected] += 1
+            if name not in allowed:
+                problems.append(f"{source} 的 {where} 用了未登记的{expected}级规则：{name or '<空>'}")
+
     for filename, entry in _cards():
         for node in entry.get("能力") or ():
             if not isinstance(node, dict):
                 continue
             if node.get("能力") == RULE_TEXT_ABILITY:
-                for item in node.get(RULE_TEXT_FIELD) or ():
-                    name = str(dict(item).get("名称") or "")
-                    counts["单位"] += 1
-                    if name not in unit:
-                        problems.append(f"{filename} 用了未登记的单位级规则：{name or '<空>'}")
-            for name, value in node.items():
-                if name in line and value:
-                    counts["行"] += 1
-    for name in sorted(line - allowed):
-        problems.append(f"行级规则 {name} 没有对应的原子能力字段，内容写了也会被启动拦下")
+                read("规则文本", node.get(RULE_FIELD), "单位", filename)
+            elif node.get(RULE_FIELD):
+                read(str(node.get("能力")), node.get(RULE_FIELD), "行", filename)
     print(f"  内容用到单位级规则 {counts['单位']} 次 · 行级规则 {counts['行']} 次")
     return problems
 
 
 CHECKS = (
     ("登记表自洽", check_registry),
-    ("登记与实现", check_consumers),
-    ("行级规则进词汇表", check_line_rules_in_vocabulary),
+    ("拦截点与实现", check_interception_points),
+    ("标准探针覆盖", check_probe_coverage),
     ("渲染路径", check_render_path),
     ("内容只用登记过的", check_content_uses),
 )
@@ -201,8 +221,8 @@ CHECKS = (
 
 def main() -> int:
     layer = json.loads(REGISTRY.read_text(encoding="utf-8"))
-    problems: list[str] = []
     print(f"规则层：登记 {len(layer)} 条")
+    problems: list[str] = []
     for name, check in CHECKS:
         try:
             found = check(layer)

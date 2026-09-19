@@ -186,7 +186,8 @@ class Skill:
     tags: tuple[str, ...] = ()
     costs: tuple[Mapping[str, Any], ...] = ()
     disabled: bool = False
-    rule_locked: bool = False
+    #: 这一行自己的规则（行级）：`规则名 -> 展开后的规则`，见 `data/战斗/定义/规则层.json`。
+    rules: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     uses: int = 0
     use_limit: int = 0
     cooldown_group: str = ""
@@ -255,20 +256,6 @@ class Fighter:
         for status in self.statuses:
             result += float(status.modifiers.get(key, 0.0)) * max(1, status.stacks)
         return result
-
-    def rule(self, name: str) -> dict[str, Any] | None:
-        """读一条单位级规则；没有声明就返回 `None`（规则层不为任何人兜底）。"""
-
-        return self.rules.get(str(name))
-
-    def rule_source_matches(self, name: str, relation: str) -> bool:
-        """这条规则的 `来源` 是否覆盖某种关系（`自身` / `己方` / `敌方`）。"""
-
-        params = self.rule(name)
-        if params is None:
-            return False
-        declared = str(params.get("来源") or "任意")
-        return declared == "任意" or declared == relation
 
     @property
     def alive(self) -> bool:
