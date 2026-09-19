@@ -43,8 +43,6 @@ _TONES = {
 }
 TONES = MappingProxyType(_TONES)
 
-TITLE_SIZE_COMMAND = "large"
-BODY_SIZE_COMMAND = "normalsize"
 CAPTION_SIZE_COMMAND = "small"
 PROGRESS_EMPTY_COLOR = "#B0B0B0"
 PROGRESS_FILLED_COLOR = "#3B5B7A"
@@ -77,14 +75,12 @@ def normalize_line_size(value: object) -> LineSize:
 
 
 __all__ = [
-    "BODY_SIZE_COMMAND",
     "CAPTION_SIZE_COMMAND",
     "PROGRESS_EMPTY_COLOR",
     "PROGRESS_EMPTY_GLYPH",
     "PROGRESS_FILLED_COLOR",
     "PROGRESS_FILLED_GLYPH",
     "PROGRESS_SEGMENTS",
-    "TITLE_SIZE_COMMAND",
     "TONES",
     "LineSize",
     "ToneStyle",

@@ -11,7 +11,6 @@ from .base_handler import BaseAdapter as BaseAdapter
 from .base_handler import BaseMessageHandler as BaseMessageHandler
 from .command_guard import CommandGuardContext as CommandGuardContext
 from .command_guard import CommandGuardDecision as CommandGuardDecision
-from .command_guard import clear_command_guards as clear_command_guards
 from .command_guard import register_command_guard as register_command_guard
 from .command_guard import registered_command_guards as registered_command_guards
 from .command_guard import run_command_guards as run_command_guards
@@ -26,7 +25,6 @@ from .context import SendRequest as SendRequest
 from .context import current_message_context as current_message_context
 from .context import current_reply_target as current_reply_target
 from .depends import Depends as Depends
-from .depends import current_context_value as current_context_value
 from .registry import AdapterHttpMount as AdapterHttpMount
 from .registry import AdapterReplyManager as AdapterReplyManager
 from .registry import AdapterSpec as AdapterSpec

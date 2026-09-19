@@ -123,12 +123,6 @@ def unregister_command_guard(name: str) -> None:
     _guards.pop(str(name or "").strip(), None)
 
 
-def clear_command_guards() -> None:
-    """清空所有命令守卫，主要用于测试隔离。"""
-
-    _guards.clear()
-
-
 def registered_command_guards() -> tuple[CommandGuardEntry, ...]:
     """返回当前已注册守卫，按执行顺序排序。"""
 

@@ -34,16 +34,6 @@ driver_runtime = QqDriverRuntime()
 _running_transports = 0
 
 
-def describe_registry() -> dict[str, int]:
-    """返回命令索引规模，便于诊断与工具读取。"""
-
-    return {
-        "fullmatch": registry.fullmatch_count,
-        "command": registry.command_count,
-        "regex": registry.regex_rule_count,
-    }
-
-
 def registry_log_parts() -> list[str]:
     """生成命令索引规模的启动日志片段，两个传输共用。"""
 
@@ -301,7 +291,6 @@ def payload_log_parts(payload: dict) -> list[str]:
 
 __all__ = [
     "bot_name",
-    "describe_registry",
     "driver_runtime",
     "event_log_parts",
     "event_type_label",

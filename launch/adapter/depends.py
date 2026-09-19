@@ -64,13 +64,6 @@ async def call_with_dependencies(func: Callable, context: Mapping[str, Any]) -> 
         _current_message_context.reset(token)
 
 
-def current_context_value(name: str, default: Any = None) -> Any:
-    """读取当前消息上下文中的字段。"""
-
-    context = _current_message_context.get()
-    return default if context is None else context.get(name, default)
-
-
 def _expanded_context(values: Mapping[str, Any]) -> dict[str, Any]:
     """同时提供聚合消息对象和常用公共字段。"""
 

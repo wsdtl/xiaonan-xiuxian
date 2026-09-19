@@ -18,6 +18,7 @@ import ast
 import copy
 import io
 import re
+import subprocess
 import tokenize
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -1176,6 +1177,39 @@ def check_hardcoded_machine_paths() -> list[Finding]:
     return findings
 
 
+def check_tracked_ignored_files() -> list[Finding]:
+    """被 `.gitignore` 忽略的文件不得留在索引里。
+
+    第 87 轮盘出来的：`certs/` 早就写进了 `.gitignore`，但四个文件仍在索引里被跟踪——
+    其中是**域名证书的私钥**。忽略规则与索引各说各话时，谁也不会报错：规则看着守住了，
+    东西照旧进库。这条判据把两者对一遍（`git ls-files -i -c` 就是「已跟踪且被忽略」）。
+    """
+
+    try:
+        done = subprocess.run(
+            ["git", "ls-files", "-i", "-c", "--exclude-standard"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:  # 没有 git 时不判：这是维护审查，不是运行期契约
+        return []
+    if done.returncode != 0:
+        return []
+    return [
+        Finding(
+            "忽略文件入库",
+            Path(line.strip()),
+            0,
+            "`.gitignore` 说它不该入库（`git rm --cached` 保留磁盘文件）",
+        )
+        for line in (done.stdout or "").splitlines()
+        if line.strip()
+    ]
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -1201,6 +1235,7 @@ CHECKS = (
     ("重复定义", check_duplicate_definitions),
     ("写死机器路径", check_hardcoded_machine_paths),
     ("字段校验重写", check_field_validators_are_shared),
+    ("忽略文件入库", check_tracked_ignored_files),
 )
 
 

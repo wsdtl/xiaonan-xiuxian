@@ -1,7 +1,15 @@
+# 运行时依赖。逐条都对应代码里的直接 import：
+#   fastapi / starlette / pydantic —— Web 层（starlette 与 pydantic 虽然由 fastapi 带进来，
+#   但 launch/ 与后台路由直接 import 它们，所以显式声明，不让版本跟着别人漂）
+#   uvicorn —— main.py 的服务入口；APScheduler —— launch/schedulers.py 的定时任务
+#   loguru —— launch/log.py；cryptography —— QQ 回调验签；urllib3 —— QQ 开放平台客户端
+#   tzdata —— Windows 上没有系统时区库，zoneinfo 要靠它（代码里不 import，但缺了会起不来）
 APScheduler==3.11.0
 cryptography==44.0.1
 fastapi==0.115.8
 loguru==0.7.3
+pydantic==2.13.4
+starlette==0.45.3
 tzdata==2025.1
 urllib3==2.3.0
 uvicorn==0.34.0

@@ -38,7 +38,6 @@ OPCODE_PING = 0x9
 OPCODE_PONG = 0xA
 
 CONTROL_OPCODES = frozenset({OPCODE_CLOSE, OPCODE_PING, OPCODE_PONG})
-DATA_OPCODES = frozenset({OPCODE_CONTINUATION, OPCODE_TEXT, OPCODE_BINARY})
 
 MAX_PAYLOAD_BYTES = 8 * 1024 * 1024
 
@@ -406,7 +405,6 @@ def _parse_headers(header_block: str) -> dict[str, str]:
 
 __all__ = [
     "CONTROL_OPCODES",
-    "DATA_OPCODES",
     "MAX_PAYLOAD_BYTES",
     "OPCODE_BINARY",
     "OPCODE_CLOSE",

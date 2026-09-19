@@ -57,7 +57,7 @@ FATAL_CLOSE_CODES = frozenset({4914, 4915})
 
 # 本地链路断开、但会话未必失效的关闭码：正常关闭与"没有收到关闭帧就断链"。
 # 这两种按 Resume 处理，让服务端补发这段空档里遗漏的事件。
-RECONNECT_CLOSE_CODES = frozenset({1000, 1006})
+RECONNECT_CLOSE_CODES = frozenset({CLOSE_NORMAL, 1006})
 
 
 class QqGatewayPayloadError(RuntimeError):

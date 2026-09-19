@@ -1,26 +1,18 @@
 """项目资源路径工具。
 
 这里放的是项目级资源路径底座，不属于任何业务组件。
-业务组件需要读写 static、生成 /static 链接、定位项目内固定文件时，
-都从这里取同一套口径。
+业务组件需要读写 static、生成 /static 链接时，都从这里取同一套口径。
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import unquote
 
 from .config import DEFAULT_PUBLIC_HOST, config
 
 PROJECT_DIR: Path = config.base_dir
 STATIC_DIR: Path = PROJECT_DIR / "static"
 STATIC_URL_PREFIX = "/static"
-
-
-def project_path(*parts: object) -> Path:
-    """返回项目根目录下的文件路径。"""
-
-    return PROJECT_DIR.joinpath(*_path_parts(parts))
 
 
 def static_path(*parts: object) -> Path:
@@ -53,23 +45,6 @@ def public_url(*parts: object) -> str:
         domain = f"https://{domain}"
     suffix = "/".join(_url_parts(parts))
     return f"{domain}/{suffix}" if suffix else domain
-
-
-def static_file_from_url(public_path: str) -> Path:
-    """把 `/static/...` 形式的公开路径还原成本地文件路径。
-
-    这里只处理项目自己发出的 static 公开路径，不做公网域名解析。
-    """
-
-    text = str(public_path or "").split("?", 1)[0].split("#", 1)[0].strip()
-    prefix = f"{STATIC_URL_PREFIX}/"
-    if text == STATIC_URL_PREFIX:
-        return STATIC_DIR
-    if text.startswith(prefix):
-        text = text[len(prefix):]
-    else:
-        text = text.lstrip("/\\")
-    return static_path(*unquote(text).split("/"))
 
 
 def _path_parts(parts: tuple[object, ...]) -> list[str]:
