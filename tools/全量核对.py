@@ -44,6 +44,8 @@ REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("描述一致", ("tools/架构审查/检查描述一致.py",)),
     # 方法与实体合在一处：丹药自带处方（炼制难度 / 炉法），不再有第二份丹方实体。
     ("炼丹形状", ("tools/架构审查/检查炼丹形状.py",)),
+    # 战报展示层要跟战报本身自洽：阵营分组、对阵标题、简要行、内部明细（第 86 轮）。
+    ("战报展示", ("tools/架构审查/检查战报展示.py",)),
     ("启动顺序", ("tools/验证启动顺序.py",)),
     ("语法（game/tools/launch/message/tests）", ("-m", "compileall", "-q", "game", "tools", "launch", "message", "tests")),
     ("单元测试", ("-m", "pytest", "-q",)),

@@ -712,6 +712,69 @@ body[data-mode="detail"] .mode-switch::before {
   min-width: 0;
 }
 
+.participant-roster {
+  padding: 10px 12px 14px;
+}
+
+.roster-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.roster-item {
+  padding-bottom: 9px;
+  border-bottom: 1px dashed #cdd8d2;
+}
+
+.roster-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.roster-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.roster-index {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--actor-color, var(--jade));
+  color: var(--actor-ink, #fff);
+  font-size: .68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--jade-deep);
+  font-size: .82rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-gauges .bar-row {
+  margin-top: 4px;
+  font-size: .68rem;
+}
+
+.participant-disclosure[data-expanded="true"] > .participant-roster {
+  display: none;
+}
+
 .participant-disclosure-title {
   display: flex;
   align-items: center;
@@ -1334,9 +1397,14 @@ details[open] > :not(summary) {
     overflow: visible;
   }
 
+  /* 战报可以很长（一场 60 次行动近万像素），参战者状态钉在左边：
+     读到哪一段都能看见血气条，不用来回滚。展开后比屏幕高时，面板自己滚。 */
   .summary-panel {
-    height: auto;
-    overflow: visible;
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .participant-disclosure {

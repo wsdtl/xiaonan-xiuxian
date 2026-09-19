@@ -325,6 +325,7 @@ class WorldService:
                     bounds=_cell_bounds(cells),
                     label_xy=_label_cell(cells),
                     cell_count=len(cells),
+                    altitude_range=self._altitude_range(cells),
                     coordinate_bands=_map_coordinate_bands(cells),
                     terrain_zones=terrain_zones,
                 )
@@ -492,6 +493,18 @@ class WorldService:
     def _altitude(self, xy: tuple[int, int]) -> int:
         x, y = xy
         return self._surface[y - self._bounds[2]][x - self._bounds[0]]
+
+    def _altitude_range(self, cells: frozenset[tuple[int, int]]) -> tuple[int, int]:
+        """一块区域的海拔上下限。
+
+        **这个数只能在这里算**：前端不该为了显示「海拔 X 至 Y」去遍历整张地表栅格——
+        那正是「展示层自己算数据」的越界（负责人第 86 轮的口径：web 只展示，数据都来自后台）。
+        """
+
+        if not cells:
+            raise JsonDataError("区域没有任何格子，算不出海拔范围")
+        values = [self._altitude(xy) for xy in cells]
+        return (min(values), max(values))
 
     def _terrain_at(self, xy: tuple[int, int]) -> str:
         try:

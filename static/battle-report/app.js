@@ -451,7 +451,10 @@ function renderSummaryPanel(segment) {
   button.dataset.action = "participant-disclosure";
   button.setAttribute("aria-controls", "participantDetails");
   button.setAttribute("aria-expanded", String(state.participantExpanded));
-  const disclosure = node("section", "participant-disclosure", [button]);
+  const disclosure = node("section", "participant-disclosure", [
+    button,
+    renderRoster(segment),
+  ]);
   disclosure.dataset.expanded = String(state.participantExpanded);
   if (state.participantExpanded) {
     const key = `${state.segmentIndex}:${state.snapshot}`;
@@ -481,6 +484,33 @@ function renderSummaryPanel(segment) {
     disclosure.append(content);
   }
   return node("aside", "summary-panel", disclosure);
+}
+
+function renderRoster(segment) {
+  // 收起状态下的参战者名录：一栏徽章 + 名字 + 血气/精神条。
+  // 面板收起来时只剩下一个标题，左边这一栏会空成一片——名录让它一直有用。
+  const participants = state.snapshot === "before"
+    ? segment.initial_participants
+    : segment.final_participants;
+  const list = node("ul", "roster-list");
+  participants.forEach((participant) => {
+    const badge = node(
+      "span",
+      "roster-index",
+      String(participant.visual?.number || 0).padStart(2, "0"),
+    );
+    applyVisual(badge, participant.visual);
+    const row = node("li", "roster-item", [
+      node("div", "roster-head", [badge, node("span", "roster-name", participant.label)]),
+      node(
+        "div",
+        "roster-gauges",
+        (participant.gauges || []).map((gauge) => renderGauge(gauge)),
+      ),
+    ]);
+    list.append(row);
+  });
+  return node("div", "participant-roster", list);
 }
 
 function renderParticipantSummary(participant) {

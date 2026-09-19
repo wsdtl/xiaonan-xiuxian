@@ -171,6 +171,34 @@ class BattleReportCatalog:
         return _strings(self.normalization, "紧凑隐藏类型")
 
     @property
+    def internal_details(self) -> frozenset[str]:
+        """不该进战报的明细标签：引擎的记账字段与内部编号。
+
+        `事件` 只是把类型名抄一遍，`来源 / 承受者 / 行动者 / 目标ID / 对象ID` 是
+        `L1`、`L1:战斗对象:1` 这样的内部编号，`原始数值 / 当前数值` 多数时候是 0，
+        `状态定义` 是整个状态对象。它们并排印在事件行上时，一句「青云剑修 命中 霜岭客」
+        后面跟着七个记账字段——**玩家要看的是战斗，不是引擎的账本**。
+        """
+
+        return _strings(self.normalization, "内部明细")
+
+    @property
+    def compact_facts(self) -> dict[str, tuple[tuple[str, ...], ...]]:
+        """简要模式每行带出哪些事实：`事件类型 -> ((标签,), (前, 后), …)`。
+
+        一个条目是「取哪个明细标签」；写两个标签表示要把「前 → 后」连起来。
+        `_compact_text` 按序取第一个有值的，拼成 `类型名 · 事实`。
+        """
+
+        return {
+            str(kind): tuple(
+                (str(entry),) if isinstance(entry, str) else tuple(str(name) for name in entry)
+                for entry in entries
+            )
+            for kind, entries in _mapping(self.normalization, "紧凑事实")["类型"].items()
+        }
+
+    @property
     def system_kinds(self) -> frozenset[str]:
         return _strings(self.normalization, "系统类型")
 
@@ -331,6 +359,18 @@ class BattleReportCatalog:
             raise ValueError("战报默认筛选没有对应定义")
         if str(ui["默认快照"]) not in snapshot_ids:
             raise ValueError("战报默认快照没有对应定义")
+        hidden = self.compact_hidden_kinds
+        known_kinds = set(_mapping(self.normalization, "类型分类"))
+        for kind, entries in self.compact_facts.items():
+            # 声明的类型必须是真事件，也不能声明「本来就不会出现在简要模式」的类型：
+            # 两种写错都只会安静地不生效，等于没有声明。
+            if kind not in known_kinds:
+                raise ValueError(f"战报紧凑事实声明了未知事件类型：{kind}")
+            if kind in hidden:
+                raise ValueError(f"战报紧凑事实声明了被隐藏的事件类型：{kind}")
+            for entry in entries:
+                if not entry or len(entry) > 2 or not all(name.strip() for name in entry):
+                    raise ValueError(f"战报紧凑事实条目不合法：{kind}")
 
     def validate_event_kinds(self, event_kinds: Sequence[str]) -> None:
         declared = {str(value) for value in event_kinds}

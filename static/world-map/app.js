@@ -1417,7 +1417,6 @@
   }
 
   function showRegion(region) {
-    const altitudeRange = regionAltitudeRange(region);
     const terrainZones = region.terrain_zones
       .map((name) => state.terrainZoneByName.get(name))
       .filter(Boolean);
@@ -1427,7 +1426,7 @@
       type: `${terrainZones.length} 片地形分区`,
       description: region.description,
       coordinate: `${region.bounds[0]}–${region.bounds[1]}，${region.bounds[2]}–${region.bounds[3]}（${region.cell_count} 格）`,
-      altitude: `${formatMeters(altitudeRange[0])} 至 ${formatMeters(altitudeRange[1])}`,
+      altitude: `${formatMeters(region.altitude_range[0])} 至 ${formatMeters(region.altitude_range[1])}`,
       terrain: unique(terrainZones.map((zone) => zone.terrain)).join("、"),
       sectionTitle: "地形分区",
       functions: terrainZones.map((zone) => zone.name),
@@ -1478,23 +1477,6 @@
       if (detail.boundary) item.dataset.kind = "boundary";
       nodes.detailFunctions.appendChild(item);
     });
-  }
-
-  function regionAltitudeRange(region) {
-    const [xMin] = state.data.bounds;
-    const [, , yMin] = state.data.bounds;
-    let minimum = Infinity;
-    let maximum = -Infinity;
-    region.coordinate_bands.forEach((band) => {
-      band.x_ranges.forEach(([start, end]) => {
-        for (let x = start; x <= end; x += 1) {
-          const altitude = state.data.surface[band.y - yMin][x - xMin];
-          minimum = Math.min(minimum, altitude);
-          maximum = Math.max(maximum, altitude);
-        }
-      });
-    });
-    return [minimum, maximum];
   }
 
   function resetMap() {

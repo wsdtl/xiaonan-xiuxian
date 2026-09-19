@@ -76,8 +76,12 @@ def build_battle_report(
     winner_ids, winner_names, winner_id = _winner_section(
         outcome, left_results, right_results, outcome_results, participants_by_id
     )
+    side_by_id = {
+        **{value.id: "left" for value in left_results},
+        **{value.id: "right" for value in right_results},
+    }
     participant_reports = _participant_reports(
-        participants, participant_colors, outcome, winner_ids, catalog
+        participants, participant_colors, outcome, winner_ids, side_by_id, catalog
     )
     result_title = _result_title(outcome, winner_names)
     left_names = _side_names(participants_by_id, left_results)
@@ -212,9 +216,14 @@ def _participant_reports(
     participant_colors: Mapping[str, str],
     outcome: CombatResult,
     winner_ids: set[str],
+    side_by_id: Mapping[str, str],
     catalog: BattleReportCatalog,
 ) -> list[dict[str, Any]]:
-    """逐个参战者转写；胜负标签按平局 / 在胜方 / 其余三档。"""
+    """逐个参战者转写；胜负标签按平局 / 在胜方 / 其余三档。
+
+    `阵营` 必须写进来：召唤物与第二个参战者都不在「第一个是左方」这个假设里，
+    展示层拿不到阵营就只能猜（第 86 轮修的就是这个）。
+    """
 
     return [
         _participant_report(
@@ -222,6 +231,7 @@ def _participant_reports(
             number=index + 1,
             color=participant_colors[value.id],
             outcome_label="平" if outcome.draw else "胜" if value.id in winner_ids else "负",
+            side=side_by_id[value.id],
             events=outcome.events,
             catalog=catalog,
         )
@@ -319,6 +329,7 @@ def _participant_report(
     number: int,
     color: str,
     outcome_label: str,
+    side: str,
     events: Sequence[BattleEvent],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
@@ -357,6 +368,7 @@ def _participant_report(
         "number": number,
         "name": participant.name,
         "title": participant.title,
+        "side": side,
         "level": max(1, int(participant.level)),
         "combatant_type": str(participant.combatant_type or "参战者"),
         "color": color,

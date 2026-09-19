@@ -35,6 +35,16 @@ def build_battle_report_presentation(
         }
         for value in participants
     }
+    sides = _sides(participants)
+    team_ids = {"left": "team.left", "right": "team.right"}
+    team_labels = {
+        side: _team_label([value for value in participants if sides[value["id"]] == side])
+        for side in team_ids
+    }
+    team_of = {
+        value["id"]: (team_ids[sides[value["id"]]], team_labels[sides[value["id"]]])
+        for value in participants
+    }
     system = report["system"]
     system_visual = {
         "key": "system",
@@ -43,14 +53,18 @@ def build_battle_report_presentation(
         "foreground": catalog.foreground,
     }
     combatants = [
-        _combatant(value, visuals[value["id"]], index)
-        for index, value in enumerate(participants)
+        _combatant(value, visuals[value["id"]], team_of[value["id"]])
+        for value in participants
     ]
 
     initial_state = _initial_state(participants, catalog)
     final_state = _final_state(participants, initial_state)
-    initial_participants = _participant_records(participants, visuals, initial_state, catalog)
-    final_participants = _participant_records(participants, visuals, final_state, catalog)
+    initial_participants = _participant_records(
+        participants, visuals, initial_state, team_of, catalog
+    )
+    final_participants = _participant_records(
+        participants, visuals, final_state, team_of, catalog
+    )
 
     groups = _event_groups(report.get("events") or ())
     state = deepcopy(initial_state)
@@ -89,7 +103,7 @@ def build_battle_report_presentation(
             _fact("事件", len(detailed_events)),
         ]
         compact_events = [
-            _compact_event(value)
+            _compact_event(value, catalog)
             for value in detailed_events
             if value["kind"] not in catalog.compact_hidden_kinds
         ]
@@ -133,10 +147,10 @@ def build_battle_report_presentation(
                 "empty_text": ui["text"]["comparison_empty"],
                 "changes": _state_changes(participants, before, after, catalog),
                 "before": _frame(
-                    "行动前状态", round_label, participants, visuals, before, catalog
+                    "行动前状态", round_label, participants, visuals, before, team_of, catalog
                 ),
                 "after": _frame(
-                    "行动后状态", round_label, participants, visuals, after, catalog
+                    "行动后状态", round_label, participants, visuals, after, team_of, catalog
                 ),
             },
         }
@@ -262,13 +276,46 @@ def _formation_summary_line(value: Mapping[str, Any]) -> str:
     )
 
 
-def _combatant(participant: Mapping[str, Any], visual: Mapping[str, Any], index: int) -> dict[str, Any]:
+def _sides(participants: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    """每个参战者的阵营，取自战报自己写的 `阵营`。
+
+    展示层**不许自己猜阵营**：第一版写的是「下标 0 是左方、其余是右方」，
+    而战报的标题（同一次战斗、同一份数据）写的是「青岚剑修、云岫道人、孤敌悬赏、孤敌悬赏
+    对阵 黑水魔修、赤炎散人、霜岭客」——**页面自己跟自己打架**：第二个修士与召唤物
+    全被画到了敌方。多单位编组（宗门战、讨伐）一直是错的，只是 1v1 时看不出来。
+    """
+
+    result = {}
+    for value in participants:
+        side = str(value.get("side") or "")
+        if side not in {"left", "right"}:
+            raise ValueError(f"战报参战者缺少阵营：{value.get('name')}")
+        result[value["id"]] = side
+    return result
+
+
+def _team_label(members: Sequence[Mapping[str, Any]]) -> str:
+    """一方的单位构成：一个单位就写它自己，多个按「单位 × 数」列出。"""
+
+    counts: OrderedDict[str, int] = OrderedDict()
+    for value in members:
+        title = _participant_title(value)
+        counts[title] = counts.get(title, 0) + 1
+    return " · ".join(
+        f"{title} ×{count}" if count > 1 else title for title, count in counts.items()
+    )
+
+
+def _combatant(
+    participant: Mapping[str, Any],
+    visual: Mapping[str, Any],
+    team: tuple[str, str],
+) -> dict[str, Any]:
     return {
         "key": participant["id"],
         "label": participant["name"],
-        "team_id": "team.player" if index == 0 else "team.opponent",
-        "team_label": _participant_title(participant),
-        "unit_kind": str(participant.get("kind") or "参战者"),
+        "team_id": team[0],
+        "team_label": team[1],
         "visual": dict(visual),
     }
 
@@ -277,6 +324,7 @@ def _participant_records(
     participants: Sequence[Mapping[str, Any]],
     visuals: Mapping[str, Mapping[str, Any]],
     state: Mapping[str, Mapping[str, Any]],
+    team_of: Mapping[str, tuple[str, str]],
     catalog: BattleReportCatalog,
 ) -> list[dict[str, Any]]:
     return [
@@ -284,10 +332,10 @@ def _participant_records(
             value,
             visuals[value["id"]],
             state[value["id"]],
-            index,
+            team_of[value["id"]],
             catalog,
         )
-        for index, value in enumerate(participants)
+        for value in participants
     ]
 
 
@@ -295,7 +343,7 @@ def _participant_record(
     participant: Mapping[str, Any],
     visual: Mapping[str, Any],
     state: Mapping[str, Any],
-    index: int,
+    team: tuple[str, str],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     resources = state["resources"]
@@ -340,9 +388,8 @@ def _participant_record(
     return {
         "key": participant["id"],
         "label": participant["name"],
-        "team_id": "team.player" if index == 0 else "team.opponent",
-        "team_label": _participant_title(participant),
-        "unit_kind": str(participant.get("kind") or "参战者"),
+        "team_id": team[0],
+        "team_label": team[1],
         "visual": dict(visual),
         "gauges": gauges,
         "status_group": {
@@ -392,9 +439,16 @@ def _detail_groups(
 
 
 def _participant_title(participant: Mapping[str, Any]) -> str:
+    """单位标题：`修士 · Lv5`。
+
+    `参战者` 这个兜底词是第 86 轮修掉的：这里读的键是 `kind`，而战报写的是
+    `combatant_type`，于是每个单位的标题都变成「修士 · 参战者 · Lv5」——
+    **键读错了不会报错，只会让人以为单位类型就叫「参战者」。**
+    """
+
     parts = [
         str(participant.get("title") or "").strip(),
-        str(participant.get("kind") or "参战者").strip(),
+        str(participant.get("combatant_type") or "").strip(),
         f"Lv{max(1, int(participant.get('level') or 1))}",
     ]
     return " · ".join(dict.fromkeys(value for value in parts if value))
@@ -586,6 +640,7 @@ def _public_event(
     details = list(event.get("details") or ())
     if category == "damage":
         details = [value for value in details if value.get("label") in catalog.damage_facts]
+    details = [value for value in details if value.get("label") not in catalog.internal_details]
     facts = [
         {
             "key": value["label"],
@@ -601,7 +656,7 @@ def _public_event(
         "label": event.get("kind_label") or event.get("kind") or "事件",
         "tone": _event_tone(category, str(event.get("kind") or ""), catalog),
         "category": category,
-        "text": event.get("text", ""),
+        "text": _sentence(event),
         "source": {"key": source.get("id", "system"), "label": source.get("name", "战场")},
         "target": {"key": target.get("id", "system"), "label": target.get("name", "战场")},
         "subject": {"id": event.get("ability") or event.get("kind", "event"), "label": subject_label},
@@ -613,11 +668,54 @@ def _public_event(
     }
 
 
-def _compact_event(event: Mapping[str, Any]) -> dict[str, Any]:
-    return {
+def _sentence(event: Mapping[str, Any]) -> str:
+    """事件自己的正文；**它只是把类型名抄一遍时算没有正文**。
+
+    引擎给多数事件填的 `text` 就是事件类型（`命中后`、`造成伤害后`），那不是正文。
+    以前前端把 `text` 当句子直接印出来，战斗记录里于是全是这些内部阶段名，
+    一条数字都没有（第 86 轮实测：160 条紧凑事件里 137 条短于 7 个字）。
+    这里换掉，让紧凑行改由声明的关键事实拼（见 `_compact_text`）。
+    """
+
+    text = str(event.get("text") or "").strip()
+    if text and text not in {str(event.get("kind") or ""), str(event.get("kind_label") or "")}:
+        return text
+    return ""
+
+
+def _compact_event(event: Mapping[str, Any], catalog: BattleReportCatalog) -> dict[str, Any]:
+    result = {
         key: deepcopy(event[key])
-        for key in ("kind", "label", "tone", "category", "text", "source", "target", "visual")
+        for key in ("kind", "label", "tone", "category", "source", "target", "visual")
     }
+    result["text"] = _compact_text(event, catalog)
+    return result
+
+
+def _compact_text(event: Mapping[str, Any], catalog: BattleReportCatalog) -> str:
+    """紧凑行：事件自带正文就用正文，否则「类型名 · 声明的关键事实」。
+
+    关键事实住 `战报.json` 的 `标准化.紧凑事实`，按事件类型声明：伤害类报实际伤害、
+    资源类报资源与数值、状态类报状态名与层数。**渲染层不参与判断**——
+    它只负责把这一行印出来。
+    """
+
+    sentence = _sentence(event)
+    if sentence:
+        return sentence
+    facts = {str(value["label"]): value for value in event.get("facts") or ()}
+    parts = []
+    for entry in catalog.compact_facts.get(str(event.get("kind") or ""), ()):
+        displays = [
+            str(facts[name].get("display") or "").strip()
+            for name in entry
+            if name in facts and str(facts[name].get("display") or "").strip()
+        ]
+        if displays:
+            parts.append(" → ".join(displays))
+    if not parts:
+        return str(event.get("label") or "事件")
+    return f"{event.get('label') or '事件'} · {' '.join(parts)}"
 
 
 def _event_category(
@@ -643,13 +741,14 @@ def _frame(
     participants: Sequence[Mapping[str, Any]],
     visuals: Mapping[str, Mapping[str, Any]],
     state: Mapping[str, Mapping[str, Any]],
+    team_of: Mapping[str, tuple[str, str]],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     return {
         "title": title,
         "round_turn_label": label,
         "facts": [],
-        "participants": _participant_records(participants, visuals, state, catalog),
+        "participants": _participant_records(participants, visuals, state, team_of, catalog),
     }
 
 

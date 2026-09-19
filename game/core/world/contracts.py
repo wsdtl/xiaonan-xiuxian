@@ -109,6 +109,7 @@ class MapRegion:
     bounds: tuple[int, int, int, int]
     label_xy: tuple[int, int]
     cell_count: int
+    altitude_range: tuple[int, int]
     coordinate_bands: tuple[MapCoordinateBand, ...]
     terrain_zones: tuple[str, ...]
 
