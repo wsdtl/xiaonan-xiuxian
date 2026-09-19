@@ -66,6 +66,9 @@ class WanzhenFeature:
         grant_guard = _text(distribution.get("状态守卫"), "万珍殿.发放.状态守卫")
         if store_guard != grant_guard:
             raise JsonDataError("万珍殿存入和发放必须使用同一状态守卫")
+        # 存入只收五类成品，声明写在数据里（`成品类别` 与 `存入.允许类别` 必须一致）。
+        if list(storing.get("允许类别") or ()) != list(rule.get("成品类别") or ()):
+            raise JsonDataError("万珍殿存入允许类别必须与成品类别一致")
         self._guard_rule = store_guard
         self._page_limit = _positive_int(rule.get("每页上限"), "万珍殿.每页上限")
         raw_copy = require_mapping(self._data.dataset("万珍殿展示").get("文本"), "万珍殿展示")

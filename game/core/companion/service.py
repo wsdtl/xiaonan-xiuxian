@@ -1299,6 +1299,9 @@ class CompanionService:
         reward = _mapping(value.get("圆满回礼"), "道侣.圆满回礼")
         slots_value = _mapping(value.get("修行槽位"), "道侣.修行槽位")
         qualification_growth = _mapping(value.get("资质成长修正"), "道侣.资质成长修正")
+        # 资质成长按线性插值算（插值本身写在属性成长处）。算法名写在数据里，这里读死。
+        if qualification_growth.get("算法") != "线性插值":
+            raise JsonDataError("道侣资质成长修正的算法必须是「线性插值」")
         medicine_rules = _mapping(
             self._data.dataset("服丹规则").get("服丹"), "玩法/服丹/规则/服丹.json"
         )

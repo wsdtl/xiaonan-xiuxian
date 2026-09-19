@@ -82,6 +82,9 @@ class InjuryService:
             or treatment.get("自然恢复") is not False
         ):
             raise JsonDataError("长期伤势只能通过闭关完整轮次治疗")
+        # 治疗以完整轮次为单位，语义写在数据里（`闭关治疗.单位`），这里读死。
+        if treatment.get("单位") != "完整轮次":
+            raise JsonDataError("长期伤势闭关治疗必须以完整轮次为单位")
 
         contract = ContractSet.load(
             self._data.dataset("角色字段契约").get("角色字段契约"),

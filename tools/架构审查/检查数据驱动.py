@@ -453,6 +453,117 @@ def check_component_markdown() -> list[str]:
     return 问题
 
 
+def check_rule_keys_described() -> list[str]:
+    """代码读的每个规则键，都要在所属组件的 `说明.md` 里写到。
+
+    「通过说明控制代码」的前提是**说明覆盖全部可调的行为**：数据键是代码真正读的参数，
+    某个键有人读、说明里却一个字没提，负责人就没法靠改说明来控制它。这条与
+    `check_unread_rule_keys` 正好互为反向——那边管「数据里没人读的声明删掉」，这边管
+    「代码读了的行为说明里必须有」。
+
+    范围与例外：只看 `规则/` 面（`定义/` 是按表遍历的词表，`内容/` 是实体）；
+    `展示/` 面除外（页面文案与按钮是展示契约，说明按约定不重复）；读取器与展示层的通用键
+    （`说明`/`名称`/`编号`…）不必逐条写。
+    """
+
+    运行时 = "\n".join(
+        path.read_text(encoding="utf-8")
+        for 根 in ("game", "launch", "message")
+        for path in (PROJECT_ROOT / 根).rglob("*.py")
+        if "__pycache__" not in path.parts
+    )
+    被读 = set(re.findall(r'get\("([^"\n]{1,24})"\)', 运行时))
+    被读 |= set(re.findall(r'\["([^"\n]{1,24})"\]', 运行时))
+    被读 |= set(re.findall(r"get\('([^'\n]{1,24})'\)", 运行时))
+    说明文 = {
+        清单.parent: (清单.parent / "说明.md").read_text(encoding="utf-8")
+        for 清单 in DATA.rglob("组件.json")
+    }
+
+    problems: list[str] = []
+    for path in sorted(DATA.rglob("*.json")):
+        if path.name == "组件.json":
+            continue
+        段 = path.relative_to(DATA).parts
+        if "展示" in 段:
+            continue
+        if not (("规则" in 段[1:-1]) or (len(段) >= 3 and 段[1] == "规则")):
+            continue
+        组件 = DATA
+        for 上 in path.parents:
+            if (上 / "组件.json").is_file():
+                组件 = 上
+                break
+        说 = 说明文.get(组件, "")
+        缺: set[str] = set()
+
+        def 走(节点: object, 前缀: str = "") -> None:
+            if isinstance(节点, dict):
+                for 键, 值 in 节点.items():  # type: ignore[union-attr]
+                    名 = str(键)
+                    走(值, f"{前缀}{名}.")
+                    if 名 in COMMON_KEYS or len(名) < 2 or 名 not in 被读 or 名 in 说:
+                        continue
+                    缺.add(f"{前缀}{名}")
+            elif isinstance(节点, list):
+                for 项 in 节点:  # type: ignore[union-attr]
+                    走(项, 前缀)
+
+        走(json.loads(path.read_text(encoding="utf-8")))
+        if 缺:
+            problems.append(
+                f"{组件.relative_to(DATA).as_posix()}/说明.md 没写到这些在读的规则键："
+                f"{'、'.join(f'`{x}`' for x in sorted(缺)[:8])}"
+                f"{'…' if len(缺) > 8 else ''}（说明是行为的唯一出处，读得到的键就要写得下）"
+            )
+    return problems
+
+
+#: 数据目录里**允许引代码**的两份：这份总约定本身要举例，历史日志按性质就带代码引用。
+引代码豁免 = {pathlib.PurePosixPath("说明.md"), pathlib.PurePosixPath("战斗/内容/待补内容.md")}
+
+#: 写法上像标识符、其实是数据一侧的东西：JSON 字面量、坐标符号、目录名。
+数据侧符号 = frozenset({"true", "false", "null", "x", "y", "z", "xy", "H", "data", "tools"})
+
+
+def check_data_docs_no_code() -> list[str]:
+    """`data/` 下的说明一律不引代码（组件说明、领域说明、内容说明都是）。
+
+    负责人口径（第 84 轮）：**说明是逻辑的事实源，不是实现的注解**。负责人只改说明里的中文
+    逻辑，实现照着说明改；说明里写满 `game/...` 与函数名，改实现时就跟着过期。允许保留的是
+    **数据**（数据键、取值、数据文件路径）与**操作指引**（`tools/…` 这种「改完跑这支脚本验」
+    的指针）。豁免两份：`data/说明.md` 是这套约定本身（要举例），`战斗/内容/待补内容.md` 是
+    按性质记录实现细节的历史日志。
+    """
+
+    词表 = _数据词表()
+    problems: list[str] = []
+    for path in sorted(DATA.rglob("*.md")):
+        相对 = path.relative_to(DATA).as_posix()
+        if pathlib.PurePosixPath(相对) in 引代码豁免:
+            continue
+        文本 = path.read_text(encoding="utf-8")
+        if "game/" in 文本:
+            problems.append(
+                f"data/{相对} 引了实现路径（`game/…`）：说明写中文逻辑，实现路径不进说明"
+            )
+        for 名字 in re.findall(r"`([^`\s]+)`", 文本):
+            if 名字 in 词表 or 名字 in 数据侧符号:
+                continue
+            if 名字.startswith(("http", "data/", "tools/", "launch/", "message/")):
+                continue
+            if pathlib.PurePosixPath(名字).parts[0] in 四类面 or 名字.endswith(".md"):
+                continue
+            if _是数据路径(名字):
+                continue
+            if 英文词形.match(名字) or 名字.endswith(".py"):
+                problems.append(
+                    f"data/{相对} 引了代码标识符：`{名字}`（说明只写中文逻辑，"
+                    f"反引号留给数据键、取值与数据路径）"
+                )
+    return problems
+
+
 def check_contract_placement() -> list[str]:
     """字段契约必须住在 `定义/` 或 `规则/`，不得混进 `内容/` 与 `展示/`。
 
@@ -692,6 +803,8 @@ def main() -> int:
     功能 = check_component_function_docs()
     死规则 = check_unread_rule_keys(source)
     排版 = check_component_markdown()
+    没写 = check_rule_keys_described()
+    引代码 = check_data_docs_no_code()
     print()
     if 布局:
         print(f"大类布局问题 {len(布局)} 处：")
@@ -719,6 +832,24 @@ def main() -> int:
         print("规则见仓库根的 .markdownlint.json（只关掉行长限制）。")
         return 1
     print("说明排版：标题、列表、表格、代码块都合规")
+    if 没写:
+        print(f"说明没覆盖到的规则键 {len(没写)} 份：")
+        for item in 没写:
+            print(f"  {item}")
+        print()
+        print("代码读得到的键，说明里就要写得下——说明是行为的唯一出处。")
+        return 1
+    print("代码读的规则键，说明里都写到了")
+    if 引代码:
+        print(f"说明引了代码 {len(引代码)} 处：")
+        for item in 引代码[:20]:
+            print(f"  {item}")
+        if len(引代码) > 20:
+            print(f"  …… 另 {len(引代码) - 20} 条")
+        print()
+        print("说明写中文逻辑：`game/…`、函数名、类名都删掉，只留数据路径与工具入口。")
+        return 1
+    print("说明里没有代码引用")
     if 住处:
         print(f"契约住错面 {len(住处)} 处：")
         for item in 住处:

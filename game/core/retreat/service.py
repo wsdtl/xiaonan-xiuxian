@@ -150,6 +150,17 @@ class RetreatService:
         recovery = _mapping(self._rules.get("每轮恢复"), "闭关.每轮恢复")
         if recovery.get("最多恢复至上限") is not True:
             raise JsonDataError("闭关恢复必须限制在资源上限")
+        # 同行道侣按「并肩」算正式角色，且允许没有道侣（「可无」）。声明在数据里、
+        # 判定在结算处；这里读死，免得数据说一套、实现做另一套。
+        # 注意数据装载后已被冻结（数组是元组、对象是只读映射），要按结构比而不是按字面比。
+        companion_rule = self._rules.get("同行道侣")
+        if not (
+            isinstance(companion_rule, Sequence)
+            and len(companion_rule) == 1
+            and isinstance(companion_rule[0], Mapping)
+            and dict(companion_rule[0]) == {"方式": "并肩", "要求": "可无"}
+        ):
+            raise JsonDataError("闭关同行道侣必须是并肩且可无")
         self._health_ratio = _ratio(
             recovery.get("血气上限比例"), "闭关.每轮恢复.血气上限比例"
         )

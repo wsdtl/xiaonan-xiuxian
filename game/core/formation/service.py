@@ -813,6 +813,10 @@ class FormationService:
             raise JsonDataError("阵法固定品级必须为黄、玄、地、天")
         if self._rules.get("无上限品级") != "圣":
             raise JsonDataError("阵法无上限品级必须为圣")
+        # 圣品投势按「加权几何乘势」连乘（算法本身写在 `_grade_derived` 里）。声明在数据里，
+        # 这里读死，免得数据说一套、实现做另一套。
+        if _mapping(self._rules.get("圣品增长"), "阵法规则.圣品增长").get("算法") != "加权几何乘势":
+            raise JsonDataError("圣品增长算法必须是「加权几何乘势」")
 
     def _replayed_result(
         self,

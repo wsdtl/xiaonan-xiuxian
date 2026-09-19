@@ -132,6 +132,10 @@ class SectFacilityService:
         self._base_cost = {kind: _positive_int(base.get(kind), f"宗门设施.灵石消耗.基础.{kind}") for kind in _FACILITY_TYPES}
         self._grade_multiplier = _positive_map(costs.get("品级倍率"), "宗门设施.灵石消耗.品级倍率")
         self._stage_multiplier = _positive_map(costs.get("器阶倍率"), "宗门设施.灵石消耗.器阶倍率")
+        # 炼制失败在提交前中止，语义写在数据里（`结算.失败`），这里读死。
+        settlement = _mapping(raw.get("结算"), "宗门设施.结算")
+        if settlement.get("失败") != "不扣灵石、不扣材料、不产出":
+            raise JsonDataError("宗门设施炼制失败必须不扣灵石、不扣材料、不产出")
         self._initialized = True
         return self.status()
 

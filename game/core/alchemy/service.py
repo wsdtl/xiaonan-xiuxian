@@ -154,6 +154,13 @@ class AlchemyService:
             _mapping(dan_rule.get("成丹"), "丹则.成丹").get("城镇最高品级"),
             "丹则.成丹.城镇最高品级",
         )
+        # 成丹品级按「最低余量进阶」算（算法本身写在下面几处计算里）。声明在数据里，
+        # 这里读死，免得数据说一套、实现做另一套。
+        grade_rule = _mapping(
+            _mapping(dan_rule.get("成丹"), "丹则.成丹").get("品级"), "丹则.成丹.品级"
+        )
+        if grade_rule.get("算法") != "最低余量进阶":
+            raise JsonDataError("成丹品级算法必须是「最低余量进阶」")
         self._herbs = MappingProxyType(self._load_herbs(rules.get("归脉")))
         self._beast_ids = frozenset(_item_ids(self._data, "兽宝"))
         self._recipes = MappingProxyType(self._load_recipes())
