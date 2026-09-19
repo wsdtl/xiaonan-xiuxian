@@ -159,21 +159,74 @@ def check_category_layout() -> list[str]:
     return problems
 
 
+def _数据词表() -> set[str]:
+    """`data/` 里出现过的全部键名与字符串取值。**反引号里只许出现这里有的东西**。
+
+    这条用来把「数据」和「代码」分开：`有效秒数`、`结算秒数`、`xy`、`send` 都是数据里真有的
+    键或取值，而 `request_id`、`plan_equip`、`StateConflictError` 是代码里的名字。说明是逻辑
+    的事实源，不该被实现的名字绑住（第 84 轮负责人口径：说明里不用把代码标出来）。
+    """
+
+    词: set[str] = set()
+
+    def 走(节点: object) -> None:
+        if isinstance(节点, dict):
+            for 键, 值 in 节点.items():  # type: ignore[union-attr]
+                词.add(str(键))
+                走(值)
+        elif isinstance(节点, list):
+            for 项 in 节点:  # type: ignore[union-attr]
+                走(项)
+        elif isinstance(节点, str):
+            词.add(节点)
+
+    for path in DATA.rglob("*.json"):
+        if path.name == "组件.json":
+            continue
+        try:
+            走(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return 词
+
+
+#: 说明的功能一节里，反引号中允许出现的英文词形（其余英文一律算代码标识符）。
+英文词形 = re.compile(r"^[A-Za-z_][A-Za-z0-9_.()\[\]:<>|, ]*$")
+
+
+def _是数据路径(名字: str) -> bool:
+    """`规则/切磋.json`、`data/战斗/规则/五行.json`、`战斗/定义/属性.json` 都算数据路径。
+
+    判据是「它真的指向一个数据文件」，而不是看它长什么样——这样组件内相对路径与跨组件的
+    `data/…` 前缀两种写法都放行，只要文件真在。
+    """
+
+    if not 名字.endswith((".json", ".md")):
+        return False
+    if 名字.startswith(("game/", "tools/", "tests/", "launch/", "message/")):
+        return False
+    去掉前缀 = 名字[len("data/"):] if 名字.startswith("data/") else 名字
+    if "*" in 去掉前缀:
+        return bool(list(DATA.glob(去掉前缀)))
+    return (DATA / 去掉前缀).exists()
+
+
 def check_component_function_docs() -> list[str]:
-    """每个组件的 `说明.md` 必须有一节 `## 功能`，且它引用的依据文件真的存在。
+    """每个组件的 `说明.md` 必须有一节 `## 功能`，写成**中文逻辑**，且不夹带代码。
 
-    负责人口径（第 79 轮）：**每个二级组件的说明里要把功能按点分类写清楚**，便于逐条审查。
-    写法见 `data/说明.md`——每条写成「玩家做什么 → 按哪份数据算出什么 → 落到哪里」，
-    末尾用反引号标出依据文件（相对组件目录，跨包或代码依据写完整路径）。
+    负责人口径（第 79、84 轮）：**每个二级组件的说明里要把功能按点分类写清楚**，便于逐条审改；
+    说明是逻辑的事实源——负责人改中文描述，实现照着改。因此说明里**不写代码**：不出现
+    `game/...`、不出现 `.py`、不出现函数名/类名/异常名/变量名，反引号只留给数据键与数据取值
+    （数据里真有的英文键如 `xy` 可以，代码里的 `request_id` 不行）。本包读过哪些文件由文末的
+    `## 数据集` 表统一交代，那张表里的路径逐条验存在。
 
-    这条同时挡住三种退化：新组件没写功能一节；功能条目引用了**不存在**的规则/内容/代码文件
-    （说明与设计脱节）；功能一节把**页面文案与按钮动作**又抄了一遍——那是 `展示/` 目录的
-    唯一出处，说明只讲代码逻辑（`展示/` 下被代码读取的数据不算，如 `展示/行程.json`）。
-    占位符（`内容/<区域>/<地点>/…`）与通配符按目录展开校验。
+    这条同时挡住几种退化：新组件没写功能一节；条目编号断号；功能一节把**页面文案与按钮动作**
+    又抄了一遍（那是 `展示/` 的唯一出处）；说明被实现的名字绑住（改实现就得跟着改说明）。
     """
 
     problems: list[str] = []
-    引用 = re.compile(r"`([^`\s]+)`")
+    词表 = _数据词表()
+    反引号 = re.compile(r"`([^`\s]+)`")
     for 清单 in sorted(DATA.rglob("组件.json")):
         组件目录 = 清单.parent
         相对 = 组件目录.relative_to(DATA).as_posix()
@@ -188,40 +241,216 @@ def check_component_function_docs() -> list[str]:
         片段 = 文本.split("## 功能", 1)[1].split("\n## ", 1)[0]
         if not re.search(r"^### ", 片段, flags=re.M):
             problems.append(f"{相对}/说明.md 的功能一节没有分类（缺 `### `）")
-        if not re.search(r"^\d+\. ", 片段, flags=re.M):
+        编号 = [int(x) for x in re.findall(r"^(\d+)\. ", 片段, flags=re.M)]
+        if not 编号:
             problems.append(f"{相对}/说明.md 的功能一节没有编号条目")
-        for 名字 in 引用.findall(片段):
-            if "<" in 名字 or ">" in 名字 or "…" in 名字 or 名字.startswith(("game/", "http")):
+        elif 编号 != list(range(1, len(编号) + 1)):
+            problems.append(
+                f"{相对}/说明.md 的功能条目编号不是 1..{len(编号)} 连续（{'、'.join(map(str, 编号[:8]))}…）"
+            )
+        for 名字 in 反引号.findall(片段):
+            if 词表 and 名字 in 词表:
                 continue
-            if 名字.startswith("data/"):
-                候选 = PROJECT_ROOT / 名字
-            elif 名字.startswith(tuple(f"{名}/" for 名 in 四类面)):
-                候选 = 组件目录 / 名字
-            else:
+            if 名字.startswith(("http", "data/")) or 名字 in {"组件.json"}:
                 continue
-            if not _引用存在(候选):
-                problems.append(f"{相对}/说明.md 的功能依据不存在：{名字}")
+            # 数据文件路径留在说明里是好事（`规则/切磋.json`、`data/战斗/规则/五行.json`）：
+            # 改数据的人要照着找。只有指向代码的才算夹带。
+            if _是数据路径(名字):
+                continue
+            if pathlib.PurePosixPath(名字).parts[0] in 四类面:
+                continue
+            if 名字.endswith(".md"):
+                continue
+            if 英文词形.match(名字) or "/" in 名字 or 名字.endswith(".py"):
+                problems.append(
+                    f"{相对}/说明.md 的功能一节夹带了代码：`{名字}`（说明只写中文逻辑，"
+                    f"反引号只留给数据键、数据取值与数据文件）"
+                )
         # 页面文案与按钮动作的唯一出处是 `展示/`，说明里不再抄一遍。**只拦这一层**：
-        # `展示/` 底下别的文件（如 `展示/行程.json` 的叙事模板、`展示/规则/文本.json` 的
-        # 措辞表）如果被代码读取与校验，那是代码逻辑的一部分，允许引用。
+        # `展示/` 底下被代码读取与校验的数据（如 `展示/行程.json` 的叙事模板）算逻辑，允许引用。
         for 面文件 in ("展示/文本.json", "展示/按钮.json", "展示/按钮/", "展示/分页.json"):
             if f"`{面文件}" in 片段:
                 problems.append(
                     f"{相对}/说明.md 的功能一节写了展示文案或按钮（{面文件}）："
-                    "页面与动作以 `展示/` 目录为准，说明只讲代码逻辑"
+                    "页面与动作以 `展示/` 目录为准，说明只讲逻辑"
                 )
-        if "`game/" not in 片段:
-            problems.append(
-                f"{相对}/说明.md 的功能一节没有引用实现它的代码：这一节讲的是代码逻辑，"
-                "依据里至少要有一条 `game/…`"
-            )
+        problems.extend(_数据集表问题(文本, 组件目录, 相对))
     return problems
 
 
+def _数据集表问题(文本: str, 组件目录: pathlib.Path, 相对: str) -> list[str]:
+    """说明末尾的 `## 数据集` 表要把本包读的每个文件都列上，且路径真的存在。"""
+
+    if "## 数据集" not in 文本:
+        return [f"{相对}/说明.md 缺「## 数据集」表（本包读过哪些文件由它统一交代）"]
+    片段 = 文本.split("## 数据集", 1)[1].split("\n## ", 1)[0]
+    问题: list[str] = []
+    行s = [
+        行 for 行 in 片段.splitlines()
+        if 行.startswith("|") and not _MD分隔行.match(行) and "数据集" not in 行
+    ]
+    if not 行s:
+        return [f"{相对}/说明.md 的数据集表没有数据行"]
+    for 行 in 行s:
+        格 = [x.strip() for x in 行.strip("|").split("|")]
+        if len(格) < 2:
+            问题.append(f"{相对}/说明.md 的数据集表列数不对：{行[:40]}")
+            continue
+        路径 = 格[1].strip("`")
+        if not 路径:
+            continue
+        if pathlib.PurePosixPath(路径).parts[0] not in 四类面:
+            continue  # 只验「从四类面开始」的组件内相对路径
+        候选 = 组件目录 / 路径
+        if not _引用存在(候选):
+            问题.append(f"{相对}/说明.md 的数据集表指向不存在的文件：{路径}")
+    return 问题
+
+
 def _引用存在(候选: pathlib.Path) -> bool:
-    if "*" in 候选.name:
-        return bool(list(候选.parent.glob(候选.name)))
+    """路径存在性（含通配符）。通配符可能出现在中间几段，所以整条相对路径一次 glob。"""
+
+    相对 = 候选.relative_to(PROJECT_ROOT).as_posix()
+    if "*" in 相对:
+        return bool(list(PROJECT_ROOT.glob(相对)))
     return 候选.exists()
+
+
+#: Markdown 结构检查用到的行型（对齐仓库根的 `.markdownlint.json`）。
+_MD标题 = re.compile(r"^(#{1,6})\s+(\S.*)$")
+_MD围栏 = re.compile(r"^(`{3,}|~{3,})\s*(\S*)\s*$")
+_MD有序 = re.compile(r"^(\s*)(\d+)\.\s")
+_MD无序 = re.compile(r"^(\s*)([-*+])\s")
+_MD表格 = re.compile(r"^\s*\|")
+_MD分隔行 = re.compile(r"^\s*\|[\s:|-]+\|\s*$")
+
+
+def _markdown问题(文本: str) -> list[str]:
+    """一份 Markdown 的结构体检（与 `.markdownlint.json` 同一套规则，行长不管）。"""
+
+    行s = 文本.splitlines()
+    问题: list[str] = []
+    if not 行s:
+        return ["空文件"]
+    # 一级标题只在**代码块外**数：代码块里的 `#` 是注释，不是标题。
+    在外 = True
+    一级 = 0
+    for 行 in 行s:
+        if _MD围栏.match(行):
+            在外 = not 在外
+            continue
+        if 在外 and 行.startswith("# "):
+            一级 += 1
+    if 一级 != 1:
+        问题.append(f"一级标题必须恰好一个（现在 {一级} 个）")
+    头 = _MD标题.match(行s[0]) if 行s else None
+    if 头 is None or len(头.group(1)) != 1:
+        问题.append("第 1 行必须是一级标题")
+    if not 文本.endswith("\n"):
+        问题.append("文件末尾要有换行")
+    if 文本.endswith("\n\n"):
+        问题.append("文件末尾多空行")
+    上级别 = 1
+    在围栏 = False
+    空行数 = 0
+    段落 = ""
+    列数 = 0
+    for i, 行 in enumerate(行s, 1):
+        if 行.rstrip() != 行:
+            问题.append(f"{i}: 行尾空白")
+        if "\t" in 行:
+            问题.append(f"{i}: 制表符")
+        栏 = _MD围栏.match(行)
+        if 栏:
+            空行数 = 0
+            if not 在围栏:
+                在围栏 = True
+                if not 栏.group(2):
+                    问题.append(f"{i}: 代码块没写语言")
+                if i > 1 and 行s[i - 2].strip():
+                    问题.append(f"{i}: 代码块前没有空行")
+            else:
+                在围栏 = False
+                if i < len(行s) and 行s[i].strip():
+                    问题.append(f"{i}: 代码块后没有空行")
+            continue
+        if 在围栏:
+            continue
+        if not 行.strip():
+            空行数 += 1
+            if 空行数 > 1 and i < len(行s):
+                问题.append(f"{i}: 连续空行")
+            段落 = ""  # 空行终结列表与表格
+            continue
+        空行数 = 0
+        标题 = _MD标题.match(行)
+        if 标题:
+            级别 = len(标题.group(1))
+            if 级别 > 上级别 + 1:
+                问题.append(f"{i}: 标题级别从 {上级别} 跳到 {级别}")
+            上级别 = 级别
+            if i > 1 and 行s[i - 2].strip():
+                问题.append(f"{i}: 标题前没有空行")
+            if i < len(行s) and 行s[i].strip():
+                问题.append(f"{i}: 标题后没有空行")
+            if 标题.group(2).rstrip().endswith(("。", "：", "，")):
+                问题.append(f"{i}: 标题以标点结尾")
+            段落 = "标题"
+            continue
+        if _MD有序.match(行) or _MD无序.match(行):
+            if 段落 != "列表" and i > 1 and 行s[i - 2].strip():
+                问题.append(f"{i}: 列表前没有空行")
+            段落 = "列表"
+            continue
+        if _MD表格.match(行):
+            if 段落 != "表格":
+                if i > 1 and 行s[i - 2].strip():
+                    问题.append(f"{i}: 表格前没有空行")
+                列数 = 行.count("|")
+                if i < len(行s) and not _MD分隔行.match(行s[i]):
+                    问题.append(f"{i}: 表格缺少分隔行")
+            elif 行.count("|") != 列数:
+                问题.append(f"{i}: 表格列数与表头不符（{行.count('|')} vs {列数}）")
+            段落 = "表格"
+            continue
+        if 段落 == "列表" and 行[:1] in {" ", "\t"}:
+            continue  # 折行续写，仍算同一个列表
+        if 段落 in {"列表", "表格"} and i > 1 and 行s[i - 2].strip():
+            问题.append(f"{i}: {段落}后没有空行")
+        段落 = "段落"
+    if 在围栏:
+        问题.append("代码块没有闭合")
+    return 问题
+
+
+def check_component_markdown() -> list[str]:
+    """每个二级组件的 `说明.md` 与 `data/说明.md` 要过 Markdown 结构检查。
+
+    负责人口径（第 84 轮）：**说明的 md 格式不要有警告**。规则与仓库根的
+    `.markdownlint.json` 一致（只关掉行长限制）：一级标题唯一且在首行、标题级别不跳级、
+    标题/列表/表格/代码块前后留空行、代码块写语言并闭合、表格列数对齐、无连续空行与行尾
+    空白、文件以单个换行结尾。**再加一条正文本身的检查**：说明里的 Markdown 链接必须指向
+    真实存在的文件（坏链是说明与数据脱节的另一种形态）。
+    """
+
+    问题: list[str] = []
+    目标 = [p.parent / "说明.md" for p in sorted(DATA.rglob("组件.json"))]
+    目标.append(DATA / "说明.md")
+    链接 = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+    for 说明 in 目标:
+        if not 说明.is_file():
+            continue
+        相对 = 说明.relative_to(PROJECT_ROOT).as_posix()
+        文本 = 说明.read_text(encoding="utf-8")
+        for 一条 in _markdown问题(文本):
+            问题.append(f"{相对} 的 Markdown：{一条}")
+        for 目标路径 in 链接.findall(文本):
+            if 目标路径.startswith(("http", "#")):
+                continue
+            去锚 = 目标路径.split("#")[0]
+            if 去锚 and not (说明.parent / 去锚).exists():
+                问题.append(f"{相对} 的链接指向不存在的文件：{目标路径}")
+    return 问题
 
 
 def check_contract_placement() -> list[str]:
@@ -462,6 +691,7 @@ def main() -> int:
     布局 = check_category_layout()
     功能 = check_component_function_docs()
     死规则 = check_unread_rule_keys(source)
+    排版 = check_component_markdown()
     print()
     if 布局:
         print(f"大类布局问题 {len(布局)} 处：")
@@ -476,9 +706,19 @@ def main() -> int:
         for item in 功能:
             print(f"  {item}")
         print()
-        print("每个组件的说明.md 要有一节「## 功能」，按点分类，依据文件必须存在。")
+        print("说明要按点写中文逻辑：不夹带代码，条目编号连续，数据集表逐条有效。")
         return 1
-    print("组件说明：每个组件都有功能一节，依据文件都在")
+    print("组件说明：中文逻辑、不夹带代码、数据集表有效")
+    if 排版:
+        print(f"说明排版问题 {len(排版)} 处：")
+        for item in 排版[:20]:
+            print(f"  {item}")
+        if len(排版) > 20:
+            print(f"  …… 另 {len(排版) - 20} 条")
+        print()
+        print("规则见仓库根的 .markdownlint.json（只关掉行长限制）。")
+        return 1
+    print("说明排版：标题、列表、表格、代码块都合规")
     if 住处:
         print(f"契约住错面 {len(住处)} 处：")
         for item in 住处:
