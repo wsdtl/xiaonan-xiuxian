@@ -264,12 +264,21 @@ COMMON_KEYS = frozenset({
 })
 
 
+#: 展示面板与分区的名字：挂在文案树上当容器，展示层按约定取整节，本身不是文案。
+DISPLAY_SECTION_KEYS = frozenset({
+    "图标", "分页", "格式", "页面", "位置", "行为", "样式", "提交", "查看", "结果", "错误",
+    "状态", "标识", "编号列", "每页数量", "标题", "副标题", "提示", "颜色", "分组", "列表",
+    "进度", "发起", "命令", "文本", "按钮", "条件",
+})
+
+
 def _rule_files() -> list[pathlib.Path]:
-    """`data/` 里「规则」面下的全部 JSON（定义面是按表遍历的词表，不在判定内）。
+    """要判「有没有人读」的数据文件：`规则` 面，加上展示面的 `文本.json`。
 
     `规则` 那一层可能在大类目录下（`宗门/规则/…`），也可能在组件目录下
     （`玩法/队伍/规则/…`、`物品/炼丹/规则/…`）。**`展示/规则/` 不是规则面**——那是
-    展示层按节/键取的叙事模板与措辞表，归展示契约管。
+    展示层按节/键取的叙事模板与措辞表，按文案判（它也是 `文本.json`）。
+    展示面的按钮与分页不判：投影器按约定整份读它们的结构。
     """
 
     目标: list[pathlib.Path] = []
@@ -277,9 +286,10 @@ def _rule_files() -> list[pathlib.Path]:
         if path.name == "组件.json":
             continue
         段 = path.relative_to(DATA).parts
-        if len(段) < 3 or "规则" not in 段[1:-1] or "展示" in 段[1:-1]:
-            continue
-        目标.append(path)
+        是规则 = len(段) >= 3 and "规则" in 段[1:-1] and "展示" not in 段[1:-1]
+        是文案 = path.name == "文本.json" and "展示" in 段
+        if 是规则 or 是文案:
+            目标.append(path)
     return 目标
 
 
@@ -335,8 +345,10 @@ def check_unread_rule_keys(source: str) -> list[str]:
     判据是保守的三条：键名作为字符串字面量出现在 `game`/`launch`/`message`（以及
     `tools`/`tests`——工具与测试也算消费者）里，或者能被源码里的 f-string 拼出来
     （`f"{prefix}系数"`），或者是读取器与展示层的通用键。
-    **只判 `规则/` 面**：`定义/` 是按表遍历的词表，`护盾加成` 在代码里 0 次字面量却被
-    16 个数据文件引用，按这条判会误删属性；`展示/规则/` 也不是规则面。
+    **`定义/` 不判**：属性表是按表遍历的词表，`护盾加成` 在代码里 0 次字面量却被
+    16 个数据文件引用，按这条判会误删属性。
+    **展示面按文案判**（`展示/**/文本.json`）：展示层按「节 / 键」取文案，没人取的字符串
+    玩家永远看不到；分区名与按钮分页按约定整份读，写进 `DISPLAY_SECTION_KEYS`。
 
     顶层键**全部**没人读的文件会额外点名——那是整份声明没人执行（`灵兽修炼.json`、
     `境界突破.json`、`同行.json`、`炼丹/规则/战丹.json` 都属于这一类）。
@@ -355,16 +367,19 @@ def check_unread_rule_keys(source: str) -> list[str]:
             字面量 |= set(re.findall(r"'([^'\n]{1,24})'", 文))
     模板 = _dynamic_key_patterns()
 
-    def 有读者(名: str) -> bool:
-        return 名 in 字面量 or 名 in COMMON_KEYS or any(t.match(名) for t in 模板)
+    def 有读者(名: str, 文案: bool) -> bool:
+        if 名 in 字面量 or any(t.match(名) for t in 模板):
+            return True
+        return 名 in (COMMON_KEYS | DISPLAY_SECTION_KEYS if 文案 else COMMON_KEYS)
 
     problems: list[str] = []
     for path in _rule_files():
         文档 = json.loads(path.read_text(encoding="utf-8"))
         相对 = path.relative_to(PROJECT_ROOT).as_posix()
+        文案 = path.name == "文本.json" and "展示" in path.relative_to(DATA).parts
         顶层 = list(文档) if isinstance(文档, dict) else []
-        死键 = [".".join(键) for 键 in _all_keys(文档) if not 有读者(键[-1])]
-        if 顶层 and all(not 有读者(str(名)) for 名 in 顶层):
+        死键 = [".".join(键) for 键 in _all_keys(文档) if not 有读者(键[-1], 文案)]
+        if 顶层 and all(not 有读者(str(名), 文案) for 名 in 顶层):
             problems.append(f"{相对}：整份没人读（顶层键 {len(顶层)} 个全无消费者），确认作废就删掉")
             continue
         if 死键:
@@ -473,13 +488,13 @@ def main() -> int:
         return 1
     print("字段契约都住在 定义/ 或 规则/")
     if 死规则:
-        print(f"没人读的规则 {len(死规则)} 份：")
+        print(f"没人读的规则或文案 {len(死规则)} 份：")
         for item in 死规则:
             print(f"  {item}")
         print()
         print("一条规则只有在有人读的时候才算规则；没人读的声明接上消费者或者删掉。")
         return 1
-    print("规则文件里的键都有消费者")
+    print("规则与展示文案里的键都有消费者")
     if problems:
         print(f"无消费者数据集 {len(problems)} 项：")
         for item in problems:

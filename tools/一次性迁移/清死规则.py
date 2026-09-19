@@ -1,12 +1,13 @@
-"""清掉规则文件里没人读的键与整份没人读的规则文件。
+"""清掉规则文件里没人读的键与整份没人读的规则文件，外加展示面里没人取的文案。
 
 负责人口径（第 83 轮）：**没用的规则删掉**。一条规则只有在**有人读**的时候才算规则；
 没人读的键是「声明了却没人执行」的谎，既不约束代码，也看不出代码到底按什么裁定。
+展示文案同理：展示层按「节 / 键」取文案，没人取的字符串玩家永远看不到。
 
 判据（保守，宁可漏删不可误删）：
 
-1. 键名是否作为**字符串字面量**出现在 `game/`、`launch/`、`message/` 里——数据键一律中文，
-   代码要读它就必须写出这个中文字符串；
+1. 键名是否作为**字符串字面量**出现在 `game/`、`launch/`、`message/`、`tools/`、`tests/` 里
+   ——数据键一律中文，代码要读它就必须写出这个中文字符串；
 2. 排除**能被 f-string 拼出来**的键（`f"{prefix}系数"` 能读 `中段系数`）——把源码里所有含
    占位符的字符串当成模板，键匹配得上就保留；
 3. 排除通用键（`说明` / `名称` / `编号` / `条件` …）——读取器与展示层按约定读；
@@ -14,6 +15,8 @@
    0 次字面量，却被 16 个数据文件引用，删了就是删属性）；只有**整份都没人读**的定义文件
    才删（见 `死文件`）。
 5. 整份文件都没人读的（`dataset(名字).get(文件主干)` 从不出现）直接删文件。
+6. 展示面**只清 `展示/*/文本.json`（含 `展示/规则/文本.json`）**：按钮与分页是投影器按约定
+   整份读的结构，不在这里判。
 
 删完之后空掉的父节点一并摘掉（`藏经阁.生效` 的三个子键全死，`生效` 也就不必留着）。
 
@@ -43,6 +46,13 @@ DATA = ROOT / "data"
     "按钮", "动作", "命令", "参数", "提示", "值", "键", "内容",
 }
 
+#: 展示面板与分区的名字（挂在文案树上当容器，本身不是文案，展示层按约定取整节）。
+展示分区键 = {
+    "图标", "分页", "格式", "页面", "位置", "行为", "样式", "提交", "查看", "结果", "错误",
+    "状态", "标识", "编号列", "每页数量", "标题", "副标题", "提示", "颜色", "分组", "列表",
+    "进度", "发起", "命令", "文本", "按钮", "条件",
+}
+
 #: 整份没人读的规则/定义文件。
 #:
 #: * `世界/位置/规则/同行.json`：`位置规则` 只被读过 `附近`（`location/service.py`），
@@ -56,12 +66,19 @@ DATA = ROOT / "data"
 #: * `物品/炼丹/规则/战丹.json`：整份只有一条 `强度规则`（强度 ↔ 允许炼制难度）。`炼药规则`
 #:   这份数据集只被取过 `丹则` / `炉法` / `难度` / `归脉`（`alchemy/service.py`），
 #:   战丹的战前寄存规则读的是 `服丹规则.服丹.战丹`（`medicine/service.py`），是另一份。
+#: * `物品/基础物品/规则/品级.json`：`物品规则` 这份数据集只被取过 `分类`（`medicine/service.py`），
+#:   `实例.字段` 那点内容代码里另有写法。
+#: * `玩法/培养/规则/人物培养.json` / `道侣培养.json`：培养玩法只读 `培养展示`，两份规则零消费者；
+#:   消耗与去向全在 `character/service.py` 与 `companion/service.py` 里。
 死文件 = (
     "世界/位置/规则/同行.json",
     "角色/规则/成长/灵兽修炼.json",
     "角色/规则/突破/境界突破.json",
     "战斗/定义/五行.json",
     "物品/炼丹/规则/战丹.json",
+    "物品/基础物品/规则/品级.json",
+    "玩法/培养/规则/人物培养.json",
+    "玩法/培养/规则/道侣培养.json",
 )
 
 
@@ -107,7 +124,12 @@ def 动态模板() -> list[re.Pattern[str]]:
 空壳 = object()
 
 
-def 清(节点: object, 字面量: set[str], 模板: list[re.Pattern[str]]) -> tuple[object, list[str]]:
+def 清(
+    节点: object,
+    字面量: set[str],
+    模板: list[re.Pattern[str]],
+    允许: set[str],
+) -> tuple[object, list[str]]:
     """递归删掉没人读的键；清空的字典整体摘除。返回（新节点, 被删的键路径）。"""
 
     删除: list[str] = []
@@ -115,12 +137,12 @@ def 清(节点: object, 字面量: set[str], 模板: list[re.Pattern[str]]) -> t
         结果: dict[str, object] = {}
         for 键, 值 in 节点.items():
             名 = str(键)
-            子, 子删 = 清(值, 字面量, 模板)
+            子, 子删 = 清(值, 字面量, 模板, 允许)
             删除.extend(f"{名}.{x}" for x in 子删)
             if 子 is 空壳:
                 删除.append(名)
                 continue
-            if 名 in 字面量 or 名 in 通用键 or any(t.match(名) for t in 模板):
+            if 名 in 字面量 or 名 in 允许 or any(t.match(名) for t in 模板):
                 结果[名] = 子
             else:
                 删除.append(名)
@@ -128,7 +150,7 @@ def 清(节点: object, 字面量: set[str], 模板: list[re.Pattern[str]]) -> t
             return 空壳, 删除
         return 结果, 删除
     if isinstance(节点, list):
-        新列表 = [清(项, 字面量, 模板) for 项 in 节点]
+        新列表 = [清(项, 字面量, 模板, 允许) for 项 in 节点]
         for _, 子删 in 新列表:
             删除.extend(子删)
         return [x for x, _ in 新列表], 删除
@@ -160,10 +182,13 @@ def main() -> int:
         段 = p.relative_to(DATA).parts
         # `规则` 面可能在第二层（组件名与大类同名）或第三层（大类/组件/规则）；
         # **`展示/` 底下也有一个叫 `规则` 的子目录**（叙事模板与措辞表），那不是规则面。
-        if len(段) < 3 or "规则" not in 段[1:-1] or "展示" in 段[1:-1]:
+        是规则 = len(段) >= 3 and "规则" in 段[1:-1] and "展示" not in 段[1:-1]
+        是文案 = p.name == "文本.json" and "展示" in 段
+        if not (是规则 or 是文案):
             continue
+        允许 = 通用键 | 展示分区键 if 是文案 else 通用键
         文档 = json.loads(p.read_text(encoding="utf-8"))
-        新文档, 删除 = 清(文档, 字面量, 模板)
+        新文档, 删除 = 清(文档, 字面量, 模板, 允许)
         if 新文档 is 空壳:
             # 顶层键全死 = 整份文件没人读，交给 死文件 处理（本轮先报出来）。
             清空文件.append(p.relative_to(DATA).as_posix())
@@ -171,15 +196,19 @@ def main() -> int:
         if not 删除:
             continue
         删键总数 += len(set(删除))
-        行.append(f"\n{p.relative_to(DATA).as_posix()}  删 {len(删除)} 个键")
+        行.append(f"\n{p.relative_to(DATA).as_posix()}  删 {len(set(删除))} 个键")
         for x in sorted(set(删除)):
             行.append(f"    - {x}")
         if args.落盘:
             p.write_text(json.dumps(新文档, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     报告 = pathlib.Path(__file__).resolve().with_name("清死规则清单.txt")
-    报告.write_text("\n".join(行) + "\n", encoding="utf-8")
-    print(f"删键 {删键总数} 个 · 明细见 {报告.relative_to(ROOT).as_posix()}")
+    if 行:
+        # 没东西可删时不覆盖留档清单（那份清单是这次改写的记录，不是每次运行的输出）。
+        报告.write_text("\n".join(行) + "\n", encoding="utf-8")
+        print(f"删键 {删键总数} 个 · 明细见 {报告.relative_to(ROOT).as_posix()}")
+    else:
+        print("没有可删的键（留档清单保持不动）")
     if 清空文件:
         print("顶层键全死、该整份删掉的文件（加进 死文件 再跑）：")
         for x in 清空文件:
