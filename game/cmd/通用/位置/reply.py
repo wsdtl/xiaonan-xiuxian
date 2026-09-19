@@ -31,7 +31,7 @@ def current(
             (copy.region_label, location.region), (copy.terrain_label, location.terrain)
         ).row(
             (copy.coordinate_label, _coordinate(copy, location.xy)),
-            (copy.altitude_label, copy.altitude.format(海拔=location.altitude)),
+            (copy.altitude_label, copy.altitude.format_map({"海拔": location.altitude})),
         )
     else:
         builder.row(
@@ -65,7 +65,7 @@ def nearby_overview(
     builder = (
         M.document()
         .header(
-            copy.overview_title.format(地点=location_name) if surface else location_name
+            copy.overview_title.format_map({"地点": location_name}) if surface else location_name
         )
         .section(copy.overview_cultivators_section, icon=copy.cultivator_icon)
     )
@@ -101,11 +101,8 @@ def nearby_cultivators(
             copy.cultivators_active_section, icon=copy.cultivator_icon
         ).field(
             result.active_companion.name,
-            copy.cultivator_summary.format(
-                境界=result.active_companion.realm_name,
-                等级=result.active_companion.level,
-                性别=result.active_companion.gender,
-                状态="",
+            copy.cultivator_summary.format_map(
+                {"境界": result.active_companion.realm_name, "等级": result.active_companion.level, "性别": result.active_companion.gender, "状态": ""},
             ),
         )
     if result.local_cultivators:
@@ -114,8 +111,8 @@ def nearby_cultivators(
             builder.line(
                 M.command(local.name, f"查看 {local.companion_id}"),
                 " · ",
-                copy.cultivator_summary.format(
-                    境界=local.realm_name, 等级=local.level, 性别=local.gender, 状态=""
+                copy.cultivator_summary.format_map(
+                    {"境界": local.realm_name, "等级": local.level, "性别": local.gender, "状态": ""}
                 ),
             )
     builder.section(
@@ -127,19 +124,16 @@ def nearby_cultivators(
     if result.cultivators:
         for cultivator in result.cultivators:
             state = copy.state_separator.join(cultivator.states)
-            summary = copy.cultivator_summary.format(
-                境界=cultivator.realm_name,
-                等级=cultivator.level,
-                性别=cultivator.gender,
-                状态="",
+            summary = copy.cultivator_summary.format_map(
+                {"境界": cultivator.realm_name, "等级": cultivator.level, "性别": cultivator.gender, "状态": ""},
             )
             direction = (
-                copy.cultivator_direction.format(
-                    方向=cultivator.direction, 距离=cultivator.distance
+                copy.cultivator_direction.format_map(
+                    {"方向": cultivator.direction, "距离": cultivator.distance}
                 )
                 if cultivator.direction
-                else copy.colocated_cultivator_direction.format(
-                    距离=cultivator.distance
+                else copy.colocated_cultivator_direction.format_map(
+                    {"距离": cultivator.distance}
                 )
             )
             builder.line(
@@ -203,12 +197,12 @@ def _append_location(
     )
     builder.item(
         index,
-        copy.location_summary.format(
-            名称=location.name, 方向=location.direction, 距离=location.distance
+        copy.location_summary.format_map(
+            {"名称": location.name, "方向": location.direction, "距离": location.distance}
         ),
     ).small(
-        copy.location_detail.format(
-            区域=location.region, 地形=location.terrain, 功能=functions
+        copy.location_detail.format_map(
+            {"区域": location.region, "地形": location.terrain, "功能": functions}
         )
     )
 
@@ -216,11 +210,11 @@ def _append_location(
 def _location_name(copy: PositionCopy, location) -> str:
     if location.location_name:
         return location.location_name
-    return copy.unknown_location.format(区域=location.region, 地形=location.terrain)
+    return copy.unknown_location.format_map({"区域": location.region, "地形": location.terrain})
 
 
 def _coordinate(copy: PositionCopy, xy: tuple[int, int]) -> str:
-    return copy.coordinate.format(横坐标=xy[0], 纵坐标=xy[1])
+    return copy.coordinate.format_map({"横坐标": xy[0], "纵坐标": xy[1]})
 
 
 def _nearby_state_tone(value: str) -> str:

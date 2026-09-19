@@ -46,7 +46,7 @@ def main() -> None:
     value = json.loads(alchemy_manifest.read_text(encoding="utf-8"))
     value["读取规则"].append({
         "数据集": "丹药",
-        "路径": "炼丹/内容/丹药/*/*.json",
+        "路径": "物品/炼丹/内容/丹药/*/*.json",
         "结构": "编号实体列表",
         "实体类别": "丹药",
         "编号类别": "丹药",

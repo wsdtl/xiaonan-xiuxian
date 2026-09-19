@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import re
 
-from message import M
 
 from .utils import (
     _display_number,
@@ -278,20 +277,20 @@ def _injury_lines(
     return tuple(lines)
 
 
-def _recipe_lines(
+def _medicine_lines(
     fields: Mapping[str, object],
     related: Mapping[str, object],
     rendered: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """丹方：炼制难度、炉法与成丹。"""
+    """丹药：既有炼出来是什么（渲染正文写的使用效果），也有怎么炼（炼制难度、炉法）。
 
-    lines = []
+    丹方并进丹药之后，一处就能读全——不再需要在「丹方」与「丹药」两份资料之间对着看。
+    """
+
+    lines = list(rendered)
     for key in ("炼制难度", "炉法"):
         if key in fields:
             lines.append(f"{key}：{fields[key]}")
-    product = _related_name(fields.get("成丹"), related)
-    if product:
-        lines.append(f"成丹：{product}")
     return tuple(lines)
 
 
@@ -337,7 +336,7 @@ def _artisan_lines(
     """炼丹师 / 炼器工匠 / 阵师：把开放清单解析成名称，其余字段平铺。"""
 
     lines = []
-    reference_keys = {"开放丹方", "开放器律", "开放阵法"}
+    reference_keys = {"开放器律", "开放阵法"}
     for key, value in fields.items():
         if (
             key in reference_keys
@@ -369,12 +368,11 @@ def _generic_lines(fields: Mapping[str, object]) -> tuple[str, ...]:
 _SECTION_LINES = {
     "道侣": _daolv_lines,
     "先天灵宝": _innate_treasure_lines,
-    "丹药": _rendered_only,
+    "丹药": _medicine_lines,
     "基础物品": _base_item_lines,
     "阵法": _formation_lines,
     "伤势": _injury_lines,
     "战场环境": _rendered_only,
-    "丹方": _recipe_lines,
     "境界": _realm_lines,
     "人物状态": _person_state_lines,
     "炼丹师": _artisan_lines,

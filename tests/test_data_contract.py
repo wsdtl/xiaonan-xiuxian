@@ -75,7 +75,7 @@ def test_builds_carry_their_own_combat_text() -> None:
         "战斗/内容/功法/功法-*.json",
         "战斗/内容/真意/真意-*.json",
         "战斗/内容/气机/气机-*.json",
-        "炼器/内容/器律-*.json",
+        "物品/炼器/内容/器律-*.json",
     )
     files = [path for pattern in patterns for path in DATA_ROOT.glob(pattern)]
     assert files

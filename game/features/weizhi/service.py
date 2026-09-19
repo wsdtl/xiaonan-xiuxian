@@ -9,7 +9,7 @@ from dataclasses import replace
 
 from game.core.character import CharacterService
 from game.core.companion import CompanionService, LocalCultivator
-from game.core.data import JsonDataError, JsonDataService, positive_int as _positive_int
+from game.core.data import JsonDataService, positive_int as _positive_int
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
@@ -307,14 +307,14 @@ class PositionFeature:
                 names += (self.copy().fellowship_conflict_state,)
             elif sect_follow is not None and sect_follow.following:
                 names += (
-                    self.copy().sect_follow_leader_state.format(
-                        人数=sect_follow.member_count
+                    self.copy().sect_follow_leader_state.format_map(
+                        {"人数": sect_follow.member_count}
                     )
                     if sect_follow.leading
                     else self.copy().sect_follow_member_state,
                 )
             elif team is not None and team.grouped:
-                names += (self.copy().team_state.format(人数=team.member_count),)
+                names += (self.copy().team_state.format_map({"人数": team.member_count}),)
             visible.append(
                 NearbyCultivatorView(
                     user_id=candidate.user_id,

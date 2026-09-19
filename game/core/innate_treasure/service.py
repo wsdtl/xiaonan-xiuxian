@@ -72,7 +72,7 @@ class InnateTreasureService:
             raise RuntimeError("核心数据库必须先于先天灵宝核心启动")
         rules = _mapping(
             self._data.dataset("先天灵宝规则").get("先天灵宝"),
-            "先天灵宝/规则/先天灵宝.json",
+            "玩法/先天灵宝/规则/先天灵宝.json",
         )
         self._validate_rules(rules)
         self._page_limit = _positive_int(
@@ -81,7 +81,7 @@ class InnateTreasureService:
         )
         contract = ContractSet.load(
             self._data.dataset("先天灵宝字段契约").get("先天灵宝字段契约"),
-            "先天灵宝/内容/先天灵宝字段契约.json",
+            "玩法/先天灵宝/规则/先天灵宝字段契约.json",
         )
         treasures = {}
         for treasure_id, raw in self._data.entities("先天灵宝").items():

@@ -39,7 +39,13 @@ DEFAULT_BASELINE = ROOT / "tools" / "基准" / "查看结果摘要.json"
 
 
 def _canonical(value: object) -> object:
-    """把冻结消息变成可比较的普通结构（元组与映射都归一化）。"""
+    """把冻结消息变成可比较的普通结构（元组与映射都归一化）。
+
+    归一化的意义不只是「变成普通结构」：基准是用 `sort_keys=True` 写盘的，键序被排过；
+    而内存里的摘要是插入序。Python 的 `dict.__eq__` 对嵌套字典是**键序敏感**的，直接比
+    会把每一条都判成差异（实测 3987 条全红）。所以**读基准之后也要过这里**，让两边
+    的键序落到同一个规范形。
+    """
 
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {
@@ -53,6 +59,12 @@ def _canonical(value: object) -> object:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def _stable(value: object) -> str:
+    """规范化并且**键序无关**的序列化，用于比较。"""
+
+    return json.dumps(_canonical(value), ensure_ascii=False, sort_keys=True)
 
 
 def digest(root: pathlib.Path) -> tuple[dict[str, object], list[str]]:
@@ -78,8 +90,8 @@ def digest(root: pathlib.Path) -> tuple[dict[str, object], list[str]]:
 
 
 def _line_diff(field: str, old: object, new: object) -> list[str]:
-    before = json.dumps(old, ensure_ascii=False, sort_keys=True)
-    after = json.dumps(new, ensure_ascii=False, sort_keys=True)
+    before = _stable(old)
+    after = _stable(new)
     if before == after:
         return []
     return [f"-{field} {before[:160]}", f"+{field} {after[:160]}"]
@@ -125,6 +137,8 @@ def main() -> int:
     if not isinstance(expected, dict):
         print(f"基准结构不对：{baseline} 应为对象")
         return 2
+    # 基准过一遍规范化：两边键序才会落到同一规范形（见 `_canonical` 的说明）。
+    expected = _canonical(expected)
 
     changed = sorted(
         key for key in summary.keys() & expected.keys() if summary[key] != expected[key]

@@ -40,14 +40,27 @@ class JsonDataService:
             pool_count=loaded.pool_count if loaded is not None else 0,
         )
 
-    def initialize(self) -> JsonDataStatus:
-        """构建本进程唯一快照；数据更新必须通过重启服务生效。"""
+    def initialize(self, expand=None) -> JsonDataStatus:
+        """构建本进程唯一快照；数据更新必须通过重启服务生效。
 
+        装载期默认跑构筑模板展开（`game.core.combat.service.expand_build_section`）。
+        这一步**不能省**：卡里可以只写「模板 + 参数」，展开必须在快照冻结之前完成，
+        否则快照里会同时存在「引用」与「展开后的树」两种形态，读取方各拿一种。
+
+        钩子按需导入，避免数据层在模块顶层依赖战斗层；`expand` 传 False 可显式关闭。
+        """
+
+        if expand is None:
+            from game.core.combat.service import expand_build_section
+
+            expand = expand_build_section
+        elif expand is False:
+            expand = None
         with self._load_lock:
             if self._loaded is not None:
                 raise RuntimeError("正式 JSON 已加载；数据更新必须重启服务")
 
-            loaded = GameDataLoader(JsonDataReader(self._root)).load()
+            loaded = GameDataLoader(JsonDataReader(self._root)).load(expand)
             self._loaded = loaded
             return self.status()
 
@@ -173,6 +186,26 @@ class JsonDataService:
             (entity_id, _select_fields(value, field_names))
             for entity_id, value in values
         )
+
+    def replace_entities(
+        self, section: str, values: Mapping[str, Mapping[str, Any]]
+    ) -> None:
+        """用处理过的实体替换某个类别的索引。
+
+        载入期一次性改写用：构筑模板引用必须先展开成完整的树，之后**所有**读取方
+        （校验、引擎、卡面渲染、战报）才会看到同一棵树。若只在校验或解析的某一处
+        展开，同一份实体就会有两种形态，实测会让对局结果漂移。
+
+        只动实体索引，不碰文件、资源池和编号记录——展开不改编号，也不改池成员。
+        """
+
+        section_name = str(section or "").strip()
+        loaded = self._require_loaded()
+        if section_name not in loaded.entities:
+            raise JsonDataError(f"未知实体类别：{section_name or '<空>'}")
+        merged = dict(loaded.entities)
+        merged[section_name] = MappingProxyType(dict(values))
+        object.__setattr__(loaded, "entities", MappingProxyType(merged))
 
     def document_paths(self) -> tuple[str, ...]:
         return tuple(

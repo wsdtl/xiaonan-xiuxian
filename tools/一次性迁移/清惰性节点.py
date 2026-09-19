@@ -105,7 +105,7 @@ def prune(node, state, stats, removed):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="写回数据文件")
-    parser.add_argument("--报告", dest="report", default="_清惰性节点.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/清惰性节点.txt")
     args = parser.parse_args()
 
     found = audit.collect()
@@ -138,6 +138,7 @@ def main() -> int:
 
     changed = rename.write_back(entities) if args.apply else []
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"合计摘掉 {sum(stats.values())} 个节点\n")
     for key, count in stats.most_common():

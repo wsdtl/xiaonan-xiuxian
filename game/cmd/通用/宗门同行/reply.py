@@ -65,8 +65,8 @@ def page(
         ).row(
             (
                 _text(copy, "查看", "人数"),
-                _text(copy, "格式", "人数").format(
-                    当前=len(value.members), 上限=value.maximum_members
+                _text(copy, "格式", "人数").format_map(
+                    {"当前": len(value.members), "上限": value.maximum_members}
                 ),
             ),
             ("领队", leader),
@@ -82,7 +82,7 @@ def operation(
     value: SectFollowResult,
     actions: tuple[SectFollowAction, ...],
 ):
-    notice = _text(copy, "结果", value.action).format(姓名=value.target_name)
+    notice = _text(copy, "结果", value.action).format_map({"姓名": value.target_name})
     return page(copy, value.page, actions, notice=notice)
 
 

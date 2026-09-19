@@ -14,7 +14,7 @@ from message import M
 def view(feature: CompanionCultivationFeature, result: CompanionCultivationView):
     definition = result.definition
     instance = result.instance
-    title = feature.copy("道侣", "标题").format(名称=definition.name)
+    title = feature.copy("道侣", "标题").format_map({"名称": definition.name})
     builder = (
         M.document()
         .header(title)
@@ -54,10 +54,8 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
 def breakthrough(
     feature: CompanionCultivationFeature, result: CompanionBreakthroughResult
 ):
-    text = feature.copy("突破", "道侣成功").format(
-        名称=result.view.definition.name,
-        丹药=result.medicine_name,
-        境界=result.view.realm_name,
+    text = feature.copy("突破", "道侣成功").format_map(
+        {"名称": result.view.definition.name, "丹药": result.medicine_name, "境界": result.view.realm_name},
     )
     return (
         M.document()
@@ -68,8 +66,8 @@ def breakthrough(
 
 
 def forged(feature: CompanionCultivationFeature, result: CompanionLawResult):
-    text = feature.copy("覆炼", "道侣成功").format(
-        名称=result.view.definition.name, 器律=result.law_name, 孔位=result.slot
+    text = feature.copy("覆炼", "道侣成功").format_map(
+        {"名称": result.view.definition.name, "器律": result.law_name, "孔位": result.slot}
     )
     return (
         M.document()

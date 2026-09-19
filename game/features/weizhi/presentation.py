@@ -55,7 +55,7 @@ def load_position_presentation(
         "位置展示数据集",
     )
     distance_and_direction = require_mapping(
-        dataset["距离与方向"], "位置/展示/规则/距离与方向.json"
+        dataset["距离与方向"], "世界/位置/展示/规则/距离与方向.json"
     )
     _require_keys(
         distance_and_direction,
@@ -66,22 +66,22 @@ def load_position_presentation(
     _require_keys(distance, {"单位", "每里米数", "约数步长"}, "距离与方向.距离")
     function_buttons = _button_templates(
         dataset["地点功能"],
-        "位置/展示/按钮/地点功能.json",
+        "世界/位置/展示/按钮/地点功能.json",
         function_buttons=True,
     )
     terrain_buttons = _button_templates(
         dataset["地形功能"],
-        "位置/展示/按钮/地形功能.json",
+        "世界/位置/展示/按钮/地形功能.json",
         function_buttons=True,
     )
     position_buttons = _button_templates(
         dataset["位置"],
-        "位置/展示/按钮/位置.json",
+        "世界/位置/展示/按钮/位置.json",
         default_page="位置",
     )
     nearby_buttons = _button_templates(
         dataset["附近"],
-        "位置/展示/按钮/附近.json",
+        "世界/位置/展示/按钮/附近.json",
     )
     buttons = function_buttons + terrain_buttons + position_buttons + nearby_buttons
     identities = tuple((item.page, item.action_id) for item in buttons)
@@ -136,8 +136,8 @@ def _direction_map(value: object) -> dict[tuple[int, int], str]:
 
 
 def _position_copy(value: object, icon_value: object) -> PositionCopy:
-    root = require_mapping(value, "位置/展示/规则/文本.json")
-    icons = require_mapping(icon_value, "位置/展示/规则/图标.json")
+    root = require_mapping(value, "世界/位置/展示/规则/文本.json")
+    icons = require_mapping(icon_value, "世界/位置/展示/规则/图标.json")
     _require_keys(
         root,
         {"格式", "位置", "附近概览", "附近修士", "附近地点", "命令"},

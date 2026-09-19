@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from game.core.data import JsonDataError, JsonDataService
+from game.core.data import JsonDataService
 from game.core.database import (
     DatabaseService,
     IdempotencyConflictError,
@@ -48,17 +48,17 @@ class InnateTreasureFeature:
             raise RuntimeError("数据库核心必须先于先天灵宝玩法启动")
         self._copy = require_mapping(
             self._data.dataset("先天灵宝展示").get("文本"),
-            "先天灵宝/展示/文本.json",
+            "玩法/先天灵宝/展示/文本.json",
         )
         self._page_limit = self._treasures.status().page_limit
         self._initialized = True
 
-    def copy(self, key: str, **values: object) -> str:
+    def copy(self, key: str, values: Mapping[str, object] | None = None) -> str:
         self._require_initialized()
         text = self._copy.get(key)
         if not isinstance(text, str) or not text.strip():
             raise RuntimeError(f"先天灵宝展示缺少文本：{key}")
-        return text.format_map(values)
+        return text.format_map(values or {})
 
     async def inspect(self, user_id: str, page: int = 1) -> InnateTreasureView:
         self._require_initialized()

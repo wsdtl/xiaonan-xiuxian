@@ -44,8 +44,8 @@ class RaidFeature:
             }
         )
 
-    def text(self, section: str, key: str, **values: object) -> str:
-        return self._text[section][key].format_map(values)
+    def text(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
+        return self._text[section][key].format_map(values or {})
 
     async def start(self, user_id: str, request_id: str) -> RaidStarted:
         try:

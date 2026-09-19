@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -131,9 +131,42 @@ class GameDataLoader:
     def __init__(self, reader: JsonDataReader) -> None:
         self.reader = reader
 
-    def load(self) -> LoadedGameData:
+    def load(self, expand: "Callable[[str, Mapping[str, Any]], Any] | None" = None) -> LoadedGameData:
+        """读取并建立运行期只读索引。
+
+        `expand` 是**装载期后处理钩子**：逐段落对实体索引做一次改写，发生在快照
+        冻结**之前**。构筑模板引用必须在这里展开成完整的树，否则「快照里的原始形态」
+        与「某处展开后的形态」会并存，同一个实体出现两种样子，读取方各拿一种。
+        """
+
         catalog = self.reader.load_catalog()
         entities, records, pools = _index_content(catalog)
+        if expand is not None:
+            # 一个段落有**两份索引**：`entities`（按类别取实体）与 `records`
+            # （`JsonEntity`，带来源与编号类别）。两者的 `value` 原本指向同一个对象，
+            # 所以展开必须**同时改写两份**——只改前者会让 `numbered_entities()` 这条
+            # 读取路径继续看到未展开的引用（实测：查看页把模板引用渲染成
+            # `〈未支持：〉`，而战斗语料一条都测不出来，因为战斗走的是 `entities`）。
+            for section in tuple(entities):
+                expanded = expand(section, entities[section])
+                if expanded is entities[section]:
+                    continue
+                # 钩子返回的是普通字典（展开要构造新映射）。**必须逐个实体重新裹回只读**：
+                # `MappingProxyType(dict(...))` 只冻结外层映射，内层实体仍是普通字典，
+                # 快照的只读承诺就破了（`test_snapshot_is_read_only` 会抓到）。
+                frozen = {
+                    entity_id: MappingProxyType(dict(value))
+                    for entity_id, value in expanded.items()
+                }
+                entities[section] = MappingProxyType(frozen)
+                records[section] = {
+                    entity_id: (
+                        replace(record, value=frozen[entity_id])
+                        if record.value is not frozen[entity_id]
+                        else record
+                    )
+                    for entity_id, record in records[section].items()
+                }
         _validate_number_prefixes(catalog)
         loaded = LoadedGameData(
             catalog=catalog,
@@ -205,7 +238,11 @@ def _index_content(
                     number_category=descriptor.number_category,
                     source_file=document.file_id,
                     directory_owner=descriptor.directory_owner,
-                    value=value,
+                    # 快照承诺只读，而 `entity_records[..].value` 是**另一条**读取路径
+                    # （`numbered_entities()`、`实体查询`）。原先这里放普通字典，
+                    # 于是同一个实体从 `entities` 拿是只读、从 `records` 拿是可写——
+                    # 迁移后把功能测试的读取路径从前者换到后者才暴露出来。
+                    value=MappingProxyType(dict(value)),
                 )
                 continue
             if _entity_signature(previous) != _entity_signature(value):

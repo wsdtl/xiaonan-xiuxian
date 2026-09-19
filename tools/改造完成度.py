@@ -21,13 +21,18 @@ import argparse
 import collections
 import json
 import pathlib
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from 全库扫描 import 全库来源  # noqa: E402
+from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 SURFACES = (
     ("功法", "data/战斗/内容/功法/功法-*.json"),
     ("真意", "data/战斗/内容/真意/真意-*.json"),
     ("气机", "data/战斗/内容/气机/气机-*.json"),
-    ("器律", "data/炼器/内容/器律-*.json"),
+    ("器律", "data/物品/炼器/内容/器律-*.json"),
 )
 CAP_FIELD = "每次行动最多触发"
 ENGINE_ORIGINS = tuple(
@@ -73,30 +78,11 @@ def corpus_origins() -> set[str]:
     """全库（不只四类构筑卡）用到的读取来源。
 
     空位审计原来只扫 `SOURCES` 那四类卡，于是战丹/伤势/战场环境里用到的来源仍被报成"没人用"
-    （`目标当前护盾` 就栽在这上面）。空位说的是**全库**，就得扫全库。
+    （`目标当前护盾` 就栽在这上面）。空位说的是**全库**，就得扫全库——而且模板引用
+    得先展开，否则 `读取数值` 藏在模板主体里数不到。两件事都在 `全库扫描` 里。
     """
 
-    used: set[str] = set()
-
-    def walk(node: object) -> None:
-        if isinstance(node, dict):
-            if node.get("能力") == "读取数值" and node.get("来源"):
-                used.add(str(node["来源"]))
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            for value in node:
-                walk(value)
-
-    for path in sorted(ROOT.glob("data/**/*.json")):
-        if "/定义/" in path.as_posix():
-            continue
-        try:
-            document = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            continue
-        walk(document)
-    return used
+    return 全库来源()
 
 
 def main() -> int:
@@ -114,7 +100,9 @@ def main() -> int:
 
     for section, pattern in SURFACES:
         for path in sorted(ROOT.glob(pattern)):
-            for entry in json.loads(path.read_text(encoding="utf-8")):
+            # 模板引用先展开：迁移之后一条效果可能只剩 `{"模板": …}`，
+            # 不展开就把「这张卡的时点/来源/限额各有几种」数成 1 种。
+            for entry in _load_build_json(path):
                 total += 1
                 info = profile(entry)
                 per_file_total[f"{section}/{path.stem}"] += 1

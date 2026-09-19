@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from game.features.zongmen_cangjing import CangjingCopy, CangjingPage
 from message import M
 
@@ -32,7 +34,7 @@ def page(copy: CangjingCopy, value: CangjingPage, actions):
                 submit=False,
             ),
         )
-    builder.small(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
+    builder.small(_text(copy, "页码", {"当前页": value.page, "总页数": value.page_count}))
     builder.small(_text(copy, "说明"))
     return builder.actions(message_actions(actions)).build()
 
@@ -46,10 +48,7 @@ def borrowed(copy: CangjingCopy, value):
         .line(
             _text(
                 copy,
-                "借阅",
-                品级=value.technique.grade_name,
-                名称=value.technique.name,
-                槽位=value.slot,
+                "借阅", {"品级": value.technique.grade_name, "名称": value.technique.name, "槽位": value.slot},
             )
         )
         .build()
@@ -65,8 +64,8 @@ def error(copy: CangjingCopy, message: str):
     )
 
 
-def _text(copy: CangjingCopy, key: str, **values: object) -> str:
-    return copy.text[key].format_map(values)
+def _text(copy: CangjingCopy, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[key].format_map(values or {})
 
 
 __all__ = ["borrowed", "error", "page"]

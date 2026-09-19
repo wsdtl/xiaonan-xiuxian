@@ -219,7 +219,8 @@ def inert_report(found) -> str:
 
 def main() -> int:
     found = collect()
-    out = io.TextIOWrapper(open(ROOT / "_词条作用域.txt", "wb"), encoding="utf-8")
+    (ROOT / "_输出").mkdir(exist_ok=True)
+    out = io.TextIOWrapper(open(ROOT / "_输出" / "词条作用域.txt", "wb"), encoding="utf-8")
 
     verdicts = collections.Counter()
     failures: list[str] = []
@@ -282,7 +283,7 @@ def main() -> int:
     for kind in sorted(found):
         print(f"{kind}: {len(found[kind])} 个名字")
     if failures:
-        print(f"词条作用域审查失败：{len(failures)} 项，详见 _词条作用域.txt")
+        print(f"词条作用域审查失败：{len(failures)} 项，详见 _输出/词条作用域.txt")
         return 1
     print("词条作用域审查通过：卡片私有池无跨实体重名")
     return 0

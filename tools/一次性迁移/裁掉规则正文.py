@@ -44,7 +44,7 @@ def trim(text: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="写回数据文件")
-    parser.add_argument("--报告", dest="report", default="_裁掉规则正文.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/裁掉规则正文.txt")
     args = parser.parse_args()
 
     entities = rename.load_entities()
@@ -73,6 +73,7 @@ def main() -> int:
 
     changed = rename.write_back(entities) if args.apply else []
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"处理实体 {sum(stats.values())}\n")
     for key, count in stats.most_common(6):

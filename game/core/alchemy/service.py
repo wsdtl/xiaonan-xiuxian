@@ -59,7 +59,9 @@ from .contracts import (
 from game.core.data import sequence as _sequence, strict_text, strict_text as _text
 
 _CATEGORIES = ("恢复丹", "战丹", "突破丹", "特殊丹")
-_RECIPE_CATEGORIES = {"11": "恢复丹", "13": "战丹", "15": "突破丹", "17": "特殊丹"}
+#: 编号前缀 → 类别。丹方并进丹药之后，前缀就是**丹药**那四段（10/12/14/16）；
+#: 过去的丹方段（11/13/15/17）已经没有实体了。
+_RECIPE_CATEGORIES = {"10": "恢复丹", "12": "战丹", "14": "突破丹", "16": "特殊丹"}
 _SECONDARY_COST = 1_000_000_000
 _GRADE_COST = 100_000
 
@@ -312,7 +314,7 @@ class AlchemyService:
         if committed is not None:
             if (
                 committed.receipt.business_type != "炼丹"
-                or committed.payload.get("丹方编号") != recipe.recipe_id
+                or committed.payload.get("丹药编号") != recipe.recipe_id
             ):
                 raise AlchemyConflictError("请求编号已经用于其他操作")
             return self._replayed_result(normalized, recipe, committed.payload)
@@ -377,7 +379,7 @@ class AlchemyService:
             payload = {
                 "地点": preview.location_name,
                 "丹师编号": preview.alchemist.alchemist_id,
-                "丹方编号": preview.recipe.recipe_id,
+                "丹药编号": preview.recipe.recipe_id,
                 "成丹编号": preview.recipe.medicine_id,
                 "成丹品级": preview.medicine_grade_id,
                 "原数量": output.before_quantity,
@@ -628,7 +630,7 @@ class AlchemyService:
         if recipe is None:
             recipe = self._recipes.get(self._recipe_by_medicine.get(query, ""))
         if recipe is None:
-            raise AlchemyError(f"未找到唯一丹方：{query or '<空>'}")
+            raise AlchemyError(f"未找到唯一丹药：{query or '<空>'}")
         return recipe
 
     def _load_methods(self, value: object) -> dict[str, tuple[str, ...]]:
@@ -685,36 +687,38 @@ class AlchemyService:
         return result
 
     def _load_recipes(self) -> dict[str, AlchemyRecipe]:
+        """丹药**自己就是处方**：`炉法` / `炼制难度` 与 `使用效果` 写在同一份实体里。
+
+        丹方并进丹药之后，`recipe_id` 与 `medicine_id` 是同一个编号（第 76 轮）；
+        过去那张「丹方 → 成丹」的跳转表不再存在。
+        """
+
         result: dict[str, AlchemyRecipe] = {}
         names: set[str] = set()
-        medicines: set[str] = set()
         contract = ContractSet.from_dataset(
-            self._data.dataset("炼丹字段契约"), "炼丹/规则/炼丹字段契约.json"
+            self._data.dataset("炼丹字段契约"), "物品/炼丹/规则/炼丹字段契约.json"
         )
-        for recipe_id, raw in self._data.entities("丹方").items():
-            contract.validate(raw, "丹方", f"丹方 {recipe_id}")
-            name = _text(raw.get("名称"), f"丹方 {recipe_id}.名称")
-            method = _text(raw.get("炉法"), f"丹方 {name}.炉法")
-            medicine_id = _text(raw.get("成丹"), f"丹方 {name}.成丹")
-            difficulty = _positive_int(raw.get("炼制难度"), f"丹方 {name}.炼制难度")
-            if name in names or medicine_id in medicines:
-                raise JsonDataError(f"丹方名称或成丹重复：{name}")
+        for medicine_id, raw in self._data.entities("丹药").items():
+            contract.validate(raw, "丹药", f"丹药 {medicine_id}")
+            name = _text(raw.get("名称"), f"丹药 {medicine_id}.名称")
+            method = _text(raw.get("炉法"), f"丹药 {name}.炉法")
+            difficulty = _positive_int(raw.get("炼制难度"), f"丹药 {name}.炼制难度")
+            if name in names:
+                raise JsonDataError(f"丹药名称重复：{name}")
             if method not in self._methods or difficulty not in self._difficulties:
-                raise JsonDataError(f"丹方引用未知炉法或难度：{name}")
-            medicine = self._data.entity("丹药", medicine_id)
-            category = _RECIPE_CATEGORIES.get(recipe_id[:2], "")
+                raise JsonDataError(f"丹药引用未知炉法或难度：{name}")
+            category = _RECIPE_CATEGORIES.get(medicine_id[:2], "")
             if category not in _CATEGORIES:
-                raise JsonDataError(f"丹方成丹类别错误：{name} -> {category}")
+                raise JsonDataError(f"丹药类别错误：{name} -> {category}")
             names.add(name)
-            medicines.add(medicine_id)
-            result[recipe_id] = AlchemyRecipe(
-                recipe_id,
+            result[medicine_id] = AlchemyRecipe(
+                medicine_id,
                 name,
                 category,
                 difficulty,
                 method,
                 medicine_id,
-                _text(medicine.get("名称"), f"丹药 {medicine_id}.名称"),
+                name,
             )
         return result
 
@@ -747,7 +751,7 @@ class AlchemyService:
             difficulty = self._difficulties[recipe.difficulty]
             count = len(self._methods[recipe.method])
             if not difficulty.herb_range[0] <= count <= difficulty.herb_range[1]:
-                raise JsonDataError(f"丹方炉法味数与难度不一致：{recipe.name}")
+                raise JsonDataError(f"丹药炉法味数与难度不一致：{recipe.name}")
         locations = {
             item.name
             for item in self._world.map_view().locations

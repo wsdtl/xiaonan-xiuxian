@@ -94,14 +94,14 @@ class TongquetaiFeature:
         self._buttons = tuple(_button(raw, index) for index, raw in enumerate(buttons))
         self._copy = document
 
-    def copy(self, section: str, key: str, **values: object) -> str:
+    def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:
             raise RuntimeError("铜雀台玩法尚未初始化")
         group = self._copy.get(section)
         value = group.get(key) if isinstance(group, Mapping) else None
         if not isinstance(value, str) or not value.strip():
             raise RuntimeError(f"铜雀台展示缺少文本：{section}.{key}")
-        return value.format_map(values)
+        return value.format_map(values or {})
 
     def actions(self, *, has_medicine: bool) -> tuple[Mapping[str, object], ...]:
         return tuple(

@@ -90,7 +90,7 @@ class RaidService:
             raise RuntimeError("敌人核心必须先于讨伐核心启动")
         rules = self._data.dataset("玩法规则").get("讨伐")
         if not isinstance(rules, Mapping):
-            raise JsonDataError("讨伐/规则/讨伐.json 必须是对象")
+            raise JsonDataError("玩法/讨伐/规则/讨伐.json 必须是对象")
         self._rules = dict(rules)
         self._state_id = _text(self._rules.get("行为状态"), "讨伐.行为状态")
         self._initialized = True

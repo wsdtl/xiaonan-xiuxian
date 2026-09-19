@@ -5,7 +5,7 @@
 下一批的差异核对混进了上一批的旧差异。当时是靠「越界差异的编号全是上一批的」才反推出来。
 
 这条检查把这类错变成一次显式的失败：**基准目录**里凡是名字里带两个后缀的（`*.json.sem`
-这类拼接产物）一律报错。只查 `tools/基准`——根目录的 `_语料.sem` 是跑语料用的临时摘要，
+这类拼接产物）一律报错。只查 `tools/基准`——`_输出/` 下的 `语料.sem` 是跑语料用的临时摘要，
 本就不入库，不在管辖范围（否则每跑一次语料就红一片，检查会被人无视）。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查基准文件.py
@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import pathlib
-import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASELINE_DIR = ROOT / "tools" / "基准"

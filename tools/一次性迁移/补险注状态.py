@@ -179,7 +179,7 @@ def apply_card(entity: rename.Entity, taken: set[str], stats) -> tuple[str | Non
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="写回数据文件")
-    parser.add_argument("--报告", dest="report", default="_补险注状态.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/补险注状态.txt")
     args = parser.parse_args()
 
     entities = rename.load_entities()
@@ -200,6 +200,7 @@ def main() -> int:
 
     changed = rename.write_back(entities) if args.apply else []
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"读「{TARGET}」层数的卡 {targets} 张\n")
     for key, count in stats.most_common():

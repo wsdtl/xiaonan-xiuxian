@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from game.features.zongmen_lingcang import LingcangCopy, LingcangPage
 from message import M
 
@@ -31,7 +33,7 @@ def page(copy: LingcangCopy, value: LingcangPage, actions):
             f" × {entry.quantity}",
         ).small(f"{entry.category} · {entry.content_id}")
     if value.page_count > 1:
-        builder.small(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
+        builder.small(_text(copy, "页码", {"当前页": value.page, "总页数": value.page_count}))
     return builder.actions(message_actions(actions)).build()
 
 
@@ -47,10 +49,7 @@ def donated_material(copy: LingcangCopy, result):
         .line(
             _text(
                 copy,
-                "捐入材料",
-                品级=entry.grade_name,
-                名称=entry.name,
-                数量=entry.quantity,
+                "捐入材料", {"品级": entry.grade_name, "名称": entry.name, "数量": entry.quantity},
             )
         )
     )
@@ -70,7 +69,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result):
         .header(_text(copy, "标题"))
         .section("捐入灵藏", icon="success")
         .line(M.status("捐献完成", tone="positive"))
-        .line(_text(copy, "捐入灵石", 数量=quantity, 余额=result.spirit_stones))
+        .line(_text(copy, "捐入灵石", {"数量": quantity, "余额": result.spirit_stones}))
     )
     if result.contribution:
         builder.field("宗门贡献", M.text(f"+{result.contribution}", tone="positive"))
@@ -91,8 +90,8 @@ def error(copy: LingcangCopy, message: str):
     )
 
 
-def _text(copy: LingcangCopy, key: str, **values: object) -> str:
-    return copy.text[key].format_map(values)
+def _text(copy: LingcangCopy, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[key].format_map(values or {})
 
 
 __all__ = ["donated_material", "donated_stones", "error", "page"]

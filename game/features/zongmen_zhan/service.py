@@ -104,14 +104,14 @@ class SectWarFeature:
     async def view(self, user_id, war_id):
         return await self._war.view(user_id, war_id)
 
-    def text(self, section: str, key: str, **values: object) -> str:
+    def text(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._text is None:
             raise RuntimeError("宗门战玩法尚未初始化")
         try:
             template = self._text[section][key]
         except KeyError as exc:
             raise RuntimeError(f"宗门战展示缺少文本：{section}.{key}") from exc
-        return template.format_map(values)
+        return template.format_map(values or {})
 
     def error(self, error: SectWarError) -> str:
         if self._text is not None and error.code in self._text["错误"]:

@@ -1300,7 +1300,7 @@ class CompanionService:
         slots_value = _mapping(value.get("修行槽位"), "道侣.修行槽位")
         qualification_growth = _mapping(value.get("资质成长修正"), "道侣.资质成长修正")
         medicine_rules = _mapping(
-            self._data.dataset("服丹规则").get("服丹"), "服丹/规则/服丹.json"
+            self._data.dataset("服丹规则").get("服丹"), "玩法/服丹/规则/服丹.json"
         )
         medicine_auto = _mapping(medicine_rules.get("自动用药"), "服丹.自动用药")
         return CompanionRules(
@@ -1338,7 +1338,7 @@ class CompanionService:
     def _load_plant_pool_meridians(self) -> Mapping[str, str]:
         rows = _sequence(
             self._data.dataset("炼药规则").get("归脉"),
-            "炼丹/规则/归脉.json",
+            "物品/炼丹/规则/归脉.json",
         )
         result: dict[str, str] = {}
         for raw in rows:

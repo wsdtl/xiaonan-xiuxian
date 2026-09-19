@@ -7,6 +7,7 @@
 
 import asyncio
 import json
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -20,6 +21,10 @@ from game.core.combat.contracts import (
 )
 
 DATA = Path(__file__).resolve().parents[1] / "data"
+if str(DATA.parent / "tools") not in sys.path:
+    sys.path.insert(0, str(DATA.parent / "tools"))
+
+from 构筑模板展开 import expand_build_document  # noqa: E402
 ATTRS = {
     "血气上限": 1200,
     "精神上限": 400,
@@ -34,7 +39,8 @@ ATTRS = {
     "格挡率": 10,
     "破格率": 5,
     "格挡减伤": 30,
-    "伤害加成": 0,
+    # 加成口径的基准是 100（不增不减）：这里写 0 等于「伤害加成 0%」，会把伤害乘成 0。
+    "伤害加成": 100,
     "伤害减免": 0,
 }
 #: 目前没有已知会崩的战前状态；任何一处崩溃都必须在这里显式登记理由。
@@ -43,13 +49,16 @@ KNOWN_LOOPING: set[str] = set()
 
 def _battle_pills() -> list[dict]:
     entries: list[dict] = []
-    for path in sorted((DATA / "炼丹/内容/丹药/战丹").glob("*.json")):
-        entries.extend(json.loads(path.read_text(encoding="utf-8")))
+    for path in sorted((DATA / "物品/炼丹/内容/丹药/战丹").glob("*.json")):
+        # 监听节点已经模板化；不展开拿到的是引用，会被判成「不是监听事件节点」。
+        entries.extend(expand_build_document(json.loads(path.read_text(encoding="utf-8"))))
     return entries
 
 
 def _injuries() -> list[dict]:
-    return json.loads((DATA / "角色/内容/伤势.json").read_text(encoding="utf-8"))
+    return expand_build_document(
+        json.loads((DATA / "角色" / "内容" / "伤势.json").read_text(encoding="utf-8"))
+    )
 
 
 @pytest.fixture(scope="module")

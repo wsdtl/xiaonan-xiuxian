@@ -27,9 +27,10 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 #: 执行 `清惰性节点.py` 之前的那份数据，原监听从它取。
-BACKUP = pathlib.Path(
-    r"C:\Users\DengXiaonan\Desktop\_晓楠修仙_重构备份\20260911-182043-清惰性前\data"
-)
+#:
+#: **不写死机器路径**（原先是 `C:\Users\<别人>\...\_晓楠修仙_重构备份\…`，换台机器就跑不了）：
+#: 用 `--备份 <data 目录>` 传，不传就直接报错——这个脚本只在那一次补内容时用过。
+BACKUP = pathlib.Path()
 
 #: 被摘空监听的 13 枚战丹。
 EMPTY = [
@@ -52,7 +53,7 @@ rename = _load("词条改名", "tools/一次性迁移/重命名词条.py")
 
 
 def backup_pill(identity: str) -> dict | None:
-    for path in sorted(BACKUP.glob("炼丹/内容/丹药/战丹/*.json")):
+    for path in sorted(BACKUP.glob("物品/炼丹/内容/丹药/战丹/*.json")):
         for entry in json.loads(path.read_text(encoding="utf-8")):
             if str(entry["编号"]) == identity:
                 return entry
@@ -119,10 +120,22 @@ def payoff(counter: str) -> dict:
 
 
 def main() -> int:
+    global BACKUP
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="写回数据文件")
-    parser.add_argument("--报告", dest="report", default="_补空规则战丹.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/补空规则战丹.txt")
+    parser.add_argument(
+        "--备份",
+        dest="backup",
+        default="",
+        help="执行清惰性节点之前的那份 data 目录（必填：原监听只能从它取）",
+    )
     args = parser.parse_args()
+
+    if not args.backup:
+        print("需要 --备份 <清惰性节点之前的 data 目录>；这个脚本只在那一次补内容时用过。")
+        return 2
+    BACKUP = pathlib.Path(args.backup)
 
     entities = rename.load_entities()
     rows: list[str] = []
@@ -148,6 +161,7 @@ def main() -> int:
 
     changed = rename.write_back(entities) if args.apply else []
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"目标 {len(EMPTY)} 枚；改动文件 {len(changed)}\n")
     out.write("模式: " + ("已写回" if args.apply else "预演") + "\n\n")

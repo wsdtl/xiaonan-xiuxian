@@ -78,14 +78,14 @@ class MedicineFeature:
                 raise JsonDataError(f"服丹展示缺少文本.{section}")
         self._copy = copy
 
-    def copy(self, section: str, key: str, **values: object) -> str:
+    def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:
             raise RuntimeError("服丹玩法尚未初始化")
         group = self._copy.get(section)
         value = group.get(key) if isinstance(group, Mapping) else None
         if not isinstance(value, str) or not value.strip():
             raise RuntimeError(f"服丹展示缺少文本：{section}.{key}")
-        return value.format_map(values)
+        return value.format_map(values or {})
 
     async def use(self, request: MedicineUseRequest) -> MedicineUseResult:
         target = _target(request.target)

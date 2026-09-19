@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import ast
 import copy
+import io
 import re
-import sys
+import tokenize
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,20 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOTS = ("game", "launch", "message")
 SKIP_PARTS = {"__pycache__", ".venv", ".git"}
+
+#: 中日韩统一表意文字（含扩展 A 与兼容区）。用来判「这个标识符是不是中文写的」。
+CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+#: 机器绝对路径：`C:\Users\<谁>\…`、`/Users/<谁>/…`、`/home/<谁>/…`。
+MACHINE_PATH = re.compile(
+    r"(?:[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s\"']+|[\\/]Users[\\/][^\\/\s\"']+[\\/]|/home/[^/\s\"']+/)"
+)
+#: 判据自己要把这个形状写出来当例子（正则与 docstring），所以只能放过它自己。
+MACHINE_PATH_ALLOWLIST = {Path("tools/架构审查/检查边界.py")}
+
+
+def _has_cjk(text: str) -> bool:
+    return bool(CJK.search(text))
 
 # 实现模块不得被跨服务导入（见 微服务边界规范.md 第二节）。
 INTERNAL_MODULES = {
@@ -960,6 +975,114 @@ def _referenced_modules() -> tuple[set[str], dict[Path, str]]:
     return imported, strings
 
 
+def check_ascii_identifiers() -> list[Finding]:
+    """游戏代码的标识符不得含中文。
+
+    负责人口径（第 80 轮）：**`game/` 里不写中文标识符**——不是所有机器都吃得下中文写的
+    代码。注释、文档串、给玩家看的文案、以及 JSON 里的数据键照旧是中文；**只有标识符**
+    （变量、函数、类、参数、导入名）必须英文。
+
+    数据键（如 `"读取数值"`、`json.get("能力")`）是**字符串**，不在此列；它们与数据层
+    一一对应，改名要连着 JSON 一起动。渲染器因此不拼 `f"_ability_{能力名}"`，改成查
+    `card_text.ABILITY_RENDERERS` 这张显式表。
+
+    只扫 `game/`：`tools/` 与 `tests/` 是开发期脚本，允许中文标识符。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game"):
+        relative = _relative(path)
+        source = path.read_text(encoding="utf-8")
+        try:
+            tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+            for token in tokens:
+                if token.type == tokenize.NAME and _has_cjk(token.string):
+                    findings.append(
+                        Finding(
+                            "中文标识符",
+                            relative,
+                            token.start[0],
+                            f"{token.string} 是标识符；注释与文案可以中文，名字不行",
+                        )
+                    )
+        except (tokenize.TokenError, IndentationError) as exc:
+            findings.append(Finding("无法解析", relative, 1, str(exc)))
+    return findings
+
+
+def check_file_encodings() -> list[Finding]:
+    """源码与数据文件不得带 UTF-8 BOM。
+
+    BOM 会让 `ast.parse` 与 `json.loads` **直接报错**（不是警告）——`tools/说明.md` 里
+    记过这条教训：造探针文件时用 `Set-Content -Encoding UTF8` 写出的 BOM 让整支审查
+    当场死掉，看着像「查出了违规」。第 82 轮清出 4 个带 BOM 的文件（2 个数据说明、
+    2 个工具脚本），其中 `tools/一次性迁移/气机重定价.py` 因为 BOM 连 AST 都解析不了。
+    """
+
+    findings: list[Finding] = []
+    for 根 in ("game", "tools", "tests", "launch", "message", "data"):
+        目录 = PROJECT_ROOT / 根
+        if not 目录.is_dir():
+            continue
+        for path in sorted(目录.rglob("*")):
+            if not path.is_file() or path.suffix not in {".py", ".json", ".md"}:
+                continue
+            if any(段 in SKIP_PARTS for 段 in path.parts):
+                continue
+            try:
+                with path.open("rb") as handle:
+                    开头 = handle.read(3)
+            except OSError:
+                continue
+            if 开头 == b"\xef\xbb\xbf":
+                findings.append(
+                    Finding(
+                        "UTF-8 BOM",
+                        _relative(path),
+                        1,
+                        "BOM 会让 ast.parse / json.loads 直接报错；存成无 BOM 的 UTF-8",
+                    )
+                )
+    return findings
+
+
+def check_duplicate_definitions() -> list[Finding]:
+    """同一模块不得重复定义同名顶层函数或类。
+
+    重复定义不会报错，**后一份静默覆盖前一份**——`game/core/combat/templates.py` 有
+    104 行（`_materialize` / `order_diff` / `restore_reference` 三个函数与两个私有类）
+    被整段复制了两遍，第一份是死代码，而「改了第一份却不生效」这类事故不会有任何提示。
+    同一个名字在模块顶层出现两次就是病，不区分两份是否逐字相同。
+    """
+
+    findings: list[Finding] = []
+    for root in SOURCE_ROOTS:
+        目录 = PROJECT_ROOT / root
+        if not 目录.is_dir():
+            continue
+        for path in sorted(目录.rglob("*.py")):
+            if any(段 in SKIP_PARTS for 段 in path.parts):
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            位置: dict[str, int] = {}
+            for node in tree.body:
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    continue
+                先前 = 位置.get(node.name)
+                if 先前 is not None:
+                    findings.append(
+                        Finding(
+                            "重复定义",
+                            _relative(path),
+                            node.lineno,
+                            f"{node.name} 在第 {先前} 行已定义过，这一份会静默覆盖它",
+                        )
+                    )
+                else:
+                    位置[node.name] = node.lineno
+    return findings
+
+
 def check_unreferenced_modules() -> list[Finding]:
     """不得留下无人引用的模块。
 
@@ -1003,6 +1126,56 @@ def check_unreferenced_modules() -> list[Finding]:
     return findings
 
 
+def check_hardcoded_machine_paths() -> list[Finding]:
+    """源码里不得写死某一台机器的绝对路径。
+
+    写死路径不会报错，只是在别人机器上**改到空气**或者建到别处——第 82 轮一次查出
+    **17 支脚本**把项目根写成 `C:\\Users\\<别人>\\Desktop\\晓楠修仙`（那是上一台机器的
+    位置），它们在本机跑起来会去读一个不存在的目录。同一批还有两处把临时目录写成
+    `C:\\Users\\<谁>\\AppData\\Local\\Temp\\…`。
+
+    项目根用 `pathlib.Path(__file__).resolve().parents[N]` 推，临时目录用
+    `tempfile.gettempdir()`，两者都与机器无关。
+
+    **只扫字符串字面量**：注释里出现这种路径（比如本检查的来历说明）是历史记录，不算病；
+    代价是跨行拼起来的路径扫不到——真要拼路径，用 `pathlib` 就等于绕开了这个问题。
+    """
+
+    findings: list[Finding] = []
+    for root in ("game", "tools", "tests", "launch", "message"):
+        目录 = PROJECT_ROOT / root
+        if not 目录.is_dir():
+            continue
+        for path in sorted(目录.rglob("*.py")):
+            if SKIP_PARTS & set(path.parts):
+                continue
+            if _relative(path) in MACHINE_PATH_ALLOWLIST:
+                continue
+            try:
+                tokens = list(
+                    tokenize.generate_tokens(io.StringIO(path.read_text(encoding="utf-8")).readline)
+                )
+            except (tokenize.TokenError, IndentationError):
+                continue  # 解析不了的交给 check_file_encodings / 主流程报
+            for token in tokens:
+                if token.type != tokenize.STRING:
+                    continue
+                命中 = MACHINE_PATH.search(token.string)
+                if 命中 is None:
+                    continue
+                findings.append(
+                    Finding(
+                        "写死机器路径",
+                        _relative(path),
+                        token.start[0],
+                        f"`{命中.group(0)}` 只在那一台机器上存在；项目根用 "
+                        f"`pathlib.Path(__file__).resolve().parents[N]` 推，临时目录用 "
+                        f"`tempfile.gettempdir()`",
+                    )
+                )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -1023,6 +1196,10 @@ CHECKS = (
     ("微服务包结构", check_service_doc_coverage),
     ("后台例外边界", check_console_boundary),
     ("无人引用的模块", check_unreferenced_modules),
+    ("中文标识符", check_ascii_identifiers),
+    ("文件编码", check_file_encodings),
+    ("重复定义", check_duplicate_definitions),
+    ("写死机器路径", check_hardcoded_machine_paths),
     ("字段校验重写", check_field_validators_are_shared),
 )
 

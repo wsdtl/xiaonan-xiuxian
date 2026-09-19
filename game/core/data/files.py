@@ -77,7 +77,6 @@ class DataReadRules:
     number_definition_path: str
     unique_filename_scopes: frozenset[str]
     pool_reference_sections: MappingProxyType
-
     def descriptor(self, relative_path: str, file_id: str) -> DocumentDescriptor:
         scope = relative_path.partition("/")[0]
         candidates = self.rules_by_scope.get(scope, ())
@@ -165,6 +164,24 @@ class JsonDataCatalog:
         return document
 
 
+def _reserved_segments(scan_directories: tuple[str, ...]) -> dict[str, frozenset[str]]:
+    """父扫描目录 → 必须让给更深的扫描目录的首段。
+
+    `data/` 允许**大类目录里再放组件目录**（`物品/炼丹/…`），而大类自己也可能就是一个组件
+    （`世界/内容/…` 与 `世界/位置/规则/…` 同住 `世界/`）。于是扫描 `世界` 时 `rglob` 会把
+    `位置/`、`行路/` 也捞进来，那些文件属于另一份组件清单，会判成「没有匹配的读取规则」。
+    这里把更深扫描目录的首段记下来，让父目录扫描时整段跳过。
+    """
+
+    result: dict[str, set[str]] = {}
+    for entry in scan_directories:
+        segment = PurePosixPath(entry).parts
+        for depth in range(1, len(segment)):
+            parent = PurePosixPath(*segment[:depth]).as_posix()
+            result.setdefault(parent, set()).add(segment[depth])
+    return {parent: frozenset(segment) for parent, segment in result.items()}
+
+
 class JsonDataReader:
     """先读取固定引导文件，再按其中规则解析全部正式 JSON。"""
 
@@ -179,12 +196,18 @@ class JsonDataReader:
         dataset_names: dict[str, dict[str, str]] = {}
         content_by_file: dict[str, JsonDocument] = {}
         content_sources: dict[str, str] = {}
+        reserved = _reserved_segments(read_rules.scan_directories)
         for scope in read_rules.scan_directories:
             directory = self.root / scope
             if not directory.is_dir():
                 raise JsonDataError(f"数据目录不存在：{scope}")
+            blocked = reserved.get(scope, frozenset())
             files = sorted(
-                directory.rglob("*.json"),
+                (
+                    value
+                    for value in directory.rglob("*.json")
+                    if value.relative_to(directory).parts[0] not in blocked
+                ),
                 key=lambda value: value.relative_to(self.root).as_posix().casefold(),
             )
             for path in files:
@@ -244,23 +267,27 @@ class JsonDataReader:
             raise JsonDataError("读取入口字段错误")
         if any(self.root.glob("*.json")):
             raise JsonDataError("正式 JSON 必须归属组件")
-        components = _nonempty_unique_strings(value.get("扫描目录"), "扫描目录")
+        components = _relative_directories(value.get("扫描目录"), "扫描目录")
         actual = {p.name for p in self.root.iterdir() if p.is_dir()}
-        if actual != set(components):
-            raise JsonDataError(f"组件目录与读取入口不一致：{sorted(actual ^ set(components))}")
+        categories = {PurePosixPath(entry).parts[0] for entry in components}
+        if actual != categories:
+            raise JsonDataError(f"大类目录与读取入口不一致：{sorted(actual ^ categories)}")
         rows = []
         for component in components:
+            depth = len(PurePosixPath(component).parts)
             manifest_path = self.root / component / "组件.json"
             manifest = self._read_path(manifest_path, f"{component}/组件.json")
             if not isinstance(manifest, Mapping) or set(manifest) != {"组件", "读取规则"}:
                 raise JsonDataError(f"组件清单字段错误：{component}")
-            if manifest["组件"] != component or not _is_array(manifest["读取规则"]):
+            if manifest["组件"] != PurePosixPath(component).name or not _is_array(manifest["读取规则"]):
                 raise JsonDataError(f"组件清单身份或规则错误：{component}")
             for row in manifest["读取规则"]:
                 if not isinstance(row, Mapping) or not str(row.get("路径", "")).startswith(component + "/"):
                     raise JsonDataError(f"组件不能注册其他组件的文件：{component}")
                 parts = PurePosixPath(str(row["路径"])).parts
-                if str(row["路径"]) != ROUTING_RULES_PATH.as_posix() and (len(parts) < 3 or parts[1] not in {"定义", "规则", "内容", "展示"}):
+                if str(row["路径"]) != ROUTING_RULES_PATH.as_posix() and (
+                    len(parts) < depth + 2 or parts[depth] not in {"定义", "规则", "内容", "展示"}
+                ):
                     raise JsonDataError(f"数据必须声明组件内语义分类：{row['路径']}")
                 rows.append(row)
         return _parse_read_rules({**value, "读取规则": tuple(rows)}, relative_path)
@@ -288,7 +315,7 @@ def _parse_read_rules(value: Any, path: str) -> DataReadRules:
     }
     if unknown:
         raise JsonDataError(f"数据读取规则存在未知字段：{'、'.join(sorted(unknown))}")
-    scopes = _nonempty_unique_strings(value.get("扫描目录"), "扫描目录")
+    scopes = _relative_directories(value.get("扫描目录"), "扫描目录")
     number_definition_path = _required_string(
         value.get("编号定义"),
         "数据读取规则.编号定义",
@@ -326,7 +353,11 @@ def _parse_read_rules(value: Any, path: str) -> DataReadRules:
     number_file_id = PurePosixPath(number_definition_path).stem
     if sum(rule.matches(number_definition_path, number_file_id) for rule in rules) != 1:
         raise JsonDataError(f"编号定义必须唯一匹配读取规则：{number_definition_path}")
-    by_scope: dict[str, list[ReadRule]] = {scope: [] for scope in scopes}
+    # 匹配按**最外层目录**分桶：文件路径的第一段就是大类名，扫描时按它取候选规则，
+    # 再由 `ReadRule.matches` 按完整模式筛。扫描目录可以是 `大类/组件`，所以桶键取首段。
+    by_scope: dict[str, list[ReadRule]] = {
+        segment: [] for segment in {PurePosixPath(scope).parts[0] for scope in scopes}
+    }
     for rule in rules:
         by_scope[PurePosixPath(rule.pattern).parts[0]].append(rule)
     return DataReadRules(
@@ -379,7 +410,7 @@ def _parse_read_rule(
         raise JsonDataError(f"{path}.路径必须是 data 内相对路径")
     if not pattern.endswith(".json") or not pattern_path.parts:
         raise JsonDataError(f"{path}.路径必须指向 JSON 文件")
-    if pattern_path.parts[0] not in scopes:
+    if not _within_scope(pattern_path.parts, scopes):
         raise JsonDataError(f"{path}.路径不属于已声明作用域：{pattern}")
     if any(character in pattern for character in "?[]"):
         raise JsonDataError(f"{path}.路径只允许使用 * 通配符")
@@ -433,6 +464,36 @@ def _nonempty_unique_strings(value: Any, path: str) -> tuple[str, ...]:
         raise JsonDataError(f"数据读取规则.{path}不能重复")
     if any("/" in item or "\\" in item or item in {".", ".."} for item in result):
         raise JsonDataError(f"数据读取规则.{path}只能包含目录名称")
+    return result
+
+
+def _within_scope(segment: tuple[str, ...], scopes: tuple[str, ...]) -> bool:
+    """路径是否落在某个已声明的扫描目录之下（扫描目录可以是 `大类/组件`）。"""
+
+    for scope in scopes:
+        prefix = PurePosixPath(scope).parts
+        if segment[: len(prefix)] == prefix:
+            return True
+    return False
+
+
+def _relative_directories(value: Any, path: str) -> tuple[str, ...]:
+    """组件相对路径：允许一层以上的 `大类/组件`，但不要绝对路径、`.`、`..` 与空段。"""
+
+    if not _is_array(value) or not value:
+        raise JsonDataError(f"数据读取规则.{path}必须是非空字符串数组")
+    result = tuple(_required_string(item, f"数据读取规则.{path}") for item in value)
+    if len(result) != len(set(result)):
+        raise JsonDataError(f"数据读取规则.{path}不能重复")
+    for item in result:
+        parts = PurePosixPath(item).parts
+        if (
+            "\\" in item
+            or not parts
+            or any(segment in ("", ".", "..") for segment in parts)
+            or PurePosixPath(*parts).as_posix() != item
+        ):
+            raise JsonDataError(f"数据读取规则.{path}只能包含组件相对路径：{item}")
     return result
 
 

@@ -22,7 +22,7 @@ def view(feature: SectWarFeature, value: SectWarView):
         .field(
             feature.text("查看", "双方"),
             feature.text(
-                "格式", "双方", 甲=value.attacker_name, 乙=value.defender_name
+                "格式", "双方", {"甲": value.attacker_name, "乙": value.defender_name}
             ),
         )
         .row(
@@ -83,10 +83,7 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage):
             index,
             feature.text(
                 "格式",
-                "记录",
-                甲=entry.attacker_name,
-                乙=entry.defender_name,
-                状态=feature.text("状态", entry.status),
+                "记录", {"甲": entry.attacker_name, "乙": entry.defender_name, "状态": feature.text("状态", entry.status)},
             ),
         ).line(
             feature.text("查看", "战书"),
@@ -94,7 +91,7 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage):
             M.command(M.text(entry.war_id, tone="muted"), f"战况 {entry.war_id}"),
         )
     return builder.small(
-        feature.text("格式", "页码", 当前页=value.page, 总页数=value.page_count)
+        feature.text("格式", "页码", {"当前页": value.page, "总页数": value.page_count})
     ).build()
 
 

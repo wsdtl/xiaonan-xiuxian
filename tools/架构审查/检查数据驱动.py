@@ -3,12 +3,20 @@
 JSON 是这个项目规则与内容的唯一主体，因此"声明的数据是否真有人读"和
 "字段契约是否被统一校验"是数据层的核心健康指标。本脚本检查：
 
-1. **无消费者数据集**：在 `组件.json` 声明并被启动加载，却在 `game/` 中没有任何
+1. **大类布局**：顶层是七大类，组件清单在第二层（组件名与大类同名时不再多一层）。
+   扫描目录、组件清单、注册路径三者要互相对得上；大类里不许留下既不是四类目录、
+   也不是已登记组件的空壳目录。
+2. **组件说明要写功能**：每个组件的 `说明.md` 必须有一节 `## 功能`，按点分类，且每条引用的
+   依据文件真的存在（说明与设计脱节是同一类病）。
+3. **契约住错了面**：字段契约是**裁定参数**，按 `data/说明.md` 的目录约定该住
+   `定义/` 或 `规则/`；混进 `内容/`（实体与资源池）或 `展示/`（文本与界面）会让
+   「内容目录只放实体」这条约定失效。
+4. **无消费者数据集**：在 `组件.json` 声明并被启动加载，却在 `game/` 中没有任何
    代码引用的数据集。它们会被校验通过并进入快照，但改动它们不影响游戏。
-2. **无消费者池**：登记为池但从未被任何服务按池名引用。
-3. **字段契约覆盖率**：有多少数据文件自带字段契约（`必填字段` / `可选字段` /
+5. **无消费者池**：登记为池但从未被任何服务按池名引用。
+6. **字段契约覆盖率**：有多少数据文件自带字段契约（`必填字段` / `可选字段` /
    `字段` + `类型`），其余只能靠手写校验器保护。
-4. **手写校验规模**：跨服务重复定义的字段校验辅助数量，作为"schema 未统一"
+7. **手写校验规模**：跨服务重复定义的字段校验辅助数量，作为"schema 未统一"
    的量化指标。
 
 属于数据维护审查，不进入游戏启动流程。
@@ -19,7 +27,7 @@ JSON 是这个项目规则与内容的唯一主体，因此"声明的数据是�
 .venv/Scripts/python.exe -X utf8 tools/架构审查/检查数据驱动.py
 ```
 
-退出码 0 表示全部通过；1 表示存在无消费者数据或池。
+退出码 0 表示全部通过；1 表示存在大类布局问题、组件说明问题、契约住错面、无消费者数据或池。
 """
 
 from __future__ import annotations
@@ -74,6 +82,176 @@ def _declared() -> dict[str, dict[str, object]]:
             if rule.get("实体类别"):
                 entry["entity"] = True
     return declared
+
+
+四类面 = ("定义", "规则", "内容", "展示")
+
+
+def check_category_layout() -> list[str]:
+    """`data/` 的大类布局：顶层是大类，组件清单在第二层。
+
+    `data/说明.md` 的口径（第 78 轮）：顶层收成七大类，大类里放组件；**组件名与大类同名时
+    不再多一层**（`基础`、`世界`、`角色`、`战斗`、`宗门` 五个组件的面直接住在大类目录下），
+    于是「大类既可以是组件，也可以装组件」。
+
+    这里把三件事实对齐：读取入口的扫描目录、每个组件的清单、清单里注册的路径。再加一条
+    空壳判据——大类里出现的目录，要么是四类面之一，要么是被扫描目录登记过的组件。
+    """
+
+    problems: list[str] = []
+    入口们 = sorted(DATA.glob("*/读取规则.json")) + sorted(DATA.glob("*/*/读取规则.json"))
+    if len(入口们) != 1:
+        return [
+            "读取入口应恰好一份："
+            + "、".join(p.relative_to(PROJECT_ROOT).as_posix() for p in 入口们)
+        ]
+    入口 = 入口们[0]
+    try:
+        规则 = json.loads(入口.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"{入口.relative_to(PROJECT_ROOT).as_posix()} 读不出来：{exc}"]
+    扫描 = [str(x) for x in 规则.get("扫描目录") or []]
+    路由 = 入口.relative_to(DATA).as_posix()
+    顶层 = {p.name for p in DATA.iterdir() if p.is_dir()}
+    首段 = {项.split("/")[0] for 项 in 扫描}
+    if 顶层 != 首段:
+        problems.append(f"顶层目录与扫描目录首段不一致：{sorted(顶层 ^ 首段)}")
+
+    登记 = set(扫描)
+    for 项 in 扫描:
+        段 = 项.split("/")
+        清单 = DATA / 项 / "组件.json"
+        if not 清单.is_file():
+            problems.append(f"{项}/ 没有组件清单")
+            continue
+        if len(段) > 1 and 段[0] == 段[-1]:
+            problems.append(f"{项}/ 多了一层：组件名与大类同名时应直接住在大类目录下")
+        try:
+            数据 = json.loads(清单.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            problems.append(f"{项}/组件.json 读不出来：{exc}")
+            continue
+        if str(数据.get("组件")) != 段[-1]:
+            problems.append(
+                f"{项}/组件.json 的组件名是 {数据.get('组件')}，与目录名 {段[-1]} 不符"
+            )
+        for 行 in 数据.get("读取规则") or []:
+            路径 = str(行.get("路径") or "")
+            路径段 = pathlib.PurePosixPath(路径).parts
+            if 路径 == 路由:
+                # 读取入口本身就在组件根上，没有四类面那一段。
+                continue
+            if not 路径.startswith(项 + "/"):
+                problems.append(f"{项}/组件.json 注册了别处的文件：{路径}")
+                continue
+            if len(路径段) < len(段) + 2 or 路径段[len(段)] not in 四类面:
+                problems.append(f"{项}/组件.json 的路径没有组件内语义分类：{路径}")
+
+    for 大类 in sorted(顶层):
+        目录 = DATA / 大类
+        if not (目录 / "说明.md").is_file():
+            problems.append(f"{大类}/ 缺说明.md")
+        for 子 in sorted(p for p in 目录.iterdir() if p.is_dir()):
+            名字 = f"{大类}/{子.name}"
+            if 子.name in 四类面 or 名字 in 登记:
+                continue
+            problems.append(f"{名字}/ 既不是四类面，也不在扫描目录里")
+    return problems
+
+
+def check_component_function_docs() -> list[str]:
+    """每个组件的 `说明.md` 必须有一节 `## 功能`，且它引用的依据文件真的存在。
+
+    负责人口径（第 79 轮）：**每个二级组件的说明里要把功能按点分类写清楚**，便于逐条审查。
+    写法见 `data/说明.md`——每条写成「玩家做什么 → 按哪份数据算出什么 → 落到哪里」，
+    末尾用反引号标出依据文件（相对组件目录，跨包或代码依据写完整路径）。
+
+    这条同时挡住三种退化：新组件没写功能一节；功能条目引用了**不存在**的规则/内容/代码文件
+    （说明与设计脱节）；功能一节把**页面文案与按钮动作**又抄了一遍——那是 `展示/` 目录的
+    唯一出处，说明只讲代码逻辑（`展示/` 下被代码读取的数据不算，如 `展示/行程.json`）。
+    占位符（`内容/<区域>/<地点>/…`）与通配符按目录展开校验。
+    """
+
+    problems: list[str] = []
+    引用 = re.compile(r"`([^`\s]+)`")
+    for 清单 in sorted(DATA.rglob("组件.json")):
+        组件目录 = 清单.parent
+        相对 = 组件目录.relative_to(DATA).as_posix()
+        说明 = 组件目录 / "说明.md"
+        if not 说明.is_file():
+            problems.append(f"{相对}/ 缺说明.md")
+            continue
+        文本 = 说明.read_text(encoding="utf-8")
+        if "## 功能" not in 文本:
+            problems.append(f"{相对}/说明.md 缺「## 功能」一节")
+            continue
+        片段 = 文本.split("## 功能", 1)[1].split("\n## ", 1)[0]
+        if not re.search(r"^### ", 片段, flags=re.M):
+            problems.append(f"{相对}/说明.md 的功能一节没有分类（缺 `### `）")
+        if not re.search(r"^\d+\. ", 片段, flags=re.M):
+            problems.append(f"{相对}/说明.md 的功能一节没有编号条目")
+        for 名字 in 引用.findall(片段):
+            if "<" in 名字 or ">" in 名字 or "…" in 名字 or 名字.startswith(("game/", "http")):
+                continue
+            if 名字.startswith("data/"):
+                候选 = PROJECT_ROOT / 名字
+            elif 名字.startswith(tuple(f"{名}/" for 名 in 四类面)):
+                候选 = 组件目录 / 名字
+            else:
+                continue
+            if not _引用存在(候选):
+                problems.append(f"{相对}/说明.md 的功能依据不存在：{名字}")
+        # 页面文案与按钮动作的唯一出处是 `展示/`，说明里不再抄一遍。**只拦这一层**：
+        # `展示/` 底下别的文件（如 `展示/行程.json` 的叙事模板、`展示/规则/文本.json` 的
+        # 措辞表）如果被代码读取与校验，那是代码逻辑的一部分，允许引用。
+        for 面文件 in ("展示/文本.json", "展示/按钮.json", "展示/按钮/", "展示/分页.json"):
+            if f"`{面文件}" in 片段:
+                problems.append(
+                    f"{相对}/说明.md 的功能一节写了展示文案或按钮（{面文件}）："
+                    "页面与动作以 `展示/` 目录为准，说明只讲代码逻辑"
+                )
+        if "`game/" not in 片段:
+            problems.append(
+                f"{相对}/说明.md 的功能一节没有引用实现它的代码：这一节讲的是代码逻辑，"
+                "依据里至少要有一条 `game/…`"
+            )
+    return problems
+
+
+def _引用存在(候选: pathlib.Path) -> bool:
+    if "*" in 候选.name:
+        return bool(list(候选.parent.glob(候选.name)))
+    return 候选.exists()
+
+
+def check_contract_placement() -> list[str]:
+    """字段契约必须住在 `定义/` 或 `规则/`，不得混进 `内容/` 与 `展示/`。
+
+    `data/说明.md`：定义登记概念，规则保存裁定参数，内容保存实体和资源池，展示保存
+    文本及界面契约。字段契约是裁定参数。**原先先天灵宝与阵法各把它放在 `内容/` 里**
+    ——那还是唯一一处「内容目录里躺着的不是实体」的地方（第 76 轮挪进 `规则/`）。
+
+    判据认两种形态：文件名以 `字段契约.json` 结尾，或正文里带 `必填字段` / `可选字段`
+    （`物品/基础物品/规则/分类.json` 就是后一种）。
+    """
+
+    problems: list[str] = []
+    for path in sorted(DATA.rglob("*.json")):
+        if path.name == "组件.json":
+            continue
+        parts = path.relative_to(DATA).parts
+        if len(parts) < 3 or parts[1] not in {"内容", "展示"}:
+            continue
+        if path.name.endswith("字段契约.json"):
+            problems.append(f"{path.relative_to(PROJECT_ROOT).as_posix()}：契约按文件名判定")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if '"必填字段"' in text or '"可选字段"' in text:
+            problems.append(f"{path.relative_to(PROJECT_ROOT).as_posix()}：正文带字段契约")
+    return problems
 
 
 def check_dataset_consumers(source: str) -> list[str]:
@@ -144,7 +322,34 @@ def main() -> int:
     report_contract_coverage()
 
     problems = check_dataset_consumers(source)
+    住处 = check_contract_placement()
+    布局 = check_category_layout()
+    功能 = check_component_function_docs()
     print()
+    if 布局:
+        print(f"大类布局问题 {len(布局)} 处：")
+        for item in 布局:
+            print(f"  {item}")
+        print()
+        print("顶层是大类，组件清单在第二层；组件名与大类同名时不再多一层。")
+        return 1
+    print("大类布局：扫描目录、组件清单与注册路径对得上")
+    if 功能:
+        print(f"组件说明问题 {len(功能)} 处：")
+        for item in 功能:
+            print(f"  {item}")
+        print()
+        print("每个组件的说明.md 要有一节「## 功能」，按点分类，依据文件必须存在。")
+        return 1
+    print("组件说明：每个组件都有功能一节，依据文件都在")
+    if 住处:
+        print(f"契约住错面 {len(住处)} 处：")
+        for item in 住处:
+            print(f"  {item}")
+        print()
+        print("契约是裁定参数，该住 定义/ 或 规则/；内容/ 只放实体与资源池。")
+        return 1
+    print("字段契约都住在 定义/ 或 规则/")
     if problems:
         print(f"无消费者数据集 {len(problems)} 项：")
         for item in problems:

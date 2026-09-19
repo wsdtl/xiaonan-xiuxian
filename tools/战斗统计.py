@@ -39,12 +39,13 @@ from game.core.combat.contracts import (  # noqa: E402
 ATTRS = {
     "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
     "命中率": 100, "闪避率": 5, "暴击率": 20, "抗暴率": 5, "暴击伤害": 150,
-    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 0, "伤害减免": 0,
+    #: 伤害加成是加成口径，基准 100 = 不增不减；写 0 等于把伤害乘成 0。
+    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 100, "伤害减免": 0,
 }
 SURFACES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
 )
 
 
@@ -160,7 +161,7 @@ def level_attributes(root: pathlib.Path, level: int) -> dict[str, float]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--数据", dest="data", default=str(ROOT / "data"))
-    parser.add_argument("--报告", dest="report", default="_战斗统计.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/战斗统计.txt")
     parser.add_argument("--上限", dest="limit", type=int, default=60)
     parser.add_argument(
         "--空白", action="store_true",
@@ -259,6 +260,7 @@ def main() -> int:
         if fight_unresolved(raw):
             unresolved += 1
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"战斗体统计：{root}\n")
     out.write(f"样本 {total} 场；行动上限 {args.limit}；等级 {args.等级 or '陪练配置'}\n")

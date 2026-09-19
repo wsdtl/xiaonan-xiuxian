@@ -37,7 +37,7 @@ def view(feature: InnateTreasureFeature, result: InnateTreasureView):
             builder.small(treasure.description)
     if result.page_count > 1:
         builder.small(
-            feature.copy("页码", 当前页=result.page, 总页数=result.page_count)
+            feature.copy("页码", {"当前页": result.page, "总页数": result.page_count})
         )
     return builder.build()
 
@@ -50,7 +50,7 @@ def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult):
         .line(
             M.status("执掌完成", tone="positive"),
             " ",
-            feature.copy("执掌成功", 名称=treasure.name, 权柄=treasure.authority),
+            feature.copy("执掌成功", {"名称": treasure.name, "权柄": treasure.authority}),
         )
         .field(feature.copy("效果"), _effect(treasure))
         .build()

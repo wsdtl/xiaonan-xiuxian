@@ -12,7 +12,7 @@ import collections
 import json
 import pathlib
 
-ROOT = pathlib.Path(r"C:\Users\DengXiaonan\Desktop\晓楠修仙")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 ATOMS_FILE = ROOT / "data/战斗/定义/原子能力.json"
 
 

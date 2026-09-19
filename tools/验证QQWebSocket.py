@@ -49,7 +49,6 @@ def _force_websocket_transport() -> None:
 _force_websocket_transport()
 
 from launch.adapter.qq_protocol import client as client_module  # noqa: E402
-from launch.adapter.qq_protocol import processor  # noqa: E402
 from launch.adapter.qq_protocol.client import QqOpenApiClient  # noqa: E402
 from launch.adapter.qq_protocol.manager import manager as qq_manager  # noqa: E402
 from launch.adapter.qq_ws import QqWsEventHandler, gateway  # noqa: E402

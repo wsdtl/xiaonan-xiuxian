@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import copy
 import math
 import random
@@ -36,8 +37,11 @@ class BattleEngine(AbilityRuntime):
     """执行自动战斗；所有内容规则均来自传入的 JSON 目录。"""
 
     def __init__(self, combat_rules: Mapping[str, Any] | None = None) -> None:
-        self.catalog = CombatCatalog.from_mapping(combat_rules)
-        self.damage = DamageEngine(self.catalog.damage_rules)
+        rules = dict(combat_rules or {})
+        # 构筑模板库由 `template_data.py` 生成，经基石字典传进来；不参与 JSON 校验。
+        templates = rules.pop("构筑模板库", None)
+        self.catalog = CombatCatalog.from_mapping(rules, templates)
+        self.damage = DamageEngine(self.catalog.damage_rules, self.catalog.attributes)
         self._ability_handlers: dict[str, Callable[..., bool]] = {
             "顺序执行": self._ability_sequence,
             "条件执行": self._ability_conditional,
@@ -1509,7 +1513,7 @@ class BattleEngine(AbilityRuntime):
         if frame.cancelled:
             return False
         target = frame.target
-        power = max(0.0, 1 + self._percent(source, "普通攻击威力"))
+        power = max(0.0, self._percent(source, "普通攻击威力"))
         applied = self._deal_attack(
             context, source, target, power, "普通攻击", tags=("普通攻击",)
         )
@@ -1592,7 +1596,7 @@ class BattleEngine(AbilityRuntime):
                 context,
                 source,
                 target,
-                power * self._percent(source, "连击伤害", 1),
+                power * self._percent(source, "连击伤害"),
                 "连击",
                 tags=(*tags, "连击", "派生伤害"),
                 allow_followups=False,
@@ -1972,11 +1976,3 @@ class BattleEngine(AbilityRuntime):
                 },
                 tags=("丹药", "恢复", resource),
             )
-
-    @staticmethod
-    def _percent(target, attribute, default=0.0):
-        if attribute not in target.attributes and not any(
-            attribute in status.modifiers for status in target.statuses
-        ):
-            return float(default)
-        return target.value(attribute, default * 100) / 100.0

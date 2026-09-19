@@ -47,7 +47,6 @@ def fingerprint(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
-
 def simplify(node: object, stats: collections.Counter) -> object:
     """就地化简；返回（可能是新的）节点。"""
 
@@ -91,7 +90,7 @@ def simplify(node: object, stats: collections.Counter) -> object:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="写回数据文件")
-    parser.add_argument("--报告", dest="report", default="_清理冗余判定.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/清理冗余判定.txt")
     args = parser.parse_args()
 
     entities = rename.load_entities()
@@ -111,6 +110,7 @@ def main() -> int:
     if args.apply:
         changed_files = rename.write_back(entities)
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"化简 {sum(stats.values())} 处；未改动的实体 {untouched}\n")
     for key, count in stats.most_common():

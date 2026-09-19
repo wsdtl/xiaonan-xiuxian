@@ -35,7 +35,8 @@ from game.core.combat.contracts import (  # noqa: E402
 ATTRS = {
     "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
     "命中率": 100, "闪避率": 5, "暴击率": 20, "抗暴率": 5, "暴击伤害": 150,
-    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 0, "伤害减免": 0,
+    #: 伤害加成是加成口径，基准 100 = 不增不减；写 0 等于把伤害乘成 0。
+    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 100, "伤害减免": 0,
 }
 ATTRS_R = {
     **ATTRS,
@@ -54,7 +55,7 @@ def load_cards(path: pathlib.Path) -> list[str]:
         if raw and all(isinstance(value, list) for value in raw.values()):
             # 也吃 `换源恢复.py --授权集` 的格式：{"data/战斗/内容/真意/真意-绝境.json": ["410129", …]}
             # 体裁取**文件名前缀**（`器律-时序.json` → 器律）。按目录倒数第二段取会在器律上错：
-            # 器律在 `data/炼器/内容/` 下，那一段是「内容」，于是器律卡被记成 `内容:700001`。
+            # 器律在 `data/物品/炼器/内容/` 下，那一段是「内容」，于是器律卡被记成 `内容:700001`。
             cards = [f"{pathlib.Path(name).stem.split('-')[0]}:{cid}"
                      for name, ids in raw.items() for cid in ids]
             return sorted(set(cards))

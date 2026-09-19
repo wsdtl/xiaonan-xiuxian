@@ -101,7 +101,7 @@ def plan_for(entity: rename.Entity, kind: str, pool: dict, taken: set[str]):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="写回数据文件")
-    parser.add_argument("--报告", dest="report", default="_前缀修整.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/前缀修整.txt")
     args = parser.parse_args()
 
     entities = rename.load_entities()
@@ -138,6 +138,7 @@ def main() -> int:
 
     changed = rename.write_back(entities) if args.apply else []
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     per_kind = collections.Counter(kind for _, kind, _, _ in planned)
     out.write(f"改名 {len(planned)} 处（计量 {per_kind['计量']}，状态 {per_kind['状态']}）\n")

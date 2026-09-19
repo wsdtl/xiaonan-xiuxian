@@ -21,8 +21,8 @@ import collections
 import json
 import pathlib
 
-ROOT = pathlib.Path(r"C:\Users\DengXiaonan\Desktop\晓楠修仙")
-PILLS = ROOT / "data/炼丹/内容/丹药/战丹"
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+PILLS = ROOT / "data/物品/炼丹/内容/丹药/战丹"
 
 FAMILY = {
     "恢复资源": "恢复", "获得护盾": "保命", "抵挡致命伤害": "保命", "复活": "保命",

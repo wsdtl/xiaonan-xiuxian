@@ -11,11 +11,32 @@ from game.core.formation import FormationNodeRules
 from .executors import EXECUTOR_CATEGORIES
 from .schema import RuleSchemaValidator
 
+#: 属性口径：引擎**怎么读**这个属性。基准就是属性自己的 `默认值`
+#: （读法见 `models.attribute_ratio`），这张表只声明用法。
+#:
+#: 这里必须写死在代码里的是「有哪几种口径」，因为引擎按口径分派；**具体某个属性是哪一种**
+#: 是内容决定，所以写在 `属性.json` 的 `口径` 字段里。
+ATTRIBUTE_CALIBERS: Mapping[str, str] = {
+    "数值": "直接参与加减与曲线（攻击、防御、速度、各类上限、固定穿透、行动开始恢复）",
+    "加成": "相对倍率：基准 100 即不增不减，卡面写 120 就是 +20%",
+    "倍率": "本身就是倍率：暴击伤害 150 = ×1.5，连击伤害 100 = ×1.0",
+    "概率": "百分点概率，0 = 不发生；命中率自己那条是 100 = 必中",
+    "减免": "从倍率里减去的百分点，0 = 不减免",
+    "比率": "直接当比率用（比例穿透），0 = 不生效",
+}
+
+#: 「加成」类只能有 100 这一种基准，「减免 / 比率」类只能有 0 这一种基准。
+#: 混用会静默改机制：实测把减免类的基准也补成 100，`伤害减免` 就变成「减 100%」，
+#: 1967 场里 1950 场战报变化——这不是等价改写。所以在这里锁死。
+_BASELINE_IS_100 = ("加成",)
+_BASELINE_IS_ZERO = ("减免", "比率")
+
 
 def load_battle_foundation(
     data: JsonDataService,
     *,
     formation_rules: FormationNodeRules | None = None,
+    templates: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if not data.status().loaded:
         raise RuntimeError("JSON 数据微服务必须先于战斗微服务启动")
@@ -36,7 +57,8 @@ def load_battle_foundation(
             "阵法规则": formation_rules,
         }
     )
-    validate_battle_foundation(result)
+    validate_battle_foundation(result, templates=templates)
+    result["构筑模板库"] = dict(templates or {})
     return result
 
 
@@ -83,10 +105,15 @@ def rule_validator(value: Mapping[str, Any]) -> RuleSchemaValidator:
     )
 
 
-def validate_battle_foundation(value: Mapping[str, Any]) -> None:
+def validate_battle_foundation(
+    value: Mapping[str, Any],
+    *,
+    templates: Mapping[str, Mapping[str, Any]] | None = None,
+) -> None:
     abilities = _mapping(value.get("原子能力"), "原子能力")
     events = _mapping(value.get("事件"), "事件")
     attributes = _mapping(value.get("属性"), "属性")
+    _validate_attribute_definitions(attributes)
     resources = _mapping(value.get("资源"), "资源")
     action_rules = _mapping(value.get("行动规则"), "行动规则")
     timing = _mapping(value.get("时序"), "时序")
@@ -115,6 +142,9 @@ def validate_battle_foundation(value: Mapping[str, Any]) -> None:
         if "类型" in mutable and name not in {"恢复前", "获得护盾前", "资源恢复前"}:
             raise ValueError(f"事件.{name}没有可转化的共同结算语义")
     validator = rule_validator(value)
+    # 校验器要认识构筑模板：卡里的 `{"模板": …}` 引用没有 `能力` 字段，
+    # 不展开就会被当成非法节点挡掉（实测会让启动失败）。
+    validator.templates = dict(templates or {})
     validator.validate_definitions("战斗定义.原子能力")
     _validate_battle_environments(environments, validator)
     if not isinstance(formation_rules, FormationNodeRules):
@@ -127,6 +157,42 @@ def validate_battle_foundation(value: Mapping[str, Any]) -> None:
     missing = set(EXECUTOR_CATEGORIES) - declared
     if missing:
         raise ValueError(f"执行器没有原子能力声明：{'、'.join(sorted(missing))}")
+
+
+def _validate_attribute_definitions(attributes: Mapping[str, Any]) -> None:
+    """每个属性必须声明它怎么被读，且基准与口径相符。
+
+    这是「补上缺失定义」的那一条：改动前属性的读法只存在于调用点的 `1 + …` / `- …` 里，
+    同一张表要对着代码看才知道「伤害加成 20」是 +20% 还是「设成 20%」。
+    """
+
+    for name, raw in attributes.items():
+        path = f"属性.{name}"
+        definition = _mapping(raw, path)
+        unknown = set(definition) - {
+            "默认值", "单位", "最小单位", "最低值", "最高值", "显示", "口径", "说明",
+        }
+        if unknown:
+            raise ValueError(f"{path}存在未知字段：{'、'.join(sorted(unknown))}")
+        for field in ("默认值", "最低值", "最高值", "口径"):
+            if field not in definition:
+                raise ValueError(f"{path}缺少字段：{field}")
+        caliber = str(definition["口径"] or "")
+        if caliber not in ATTRIBUTE_CALIBERS:
+            raise ValueError(
+                f"{path}.口径未登记：{caliber or '<空>'}；"
+                f"可选 {'、'.join(ATTRIBUTE_CALIBERS)}"
+            )
+        default = float(definition["默认值"])
+        if caliber in _BASELINE_IS_100 and default != 100.0:
+            raise ValueError(f"{path}是{caliber}口径，基准必须是 100，当前 {default:g}")
+        if caliber in _BASELINE_IS_ZERO and default != 0.0:
+            raise ValueError(f"{path}是{caliber}口径，基准必须是 0，当前 {default:g}")
+        if not float(definition["最低值"]) <= default <= float(definition["最高值"]):
+            raise ValueError(
+                f"{path}的默认值 {default:g} 不在上下限 "
+                f"{float(definition['最低值']):g}~{float(definition['最高值']):g} 内"
+            )
 
 
 def _validate_battle_environments(
@@ -328,6 +394,31 @@ def _validate_action_rules(
     attributes: Mapping[str, Any],
     resources: Mapping[str, Any],
 ) -> None:
+    """资源定义必须声明执行器要用到的那几个字段。
+
+    执行器不再认资源名（曾经是 `if 资源 == "血气"` 三分支），一切走 `资源.json` 的
+    声明。所以字段缺了不会「静默走默认分支」，而是直接在这里拦下——加第四个资源
+    只要照抄这几个字段，不必改代码。
+
+    `加成属性` 允许留空：它是**基准属性**（`治疗效果` / `护盾强度`），默认 100 即
+    ×1.0。`精神` 刻意不设——精神是出手预算，把它一起闸掉会让「治疗太强」表现成
+    「技能放不出来」，那是另一个问题。留空表示这个资源不做基准缩放。
+    """
+
+    required = ("上限属性", "恢复前事件", "恢复后事件", "卡牌加成属性", "受疗加成属性")
+    for resource_name, raw in resources.items():
+        entry = _mapping(raw, f"资源.{resource_name}")
+        absent = [field for field in required if not str(entry.get(field) or "").strip()]
+        if absent:
+            raise ValueError(f"资源.{resource_name}缺少字段：{'、'.join(absent)}")
+        if str(entry["上限属性"]) not in attributes:
+            raise ValueError(f"资源.{resource_name}.上限属性引用未知属性：{entry['上限属性']}")
+        # 可选字段：写了就必须引用已登记属性；留空表示不参与那一层。
+        for field in ("加成属性", "卡牌加成属性", "受疗加成属性"):
+            referenced = str(entry.get(field) or "")
+            if referenced and referenced not in attributes:
+                raise ValueError(f"资源.{resource_name}.{field}引用未知属性：{referenced}")
+
     expected = {
         "标准速度",
         "最低有效速度",
@@ -511,7 +602,6 @@ def _validate_damage_rules(value: Mapping[str, Any]) -> None:
         "最高伤害倍率",
         "防御常数",
         "最低伤害",
-        "恢复倍率",
         "输出倍率",
         "最高伤害减免",
     }

@@ -26,7 +26,7 @@ import collections
 import json
 import pathlib
 
-ROOT = pathlib.Path(r"C:\Users\DengXiaonan\Desktop\晓楠修仙")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 OUT = ROOT / "data/战斗/内容/物品角度总表.md"
 
 FAMILY = {
@@ -229,8 +229,8 @@ SURFACES: tuple[tuple[str, str, str | None, bool], ...] = (
     ("功法", "data/战斗/内容/功法/功法-*.json", "能力", False),
     ("真意", "data/战斗/内容/真意/真意-*.json", "能力", False),
     ("气机", "data/战斗/内容/气机/气机-*.json", "能力", False),
-    ("器律", "data/炼器/内容/器律-*.json", "能力", False),
-    ("战丹", "data/炼丹/内容/丹药/战丹/*.json", "使用效果", False),
+    ("器律", "data/物品/炼器/内容/器律-*.json", "能力", False),
+    ("战丹", "data/物品/炼丹/内容/丹药/战丹/*.json", "使用效果", False),
     ("战场环境", "data/战斗/内容/战场环境/*.json", "阶段", True),
     ("长期伤势", "data/角色/内容/伤势.json", None, False),
 )

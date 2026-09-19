@@ -238,7 +238,7 @@ class SectFacilityService:
                 SectFacilityEntry(
                     name,
                     name,
-                    f"{len(self._alchemy.recipes(name))}张丹方",
+                    f"{len(self._alchemy.recipes(name))}种丹药",
                     True,
                 )
                 for name in ("恢复丹", "战丹", "突破丹", "特殊丹")

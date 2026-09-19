@@ -60,8 +60,8 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
 
 
 def equipped(feature: CharacterCultivationFeature, result: CharacterEquipResult):
-    text = feature.copy("装配", "人物成功").format(
-        名称=result.content_name, 类别=result.category, 槽位=result.slot
+    text = feature.copy("装配", "人物成功").format_map(
+        {"名称": result.content_name, "类别": result.category, "槽位": result.slot}
     )
     builder = (
         M.document()
@@ -79,8 +79,8 @@ def equipped(feature: CharacterCultivationFeature, result: CharacterEquipResult)
 def breakthrough(
     feature: CharacterCultivationFeature, result: CharacterBreakthroughResult
 ):
-    text = feature.copy("突破", "人物成功").format(
-        丹药=result.medicine_name, 境界=result.realm_name
+    text = feature.copy("突破", "人物成功").format_map(
+        {"丹药": result.medicine_name, "境界": result.realm_name}
     )
     builder = (
         M.document()
@@ -96,8 +96,8 @@ def breakthrough(
 
 
 def forged(feature: CharacterCultivationFeature, result: CharacterLawResult):
-    text = feature.copy("覆炼", "人物成功").format(
-        器律=result.law_name, 孔位=result.slot
+    text = feature.copy("覆炼", "人物成功").format_map(
+        {"器律": result.law_name, "孔位": result.slot}
     )
     return (
         M.document()

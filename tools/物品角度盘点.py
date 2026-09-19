@@ -21,11 +21,11 @@ import collections
 import json
 import pathlib
 
-ROOT = pathlib.Path(r"C:\Users\DengXiaonan\Desktop\晓楠修仙")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 SURFACES = (
-    ("战丹", "data/炼丹/内容/丹药/战丹/*.json", "使用效果"),
-    ("恢复丹", "data/炼丹/内容/丹药/恢复丹/*.json", "使用效果"),
-    ("特殊丹", "data/炼丹/内容/丹药/特殊丹/*.json", "使用效果"),
+    ("战丹", "data/物品/炼丹/内容/丹药/战丹/*.json", "使用效果"),
+    ("恢复丹", "data/物品/炼丹/内容/丹药/恢复丹/*.json", "使用效果"),
+    ("特殊丹", "data/物品/炼丹/内容/丹药/特殊丹/*.json", "使用效果"),
     ("战场环境", "data/战斗/内容/战场环境/*.json", "阶段"),
 )
 

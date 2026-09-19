@@ -33,9 +33,11 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+for _path in (str(ROOT), str(ROOT / "tools")):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
+from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 from game.app import build_game_services  # noqa: E402
 from game.core.combat.contracts import (  # noqa: E402
     CombatBuildRef,
@@ -51,15 +53,21 @@ CARD = "400541"
 ATTRS = {
     "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
     "命中率": 100, "闪避率": 5, "暴击率": 20, "抗暴率": 5, "暴击伤害": 150,
-    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 0, "伤害减免": 0,
+    #: 伤害加成是加成口径，基准 100 = 不增不减；写 0 等于把伤害乘成 0。
+    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 100, "伤害减免": 0,
 }
 
 
 def specs(core, root: pathlib.Path):
-    """产出 (标签, CombatStatusSpec)；没带监听的不进战斗。"""
+    """产出 (标签, CombatStatusSpec)；没带监听的不进战斗。
 
-    for path in sorted(root.glob("炼丹/内容/丹药/战丹/*.json")):
-        for entry in json.loads(path.read_text(encoding="utf-8")):
+    读文件必须走 `_load_build_json`：战丹与长期伤势的监听节点已经模板化，直接
+    `json.loads` 拿到的是 `{"模板": …, "参数": …}` 引用，构造 `CombatStatusSpec`
+    时会被判成「不是监听事件节点」而整条失败。
+    """
+
+    for path in sorted(root.glob("物品/炼丹/内容/丹药/战丹/*.json")):
+        for entry in _load_build_json(path):
             if not (entry.get("使用效果") or {}).get("监听"):
                 continue
             medicine = core.medicine.battle(entry["编号"], "01")
@@ -68,7 +76,7 @@ def specs(core, root: pathlib.Path):
     injuries = root / "角色" / "内容" / "伤势.json"
     if not injuries.exists():
         return
-    for entry in json.loads(injuries.read_text(encoding="utf-8")):
+    for entry in _load_build_json(injuries):
         raw = entry.get("战斗状态") or {}
         if not raw.get("监听"):
             continue
@@ -107,7 +115,7 @@ def run(root: pathlib.Path) -> tuple[dict[str, str], list[str]]:
                 seed=20260911, action_limit=60,
             ))))
         except Exception as exc:  # noqa: BLE001
-            result[label] = f"错误 {type(exc).__name__}"
+            result[label] = f"错误 {type(exc).__name__}：{exc}"
             failures.append(f"{label}\t{type(exc).__name__}: {exc}")
             continue
         final = {

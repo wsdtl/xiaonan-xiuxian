@@ -14,7 +14,7 @@
 所以「改写者」的判据是调用了上表相关的原子能力，而不是「有没有写东西」。
 
     .venv/Scripts/python.exe -X utf8 tools/盘点监听顺序.py
-    .venv/Scripts/python.exe -X utf8 tools/盘点监听顺序.py --报告 _监听顺序.txt
+    .venv/Scripts/python.exe -X utf8 tools/盘点监听顺序.py --报告 _输出/监听顺序.txt
 """
 
 from __future__ import annotations
@@ -207,7 +207,7 @@ SURFACES = (
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
     ("战场环境", "战斗/内容/战场环境/*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
     ("战丹", "丹药/内容/战丹/战丹-*.json"),
     ("伤势", "丹药/内容/伤势/*.json"),
 )
@@ -244,7 +244,7 @@ def listeners(node, out: list[dict]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--数据", dest="data", default=str(ROOT / "data"))
-    parser.add_argument("--报告", dest="report", default="_监听顺序.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/监听顺序.txt")
     args = parser.parse_args()
 
     root = pathlib.Path(args.data).resolve()
@@ -275,6 +275,7 @@ def main() -> int:
             elif writes:
                 body["未标写"] += 1
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"监听顺序盘点：{root}\n")
     out.write("判据：只有改写**共享量**（事件数值/判定/资源/属性/行动条/冷却/事件存活）的\n")

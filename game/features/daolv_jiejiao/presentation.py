@@ -29,7 +29,7 @@ def load_companion_presentation(
 ) -> tuple[CompanionCopy, tuple[CompanionButton, ...]]:
     if set(dataset) != {"文本", "图标", "道侣"}:
         raise JsonDataError("道侣展示必须包含文本、图标和道侣按钮")
-    text_value = require_mapping(dataset["文本"], "道侣/展示/规则/文本.json")
+    text_value = require_mapping(dataset["文本"], "玩法/道侣/展示/规则/文本.json")
     expected_sections = {"查看", "交谈", "赠礼", "邀约", "暂别", "命令", "错误"}
     if set(text_value) != expected_sections:
         raise JsonDataError("道侣展示文本分区不完整")
@@ -44,7 +44,7 @@ def load_companion_presentation(
             for section, value in text_value.items()
         }
     )
-    icons_value = require_mapping(dataset["图标"], "道侣/展示/规则/图标.json")
+    icons_value = require_mapping(dataset["图标"], "玩法/道侣/展示/规则/图标.json")
     expected_icons = {
         "身份",
         "性情",
@@ -84,7 +84,7 @@ def render_action(button: CompanionButton, companion_id: str) -> CompanionAction
 
 def _buttons(value: object) -> tuple[CompanionButton, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError("道侣/展示/按钮/道侣.json必须是字典列表")
+        raise JsonDataError("玩法/道侣/展示/按钮/道侣.json必须是字典列表")
     result: list[CompanionButton] = []
     for index, raw in enumerate(value):
         row = require_mapping(raw, f"道侣按钮[{index}]")

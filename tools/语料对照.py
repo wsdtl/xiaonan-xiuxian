@@ -19,6 +19,19 @@
 变化——那时它的用途是「确认变化范围符合预期」，不是「确认没变」。
 基准本身是 `tools/基准/语料摘要.sem`（入库跟踪，48 KB），所以换一个会话也能直接对照。
 基准只在**零抛错**时才会写：把带错误的运行固化成基准，等于把坏状态当成正确。
+
+## `--摘要 行为`：改「属性基数」这类改动唯一能用的判据
+
+全量摘要带着**参战者快照**，里面有属性的绝对值。所以像「把加成属性的基准从 0 补到 100」
+这种**等价改写**，全量摘要会 1967/1967 全变——它证明不了任何事。
+
+`--摘要 行为` 把参战者快照去掉，只留 `事件骨架（时点/种类/来源/目标/数值）+ 终局`：
+
+    .venv/Scripts/python.exe -u tools/语料对照.py --摘要 行为 \
+        --对照 tools/基准/语料行为摘要.sem
+
+它逐条相同才说明「伤害数值与胜负一个没动」。改基数、改口径、改名字这类**声称等价**的改动
+都该先用它验，再用全量摘要去重取基准。
 """
 
 from __future__ import annotations
@@ -38,10 +51,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "语料摘要.json"
-
 parser = argparse.ArgumentParser()
-parser.add_argument("输出", nargs="?", default=str(ROOT / "_语料.json"),
+parser.add_argument("输出", nargs="?", default=str(ROOT / "_输出" / "语料.json"),
                     help="摘要写到 <输出>.sem（默认根目录临时文件，不入库）")
 parser.add_argument("--对照", dest="对照", default="",
                     help="与这份基准摘要对照；有差异则非零退出")
@@ -51,6 +62,8 @@ parser.add_argument("--允许失败", dest="允许失败", action="store_true",
                     help="有战斗抛错时也写摘要；默认拒绝，避免把坏状态当基准")
 parser.add_argument("--差异名单", dest="差异名单", default="",
                     help="把完整差异清单写到这个文件（大批次逐条验收用）")
+parser.add_argument("--摘要", dest="摘要", choices=("全量", "行为"), default="全量",
+                    help="行为＝只摘要事件骨架与终局，去掉参战者快照（改属性基数/口径时用）")
 args = parser.parse_args()
 
 out = Path(args.输出)
@@ -62,7 +75,10 @@ if out.suffix == ".json":
 # 跑语料时的过程输出写日志文件；但**判定结论要回到真终端**，否则「一致 N / 差异 M」
 # 会被重定向吞掉，当检查用时看不见。所以先留住真 stdout。
 REAL_STDOUT = sys.stdout
-sys.stdout = io.TextIOWrapper(open(ROOT / "_语料日志.txt", "wb"), encoding="utf-8", write_through=True)
+(ROOT / "_输出").mkdir(exist_ok=True)
+sys.stdout = io.TextIOWrapper(
+    open(ROOT / "_输出" / "语料日志.txt", "wb"), encoding="utf-8", write_through=True
+)
 
 
 def report(*values: object) -> None:
@@ -80,13 +96,14 @@ DATA_DIR = Path(args.数据 or os.environ.get("CORPUS_DATA") or ROOT / "data").r
 ATTRS = {
     "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
     "命中率": 100, "闪避率": 5, "暴击率": 20, "抗暴率": 5, "暴击伤害": 150,
-    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 0, "伤害减免": 0,
+    #: 伤害加成是加成口径，基准 100 = 不增不减；写 0 等于把伤害乘成 0。
+    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 100, "伤害减免": 0,
 }
 SURFACES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
 )
 
 corpus: list[tuple[str, str]] = []
@@ -120,10 +137,14 @@ def semantic(raw: dict) -> str:
          round(float(e.get("amount") or 0), 3))
         for e in events
     ]
-    sides = {side: blind(raw.get(side) or {}) for side in ("left", "right")}
+    if args.摘要 == "行为":
+        # 不带参战者快照：那一块里有属性的绝对值，改基数就会全变，与行为无关。
+        payload: list = [skeleton, raw.get("outcome")]
+    else:
+        sides = {side: blind(raw.get(side) or {}) for side in ("left", "right")}
+        payload = [skeleton, sides, raw.get("outcome")]
     return hashlib.sha256(
-        json.dumps([skeleton, sides, raw.get("outcome")], ensure_ascii=False,
-                   sort_keys=True, default=str).encode("utf-8")
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()[:16]
 
 

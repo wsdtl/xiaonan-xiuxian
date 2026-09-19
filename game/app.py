@@ -326,10 +326,10 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         )
     )
     action_group = ActionGroupService(team, sect)
-    action_group_status = action_group.initialize()
+    action_group.initialize()
     logger.opt(colors=True).success(C.ok("行动组核心微服务已启动"))
     hosting = HostingService(data, database, player_state, action_group)
-    hosting_status = hosting.initialize()
+    hosting.initialize()
     logger.opt(colors=True).success(C.ok("托管核心微服务已启动"))
     medicine = MedicineService(data, asset)
     medicine_status = medicine.initialize()
@@ -502,10 +502,10 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         action_group,
         combat,
     )
-    duel_status = duel.initialize()
+    duel.initialize()
     logger.opt(colors=True).success(C.ok("切磋核心微服务已启动"))
     gift = GiftService(data, database, location, character, asset, item_catalog)
-    gift_status = gift.initialize()
+    gift.initialize()
     logger.opt(colors=True).success(C.ok("赠送核心微服务已启动"))
     raid = RaidService(
         data,

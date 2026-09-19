@@ -71,7 +71,7 @@ class AlchemyFeature:
             self._buttons,
             "预览",
             {"可以开炉"} if value.can_refine else set(),
-            {"丹方": value.recipe.recipe_id},
+            {"丹药": value.recipe.recipe_id},
         )
 
     def completed_actions(self) -> tuple[AlchemyAction, ...]:

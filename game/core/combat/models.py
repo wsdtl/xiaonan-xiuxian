@@ -25,7 +25,7 @@ class CombatCatalog:
     attributes: Mapping[str, Mapping[str, Any]]
     abilities: Mapping[str, Mapping[str, Any]]
     events: Mapping[str, Mapping[str, Any]]
-    resources: Mapping[str, Mapping[str, Any]]
+    resources: Mapping[str, Any]
     damage_rules: Mapping[str, Any]
     action_rules: Mapping[str, Any]
     timing: Mapping[str, Any]
@@ -34,9 +34,17 @@ class CombatCatalog:
     environment_rules: Mapping[str, Any]
     five_elements: Mapping[str, Any]
     formation_rules: FormationNodeRules
+    #: 构筑模板库。放在最后并给默认值，让既有构造点不必都改。
+    #: 模板引用在**装载期**已展开（见 `service.expand_build_section`），所以引擎
+    #: 解析时不需要再用它；保留字段是为了让基线与诊断能看到当前模板库。
+    templates: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any] | None) -> CombatCatalog:
+    def from_mapping(
+        cls,
+        value: Mapping[str, Any] | None,
+        templates: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> CombatCatalog:
         source = value or {}
         raw_events = source.get("事件") or {}
         if not isinstance(raw_events, Mapping):
@@ -55,6 +63,7 @@ class CombatCatalog:
             environment_rules=dict(source.get("环境规则") or {}),
             five_elements=dict(source.get("五行") or {}),
             formation_rules=source["阵法规则"],
+            templates=dict(templates or {}),
         )
 
     def require_event(self, key: str) -> Mapping[str, Any]:
@@ -256,6 +265,41 @@ class Fighter:
     @property
     def shield_max(self) -> float:
         return max(0.0, self.value("护盾上限", 0.0))
+
+
+def attribute_ratio(
+    fighter: Fighter,
+    attribute: str,
+    definitions: Mapping[str, Mapping[str, Any]] | None = None,
+    default: float | None = None,
+) -> float:
+    """读一个百分比属性的**比值**：`100` → `1.0`。
+
+    基准就是 `属性.json` 里这个属性自己的 `默认值`——那才是「不增不减」的值，
+    `口径` 说明它怎么被用：
+
+    | 口径 | 基准 | 读法 |
+    | --- | --- | --- |
+    | 加成 | 100 | `×比值`（伤害/治疗/护盾/受疗/受盾/普攻威力/技能威力/治疗效果/护盾强度） |
+    | 倍率 | 自身 | `×比值`（暴击伤害 150 = ×1.5、连击伤害 100 = ×1.0） |
+    | 概率 | 0 | 百分点相抵（命中率是 100 = 必中，所以它自己那条写 100） |
+    | 减免 | 0 | `- 比值`（伤害减免、格挡减伤、韧性、冷却缩减、精神消耗修正） |
+    | 比率 | 0 | 直接当比率（比例穿透） |
+
+    所以调用点**不该**再自己写 `1 + …` / `1 - …`：那是把基准又抄了一遍。
+    只有「基准不是属性自己的默认值」时才传 `default`（如今只剩命中率要传伤害规则里的
+    基础命中率）。
+    """
+
+    definition = dict(dict(definitions or {}).get(attribute) or {})
+    baseline = float(definition.get("默认值", 0.0))
+    if default is not None:
+        baseline = float(default) * 100.0
+    if attribute not in fighter.attributes and not any(
+        attribute in status.modifiers for status in fighter.statuses
+    ):
+        return baseline / 100.0
+    return fighter.value(attribute, baseline) / 100.0
 
 
 ListenerEntry = tuple[

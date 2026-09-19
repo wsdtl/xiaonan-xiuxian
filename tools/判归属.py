@@ -38,7 +38,7 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SECTIONS = (
     ("真意", "data/战斗/内容/真意/真意-*.json"),
-    ("器律", "data/炼器/内容/器律-*.json"),
+    ("器律", "data/物品/炼器/内容/器律-*.json"),
 )
 SELF_SCOPE = {"自身", "主人"}
 #: 越界：伸向**战场**的目标范围。`当前目标` **不算**——武器打持有者选定的目标正是器物本职

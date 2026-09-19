@@ -1,6 +1,6 @@
 """验证物品契约真的约束数据。
 
-`data/基础物品` 的 `分类.json`、`公共字段.json` 与 `使用效果.json` 声明了丹药
+`data/物品/基础物品` 的 `分类.json`、`公共字段.json` 与 `使用效果.json` 声明了丹药
 允许的字段集合。这些声明此前没有任何消费者，改动它们不影响游戏；现在丹药核心
 在启动时按契约校验。本脚本对副本数据做定向破坏，确认契约是**被执行的门禁**
 而不是装饰性声明。
@@ -31,7 +31,7 @@ from game.core.data import JsonDataService  # noqa: E402
 from game.core.database import DatabaseService  # noqa: E402
 from game.core.medicine import MedicineService  # noqa: E402
 
-TARGET = "炼丹/内容/丹药/恢复丹/恢复丹-精神.json"
+TARGET = "物品/炼丹/内容/丹药/恢复丹/恢复丹-精神.json"
 
 
 def _initialize_medicine(root: pathlib.Path, database_path: pathlib.Path) -> str:

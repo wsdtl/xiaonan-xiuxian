@@ -34,6 +34,60 @@ from .models import (
 )
 from .presentation import build_battle_report_presentation
 from .report import RuntimeBattleReportParticipant, build_battle_report
+from .templates import expand_in_place
+
+
+def expand_build_section(section: str, values: Any) -> Any:
+    """装载期展开器：把某一段实体里的模板引用展开成独立的树。
+
+    由 `JsonDataService.initialize(expand=...)` 在**快照冻结之前**逐段调用，
+    因此快照里不会同时存在「引用」与「展开后的树」两种形态。
+
+    四个要点：
+
+    1. **深拷贝后再展开。** 同一段里重复的引用在解析后是同一个对象，原地展开会让
+       第一次展开污染其余引用。
+    2. **段名是实体类别，不是模板化的面名。** 现在是构筑四段（功法/真意/气机/器律）
+       加上战场环境 / 伤势 / 丹药——后三者与模板面一一对应（面名 `战丹` 对应的实体
+       类别是 `丹药`）。少一段就会出现「JSON 里是引用、快照里也是引用」，
+       读取方各拿一种形态（实测战丹 148 条监听全部报「不是监听事件节点」）。
+    3. 没有引用时不做任何拷贝，避免无谓开销。
+    4. **这里只做展开，不做任何修正。** 「一个时点只算一次」必须在**数据与模板主体**
+       里就成立（见 `game.core.combat.fold`），装载期不替数据兜底——解释层折叠会把
+       数据的问题藏起来，下一个人再抄一遍照样出。
+    """
+
+    if section not in (
+        "功法", "真意", "气机", "器律",
+        "战场环境", "伤势", "丹药",
+    ):
+        return values
+    from .template_data import library as _templates
+
+    templates = _templates()
+    if not templates:
+        return values
+    expanded: dict[str, Any] = {}
+    touched = False
+    for content_id, raw in values.items():
+        value = {str(key): materialize(item) for key, item in raw.items()}
+        if _holds_template(value):
+            expand_in_place(value, templates)
+            touched = True
+        expanded[str(content_id)] = value
+    return expanded if touched else values
+
+
+def _holds_template(node: Any) -> bool:
+    """这棵树里是否含模板引用。用于避免无谓的深拷贝。"""
+
+    if isinstance(node, Mapping):
+        if "模板" in node:
+            return True
+        return any(_holds_template(item) for item in node.values())
+    if isinstance(node, (list, tuple)):
+        return any(_holds_template(item) for item in node)
+    return False
 
 
 class CombatService:
@@ -51,16 +105,24 @@ class CombatService:
             raise RuntimeError("战斗核心已经初始化")
         if not self._formation.status().initialized:
             raise RuntimeError("阵法核心必须先于战斗核心启动")
+        from .template_data import library as _templates
+
+        templates = _templates()
+        # 构筑模板库是引擎基础设施（生成自真实实例，见 tools/构筑模板代码化.py），
+        # 不进 JSON 快照；交给基石同时用于校验与引擎。
         foundation = load_battle_foundation(
             self._data,
             formation_rules=self._formation.node_rules(),
+            templates=templates,
         )
         build_counts = validate_builds(
-            self._data, load_build_contracts(self._data)
+            self._data, load_build_contracts(self._data), templates=templates
         )
         self._build_count = sum(build_counts.values())
         report_dataset = materialize(self._data.dataset("战斗展示"))
-        report_catalog = BattleReportCatalog.from_mapping(report_dataset["战报"])
+        report_catalog = BattleReportCatalog.from_mapping(
+            report_dataset["战报"], foundation["属性"]
+        )
         self._engine = BattleEngine(foundation)
         report_catalog.validate_event_kinds(tuple(self._engine.catalog.events))
         self._report_catalog = report_catalog

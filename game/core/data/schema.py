@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
@@ -270,7 +271,7 @@ class SchemaValidator:
     ) -> None:
         """按「必填字段 / 可选字段」声明校验一个对象。
 
-        这是项目里已有的轻量契约写法（见 `data/基础物品/定义/使用效果.json`）：
+        这是项目里已有的轻量契约写法（见 `data/物品/基础物品/定义/使用效果.json`）：
         只声明字段集合，不声明每个字段的类型。类型与取值仍由各领域服务在读取时
         校验，本方法负责**字段集合**这一层，并让未知字段与缺必填字段显式失败。
 
@@ -318,7 +319,7 @@ class SchemaValidator:
 
     # ------------------------------------------------------------------ 基础断言
 
-    def allow_value(self, 
+    def allow_value(self,
         value: str,
         allowed: Iterable[str] | None,
         path: str,

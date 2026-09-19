@@ -53,7 +53,7 @@ class MedicineService:
             raise RuntimeError("玩家资产核心必须先于丹药核心启动")
         rules = self._data.dataset("服丹规则").get("服丹")
         if not isinstance(rules, Mapping):
-            raise JsonDataError("服丹/规则/服丹.json 必须是对象")
+            raise JsonDataError("玩法/服丹/规则/服丹.json 必须是对象")
         self._rules = rules
         auto = _mapping(rules.get("自动用药"), "服丹.自动用药")
         threshold_range = _number_range(
@@ -321,7 +321,7 @@ class MedicineService:
     def _index_medicines(self) -> None:
         """按物品契约索引丹药，并校验每个实体真的符合契约。
 
-        契约来自 `data/基础物品` 的 `分类.json` 与 `使用效果.json`：
+        契约来自 `data/物品/基础物品` 的 `分类.json` 与 `使用效果.json`：
         `分类.json` 声明丹药必须有 `使用效果`、可选 `强度`；`使用效果.json` 按效果
         类型声明各自的必填与可选字段。此前这两份契约没有任何消费者，改动它们不影响
         游戏；现在启动即按契约校验，不再静默跳过缺字段的实体。
@@ -374,7 +374,7 @@ class MedicineService:
         common_required = self._common_entity_fields()
         rows = self._data.dataset("物品规则").get("分类")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("基础物品/规则/分类.json 必须是字典列表")
+            raise JsonDataError("物品/基础物品/规则/分类.json 必须是字典列表")
         for raw_category in rows:
             entry = _mapping(raw_category, "分类[]")
             if str(entry.get("类别") or "").strip() != "丹药":
@@ -393,7 +393,7 @@ class MedicineService:
 
         rows = self._data.dataset("物品定义").get("公共字段")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("基础物品/定义/公共字段.json 必须是字典列表")
+            raise JsonDataError("物品/基础物品/定义/公共字段.json 必须是字典列表")
         for raw in rows:
             entry = _mapping(raw, "公共字段[]")
             if str(entry.get("类别") or "").strip() != "编号实体":
@@ -406,7 +406,7 @@ class MedicineService:
 
         rows = self._data.dataset("物品定义").get("使用效果")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("基础物品/定义/使用效果.json 必须是字典列表")
+            raise JsonDataError("物品/基础物品/定义/使用效果.json 必须是字典列表")
         contract: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
         for raw in rows:
             entry = _mapping(raw, "使用效果[]")

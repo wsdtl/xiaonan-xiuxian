@@ -65,6 +65,4 @@ def _validate_buttons(buttons: tuple[Mapping[str, str], ...], label: str) -> Non
         raise JsonDataError(f"{label}同一页面的按钮编号不能重复")
 
 
-
-
 __all__ = ["actions", "load_presentation"]

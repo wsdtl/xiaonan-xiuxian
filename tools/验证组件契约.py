@@ -1,7 +1,7 @@
 """验证组件字段契约真的约束数据。
 
 非战斗侧全部实体类别已接入字段契约：境界、伤势、人物状态、阵法、先天灵宝、
-道侣、炼器工匠、炼丹师、阵师、丹方。契约由各自核心在启动时通过
+道侣、炼器工匠、炼丹师、阵师、丹药。契约由各自核心在启动时通过
 `ContractSet.validate` 执行。
 
 本脚本对数据副本做定向破坏，确认契约是**被执行的门禁**而不是装饰性声明，同时
@@ -53,14 +53,14 @@ CASES: dict[str, dict[str, str]] = {
     },
     "阵法": {
         "dataset": "阵法字段契约",
-        "contract_path": "阵法/内容/阵法字段契约.json",
-        "entity_file": "阵法/内容/阵法.json",
+        "contract_path": "物品/阵法/规则/阵法字段契约.json",
+        "entity_file": "物品/阵法/内容/阵法.json",
         "remove": "阵法核心",
     },
     "先天灵宝": {
         "dataset": "先天灵宝字段契约",
-        "contract_path": "先天灵宝/内容/先天灵宝字段契约.json",
-        "entity_file": "先天灵宝/内容/先天灵宝.json",
+        "contract_path": "玩法/先天灵宝/规则/先天灵宝字段契约.json",
+        "entity_file": "玩法/先天灵宝/内容/先天灵宝.json",
         "remove": "权柄",
     },
     "道侣": {
@@ -87,10 +87,10 @@ CASES: dict[str, dict[str, str]] = {
         "entity_file": "世界/内容/丹霞州/丹霞城/丹霞城阵师.json",
         "remove": "阵道传承",
     },
-    "丹方": {
+    "丹药": {
         "dataset": "炼丹字段契约",
-        "contract_path": "炼丹/规则/炼丹字段契约.json",
-        "entity_file": "炼丹/内容/丹方/恢复丹/丹方-恢复精神.json",
+        "contract_path": "物品/炼丹/规则/炼丹字段契约.json",
+        "entity_file": "物品/炼丹/内容/丹药/恢复丹/恢复丹-精神.json",
         "remove": "炉法",
     },
 }

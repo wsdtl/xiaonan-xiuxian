@@ -16,7 +16,7 @@ from ...presentation import sentence
 def overview(feature: TradeFeature, value: TradeOverview):
     builder = (
         M.document()
-        .header(feature.copy("总览", "标题", 地点=value.location_name))
+        .header(feature.copy("总览", "标题", {"地点": value.location_name}))
         .section(feature.copy("总览", "货架"), icon="inventory")
         .field(
             feature.copy("总览", "货币"),
@@ -35,10 +35,10 @@ def page(feature: TradeFeature, value: TradePage):
     builder = (
         M.document()
         .header(
-            feature.copy("列表", "标题", 地点=value.location_name, 类别=value.category)
+            feature.copy("列表", "标题", {"地点": value.location_name, "类别": value.category})
         )
         .section(
-            feature.copy("列表", "页码", 当前页=value.page, 总页数=value.total_pages),
+            feature.copy("列表", "页码", {"当前页": value.page, "总页数": value.total_pages}),
             icon="inventory",
         )
         .field("商品", M.text(value.total_products, tone="emphasis"))
@@ -94,10 +94,7 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult):
         .line(
             feature.copy(
                 "购买",
-                "所得",
-                品级=value.product.grade_name,
-                名称=value.product.name,
-                数量=value.quantity,
+                "所得", {"品级": value.product.grade_name, "名称": value.product.name, "数量": value.quantity},
             )
         )
         .row(

@@ -43,7 +43,7 @@ async def bailiantang(
         "help": {
             "category": "炼制",
             "summary": "在丹鼎阁炼制丹药",
-            "usage": ("丹鼎阁", "丹鼎阁 宗门", "丹鼎阁 恢复丹", "丹鼎阁 开炉 丹方编号"),
+            "usage": ("丹鼎阁", "丹鼎阁 宗门", "丹鼎阁 恢复丹", "丹鼎阁 开炉 丹药编号"),
             "side_effect": "按次消耗宗门灵石；材料来源按个人或宗门路径结算",
             "order": 75,
         },
@@ -115,7 +115,7 @@ async def _dispatch(
             if parts[0] == "开炉":
                 identifier = " ".join(parts[1:]).strip()
                 if not identifier:
-                    raise ValueError("丹鼎阁需要指定丹方")
+                    raise ValueError("丹鼎阁需要指定丹药")
                 value = await feature.craft(
                     facility, user_id, request_id, source, identifier
                 )

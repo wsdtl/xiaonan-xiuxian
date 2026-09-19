@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from game.features.lianzhen import FormationAction, FormationCopy
 from message import M
 
@@ -9,8 +11,8 @@ from ...actions import message_actions
 from ...presentation import sentence
 
 
-def text(copy: FormationCopy, section: str, key: str, **values: object) -> str:
-    return copy.text[section][key].format_map(values)
+def text(copy: FormationCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[section][key].format_map(values or {})
 
 
 def overview(copy, value, actions: tuple[FormationAction, ...]):
@@ -21,16 +23,14 @@ def overview(copy, value, actions: tuple[FormationAction, ...]):
             text(
                 copy,
                 "总览",
-                "标题",
-                地点=value.location_name,
-                阵台=master.platform_name,
+                "标题", {"地点": value.location_name, "阵台": master.platform_name},
             )
         )
         .section(master.title, icon="combat")
         .field(text(copy, "总览", "阵师"), master.name)
         .field(text(copy, "总览", "传承"), master.heritage)
-        .line(text(copy, "总览", "引言", 阵师=master.name))
-        .small(master.speech["总览"].format(主持=master.name))
+        .line(text(copy, "总览", "引言", {"阵师": master.name}))
+        .small(master.speech["总览"].format_map({"主持": master.name}))
         .section(text(copy, "总览", "阵法"), icon="item")
     )
     for index, entry in enumerate(value.entries, start=1):
@@ -42,7 +42,7 @@ def overview(copy, value, actions: tuple[FormationAction, ...]):
             ),
         ).small(f"编号：{entry.formation.formation_id} · {entry.formation.core}")
     builder.small(
-        text(copy, "列表", "页码", 当前页=value.page, 总页数=value.page_count)
+        text(copy, "列表", "页码", {"当前页": value.page, "总页数": value.page_count})
     )
     return builder.actions(message_actions(actions)).build()
 
@@ -55,14 +55,12 @@ def preview(copy, value, actions: tuple[FormationAction, ...]):
             text(
                 copy,
                 "预览",
-                "标题",
-                地点=value.location_name,
-                阵台=master.platform_name,
+                "标题", {"地点": value.location_name, "阵台": master.platform_name},
             )
         )
         .section(master.title, icon="combat")
         .field(text(copy, "预览", "阵师"), master.name)
-        .small(master.speech["审材"].format(主持=master.name))
+        .small(master.speech["审材"].format_map({"主持": master.name}))
         .section(value.formation.name, icon="item")
         .row(
             (text(copy, "预览", "阵法"), value.formation.formation_id),
@@ -97,7 +95,7 @@ def preview(copy, value, actions: tuple[FormationAction, ...]):
             tone="positive" if value.can_form else "danger",
         )
     ).small(
-        master.speech["齐备" if value.can_form else "不足"].format(主持=master.name)
+        master.speech["齐备" if value.can_form else "不足"].format_map({"主持": master.name})
     )
     return builder.actions(message_actions(actions)).build()
 
@@ -107,17 +105,17 @@ def completed(copy, value, actions: tuple[FormationAction, ...]):
     master = preview_value.master
     builder = (
         M.document()
-        .header(text(copy, "完成", "标题", 地点=preview_value.location_name))
+        .header(text(copy, "完成", "标题", {"地点": preview_value.location_name}))
         .inline_section("炼阵结果", M.status("完成", tone="positive"), icon="success")
         .section(master.title, icon="combat")
         .field(text(copy, "完成", "阵师"), master.name)
-        .line(text(copy, "完成", "过程", 阵师=master.name))
+        .line(text(copy, "完成", "过程", {"阵师": master.name}))
         .section(text(copy, "完成", "所得"), icon="item")
         .field(
             f"{preview_value.grade_name}{preview_value.formation.name}",
             f"阵藏条目 {value.reserve_key} · 数量 {value.quantity_after}",
         )
-        .small(master.speech["完成"].format(主持=master.name))
+        .small(master.speech["完成"].format_map({"主持": master.name}))
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation

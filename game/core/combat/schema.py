@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -210,7 +211,11 @@ class RuleSchemaValidator(DefinitionSchemaValidator):
         allowed_abilities: Iterable[str] | None = None,
         allowed_executors: Iterable[str] | None = None,
     ) -> None:
-        """校验一个能力节点：必须引用已声明原子能力，且字段满足其契约。"""
+        """校验一个能力节点：必须引用已声明原子能力，且字段满足其契约。
+
+        卡里可以只写「模板 + 参数」，但模板引用在**装载期**就已展开
+        （见 `service._expand_build_entities`），所以这里拿到的一定是完整的树。
+        """
 
         node = self._object(raw_node, path)
         ability_name = self._nonempty_string(node.get("能力"), f"{path}.能力")

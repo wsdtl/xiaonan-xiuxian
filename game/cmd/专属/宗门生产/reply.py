@@ -25,7 +25,7 @@ def viewed(
         .section("生产状态", icon="location")
         .field(
             "周期",
-            common["周期"].format(时长=duration(value.facility.period_seconds)),
+            common["周期"].format_map({"时长": duration(value.facility.period_seconds)}),
         )
     )
     if not value.started:
@@ -35,12 +35,12 @@ def viewed(
         builder.field(
             "可收取",
             M.text(
-                common["待结算"].format(轮数=value.pending_cycles),
+                common["待结算"].format_map({"轮数": value.pending_cycles}),
                 tone="emphasis",
             ),
         )
         builder.field(
-            "下一轮", common["剩余"].format(时长=duration(value.next_cycle_seconds))
+            "下一轮", common["剩余"].format_map({"时长": duration(value.next_cycle_seconds)})
         )
         if value.pending_cycles == 0:
             builder.small(common["无待结算"])
@@ -60,7 +60,7 @@ def started(
         .section(text["开启"], icon="success")
         .line(M.status("生产已开启", tone="positive"))
         .small(
-            common["开启说明"].format(时长=duration(value.view.facility.period_seconds))
+            common["开启说明"].format_map({"时长": duration(value.view.facility.period_seconds)})
         )
         .actions(message_actions(actions))
         .build()
@@ -79,7 +79,7 @@ def collected(
         .header(text["标题"])
         .section(text["收取"], icon="success")
         .line(M.status("收取完成", tone="positive"))
-        .field("收取轮次", common["结算轮数"].format(轮数=value.settled_cycles))
+        .field("收取轮次", common["结算轮数"].format_map({"轮数": value.settled_cycles}))
     )
     if value.spirit_stones:
         builder.field(

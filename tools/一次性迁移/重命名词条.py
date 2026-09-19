@@ -46,8 +46,8 @@ SURFACES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
-    ("战丹", "炼丹/内容/丹药/战丹/*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
+    ("战丹", "物品/炼丹/内容/丹药/战丹/*.json"),
     ("伤势", "角色/内容/伤势.json"),
 )
 
@@ -539,7 +539,7 @@ def write_back(entities: list[Entity]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="写回数据文件")
-    parser.add_argument("--report", default="_词条改名.txt", help="报告文件")
+    parser.add_argument("--report", default="_输出/词条改名.txt", help="报告文件")
     args = parser.parse_args()
 
     entities = load_entities()
@@ -559,6 +559,7 @@ def main() -> int:
 
     changed = write_back(entities) if args.apply else []
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     per_kind = collections.Counter(item[0] for item in plan)
     per_card = collections.Counter(item[3] for item in plan)

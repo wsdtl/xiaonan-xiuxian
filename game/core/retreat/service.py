@@ -115,7 +115,7 @@ class RetreatService:
         if not self._innate_treasure.status().initialized:
             raise RuntimeError("先天灵宝核心必须先于闭关核心启动")
         rules = self._data.dataset("玩法规则").get("闭关")
-        self._rules = _mapping(rules, "闭关/规则/闭关.json")
+        self._rules = _mapping(rules, "玩法/闭关/规则/闭关.json")
         seconds = _positive_int(self._rules.get("每轮秒数"), "闭关.每轮秒数")
         maximum = _positive_int(self._rules.get("最多轮数"), "闭关.最多轮数")
         duration = _positive_int(self._rules.get("持续秒数"), "闭关.持续秒数")

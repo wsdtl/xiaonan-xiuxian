@@ -4,11 +4,15 @@
 
     .venv/Scripts/python.exe -X utf8 tools/渲染战斗文本.py
     .venv/Scripts/python.exe -X utf8 tools/渲染战斗文本.py --卡片 400541
+    .venv/Scripts/python.exe -X utf8 tools/渲染战斗文本.py --体裁 功法 --报告 _输出/功法说明.md
 
 输出：
 
-* `_战斗文本预览.md` —— 每张卡的「现有说明」与「渲染正文」左右对照；
+* `<报告>` —— 每张卡的「现有说明」与「渲染正文」左右对照（默认 `_输出/战斗文本预览.md`）；
 * 标准输出 —— 认不出的原子能力、事件、字段清单；有未支持项即退出码 1。
+
+**读数据必须走 `构筑模板展开`**：卡里的效果已经模板化，直接 `json.loads` 拿到的是
+`{"模板": …}` 引用，渲染出来全是 `〈未支持：〉`（实测整套功法都这样）。
 """
 
 from __future__ import annotations
@@ -22,24 +26,26 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from game.core.combat.card_text import render_body, render_listeners  # noqa: E402
+from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 
 DATA = ROOT / "data"
 SURFACES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
     ("战场环境", "战斗/内容/战场环境/*.json"),
-    ("战丹", "炼丹/内容/丹药/战丹/*.json"),
+    ("战丹", "物品/炼丹/内容/丹药/战丹/*.json"),
     ("长期伤势", "角色/内容/伤势.json"),
 )
 
 
 def cards(pattern: str):
     for path in sorted(DATA.glob(pattern)):
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = _load_build_json(path)
         entries = document if isinstance(document, list) else [document]
         for entry in entries:
             if isinstance(entry, dict):
@@ -83,10 +89,18 @@ def defects(card: dict) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--卡片", action="append", default=[], help="只渲染这些编号")
-    parser.add_argument("--报告", dest="report", default="_战斗文本预览.md")
+    parser.add_argument("--体裁", action="append", default=[],
+                        help="只渲染这些体裁（功法 / 真意 / 气机 / 器律 / 战场环境 / 战丹 / 长期伤势）")
+    parser.add_argument("--报告", dest="report", default="_输出/战斗文本预览.md")
     args = parser.parse_args()
 
     wanted = set(args.卡片)
+    kinds = set(args.体裁)
+    未知体裁 = kinds - {name for name, _ in SURFACES}
+    if 未知体裁:
+        print(f"未登记的体裁：{'、'.join(sorted(未知体裁))}")
+        return 2
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     unknown: collections.Counter[str] = collections.Counter()
     issues: collections.Counter[str] = collections.Counter()
@@ -94,6 +108,8 @@ def main() -> int:
     empty = 0
 
     for section, pattern in SURFACES:
+        if kinds and section not in kinds:
+            continue
         for card in cards(pattern):
             identity = str(card.get("编号"))
             if wanted and identity not in wanted:

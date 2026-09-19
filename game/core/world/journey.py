@@ -369,7 +369,7 @@ class JourneyPlanner:
             joined = "、".join(displayed)
             if len(via_locations) > self._via_limit:
                 joined += str(self._narrative["经由省略后缀"])
-            sections["经由"] = str(self._narrative["经由"]).format(地点=joined)
+            sections["经由"] = str(self._narrative["经由"]).format_map({"地点": joined})
         else:
             sections["经由"] = str(self._narrative.get("没有经由地点") or "")
         sections["途中"] = realm.en_route
@@ -377,9 +377,8 @@ class JourneyPlanner:
         highest_xy = max(terrain_candidates, key=lambda xy: self._altitude(xy))
         terrain_turn = self._position_label(highest_xy)
         ascent_word = _threshold_text(self._ascent_words, metrics.total_ascent_m)
-        sections["地势"] = str(self._narrative["地势"]).format(
-            地势转折=terrain_turn,
-            爬升措辞=ascent_word,
+        sections["地势"] = str(self._narrative["地势"]).format_map(
+            {"地势转折": terrain_turn, "爬升措辞": ascent_word},
         )
         sections["抵达"] = realm.arrival.format_map(values)
         altitude_word = _threshold_text(
@@ -388,10 +387,8 @@ class JourneyPlanner:
         li = metrics.horizontal_distance_m / self._meters_per_li
         rounded_li = _round_to_step(li, self._li_rounding)
         template = "总览高地" if metrics.maximum_altitude_m > 0 else "总览低地"
-        sections["总览"] = str(self._narrative[template]).format(
-            里程=rounded_li,
-            最高海拔=metrics.maximum_altitude_m,
-            海拔措辞=altitude_word,
+        sections["总览"] = str(self._narrative[template]).format_map(
+            {"里程": rounded_li, "最高海拔": metrics.maximum_altitude_m, "海拔措辞": altitude_word},
         )
         return tuple(
             sections[section] for section in self._narrative_order if sections[section]
@@ -404,7 +401,7 @@ class JourneyPlanner:
             template = words["起行"] if first else words["转入"]
         else:
             template = str(self._terrain_words["起行" if first else "转入"])
-        return str(template).format(方向=direction, 地形=segment.name)
+        return str(template).format_map({"方向": direction, "地形": segment.name})
 
     def _position_label(self, xy: XY) -> str:
         location_name = self._location_name_by_xy.get(xy)

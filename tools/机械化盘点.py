@@ -31,13 +31,17 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from 全库扫描 import 全库文档  # noqa: E402
+from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 DEFAULT_BASELINE = ROOT / "tools" / "基准" / "机械化基线.json"
 
 SURFACES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
 )
 
 #: 引擎 `_value_read` 支持的读取来源（见 `game/core/combat/mechanics.py`）。
@@ -113,7 +117,7 @@ def scan() -> dict[str, object]:
 
     for section, pattern in SURFACES:
         for path in sorted(ROOT.glob(f"data/{pattern}")):
-            for entry in json.loads(path.read_text(encoding="utf-8")):
+            for entry in _load_build_json(path):
                 total_cards += 1
                 walk(entry, str(entry["编号"]))
 
@@ -164,6 +168,10 @@ def gaps() -> dict[str, object]:
 
     负责人口径是「**每个机制尽量要平均，没有的机制可以考虑使用上**」——所以读数不能只报
     「哪里挤」，还要报「哪里空着」。只报事实，不自动判定好坏。
+
+    **扫全库，不只四类构筑卡**：口径说的是「全库没人用」，只扫 `SURFACES` 会把战丹 / 伤势 /
+    战场环境里已经用上的来源报成空位（`目标当前护盾` 就被这样误报过）。读取走
+    `全库扫描.全库文档()`，模板引用在那里已经展开。
     """
     origins: collections.Counter[str] = collections.Counter()
     fields: collections.Counter[str] = collections.Counter()
@@ -189,10 +197,8 @@ def gaps() -> dict[str, object]:
             for nested in node:
                 walk(nested)
 
-    for _section, pattern in SURFACES:
-        for path in sorted(ROOT.glob(f"data/{pattern}")):
-            for entry in json.loads(path.read_text(encoding="utf-8")):
-                walk(entry)
+    for _相对, 文档 in 全库文档():
+        walk(文档)
     unused = [name for name in ENGINE_ORIGINS if name not in origins]
     return {"未用来源": unused, "字段": fields, "标签": tags}
 
@@ -236,6 +242,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--基准", default=str(DEFAULT_BASELINE), help="入库基线")
     parser.add_argument("--写基准", action="store_true", help="把当前读数写成新基线（抬高棘轮）")
+    parser.add_argument("--备注", default="", help="与 --写基准 同用：记下这次为什么抬高棘轮")
     parser.add_argument("--明细", action="store_true", help="打出完整分布表")
     args = parser.parse_args()
 
@@ -245,6 +252,16 @@ def main() -> int:
 
     baseline = pathlib.Path(args.基准)
     if args.写基准:
+        旧备注 = ""
+        if baseline.is_file():
+            try:
+                旧备注 = str(json.loads(baseline.read_text(encoding="utf-8")).get("备注") or "")
+            except (OSError, json.JSONDecodeError):
+                旧备注 = ""
+        # 棘轮是**按名字**量的：改过口径（例如两个动词合并成一个名字）之后，旧基线
+        # 与当前读数不是同一把尺子，必须留下为什么抬高的依据。没写新的就沿用旧的。
+        if args.备注 or 旧备注:
+            stored["备注"] = args.备注 or 旧备注
         baseline.parent.mkdir(parents=True, exist_ok=True)
         baseline.write_text(
             json.dumps(stored, ensure_ascii=False, sort_keys=True, indent=1) + "\n",

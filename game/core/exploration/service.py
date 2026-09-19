@@ -139,7 +139,7 @@ class ExplorationService:
         if not self._innate_treasure.status().initialized:
             raise RuntimeError("先天灵宝核心必须先于探险核心启动")
         rules = self._data.dataset("玩法规则").get("探险")
-        self._rules = _mapping(rules, "探险/规则/探险.json")
+        self._rules = _mapping(rules, "玩法/探险/规则/探险.json")
         seconds = _positive_int(self._rules.get("每场秒数"), "探险.每场秒数")
         maximum = _positive_int(self._rules.get("最多场数"), "探险.最多场数")
         duration = _positive_int(self._rules.get("持续秒数"), "探险.持续秒数")

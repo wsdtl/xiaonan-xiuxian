@@ -13,7 +13,7 @@ import collections
 import json
 import pathlib
 
-ROOT = pathlib.Path(r"C:\Users\DengXiaonan\Desktop\晓楠修仙")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 MARKERS = ("能力", "阶段", "使用效果", "战斗状态", "阵法核心", "品级", "权柄",
            "监听", "效果", "事件", "伤害", "属性变化", "行动限制")
 

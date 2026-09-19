@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from game.features.lianqi import (
     ForgingAction,
     ForgingCopy,
@@ -16,8 +18,8 @@ from ...actions import message_actions
 from ...presentation import sentence
 
 
-def text(copy: ForgingCopy, section: str, key: str, **values: object) -> str:
-    return copy.text[section][key].format_map(values)
+def text(copy: ForgingCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[section][key].format_map(values or {})
 
 
 def overview(
@@ -32,16 +34,14 @@ def overview(
             text(
                 copy,
                 "总览",
-                "标题",
-                地点=value.location_name,
-                炉名=artisan.furnace_name,
+                "标题", {"地点": value.location_name, "炉名": artisan.furnace_name},
             )
         )
         .section(artisan.title, icon="weapon")
         .field(text(copy, "总览", "工匠"), artisan.name)
         .field(text(copy, "总览", "流派"), artisan.school)
-        .line(text(copy, "总览", "引言", 工匠=artisan.name))
-        .small(value.artisan.speech["总览"].format(主持=value.artisan.name))
+        .line(text(copy, "总览", "引言", {"工匠": artisan.name}))
+        .small(value.artisan.speech["总览"].format_map({"主持": value.artisan.name}))
         .section(text(copy, "总览", "器阶"), icon="item")
     )
     for index, (stage, count) in enumerate(value.stage_counts, start=1):
@@ -52,7 +52,7 @@ def overview(
 def law_list(copy: ForgingCopy, value: ForgingLawList):
     builder = (
         M.document()
-        .header(text(copy, "列表", "标题", 地点=value.location_name, 器阶=value.stage))
+        .header(text(copy, "列表", "标题", {"地点": value.location_name, "器阶": value.stage}))
         .section(value.artisan.title, icon="weapon")
         .field(text(copy, "列表", "工匠"), value.artisan.name)
         .section(value.stage, icon="item")
@@ -68,7 +68,7 @@ def law_list(copy: ForgingCopy, value: ForgingLawList):
             " · ",
             M.status(state, tone="positive" if entry.can_forge else "warning"),
         ).small(f"编号：{entry.law.law_id} · 铸法：{entry.law.method}")
-    builder.small(text(copy, "列表", "页码", 当前页=1, 总页数=1))
+    builder.small(text(copy, "列表", "页码", {"当前页": 1, "总页数": 1}))
     return builder.build()
 
 
@@ -84,14 +84,12 @@ def preview(
             text(
                 copy,
                 "预览",
-                "标题",
-                地点=value.location_name,
-                炉名=artisan.furnace_name,
+                "标题", {"地点": value.location_name, "炉名": artisan.furnace_name},
             )
         )
         .section(artisan.title, icon="weapon")
         .field(text(copy, "预览", "工匠"), artisan.name)
-        .small(artisan.speech["审材"].format(主持=artisan.name))
+        .small(artisan.speech["审材"].format_map({"主持": artisan.name}))
         .section(value.law.name, icon="item")
         .row(
             (text(copy, "预览", "器律"), value.law.law_id),
@@ -115,7 +113,7 @@ def preview(
             tone="positive" if value.can_forge else "danger",
         )
     ).small(
-        artisan.speech["齐备" if value.can_forge else "不足"].format(主持=artisan.name)
+        artisan.speech["齐备" if value.can_forge else "不足"].format_map({"主持": artisan.name})
     )
     return builder.actions(message_actions(actions)).build()
 
@@ -129,14 +127,14 @@ def completed(
     artisan = preview_value.artisan
     builder = (
         M.document()
-        .header(text(copy, "完成", "标题", 地点=preview_value.location_name))
+        .header(text(copy, "完成", "标题", {"地点": preview_value.location_name}))
         .inline_section("炼器结果", M.status("完成", tone="positive"), icon="success")
         .section(artisan.title, icon="weapon")
         .field(text(copy, "完成", "工匠"), artisan.name)
-        .line(text(copy, "完成", "过程", 工匠=artisan.name))
+        .line(text(copy, "完成", "过程", {"工匠": artisan.name}))
         .section(text(copy, "完成", "所得"), icon="item")
         .field(preview_value.law.name, f"器藏数量 {value.quantity_after}")
-        .small(artisan.speech["完成"].format(主持=artisan.name))
+        .small(artisan.speech["完成"].format_map({"主持": artisan.name}))
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation

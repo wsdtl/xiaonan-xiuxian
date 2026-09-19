@@ -1,5 +1,6 @@
 """跨服务启动契约；构筑词条由战斗装配显式绑定。"""
 from __future__ import annotations
+
 from collections.abc import Iterable, Mapping
 from typing import Protocol
 

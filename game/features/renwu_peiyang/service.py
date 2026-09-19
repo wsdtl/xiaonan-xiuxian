@@ -84,7 +84,7 @@ class CharacterCultivationFeature:
             if not ready:
                 raise RuntimeError(f"{label}必须先于人物培养玩法启动")
         dataset = self._data.dataset("培养展示")
-        self._copy = require_mapping(dataset.get("文本"), "培养/展示/文本.json")
+        self._copy = require_mapping(dataset.get("文本"), "玩法/培养/展示/文本.json")
         require_mapping(self._copy.get("人物"), "培养文本.人物")
         require_mapping(self._copy.get("装配"), "培养文本.装配")
         require_mapping(self._copy.get("突破"), "培养文本.突破")

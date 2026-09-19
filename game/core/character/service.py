@@ -139,7 +139,7 @@ class CharacterService:
             self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         medicine_rules = _mapping(
-            self._data.dataset("服丹规则").get("服丹"), "服丹/规则/服丹.json"
+            self._data.dataset("服丹规则").get("服丹"), "玩法/服丹/规则/服丹.json"
         )
         medicine_auto = _mapping(medicine_rules.get("自动用药"), "服丹.自动用药")
         self._role_rule = role_rule
@@ -872,7 +872,6 @@ class CharacterService:
             return reserve.stack.name, reserve.operation
         except (AssetStateError, ValueError) as exc:
             raise CharacterCultivationError(str(exc)) from exc
-
 
     def _equip_replaced_ids(self, replaced: object) -> tuple[str, str]:
         """被替换槽位的编号与品级；空槽给空串。"""

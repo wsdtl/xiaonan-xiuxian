@@ -43,7 +43,8 @@ ATTRS = {
     "格挡率": 10,
     "破格率": 5,
     "格挡减伤": 30,
-    "伤害加成": 0,
+    # 加成口径的基准是 100（不增不减）：这里写 0 等于「伤害加成 0%」，会把伤害乘成 0。
+    "伤害加成": 100,
     "伤害减免": 0,
 }
 GRADES = ("黄", "玄", "地", "天")
@@ -158,7 +159,7 @@ def test_every_formation_grade_fights(services) -> None:
 
     formations = [
         entry
-        for entry in _load("阵法/内容/*.json")
+        for entry in _load("物品/阵法/内容/*.json")
         if isinstance(entry, dict) and str(entry.get("编号", "")).startswith("53")
     ]
     assert len(formations) >= 40
@@ -212,7 +213,7 @@ def test_every_formation_grade_fights(services) -> None:
 def test_every_recovery_pill_can_be_used(services) -> None:
     """6 种恢复丹都要能装配，并在对应资源偏低时被真正服用。"""
 
-    pills = _load("炼丹/内容/丹药/恢复丹/*.json")
+    pills = _load("物品/炼丹/内容/丹药/恢复丹/*.json")
     assert len(pills) >= 6
     resource_of = {"恢复血气": "血气", "恢复精神": "精神"}
 
@@ -282,7 +283,7 @@ def test_entry_surfaces_reach_their_deep_paths(services) -> None:
 
     formation = next(
         entry
-        for entry in _load("阵法/内容/*.json")
+        for entry in _load("物品/阵法/内容/*.json")
         if isinstance(entry, dict) and str(entry.get("编号", "")).startswith("53")
     )
     # 首轮阵法轮转要等到 `ceil(12 × 周期倍率 / 传导)` 个行动之后，而一场仗有多长

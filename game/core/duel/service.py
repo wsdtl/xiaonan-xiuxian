@@ -62,7 +62,7 @@ class DuelService:
             raise RuntimeError("切磋核心已经初始化")
         rules = self._data.dataset("玩法规则").get("切磋")
         if not isinstance(rules, Mapping):
-            raise JsonDataError("切磋/规则/切磋.json 必须是对象")
+            raise JsonDataError("玩法/切磋/规则/切磋.json 必须是对象")
         self._rules = dict(rules)
         _positive_int(self._rules.get("有效秒数"), "切磋.有效秒数")
         _positive_int(self._rules.get("战斗行动上限"), "切磋.战斗行动上限")

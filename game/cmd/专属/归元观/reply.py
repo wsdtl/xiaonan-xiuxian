@@ -31,7 +31,7 @@ def result(feature: GuiyuanFeature, value: GuiyuanResult):
         .line(
             M.status("归元完成", tone="positive"),
             " ",
-            feature.copy("结算", "完成", 类别=value.category, 数量=value.content_count),
+            feature.copy("结算", "完成", {"类别": value.category, "数量": value.content_count}),
         )
         .build()
     )

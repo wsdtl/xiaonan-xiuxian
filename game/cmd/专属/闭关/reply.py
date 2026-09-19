@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from game.features.biguan import (
     RetreatAction,
     RetreatCopy,
@@ -17,8 +19,8 @@ from ...actions import message_actions
 from ...presentation import duration, natural_deadline
 
 
-def text(copy: RetreatCopy, section: str, key: str, **values: object) -> str:
-    return copy.text[section][key].format_map(values)
+def text(copy: RetreatCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[section][key].format_map(values or {})
 
 
 def error(copy: RetreatCopy, message: str):
@@ -151,7 +153,7 @@ def settlement_page(
                 (text(copy, "总结", "同行用户"), value.participant_count),
             )
             .field(text(copy, "总结", "感悟次数"), insight_count)
-            .small(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
+            .small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
         )
     else:
         builder = _user_page(copy, feature, value.users[page - 2], page, total_pages)
@@ -165,7 +167,7 @@ def _user_page(
     page: int,
     total_pages: int,
 ):
-    builder = M.document().header(text(copy, "用户", "标题", 人物=value.character_name))
+    builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
     if value.treasure_activation is not None:
         activation = value.treasure_activation
         builder.section("先天灵宝", icon="item").field(
@@ -227,7 +229,7 @@ def _user_page(
             )
     else:
         builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "无"))
-    return builder.small(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
+    return builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
 
 
 def _resource(value: float) -> str:

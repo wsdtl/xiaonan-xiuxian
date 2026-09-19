@@ -54,7 +54,7 @@ def page(copy: Mapping[str, Mapping[str, str]], value: Any):
             )
         builder.item(index, *parts)
     if value.page_count > 1:
-        builder.small(common["页码"].format(当前页=value.page, 总页数=value.page_count))
+        builder.small(common["页码"].format_map({"当前页": value.page, "总页数": value.page_count}))
     return builder.build()
 
 
@@ -75,7 +75,7 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any):
         assessment = value.assessment
         title = assessment.recipe.medicine_name
         rows = [
-            ("丹方", assessment.recipe.recipe_id),
+            ("丹药", assessment.recipe.recipe_id),
             (
                 "成丹",
                 f"{assessment.medicine_grade_name}{assessment.recipe.medicine_name}",

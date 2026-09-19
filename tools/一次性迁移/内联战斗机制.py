@@ -12,8 +12,8 @@
 「中间层曾经怎么被解释」的唯一留存说明。
 
 用法：
-    python tools/内联战斗机制.py            # 预演，只报告
-    python tools/内联战斗机制.py --apply    # 写回数据
+    python tools/一次性迁移/内联战斗机制.py            # 预演，只报告
+    python tools/一次性迁移/内联战斗机制.py --apply    # 写回数据
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ SOURCES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
 )
 
 
@@ -293,7 +293,7 @@ def strip_mechanism_mentions(entity: dict) -> int:
 STATUS_SOURCES = (
     (
         "战丹",
-        "炼丹/内容/丹药/战丹/*.json",
+        "物品/炼丹/内容/丹药/战丹/*.json",
         ("使用效果", "战斗机制"),
         ("使用效果", "监听"),
     ),
@@ -395,7 +395,6 @@ def main() -> int:
     report.extend(migrate_status_sources(library, args.apply))
 
     legacy = 0
-    mentions = 0
     for label, pattern in SOURCES:
         for path in sorted(DATA.glob(pattern)):
             raw_text = path.read_text(encoding="utf-8")
@@ -415,7 +414,8 @@ def main() -> int:
                 path.write_text(output, encoding="utf-8")
     report.append(f"旧属性名/术语改写与说明清理: {legacy} 处")
 
-    out = io.TextIOWrapper(open(ROOT / "_migrate.txt", "wb"), encoding="utf-8")
+    (ROOT / "_输出").mkdir(exist_ok=True)
+    out = io.TextIOWrapper(open(ROOT / "_输出" / "migrate.txt", "wb"), encoding="utf-8")
     out.write("\n".join(report) + "\n")
     out.write(f"机制库: {len(library)} 条\n")
     for key, value in sorted(inliner.stats.items()):
@@ -426,7 +426,7 @@ def main() -> int:
     )
     out.write("模式: " + ("已写回" if args.apply else "预演") + "\n")
     out.flush()
-    print(f"改动文件: {changed_files}；详见 _migrate.txt")
+    print(f"改动文件: {changed_files}；详见 _输出/migrate.txt")
     return 0
 
 

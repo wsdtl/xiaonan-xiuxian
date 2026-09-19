@@ -67,10 +67,10 @@ def page(
         ).line(
             M.status("待处理", tone="warning"),
             " ",
-            _text(copy, "格式", "邀请来源").format(
-                姓名=value.invitation_inviter_name, 宗门=value.invitation_name
+            _text(copy, "格式", "邀请来源").format_map(
+                {"姓名": value.invitation_inviter_name, "宗门": value.invitation_name}
             ),
-        ).small(_text(copy, "格式", "邀请时限").format(分钟=value.invitation_minutes))
+        ).small(_text(copy, "格式", "邀请时限").format_map({"分钟": value.invitation_minutes}))
     else:
         builder.section("山门", icon=_text(copy, "图标", "宗门")).field(
             _text(copy, "查看", "入口"), value.entrance
@@ -119,7 +119,7 @@ def page(
 def operation(
     copy: SectCopy, value: SectOperationResult, actions: tuple[SectAction, ...]
 ):
-    notice = _text(copy, "结果", value.action).format(姓名=value.target_name)
+    notice = _text(copy, "结果", value.action).format_map({"姓名": value.target_name})
     return page(copy, value.page, actions, notice=notice)
 
 

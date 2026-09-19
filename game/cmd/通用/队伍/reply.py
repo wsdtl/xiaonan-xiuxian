@@ -59,8 +59,8 @@ def page(
             _text(copy, "查看", "状态"), icon=_text(copy, "图标", "队伍")
         ).field(
             _text(copy, "查看", "人数"),
-            _text(copy, "格式", "人数").format(
-                当前=len(value.members), 上限=value.maximum_players
+            _text(copy, "格式", "人数").format_map(
+                {"当前": len(value.members), "上限": value.maximum_players}
             ),
         )
         if len(value.members) == 1:
@@ -68,16 +68,16 @@ def page(
         builder.section(_text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员"))
         template = _text(copy, "格式", "成员")
         for index, member in enumerate(value.members, start=1):
-            builder.item(index, template.format(姓名=member.name, 身份=member.role))
+            builder.item(index, template.format_map({"姓名": member.name, "身份": member.role}))
     if value.invitation is not None:
         builder.section(
             _text(copy, "查看", "待处理邀请"),
             icon=_text(copy, "图标", "邀请"),
         ).line(
-            _text(copy, "格式", "邀请来源").format(姓名=value.invitation.inviter_name)
+            _text(copy, "格式", "邀请来源").format_map({"姓名": value.invitation.inviter_name})
         ).small(
-            _text(copy, "格式", "邀请时限").format(
-                分钟=value.invitation.remaining_minutes
+            _text(copy, "格式", "邀请时限").format_map(
+                {"分钟": value.invitation.remaining_minutes}
             )
         )
     return builder.actions(message_actions(actions)).build()
@@ -88,7 +88,7 @@ def operation(
     value: TeamOperationResult,
     actions: tuple[TeamAction, ...],
 ):
-    notice = _text(copy, "结果", value.action).format(姓名=value.target_name)
+    notice = _text(copy, "结果", value.action).format_map({"姓名": value.target_name})
     return page(copy, value.page, actions, notice=notice)
 
 

@@ -8,7 +8,7 @@
   3. 耦合——被最多文件导入的模块、各包扇出。
 
     .venv/Scripts/python.exe -X utf8 tools/重复与耦合.py
-    # 报告写到 _重复与耦合.txt（根目录 _* 不入库）
+    # 报告写到 `_输出/重复与耦合.txt`
 
 **读数的坑（两种口径都要看）**：宽松口径把所有标识符与字面量都抹成同形，于是
 「结构相同」既不等于「同一个函数」，也不等于「可以合并」——它会把**不同的校验器**
@@ -58,7 +58,8 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GAME = ROOT / "game"
-out = io.TextIOWrapper(open(ROOT / "_重复与耦合.txt", "wb"), encoding="utf-8")
+(ROOT / "_输出").mkdir(exist_ok=True)
+OUT = ROOT / "_输出" / "重复与耦合.txt"
 
 #: **决策点**：每个都要求读代码的人分一次叉。
 DECISION_NODES = (ast.If, ast.IfExp, ast.BoolOp, ast.ExceptHandler, ast.Match)
@@ -189,6 +190,10 @@ def collect():
 def main() -> int:
     functions, bodies, imports, package_imports = collect()
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
+    out = io.TextIOWrapper(
+        open(OUT, "wb"), encoding="utf-8"
+    )
     out.write("=" * 96 + "\n")
     out.write("一、重复函数体（按可省行数排序）\n")
     out.write("=" * 96 + "\n")
@@ -271,7 +276,7 @@ def main() -> int:
     out.write("\n注：`game.app` 虽然被 41 个文件导入，但全在 `game/cmd`，"
               "`features`/`core` 一处都没有——不是耦合。\n")
     out.flush()
-    print(f"详见 _重复与耦合.txt：函数 {len(functions)} 个、重复组 {len(duplicates)} 组")
+    print(f"详见 _输出/重复与耦合.txt：函数 {len(functions)} 个、重复组 {len(duplicates)} 组")
     return 0
 
 

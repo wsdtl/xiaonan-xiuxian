@@ -38,14 +38,14 @@ class TradeFeature:
                 raise JsonDataError(f"交易展示缺少文本.{section}")
         self._copy = copy
 
-    def copy(self, section: str, key: str, **values: object) -> str:
+    def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:
             raise RuntimeError("交易玩法尚未初始化")
         group = self._copy.get(section)
         value = group.get(key) if isinstance(group, Mapping) else None
         if not isinstance(value, str) or not value.strip():
             raise RuntimeError(f"交易展示缺少文本：{section}.{key}")
-        return value.format_map(values)
+        return value.format_map(values or {})
 
     async def overview(self, user_id: str) -> TradeOverview:
         return await self._call(self._trade.overview(user_id))

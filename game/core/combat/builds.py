@@ -51,8 +51,14 @@ def validate_builds(
     data: JsonDataService,
     contracts: Mapping[str, Mapping[str, Any]] | None = None,
     validator: RuleSchemaValidator | None = None,
+    *,
+    templates: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, int]:
-    """逐类校验构筑实体，返回每类通过的实体数。"""
+    """逐类校验构筑实体，返回每类通过的实体数。
+
+    `templates` 是构筑模板库：卡里可以只写「模板 + 参数」，校验器必须能展开它们，
+    否则引用节点没有 `能力` 字段会被当成非法节点挡掉（实测确实让启动失败过）。
+    """
 
     if contracts is None:
         contracts = load_build_contracts(data)

@@ -13,8 +13,8 @@ from game.core.data import DefinitionSchemaValidator
 schema 与它约束的数据**分开存放**，这是此前最容易混淆的地方：`data/战斗/定义/原子能力.json` 曾同时装结构与数据，体量大到难以阅读。
 
 ```text
-data/<组件>/定义/<类别>.json      schema：这类定义允许什么形状
-data/<组件>/内容/<类别>/*.json    数据：符合该形状的正式实体
+data/<大类>/<组件>/定义/<类别>.json    schema：这类定义允许什么形状
+data/<大类>/<组件>/内容/<类别>/*.json  数据：符合该形状的正式实体
 ```
 
 约定：
@@ -86,10 +86,10 @@ rules/战斗/原子能力.json -> 原子能力.主动技能.字段.释放顺序.
 
 ## 六、新增契约的流程
 
-1. 在 `data/<组件>/定义` 写 schema，登记进组件清单；
+1. 在 `data/<大类>/<组件>/定义` 写 schema，登记进组件清单；
 2. 让该领域服务继承 `DefinitionSchemaValidator`，按需注册领域类型、引用表与专用校验；
 3. 启动时调用 `validate_definitions`，数据不合契约即**阻止启动**；
-4. 用 `tools/校验数据契约.py` 在改数据后本地验证，不必启动整个服务。
+4. 用 `tools/验证契约引擎.py` 在改数据后本地验证，不必启动整个服务。
 
 ## 七、两条硬约定
 

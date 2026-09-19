@@ -40,7 +40,7 @@ class GiftService:
             raise RuntimeError("玩家赠送核心已经初始化")
         rules = self._data.dataset("交易规则").get("玩家赠送")
         if not isinstance(rules, Mapping):
-            raise JsonDataError("交易/规则/玩家赠送.json 必须是对象")
+            raise JsonDataError("玩法/交易/规则/玩家赠送.json 必须是对象")
         allowed = rules.get("允许物品类别")
         if not isinstance(allowed, (list, tuple)) or not allowed:
             raise JsonDataError("玩家赠送.允许物品类别不能为空")

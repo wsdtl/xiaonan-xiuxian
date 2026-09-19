@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-import re
-
-from message import M
 
 
 def _plain_value(value: object) -> str:

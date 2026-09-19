@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import collections
-import dataclasses
 import importlib.util
 import io
 import pathlib
@@ -109,7 +108,7 @@ class Tracer:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--数据", dest="data", default=str(ROOT / "data"))
-    parser.add_argument("--报告", dest="report", default="_实测共现.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/实测共现.txt")
     parser.add_argument("--等级", dest="等级", type=int, default=100)
     parser.add_argument("--构筑数", dest="构筑数", type=int, default=60)
     parser.add_argument("--上限", dest="limit", type=int, default=60)
@@ -188,6 +187,7 @@ def main() -> int:
 
     core.database.close()
 
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"实测共现：{root}\n")
     out.write(f"{args.等级} 级 · {args.构筑数} 套满构筑（左用第 i 套、右用第 i+1 套）"

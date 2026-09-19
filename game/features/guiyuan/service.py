@@ -42,14 +42,14 @@ class GuiyuanFeature:
             raise JsonDataError("归元展示缺少文本.json")
         self._copy = copy
 
-    def copy(self, section: str, key: str, **values: object) -> str:
+    def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:
             raise RuntimeError("归元玩法尚未初始化")
         group = self._copy.get(section)
         value = group.get(key) if isinstance(group, Mapping) else None
         if not isinstance(value, str):
             raise JsonDataError(f"归元展示缺少文本：{section}.{key}")
-        return value.format_map(values)
+        return value.format_map(values or {})
 
     async def preview(self, user_id: str) -> GuiyuanPreview:
         context = await self._context(user_id)

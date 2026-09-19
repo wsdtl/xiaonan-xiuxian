@@ -6,6 +6,7 @@ import re
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from typing import Any
 
 _COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -46,13 +47,31 @@ class BattleReportCatalog:
     """校验一次战报配置，后续标准化和展示只查询这个目录。"""
 
     raw: Mapping[str, Any]
+    #: 属性定义（`属性.json`）。战报的 `属性摘要` 只列「与基准不同」的属性，
+    #: 而基准是每个属性自己的事（加成类 100、减免类 0），所以要把定义一起带进来，
+    #: 不能把「不等于 0」写死。
+    attributes: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> BattleReportCatalog:
+    def from_mapping(
+        cls,
+        value: Mapping[str, Any],
+        attributes: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> BattleReportCatalog:
         raw = deepcopy(dict(value))
-        catalog = cls(raw)
+        catalog = cls(raw, dict(attributes or {}))
         catalog._validate()
         return catalog
+
+    def attribute_baseline(self, key: str) -> float:
+        """这个属性的基准值（不增不减的那个值）；未登记时按 0。"""
+
+        return float(dict(self.attributes.get(key) or {}).get("默认值", 0.0))
+
+    def attribute_caliber(self, key: str) -> str:
+        """这个属性的口径（`数值` / `加成` / `倍率` / `概率` / `减免` / `比率`）。"""
+
+        return str(dict(self.attributes.get(key) or {}).get("口径") or "")
 
     @property
     def report_schema(self) -> str:

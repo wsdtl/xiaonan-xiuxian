@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from game.features.tanxian import (
     ExplorationAction,
     ExplorationCopy,
@@ -17,8 +19,8 @@ from ...actions import message_actions
 from ...presentation import duration, natural_deadline
 
 
-def text(copy: ExplorationCopy, section: str, key: str, **values: object) -> str:
-    return copy.text[section][key].format_map(values)
+def text(copy: ExplorationCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[section][key].format_map(values or {})
 
 
 def error(copy: ExplorationCopy, message: str):
@@ -153,7 +155,7 @@ def settlement_page(
         )
         if not survived:
             builder.line(text(copy, "总结", "战败处理"))
-        builder.small(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
+        builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
     else:
         builder = _user_page(copy, feature, value.users[page - 2], page, total_pages)
     return builder.actions(message_actions(actions)).build()
@@ -166,7 +168,7 @@ def _user_page(
     page: int,
     total_pages: int,
 ):
-    builder = M.document().header(text(copy, "用户", "标题", 人物=value.character_name))
+    builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
     if value.treasure_activation is not None:
         activation = value.treasure_activation
         builder.section("先天灵宝", icon="item").field(
@@ -220,7 +222,7 @@ def _user_page(
             builder.item(index, *_item_parts(feature, item_id, grade_id, quantity))
     else:
         builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "无"))
-    return builder.small(text(copy, "总结", "用户页", 当前页=page, 总页数=total_pages))
+    return builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
 
 
 def _item_parts(

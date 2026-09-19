@@ -20,7 +20,7 @@ def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str):
             ("对方修士", len(value.target_participants)),
         )
         .field("有效时间", natural_deadline(value.expires_at))
-        .small(feature.text("发起", "说明", 目标=target_name))
+        .small(feature.text("发起", "说明", {"目标": target_name}))
         .build()
     )
 

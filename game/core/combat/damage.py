@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+
 import random
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
-from .models import Fighter
+from .models import Fighter, attribute_ratio
 
 
 @dataclass(frozen=True)
@@ -168,12 +169,17 @@ def _missed_resolution(
     )
 
 
-
 class DamageEngine:
     """只结算一段伤害，不处理技能选择、触发链和奖励。"""
 
-    def __init__(self, rules: Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        rules: Mapping[str, Any],
+        attributes: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> None:
         self.rules = dict(rules)
+        #: 属性定义：读百分比属性时的**基准**来源（见 `models.attribute_ratio`）。
+        self.attributes = dict(attributes or {})
 
     def resolve(
         self,
@@ -325,7 +331,7 @@ class DamageEngine:
         if critical:
             critical_multiplier = max(
                 1.0,
-                self._percent(source, "暴击伤害", 1.5)
+                self._percent(source, "暴击伤害")
                 - self._percent(target, "暴击伤害减免"),
             )
             critical_multiplier = min(
@@ -390,7 +396,7 @@ class DamageEngine:
                 self._percent(target, "伤害减免"),
                 float(self.rules.get("最高伤害减免", 100)) / 100.0,
             )
-            rate_multiplier += self._percent(source, "伤害加成")
+            rate_multiplier *= self._percent(source, "伤害加成")
             rate_multiplier -= reduction
             rate_multiplier = self._clamp(
                 rate_multiplier,
@@ -515,13 +521,12 @@ class DamageEngine:
             breakdown=replace(resolution.breakdown, limited=limited),
         )
 
-    @staticmethod
-    def _percent(target: Fighter, attribute: str, default: float = 0.0) -> float:
-        if attribute not in target.attributes and not any(
-            attribute in status.modifiers for status in target.statuses
-        ):
-            return float(default)
-        return target.value(attribute, default * 100.0) / 100.0
+    def _percent(
+        self, target: Fighter, attribute: str, default: float | None = None
+    ) -> float:
+        """读一个百分比属性的比值；基准与口径见 `models.attribute_ratio`。"""
+
+        return attribute_ratio(target, attribute, self.attributes, default)
 
     @staticmethod
     def _clamp(value: float, minimum: float, maximum: float) -> float:

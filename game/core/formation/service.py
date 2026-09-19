@@ -128,7 +128,7 @@ class FormationService:
         )
         contract = ContractSet.load(
             self._data.dataset("阵法字段契约").get("阵法字段契约"),
-            "阵法/内容/阵法字段契约.json",
+            "物品/阵法/规则/阵法字段契约.json",
         )
         raw_formations = {}
         for formation_id, raw in self._data.entities("阵法").items():

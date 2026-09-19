@@ -22,7 +22,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import game.cmd  # noqa: E402  - 导入即按声明注册全部命令组件
 from game.cmd.command import registered_commands  # noqa: E402
 
 # 二级命令目录 -> 必须声明的 scope。目录名与 scope 同名，集中登记便于比对。

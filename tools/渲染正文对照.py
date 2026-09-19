@@ -30,6 +30,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from game.core.combat import render_body, render_listeners  # noqa: E402
+from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 
 DATA = ROOT / "data"
 BASELINE = ROOT / "tools/基准/渲染正文摘要.json"
@@ -39,9 +40,9 @@ SURFACES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
     ("战场环境", "战斗/内容/战场环境/*.json"),
-    ("战丹", "炼丹/内容/丹药/战丹/*.json"),
+    ("战丹", "物品/炼丹/内容/丹药/战丹/*.json"),
     ("长期伤势", "角色/内容/伤势.json"),
 )
 
@@ -50,7 +51,7 @@ def entries(root: pathlib.Path, pattern: str):
     """按文件顺序产出 (文件, 文件内序号, 实体)。"""
 
     for path in sorted(root.glob(pattern)):
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = _load_build_json(path)
         items = document if isinstance(document, list) else [document]
         for index, item in enumerate(items):
             if isinstance(item, dict):

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-import re
 
 from game.features.chakan_wupin import ItemInspectionResult
 from message import M
@@ -112,7 +110,6 @@ def _display_title(category: str) -> tuple[str, str]:
         "灵矿": ("灵矿", "material"),
         "兽宝": ("兽宝", "material"),
         "基础物品": ("基础物品", "item"),
-        "丹方": ("丹方", "recovery"),
         "道侣": ("道侣", "player"),
         "伤势": ("伤势", "status"),
     }.get(category, (category, "docs"))
@@ -124,8 +121,7 @@ def _detail_title(category: str) -> str:
         "真意": "真意",
         "气机": "契合",
         "器律": "器纹",
-        "丹药": "丹效",
-        "丹方": "炼制",
+        "丹药": "丹效 · 炼制",
         "阵法": "阵势",
         "先天灵宝": "权柄",
         "道侣": "人物志",

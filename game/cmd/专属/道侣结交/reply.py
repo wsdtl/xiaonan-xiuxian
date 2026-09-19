@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from decimal import Decimal
 
 from game.features.daolv_jiejiao import (
@@ -17,8 +19,8 @@ from message import M
 from ...actions import CommandAction, message_actions
 
 
-def text(copy: CompanionCopy, section: str, key: str, **values) -> str:
-    return copy.text[section][key].format_map(values)
+def text(copy: CompanionCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[section][key].format_map(values or {})
 
 
 def error(copy: CompanionCopy, message: str):
@@ -39,7 +41,7 @@ def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction
     )
     return (
         M.document()
-        .header(text(copy, "查看", "标题", 名称=definition.name))
+        .header(text(copy, "查看", "标题", {"名称": definition.name}))
         .section(text(copy, "查看", "身份"), icon=copy.icons["身份"])
         .row(
             (text(copy, "查看", "称号"), definition.title),
@@ -93,7 +95,7 @@ def conversation(
     definition = result.view.definition
     return (
         M.document()
-        .header(text(copy, "交谈", "标题", 名称=definition.name))
+        .header(text(copy, "交谈", "标题", {"名称": definition.name}))
         .section(definition.title, icon=copy.icons["交谈"])
         .small(f"“{result.line}”")
         .small(definition.dialogue.preference)
@@ -108,13 +110,13 @@ def gift(
     actions: tuple[CommandAction, ...],
 ):
     definition = result.view.definition
-    builder = M.document().header(text(copy, "赠礼", "标题", 名称=definition.name))
+    builder = M.document().header(text(copy, "赠礼", "标题", {"名称": definition.name}))
     if not result.accepted:
         return (
             builder.section(definition.title, icon=copy.icons["赠礼"])
             .line(M.status("婉拒", tone="warning"))
             .line(
-                text(copy, "赠礼", "婉拒", 名称=definition.name, 物品=result.item.name)
+                text(copy, "赠礼", "婉拒", {"名称": definition.name, "物品": result.item.name})
             )
             .small(f"“{result.dialogue}”")
             .small(text(copy, "赠礼", "物品未消耗"))
@@ -134,11 +136,7 @@ def gift(
             text(
                 copy,
                 "赠礼",
-                "收下",
-                名称=definition.name,
-                数量=result.quantity,
-                品级=result.grade.name,
-                物品=result.item.name,
+                "收下", {"名称": definition.name, "数量": result.quantity, "品级": result.grade.name, "物品": result.item.name},
             ),
         ).small(f"“{result.dialogue}”").row(
             (
@@ -146,7 +144,7 @@ def gift(
                 M.text(_affection(result.base_affection), tone="companion"),
             ),
             (
-                text(copy, "赠礼", "品级倍率", 品级=result.grade.name),
+                text(copy, "赠礼", "品级倍率", {"品级": result.grade.name}),
                 result.grade.ability_multiplier,
             ),
         ).row(
@@ -202,7 +200,7 @@ def invitation(
     definition = result.view.definition
     builder = (
         M.document()
-        .header(text(copy, "邀约", "标题", 名称=definition.name))
+        .header(text(copy, "邀约", "标题", {"名称": definition.name}))
         .section(definition.title, icon=copy.icons["邀约"])
         .small(f"“{result.dialogue}”")
     )
@@ -210,7 +208,7 @@ def invitation(
         builder.line(
             M.status("同行中", tone="info"),
             " ",
-            text(copy, "邀约", "已经同行", 名称=definition.name),
+            text(copy, "邀约", "已经同行", {"名称": definition.name}),
         )
     elif result.first_invitation:
         builder.line(
@@ -220,7 +218,7 @@ def invitation(
         builder.line(
             M.status("邀约成功", tone="positive"),
             " ",
-            text(copy, "邀约", "再次同行", 名称=definition.name),
+            text(copy, "邀约", "再次同行", {"名称": definition.name}),
         )
     return builder.actions(message_actions(actions)).build()
 
@@ -233,7 +231,7 @@ def farewell(
     definition = result.definition
     return (
         M.document()
-        .header(text(copy, "暂别", "标题", 名称=definition.name))
+        .header(text(copy, "暂别", "标题", {"名称": definition.name}))
         .section(definition.title, icon=copy.icons["暂别"])
         .line(M.status("已经暂别", tone="muted"))
         .small(f"“{result.dialogue}”")
@@ -241,9 +239,7 @@ def farewell(
             text(
                 copy,
                 "暂别",
-                "返回故地",
-                名称=definition.name,
-                地点=definition.location_name,
+                "返回故地", {"名称": definition.name, "地点": definition.location_name},
             )
         )
         .actions(message_actions(actions))

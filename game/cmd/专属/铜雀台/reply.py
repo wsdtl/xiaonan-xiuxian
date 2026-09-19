@@ -17,7 +17,7 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview):
         .inline_section("夺元状态", M.status("待确认", tone="warning"), icon="notice")
         .section(value.location_name, icon="location")
         .line(feature.copy("预览", "登台"))
-        .line(feature.copy("预览", "启阵", 名称=value.companion_name))
+        .line(feature.copy("预览", "启阵", {"名称": value.companion_name}))
         .row(
             (
                 feature.copy("预览", "道侣"),
@@ -81,7 +81,7 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement):
         .header(feature.copy("结算", "标题"))
         .inline_section("夺元结果", M.status("完成", tone="positive"), icon="success")
         .section(value.location_name, icon="notice")
-        .line(feature.copy("结算", "剥离", 名称=value.companion_name))
+        .line(feature.copy("结算", "剥离", {"名称": value.companion_name}))
         .row(
             (feature.copy("结算", "人物"), value.character_name),
             (feature.copy("结算", "道侣"), value.companion_name),
@@ -93,7 +93,7 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement):
             ),
             (feature.copy("结算", "溢散修为"), M.text(value.discarded, tone="muted")),
         )
-        .line(feature.copy("结算", "重置", 名称=value.companion_name))
+        .line(feature.copy("结算", "重置", {"名称": value.companion_name}))
     )
     if value.replayed:
         builder.line(
@@ -102,18 +102,16 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement):
     elif value.mode == "护契":
         builder.line(
             M.status("道契保留", tone="positive"), " ", feature.copy("结算", "护契")
-        ).small(feature.copy("结算", "护契回应", 名称=value.companion_name)).field(
+        ).small(feature.copy("结算", "护契回应", {"名称": value.companion_name})).field(
             "消耗", f"{value.medicine_grade_name}{value.medicine_name} × 1"
         )
     else:
         builder.line(
             M.status("道契断离", tone="warning"), " ", feature.copy("结算", "离契")
-        ).small(feature.copy("结算", "离契回应", 名称=value.companion_name)).line(
+        ).small(feature.copy("结算", "离契回应", {"名称": value.companion_name})).line(
             feature.copy(
                 "结算",
-                "返回",
-                名称=value.companion_name,
-                地点=value.companion_origin,
+                "返回", {"名称": value.companion_name, "地点": value.companion_origin},
             )
         )
     if value.treasure_activation is not None:

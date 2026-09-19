@@ -9,12 +9,17 @@
 """
 
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 import pytest
 
 DATA = Path(__file__).resolve().parents[1] / "data"
+if str(DATA.parent / "tools") not in sys.path:
+    sys.path.insert(0, str(DATA.parent / "tools"))
+
+from 构筑模板展开 import expand_build_document  # noqa: E402
 
 #: 词条名只在这些目录里定义；`定义/` 放的是原子能力表，不算实体。
 SURFACES = ("**/内容/**/*.json",)
@@ -33,6 +38,8 @@ def _entities():
                 document = json.loads(path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 continue
+            # 构筑三段迁移后卡里只剩模板引用；不展开就一个能力节点都扫不到。
+            expand_build_document(document)
             entries = document if isinstance(document, list) else [document]
             for entry in entries:
                 if isinstance(entry, dict):
@@ -125,14 +132,17 @@ def test_four_card_directions_have_their_own_counter_flavour():
     def names_of(directory: str, pattern: str) -> set[str]:
         found: set[str] = set()
         for path in DATA.glob(f"{directory}/{pattern}"):
-            for entry in json.loads(path.read_text(encoding="utf-8")):
+            document = json.loads(path.read_text(encoding="utf-8"))
+            # 构筑三段迁移后卡里只剩模板引用；不展开就扫不到任何 `修改构筑计量`。
+            expand_build_document(document)
+            for entry in document:
                 for node in _walk(entry):
                     if node.get("能力") == "修改构筑计量" and isinstance(node.get("计量"), str):
                         found.add(node["计量"])
         return found
 
     gongfa = names_of("战斗/内容/功法", "功法-*.json")
-    qilv = names_of("炼器/内容", "器律-*.json")
+    qilv = names_of("物品/炼器/内容", "器律-*.json")
     assert gongfa and qilv
     # 器律的名字带器物味（`器痕/器印`），功法带灵气味（`归元/养元`），两套词不互相抄。
     assert not (gongfa & qilv), f"功法与器律用了同一个计量名：{sorted(gongfa & qilv)}"

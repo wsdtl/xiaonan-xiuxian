@@ -8,7 +8,38 @@ from collections.abc import Mapping
 from typing import Any
 
 from .contracts import BattleEvent
-from .models import CombatObject, EventFrame, Fighter, Skill, StatusState
+from .models import CombatObject, EventFrame, Fighter, Skill, StatusState, attribute_ratio
+
+#: 目标范围名 -> `_target_select` 里的分支名。
+#: 这张表是**唯一出处**：`TARGET_SCOPES` 与作用域校验都从它派生，不许另抄一份。
+TARGET_SCOPES: Mapping[str, str] = {
+    "自身": "self",
+    "当前目标": "current",
+    "效果来源": "effect_source",
+    "事件来源": "event_source",
+    "事件承受者": "event_target",
+    "行动者": "actor",
+    "己方": "allies",
+    "敌方": "enemies",
+    "全体": "everyone",
+    "任意": "anyone",
+    "关联对象": "related",
+    "主人": "owner",
+    "控制者": "controller",
+    "本编组主战者": "group_leader",
+}
+
+#: 目标字段省略时指向谁。
+#:
+#: 必须是「当前目标」，因为各调用点传进来的 `target` 语义不同：多数是出效果者自身，
+#: 但 `来源目标`/`接收目标`/`归属目标` 以及遍历选出的目标传的是别的参战者。
+#: 实测把它改成「自身」会让 19 张功法改变行为（1967 场语料对照：1948 一致 / 19 差异），
+#: 所以省略的缺省语义**必须与原实现一致**；「自身」只在显式写出时才生效。
+DEFAULT_TARGET_SCOPE = "当前目标"
+
+#: 目标字段使用的原子能力名。`parse_node` 按 `能力` 取执行器，所以缺省 selector
+#: 必须自带这个键，不能只写 `范围`。
+TARGET_SELECTOR_ABILITY = "选择目标"
 
 
 class _ListenerSink:
@@ -714,7 +745,7 @@ class AbilityRuntime:
             amount = self._resolve_value(context, effect.get("数值"), source, destination, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier
             amount *= self._element_multiplier(context, source, destination, effect)
             if source.current_skill and str(effect.get("伤害形式") or "直接") == "直接":
-                amount *= max(0.0, 1.0 + self._percent(source, "技能威力"))
+                amount *= max(0.0, self._percent(source, "技能威力"))
             resolution = self._apply_damage(
                 context,
                 source,
@@ -735,53 +766,81 @@ class AbilityRuntime:
         return success
 
     def _ability_recover_resource(self, context, source, target, effect, multiplier, **kwargs):
+        """恢复资源。**资源语义全部来自 `资源.json` 的表**，执行器不认资源名。
+
+        曾经这里有五处 `if 资源 == "血气"` / `"护盾"`：加成属性、事件名、承受方加成
+        各查一遍，其中「事件名」那张映射表建完又立刻反解回来
+        （`if frame.kind == "获得护盾前": resource = "护盾"`）。加第四个资源必须改代码，
+        这正是这个项目其他部分都在避免的事。
+
+        现在每个资源在 `资源.json` 里声明 `恢复前事件` / `恢复后事件` / `加成属性` /
+        `受疗加成属性`；两个治愈量属性 `治疗效果`（气血）与 `护盾强度`（护盾）默认
+        100，即不缩放卡面数值。精神不设属性，恢复量由卡面数值自己决定。
+        """
+
         requested_resource = str(effect.get("资源") or "血气")
+        definition = self._resource_definition(requested_resource)
         changed = False
         attempted = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
             amount = max(0.0, self._resolve_value(context, effect.get("数值"), source, destination, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier)
             amount *= self._element_multiplier(context, source, destination, effect)
-            if requested_resource == "血气":
-                amount *= max(0.0, 1.0 + self._percent(source, "治疗加成"))
-            elif requested_resource == "护盾":
-                amount *= max(0.0, 1.0 + self._percent(source, "护盾加成"))
+            baseline_attribute = str(definition.get("加成属性") or "")
+            if baseline_attribute:
+                # 基准属性（`治疗效果` / `护盾强度`）：加成口径，基准 100 即 ×1.0。
+                amount *= max(0.0, self._percent(source, baseline_attribute))
+            builtin_bonus = str(definition.get("卡牌加成属性") or "")
+            if builtin_bonus:
+                # 卡牌自带加成（`治疗加成` / `护盾加成`）：同样是加成口径、基准 100。
+                # 两层各管一件事：基准属性调「这张卡的治愈量整体偏强/偏弱」，自带加成是
+                # 卡面词条给的——但两者**读法完全相同**，都走 `_percent`。
+                amount *= max(0.0, self._percent(source, builtin_bonus))
             before, maximum = self._resource_values(destination, requested_resource)
-            event = "恢复前" if requested_resource == "血气" else "获得护盾前" if requested_resource == "护盾" else "资源恢复前"
-            frame = self._dispatch_event(context, kind=event, source=source, target=destination, amount=amount, values={"资源": requested_resource, "变化前数值": before, "上限": maximum}, tags=(*effect.get("标签", ()), "恢复", requested_resource))
+            kind = str(definition.get("恢复前事件") or "资源恢复前")
+            frame = self._dispatch_event(context, kind=kind, source=source, target=destination, amount=amount, values={"资源": requested_resource, "变化前数值": before, "上限": maximum}, tags=(*effect.get("标签", ()), "恢复", requested_resource))
             if frame.cancelled:
                 continue
-            resource = requested_resource
-            if frame.kind == "获得护盾前":
-                resource = "护盾"
-            elif frame.kind == "恢复前":
-                resource = "血气"
+            # 事件可以被监听者改写，资源身份**不跟着事件名走**：`资源变化` 类监听可能
+            # 把事件转成别的名字，但这次恢复的仍然是 `requested_resource`。
             destination = frame.target
             if "恢复" in self._immunities(destination):
                 continue
             # 恢复已满不是执行失败；后续顺序效果仍必须继续执行。
             attempted = True
-            before, maximum = self._resource_values(destination, resource)
+            before, maximum = self._resource_values(destination, requested_resource)
             received = max(0.0, frame.amount)
-            if resource == "血气":
-                received *= max(0.0, 1.0 + self._percent(destination, "受疗加成"))
-            elif resource == "护盾":
-                received *= max(0.0, 1.0 + self._percent(destination, "受盾加成"))
-            # 全局恢复倍率：调「恢复压过输出」时的总闸，不必去改几千处卡数据。
-            # 只闸血气与护盾：精神是出手预算，把它一起闸掉会让「治疗太强」
-            # 表现成「技能放不出来」，那是另一个问题，也会盖住真正的症状。
-            if resource in ("血气", "护盾"):
-                received *= max(0.0, float(self.catalog.damage_rules.get("恢复倍率", 100))) / 100.0
+            healed_bonus_attribute = str(definition.get("受疗加成属性") or "")
+            if healed_bonus_attribute:
+                received *= max(0.0, self._percent(destination, healed_bonus_attribute))
             applied = min(maximum - before, received)
-            self._set_resource(destination, resource, before + applied)
-            after_event = "恢复后" if resource == "血气" else "获得护盾后" if resource == "护盾" else "资源恢复后"
-            values = {"资源": resource, "变化前数值": before, "变化后数值": before + applied, "实际数值": applied, "溢出数值": max(0.0, received - applied)}
-            event_tags = (*frame.tags, "恢复", resource)
+            self._set_resource(destination, requested_resource, before + applied)
+            after_event = str(definition.get("恢复后事件") or "资源恢复后")
+            values = {"资源": requested_resource, "变化前数值": before, "变化后数值": before + applied, "实际数值": applied, "溢出数值": max(0.0, received - applied)}
+            event_tags = (*frame.tags, "恢复", requested_resource)
             self._dispatch_event(context, kind=after_event, source=source, target=destination, amount=applied, values=values, tags=event_tags)
-            self._dispatch_event(context, kind="资源变化后", source=source, target=destination, amount=applied, values=values, tags=(*frame.tags, "增加", resource))
+            self._dispatch_event(context, kind="资源变化后", source=source, target=destination, amount=applied, values=values, tags=(*frame.tags, "增加", requested_resource))
             changed = changed or applied > 0
             if applied > 0:
                 self._mark_team_synergy(context, source, effect)
         return changed or attempted
+
+    def _resource_definition(self, resource: str) -> Mapping[str, Any]:
+        """`资源.json` 里这个资源的定义。未登记的资源直接报错，不静默走默认分支。"""
+
+        definition = self.catalog.resources.get(resource)
+        if definition is None:
+            raise ValueError(f"战斗核心未登记资源：{resource}")
+        return definition
+
+    def _percent(self, fighter, attribute: str, default: float | None = None) -> float:
+        """读一个百分比属性的比值；基准与口径见 `models.attribute_ratio`。
+
+        与旧实现的两点不同：基准从**属性自己的 `默认值`** 来（不再由调用点写 `1 + …`
+        去补），以及 `治疗效果` / `护盾强度` 的专用读法 `_attribute_ratio` 被并入这里——
+        它们本来就是「加成口径、基准 100」，不该有两套读法。
+        """
+
+        return attribute_ratio(fighter, attribute, self.catalog.attributes, default)
 
     def _element_multiplier(self, context, source, target, effect):
         composition = effect.get("属性构成")
@@ -875,8 +934,10 @@ class AbilityRuntime:
         if kind == "资源":
             return self._ability_consume_resource(context, source, target, effect, multiplier, **kwargs)
         if kind == "状态层数":
-            value = {**effect, "层数": effect.get("数值", 1), "不足时是否失败": True}
-            return self._ability_modify_status_stacks(context, source, target, value, multiplier, consume=True)
+            # 以状态层数为代价：方向写死在数据里（减少 + 不足即失败），不再靠
+            # `consume=` 位置参数告诉执行器「这次是消耗」。
+            value = {**effect, "方式": "减少", "不足时是否失败": True}
+            return self._ability_modify_status_stacks(context, source, target, value, multiplier)
         if kind == "行动条":
             value = {**effect, "方式": "减少"}
             return self._ability_modify_action_progress(context, source, target, value, multiplier, cost=True)
@@ -1113,14 +1174,22 @@ class AbilityRuntime:
                 removed = True
         return removed
 
-    def _ability_modify_status_stacks(self, context, source, target, effect, multiplier, consume=False, **_):
+    def _ability_modify_status_stacks(self, context, source, target, effect, multiplier, **_):
+        """改状态层数。方向由 `方式` 决定（`增加` / `减少`），没有第二个开关。
+
+        曾经这里还认一个 `consume=True` 位置参数和 `数值` 字段名兜底——那是
+        `增加状态层数` / `消耗状态层数` 两个能力名共用一个执行器时留下的：方向既能
+        由能力名决定、又能由 `方式` 决定，还能由 `consume` 决定。现在只有 `方式`。
+        """
+
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
-        amount = max(0, int(float(effect.get("层数", effect.get("数值", 1))) * multiplier))
+        amount = max(0, int(float(effect.get("层数", 1)) * multiplier))
         if not pairs:
             return False
+        consume = str(effect.get("方式") or "增加") == "减少"
         for owner, status in pairs:
             before = status.stacks
-            if consume or str(effect.get("方式") or "增加") == "减少":
+            if consume:
                 if before < amount and effect.get("不足时是否失败", True):
                     return False
                 status.stacks = max(0, before - amount)
@@ -1888,14 +1957,39 @@ class AbilityRuntime:
         return {"总和": sum(data), "最小": min(data), "最大": max(data), "平均": sum(data) / len(data), "不同值数量": float(len(set(data)))}.get(mode, 0.0)
 
     def _select_targets(self, context, source, target, value):
+        """解析一个「目标/来源目标/归属」字段。
+
+        三种写法都接受：
+
+            （省略）                 -> 与原实现一致，即「当前目标」
+            "当前目标"               -> 简写，只指定范围
+            {能力: 选择目标, 范围: …} -> 完整写法
+
+        省略没有取「自身」，虽然「自身」占全部目标的 84%（16270/18647）：各调用点
+        传进来的 `target` 语义不同，把缺省改成「自身」会让 19 张功法改变行为
+        （1967 场语料对照实测）。所以省略保持原语义，「自身」必须显式写出。
+        """
         if value is None:
-            return [target]
-        if not isinstance(value, Mapping):
-            raise TypeError("目标字段必须使用选择目标")
-        node = self.catalog.parse_node(value)
+            selector: dict[str, Any] = {
+                "能力": TARGET_SELECTOR_ABILITY,
+                "范围": DEFAULT_TARGET_SCOPE,
+            }
+        elif isinstance(value, str):
+            scope = value.strip()
+            if scope not in TARGET_SCOPES:
+                raise ValueError(
+                    "未知目标范围："
+                    f"{scope or '<空>'}；可用：" + "、".join(TARGET_SCOPES)
+                )
+            selector = {"能力": TARGET_SELECTOR_ABILITY, "范围": scope}
+        elif isinstance(value, Mapping):
+            selector = dict(value)
+        else:
+            raise TypeError("目标字段必须是范围名或选择目标对象")
+        node = self.catalog.parse_node(selector)
         if node.executor != "选择目标":
             raise ValueError("目标字段必须使用选择目标")
-        return self._target_select(context, source, target, dict(value), 0, {}, ())
+        return self._target_select(context, source, target, selector, 0, {}, ())
 
     def _target_select(self, context, source, target, selector, *_):
         scope = str(selector.get("范围") or "当前目标")
@@ -1987,26 +2081,34 @@ class AbilityRuntime:
         count = len(candidates) if selector.get("选择全部", False) else max(1, int(selector.get("数量", 1)))
         return candidates[:count]
 
-    @staticmethod
-    def _resource_values(target, resource):
-        if resource == "血气":
-            return target.health, target.health_max
-        if resource == "精神":
-            return target.spirit, target.spirit_max
-        if resource == "护盾":
-            return target.shield, target.shield_max
-        raise ValueError(f"战斗核心未登记资源：{resource}")
+    #: 资源 -> `Fighter` 上承载它的属性名。资源身份与字段名的对应关系在这里写一次，
+    #: 不再散成 `if 资源 == "血气": return target.health` 这样的三分支（加第四个资源
+    #: 就要在每处补一条）。
+    _RESOURCE_FIELDS = {
+        "血气": "health",
+        "精神": "spirit",
+        "护盾": "shield",
+    }
 
-    @staticmethod
-    def _set_resource(target, resource, value):
-        if resource == "血气":
-            target.health = value
-        elif resource == "精神":
-            target.spirit = value
-        elif resource == "护盾":
-            target.shield = value
-        else:
-            raise ValueError(f"战斗核心未登记资源：{resource}")
+    def _resource_values(self, target, resource):
+        """`(当前值, 上限)`。上限取资源声明的 `上限属性`。"""
+
+        definition = self._resource_definition(resource)
+        field = self._resource_field(resource)
+        cap_attribute = str(definition.get("上限属性") or "")
+        maximum = target.value(cap_attribute, 0.0) if cap_attribute else 0.0
+        return float(getattr(target, field)), max(0.0, float(maximum))
+
+    def _set_resource(self, target, resource, value):
+        definition = self._resource_definition(resource)
+        floor = float(definition.get("最低值", 0.0) or 0.0)
+        setattr(target, self._resource_field(resource), max(floor, float(value)))
+
+    def _resource_field(self, resource: str) -> str:
+        field = self._RESOURCE_FIELDS.get(resource)
+        if field is None:
+            raise ValueError(f"战斗核心未登记资源的承载字段：{resource}")
+        return field
 
     @staticmethod
     def _immunities(fighter):

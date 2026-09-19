@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from game.core.action_group import ActionGroupError, ActionGroupService
-from game.core.data import JsonDataError, JsonDataService, nonempty_text as _text
+from game.core.data import JsonDataService, nonempty_text as _text
 from game.core.location import (
     LocationConflictError,
     LocationService,

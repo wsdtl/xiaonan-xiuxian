@@ -376,15 +376,15 @@ def _participant_report(
             {
                 "key": key,
                 "label": key,
-                "value": _round(float(participant.attributes.get(key, 0.0))),
+                "value": _round(_attribute_reported(key, participant, catalog)),
                 "display": _attribute_text(
                     key,
-                    float(participant.attributes.get(key, 0.0)),
+                    _attribute_reported(key, participant, catalog),
                     catalog,
                 ),
             }
             for key in catalog.attribute_summary
-            if float(participant.attributes.get(key, 0.0)) != 0
+            if _attribute_reported(key, participant, catalog) != 0
         ],
         "techniques": [
             _technique_report(
@@ -636,6 +636,24 @@ def _detail_text(key: str, value: Any, catalog: BattleReportCatalog) -> str:
     if isinstance(value, Sequence) and not isinstance(value, str | bytes):
         return "、".join(str(item) for item in value)
     return str(value)
+
+
+def _attribute_reported(key: str, participant, catalog: BattleReportCatalog) -> float:
+    """战报里这个属性报什么值。
+
+    **加成口径报的是「相对基准的量」**：基准 100 是「不增不减」，战报要写的是
+    「这一场拿到了多少加成」（+8%），不是「现在是 108%」。数据里存绝对值、展示报差值，
+    与加成改成 100 基准之前逐字一致（那时基准是 0，绝对值就是差值）。
+    其余口径（概率 / 减免 / 比率 / 倍率）报绝对值，它们本来就是「当前是多少」。
+
+    属性**没登记在参战者身上**时按基准算（构造物只带自己那几项属性）：加成类的差值是 0、
+    其余是 0 ——两种都等于「没效果、不列」，与旧行为一致。
+    """
+
+    if catalog.attribute_caliber(key) == "加成":
+        baseline = catalog.attribute_baseline(key)
+        return float(participant.attributes.get(key, baseline)) - baseline
+    return float(participant.attributes.get(key, 0.0))
 
 
 def _attribute_text(key: str, value: float, catalog: BattleReportCatalog) -> str:

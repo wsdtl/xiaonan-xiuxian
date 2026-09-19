@@ -137,7 +137,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--数据", dest="data", default=str(ROOT / "data"),
                         help="要复制的**源**数据目录；扫描在它的临时副本上跑")
-    parser.add_argument("--报告", dest="report", default="_平衡扫描.txt")
+    parser.add_argument("--报告", dest="report", default="_输出/平衡扫描.txt")
     parser.add_argument("--上限", dest="limit", type=int, default=60,
                         help="行动上限：到顶还没分出胜负就算未决")
     parser.add_argument("--等级", dest="等级", type=int, default=100)
@@ -147,6 +147,7 @@ def main() -> int:
     args = parser.parse_args()
 
     source = pathlib.Path(args.data).resolve()
+    (ROOT / "_输出").mkdir(exist_ok=True)
     out = io.TextIOWrapper(open(ROOT / args.report, "wb"), encoding="utf-8")
     out.write(f"平衡扫描：{source}（在临时副本上跑，源目录不改动）\n")
     out.write(f"{args.等级} 级 · {args.构筑数} 套满构筑 · 行动上限 {args.limit}\n")

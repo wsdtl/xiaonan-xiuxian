@@ -86,7 +86,7 @@ class AssetService:
 
         layout = _mapping(
             self._data.dataset("纳戒展示").get("分类"),
-            "基础物品/展示/分类.json",
+            "物品/基础物品/展示/分类.json",
         )
         self._page_limit = _positive_int(layout.get("每页上限"), "纳戒.每页上限")
         if self._page_limit > 50:
@@ -995,10 +995,10 @@ class AssetService:
         self, snapshot: StateSnapshot, category: str, content_id: str
     ) -> AssetEntry:
         number_category, _ = self._number_identity(content_id)
-        if not number_category.endswith("丹方"):
-            raise AssetStateError(f"所学包含非丹方编号：{content_id}")
+        if not number_category.endswith("丹药"):
+            raise AssetStateError(f"所学包含非丹药编号：{content_id}")
         _expect_key(snapshot, content_id)
-        name = _entity_name(self._data, "丹方", content_id)
+        name = _entity_name(self._data, "丹药", content_id)
         subcategory = self._match_subcategory(category, "编号类别", number_category)
         return AssetEntry(
             category,
@@ -1149,7 +1149,7 @@ class AssetService:
         if identity is None:
             raise AssetStateError(f"资产编号前缀未定义：{content_id}")
         subject, category = identity
-        return (subject if category in {"丹药", "丹方"} else category, category)
+        return (subject if category in {"丹药"} else category, category)
 
     def _grade(self, value: object) -> tuple[str, str]:
         grade_id = _text(value, "资产品级")
@@ -1237,8 +1237,6 @@ def _entity_name(data: JsonDataService, section: str, content_id: str) -> str:
     except JsonDataError as exc:
         raise AssetStateError(f"资产引用不存在：{section} {content_id}") from exc
     return _required_entity_text(value, "名称", f"{section} {content_id}")
-
-
 
 
 #: 能进纳戒的数据集。解析只此一处——原先 5 处各写死「基础物品」，于是任何非基础物品的

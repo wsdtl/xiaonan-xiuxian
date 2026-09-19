@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from game.features.zongmen_wanzhen import (
     WanzhenCopy,
     WanzhenPage,
@@ -37,7 +39,7 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions):
                 + "、".join(f"{key}{amount}" for key, amount in entry.materials)
             )
     if value.page_count > 1:
-        builder.small(_text(copy, "页码", 当前页=value.page, 总页数=value.page_count))
+        builder.small(_text(copy, "页码", {"当前页": value.page, "总页数": value.page_count}))
     return builder.actions(message_actions(actions)).build()
 
 
@@ -48,7 +50,7 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult):
         M.document()
         .header(_text(copy, "标题"))
         .section(value.action, icon="success")
-        .line(M.status("完成", tone="positive"), " ", _text(copy, key, **values))
+        .line(M.status("完成", tone="positive"), " ", _text(copy, key, values))
         .field("编号", value.entry.content_id)
         .build()
     )
@@ -63,8 +65,8 @@ def error(copy: WanzhenCopy, message: str):
     )
 
 
-def _text(copy: WanzhenCopy, key: str, **values: object) -> str:
-    return copy.text[key].format_map(values)
+def _text(copy: WanzhenCopy, key: str, values: Mapping[str, object] | None = None) -> str:
+    return copy.text[key].format_map(values or {})
 
 
 __all__ = ["error", "page", "transferred"]

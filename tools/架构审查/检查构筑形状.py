@@ -28,7 +28,6 @@
 
 from __future__ import annotations
 
-import json
 import pathlib
 import sys
 from collections import defaultdict
@@ -37,12 +36,15 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
+
 DATA = PROJECT_ROOT / "data"
 SOURCES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "炼器/内容/器律-*.json"),
+    ("器律", "物品/炼器/内容/器律-*.json"),
 )
 FORBIDDEN = {
     "气机": ("监听事件",),
@@ -53,7 +55,7 @@ FORBIDDEN = {
 
 def _cards(section: str, pattern: str):
     for path in sorted(DATA.glob(pattern)):
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = _load_build_json(path)
         for entry in document if isinstance(document, list) else [document]:
             yield path, entry
 
@@ -138,12 +140,17 @@ def check_weight_uniqueness() -> list[str]:
 
 
 def check_listener_carriers() -> list[str]:
-    """战丹和长期伤势也寄存监听节点，同样只允许 `监听事件`。"""
+    """战丹和长期伤势也寄存监听节点，同样只允许 `监听事件`。
+
+    必须用 `_load_build_json` 展开：这两个面已经模板化，卡里直接读会拿到
+    `{"模板": …, "参数": …}` 引用（没有 `能力` 键），于是每一条都误报
+    「不是监听事件，根能力为 <空>」。
+    """
 
     problems: list[str] = []
-    pills = DATA / "炼丹/内容/丹药/战丹"
+    pills = DATA / "物品/炼丹/内容/丹药/战丹"
     for path in sorted(pills.glob("*.json")):
-        for entry in json.loads(path.read_text(encoding="utf-8")):
+        for entry in _load_build_json(path):
             effect = entry.get("使用效果") or {}
             if "战斗机制" in effect:
                 problems.append(f"战丹 {entry['编号']} 仍在引用编号机制")
@@ -154,7 +161,7 @@ def check_listener_carriers() -> list[str]:
                         f"根能力为 {node.get('能力') or '<空>'}"
                     )
     injuries = DATA / "角色/内容/伤势.json"
-    for entry in json.loads(injuries.read_text(encoding="utf-8")):
+    for entry in _load_build_json(injuries):
         raw = entry.get("战斗状态") or {}
         if "机制" in raw:
             problems.append(f"长期伤势 {entry['编号']} 仍在引用编号机制")

@@ -27,7 +27,7 @@ import json
 import pathlib
 import sys
 
-ROOT = pathlib.Path(r"C:\Users\DengXiaonan\Desktop\晓楠修仙")
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -44,7 +44,8 @@ CARD = "400541"
 ATTRS = {
     "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
     "命中率": 100, "闪避率": 5, "暴击率": 20, "抗暴率": 5, "暴击伤害": 150,
-    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 0, "伤害减免": 0,
+    #: 伤害加成是加成口径，基准 100 = 不增不减；写 0 等于把伤害乘成 0。
+    "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 100, "伤害减免": 0,
 }
 SEED = 20260911
 
@@ -53,7 +54,7 @@ def specs(root: pathlib.Path, core) -> list[tuple[str, CombatStatusSpec | None]]
     """产出 (标签, 战前状态)；`基础档战丹`（没有监听）也带上，它靠纯属性起作用。"""
 
     out: list[tuple[str, CombatStatusSpec | None]] = []
-    for path in sorted(root.glob("炼丹/内容/丹药/战丹/*.json")):
+    for path in sorted(root.glob("物品/炼丹/内容/丹药/战丹/*.json")):
         for entry in json.loads(path.read_text(encoding="utf-8")):
             medicine = core.medicine.battle(entry["编号"], "01")
             out.append((f"丹:{entry['编号']}", core.medicine.prepared_status(medicine)))
