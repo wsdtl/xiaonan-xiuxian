@@ -999,6 +999,7 @@ class BattleEngine(AbilityRuntime):
             controller_id=str(snapshot.controller_id or snapshot.id),
             group_id=str(snapshot.group_id),
             group_role=str(snapshot.group_role or "主战者"),
+            counts_for_victory=bool(snapshot.counts_for_victory),
             form=str(snapshot.form or "本相"),
             forms=copy.deepcopy(dict(snapshot.forms)),
             tags=set(snapshot.tags),

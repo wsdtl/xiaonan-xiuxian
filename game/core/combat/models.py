@@ -400,6 +400,8 @@ class RuntimeCombatantSnapshot:
     forms: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
     #: 参战者固有规则（锁定技）：与卡面同一张登记表，装配期并进参战者的规则表。
     inherent_rules: tuple[Mapping[str, Any], ...] = ()
+    #: 计不计胜负（讨伐属从不计）。
+    counts_for_victory: bool = True
     tags: tuple[str, ...] = ()
     tactic: tuple[Mapping[str, Any], ...] = ()
     battle_profile: Mapping[str, Any] = dataclass_field(default_factory=dict)

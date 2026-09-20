@@ -137,6 +137,8 @@ class CombatantSpec:
     #: **参战者固有规则**（锁定技）：`[{"名称": …, 参数…}]`，与卡面 `规则文本` 同一形状。
     #: 它不属于任何一张卡——种族、来历这类「这个人天生如此」的东西从这条口子进来。
     inherent_rules: tuple[Mapping[str, Any], ...] = ()
+    #: **计不计胜负**：讨伐的属从不算（斩首即胜，也把「打赢了还在磨」的时间砍掉）。默认计。
+    counts_for_victory: bool = True
 
 
 @dataclass(frozen=True)
