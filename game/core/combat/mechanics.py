@@ -1824,6 +1824,18 @@ class AbilityRuntime:
     def _ability_create_object(self, context, source, target, effect, multiplier, **_):
         definition = copy.deepcopy(dict(effect.get("定义") or {}))
         kind = str(effect.get("类型") or "构造物")
+        # 锁定技：`造物被召唤` 拦截点——问**要召唤的那个单位自己**（对象还没生出来）。
+        if self._rules_deny(
+            context,
+            source,
+            "造物被召唤",
+            owner=source,
+            tags=(
+                f"类型:{'参战者' if kind == '参战者' else '构造物'}",
+                f"来源关系:{self._source_relation(context, source, source)}",
+            ),
+        ):
+            return False
         side = source.side if str(effect.get("阵营") or "己方") == "己方" else 1 - source.side
         if kind == "参战者":
             if sum(value.summoned and value.side == side and value.active for value in context.fighters) >= int(self.catalog.action_rules.get("每方召唤物上限", 6)):

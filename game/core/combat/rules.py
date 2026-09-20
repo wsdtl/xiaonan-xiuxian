@@ -204,6 +204,11 @@ INTERCEPTION_POINTS = MappingProxyType(
                 "来源关系:自身",
             ),
         ),
+        "造物被召唤": InterceptionPoint(
+            note="要造出一个战斗对象（召唤物 / 构造物）之前问**召唤者自己**",
+            carriers=("单位",),
+            probe_tags=("类型:参战者", "类型:构造物", "来源关系:自身"),
+        ),
     }
 )
 

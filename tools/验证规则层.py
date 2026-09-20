@@ -762,6 +762,53 @@ def _scene_status_removed(engine, entry: dict, rule: dict) -> tuple[str, float, 
     )
 
 
+def _scene_summon(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """造物被召唤：让目标自己召唤一个战斗对象，看它到底有没有出场。
+
+    这个拦截点问的是**召唤者自己**（对象还没生出来），所以规则只可能是「自己不许召唤」；
+    观测量取终局里有没有多出那个对象。
+    """
+
+    from game.core.combat.rules import probe_tags
+
+    tags = probe_tags(rule)
+    kind = "参战者" if "类型:参战者" in tags else "构造物"
+    summoner = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "创建战斗对象",
+                    "类型": kind,
+                    "阵营": "己方",
+                    "定义": {
+                        "编号": "探针造物",
+                        "名称": "探针造物",
+                        "身份": "召唤物",
+                        "属性": {"血气上限": 300, "攻击": 10, "速度": 100},
+                    },
+                }
+            ],
+            name="探针召唤",
+        )
+    )
+    left, right = _sides("自身", summoner, _card(_rules(entry)))
+    plain = _run(engine, *_sides("自身", summoner, None))
+    guarded = _run(engine, left, right)
+    return (
+        "终局时多出来的战斗对象",
+        float(_对象数(plain)),
+        float(_对象数(guarded)),
+        _对象数(guarded) < _对象数(plain),
+    )
+
+
+def _对象数(result) -> int:
+    """终局里除双方参战者之外多出来的战斗对象数。"""
+
+    return len(result.left_results) + len(result.right_results) - 2
+
+
 def _scene_counter(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
     """计量被修改：按方向给目标的计量加数，**加满就触发一刀**，问计量记在谁身上。
 
@@ -895,6 +942,7 @@ SCENES = {
     "形态被切换": _scene_form,
     "计量被修改": _scene_counter,
     "状态被移除": _scene_status_removed,
+    "造物被召唤": _scene_summon,
 }
 
 
