@@ -19,6 +19,38 @@ if TYPE_CHECKING:
 
 from .contracts import BattleEvent, CombatMedicineSpec
 
+#: 不可变标量。容器里只有这些值时，重建容器与深拷贝**语义完全一致**（标量不可变，
+#: 不存在别名风险），所以能省掉整棵树的递归。见 `copy_value`。
+ATOMIC_TYPES = frozenset({str, int, float, bool, bytes, type(None)})
+
+
+def copy_value(value: Any) -> Any:
+    """`copy.deepcopy` 的快路径：全原子容器直接重建，其余原样退回深拷贝。
+
+    战斗中绝大多数的拷贝对象是「键是字符串、值是标量」的字典（事件事实、状态记录），
+    深拷贝这类字典要走上百次 `_deepcopy_*` 调用，而结果与 `dict(value)` 一模一样。
+    只要出现一个容器值就退回深拷贝，所以调用方拿到的隔离强度不变。
+    """
+
+    kind = type(value)
+    if kind is dict:
+        for key, item in value.items():
+            if type(key) is not str or type(item) not in ATOMIC_TYPES:
+                return copy.deepcopy(value)
+        return dict(value)
+    if kind is list:
+        for item in value:
+            if type(item) not in ATOMIC_TYPES:
+                return copy.deepcopy(value)
+        return list(value)
+    if kind is tuple:
+        for item in value:
+            if type(item) not in ATOMIC_TYPES:
+                return copy.deepcopy(value)
+        # 元组不可变：深拷贝对全原子元组本来也返回同一个对象。
+        return value
+    return copy.deepcopy(value)
+
 
 @dataclass(frozen=True)
 class CombatCatalog:
@@ -42,6 +74,10 @@ class CombatCatalog:
     #: 模板引用在**装载期**已展开（见 `service.expand_build_section`），所以引擎
     #: 解析时不需要再用它；保留字段是为了让基线与诊断能看到当前模板库。
     templates: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
+    #: 节点解析缓存：`id(节点) -> RuleNode`（见 `parse_node`）。装配期节点不换，按身份缓存安全。
+    _node_cache: dict[int, RuleNode] = dataclass_field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def from_mapping(
@@ -101,17 +137,29 @@ class CombatCatalog:
         return base + max(0, int(level)) * per_level
 
     def parse_node(self, value: Mapping[str, Any]) -> RuleNode:
+        """把一个能力节点解析成 `RuleNode`（按对象身份记忆化）。
+
+        同一个节点在一场仗里会被反复执行（监听一次触发一次），而解析只是查一次登记表；
+        节点对象来自装配期的深拷贝、一场仗里不换，所以按 `id` 缓存是安全的——判据里
+        `parse_node` 的调用量是十几万次，这一层缓存省掉其中绝大部分。
+        """
+
+        cached = self._node_cache.get(id(value))
+        if cached is not None and cached.values is value:
+            return cached
         ability = str(value.get("能力") or "")
         try:
             definition = self.abilities[ability]
         except KeyError as exc:
             raise ValueError(f"战斗核心未登记原子能力：{ability or '<空>'}") from exc
-        return RuleNode(
+        node = RuleNode(
             ability=ability,
             executor=str(definition.get("执行器") or ""),
             category=str(definition.get("类别") or ""),
             values=value,
         )
+        self._node_cache[id(value)] = node
+        return node
 
 
 @dataclass(frozen=True)
@@ -168,8 +216,8 @@ class StatusState:
             tags=tuple(str(item) for item in value.get("标签") or ()),
             duration_unit=str(value.get("持续单位") or "状态承受者行动"),
             action_limits=tuple(str(item) for item in value.get("行动限制") or ()),
-            listeners=tuple(copy.deepcopy(item) for item in value.get("监听") or ()),
-            values=copy.deepcopy(dict(value.get("记录") or {})),
+            listeners=tuple(copy_value(item) for item in value.get("监听") or ()),
+            values=copy_value(dict(value.get("记录") or {})),
             expire_with_source=bool(value.get("来源退场时移除", False)),
         )
 
@@ -188,8 +236,8 @@ class StatusState:
             "标签": list(self.tags),
             "持续单位": self.duration_unit,
             "行动限制": list(self.action_limits),
-            "监听": copy.deepcopy(list(self.listeners)),
-            "记录": copy.deepcopy(self.values),
+            "监听": copy_value(list(self.listeners)),
+            "记录": copy_value(self.values),
             "来源退场时移除": self.expire_with_source,
         }
         # 只有真带规则的状态才多这个键：这条 `to_dict` 会进事件事实（`复制状态` 把状态定义
@@ -232,12 +280,34 @@ class Skill:
     )
 
     def clone(self, *, key: str, name: str | None = None) -> Skill:
-        value = copy.deepcopy(self)
+        value = copy_skill(self)
         value.key = key
         value.name = name or self.name
         value.source_skill = self.key
         value.uses = 0
         return value
+
+
+def copy_skill(skill: Skill) -> Skill:
+    """技能对象的结构拷贝。
+
+    `copy.deepcopy` 会把**整棵效果定义**再拷一遍，但效果定义是只读的卡面数据：
+    运行时改写技能走的是「整个字段换掉」（见 `_ability_modify_skill`），从不就地改
+    元组里的字典。所以这里只复制真会被就地改的三张字典（行级规则 / 临时变化 /
+    属性构成），标量与元组共享。实测这样与深拷贝逐事件一致，省掉战斗里最贵的一段拷贝。
+    """
+
+    cloned = copy.copy(skill)
+    cloned.rules = copy.deepcopy(skill.rules)
+    cloned.temporary_changes = dict(skill.temporary_changes)
+    cloned.element_composition = dict(skill.element_composition)
+    return cloned
+
+
+def copy_skills(skills: list[Skill]) -> list[Skill]:
+    """技能列表的结构拷贝：列表本身新建，每个技能见 `copy_skill`。"""
+
+    return [copy_skill(skill) for skill in skills]
 
 
 @dataclass
@@ -283,12 +353,20 @@ class Fighter:
     counts_for_victory: bool = True
     five_elements: dict[str, float] = dataclass_field(default_factory=dict)
     team_synergy: dict[str, int] = dataclass_field(default_factory=dict)
+    #: 按拦截点分好的规则表 + 它对应的版本号（见 `mechanics._container_rules`）。
+    rules_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    rules_cache_version: int = dataclass_field(default=-1, init=False, repr=False)
 
     def value(self, key: str, default: float = 0.0) -> float:
-        result = float(self.attributes.get(key, default))
+        # 这一条是全战斗最热的读法（每次算血气上限都走它）：循环里不放 `max()` 与
+        # `float()`，没有这个键的状态直接跳过——语义与原来逐字一致。
+        result = self.attributes.get(key, default)
         for status in self.statuses:
-            result += float(status.modifiers.get(key, 0.0)) * max(1, status.stacks)
-        return result
+            modifier = status.modifiers.get(key)
+            if modifier:
+                stacks = status.stacks
+                result += modifier * (stacks if stacks > 1 else 1)
+        return float(result)
 
     @property
     def alive(self) -> bool:
@@ -561,7 +639,12 @@ class BattleContext:
     listener_index: dict[str, tuple[ListenerEntry, ...]] = dataclass_field(
         default_factory=dict, init=False, repr=False
     )
+    #: 监听分桶：`事件 → (观察角色, 阵营关系) → 持有者 → [(位次, 监听条目)]`。
+    #: 派发时按「阵营关系」把候选收到当事人身上，再按位次合并——顺序与 `listener_index` 逐条一致。
+    listener_buckets: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     listener_index_dirty: bool = dataclass_field(default=True, init=False, repr=False)
+    #: 状态进出（以及事务回滚）时 +1：`_container_rules` 的规则表缓存按它失效。
+    status_rules_version: int = dataclass_field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.left_team:
@@ -583,6 +666,7 @@ class BattleContext:
             fighter.id: index for index, fighter in enumerate(self._fighters_cache)
         }
         self.listener_index.clear()
+        self.listener_buckets.clear()
         self.listener_index_dirty = True
 
     def mark_listener_index_dirty(self) -> None:

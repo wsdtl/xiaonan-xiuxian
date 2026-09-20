@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import bisect
 import copy
+import heapq
+import itertools
 import math
 from collections.abc import Mapping
 from typing import Any
 
 from .contracts import BattleEvent
-from .models import CombatObject, EventFrame, Fighter, Skill, StatusState, attribute_ratio
+from .models import (
+    CombatObject,
+    EventFrame,
+    Fighter,
+    Skill,
+    StatusState,
+    attribute_ratio,
+    copy_skills,
+    copy_value,
+)
 
 #: 目标范围名 -> `_target_select` 里的分支名。
 #: 这张表是**唯一出处**：`TARGET_SCOPES` 与作用域校验都从它派生，不许另抄一份。
@@ -40,6 +52,12 @@ DEFAULT_TARGET_SCOPE = "当前目标"
 #: 目标字段使用的原子能力名。`parse_node` 按 `能力` 取执行器，所以缺省 selector
 #: 必须自带这个键，不能只写 `范围`。
 TARGET_SELECTOR_ABILITY = "选择目标"
+
+#: 范围名 -> 该范围的 selector 对象。**同一范围永远给同一个对象**：`parse_node` 按对象
+#: 身份记忆化，简写范围（"自身"、"当前目标"…）每次现造一个字典就等于每次都缓存不中。
+_SCOPE_SELECTORS: Mapping[str, dict[str, Any]] = {
+    scope: {"能力": TARGET_SELECTOR_ABILITY, "范围": scope} for scope in TARGET_SCOPES
+}
 
 
 class _ListenerSink:
@@ -122,6 +140,50 @@ class _ListenerSink:
         )
 
 
+def _merged(hits_groups) -> list[tuple[int, Any]]:
+    """把若干「已按位次排好」的候选表并成一张，顺序仍是整张表的顺序。"""
+
+    lists = [item for item in hits_groups if item]
+    if not lists:
+        return []
+    if len(lists) == 1:
+        return lists[0]
+    # 位次在同一个事件里唯一，所以按位次排序与按 `(位次, 条目)` 排序同序。
+    return sorted(itertools.chain.from_iterable(lists), key=lambda pair: pair[0])
+
+
+def _merged_by_side(
+    by_owner: Mapping[str, list[tuple[int, Any]]],
+    relation: str,
+    sides: tuple[str, ...],
+) -> dict[Any, list[tuple[int, Any]]]:
+    """把一个 `(观察角色, 阵营关系)` 桶从「按持有者」并成「按阵营」。
+
+    `自身` 那类保持按持有者取；己方 / 敌方按**当事人自己的阵营**预先并好——谁和谁
+    同侧在装配期就定了，派发时逐个持有者比一次阵营是白花的时间。敌方那一桶的键
+    同样是当事人自己的阵营，装的是**不是这一侧**的持有者。
+
+    键 `None` 是「全给」那一份：观察角色认不出来时用它兜底（宁可多问，不许漏问）。
+    """
+
+    lists = list(by_owner.values())
+    if relation == "自身":
+        return {**by_owner, None: _merged(lists)}
+    by_side: dict[str, list[list[tuple[int, Any]]]] = {}
+    for hits in lists:
+        by_side.setdefault(hits[0][1][1].side, []).append(hits)
+    result: dict[Any, list[tuple[int, Any]]] = {None: _merged(lists)}
+    if relation in {"任意己方", "其他己方"}:
+        for side in sides:
+            result[side] = _merged(by_side.get(side) or ())
+    elif relation == "任意敌方":
+        for side in sides:
+            result[side] = _merged(
+                [hits for other, groups in by_side.items() if other != side for hits in groups]
+            )
+    return result
+
+
 class AbilityRuntime:
     """只实现组合语义，不决定具体功法内容。"""
 
@@ -192,11 +254,14 @@ class AbilityRuntime:
             "执行器": node.executor,
         }
         if node.category == "效果" and node.executor not in {"回放效果", "保存结果"}:
+            # `effective` 是本次调用新造的字典，除了这条历史之外没有别的持有者；
+            # 执行器只读它（改写技能/状态都是「先深拷、再换字段」），而读历史的一方
+            # （`_ability_replay_effect`）自己会先深拷一份。所以这里不必再拷一次。
             context.effect_history.append(
                 {
                     "来源": source.id,
                     "目标": target.id,
-                    "节点": copy.deepcopy(effective),
+                    "节点": effective,
                     "倍率": multiplier,
                     "成功": success,
                 }
@@ -205,9 +270,12 @@ class AbilityRuntime:
         return success
 
     def _run_effects(self, context, source, target, effects, multiplier, **kwargs) -> bool:
+        # 传**原节点**而不是 `dict(child)`：`_execute_mechanism` 自己会造一份 `effective`
+        # 再改，节点本身不动；而 `parse_node` 按对象身份记忆化，每次现造一个字典就等于
+        # 每次都缓存不中。
         for child in effects or ():
             if not self._execute_mechanism(
-                context, source, target, dict(child), multiplier, **kwargs
+                context, source, target, child, multiplier, **kwargs
             ):
                 return False
         return True
@@ -317,10 +385,12 @@ class AbilityRuntime:
             },
             "left_ids": [fighter.id for fighter in context.left_team],
             "right_ids": [fighter.id for fighter in context.right_team],
-            "records": {key: list(value) for key, value in context.records.items()},
-            "relations": [dict(value) for value in context.relations],
+            # 这几样**结构不固定**（记录值是变长列表、判定覆盖里还嵌字典），浅拷会漏掉嵌套那一层，
+            # 回滚就不干净了——实测浅拷会让事件数变（14426 → 18055），所以规矩是：**拿不准就深拷**。
+            "records": copy.deepcopy(context.records),
+            "relations": copy.deepcopy(context.relations),
             "objects": copy.deepcopy(context.combat_objects),
-            "rules": [dict(value) for value in context.battle_rules],
+            "rules": copy.deepcopy(context.battle_rules),
             "progress": dict(context.action_progress),
             "counters": dict(context.ability_counters),
             "saved": copy.deepcopy(context.saved_results),
@@ -329,10 +399,7 @@ class AbilityRuntime:
             "rng_state": context.rng.getstate(),
             "trigger_counts": dict(context.trigger_counts),
             "battle_trigger_counts": dict(context.battle_trigger_counts),
-            "judgement_overrides": {
-                key: [dict(item) for item in value]
-                for key, value in context.judgement_overrides.items()
-            },
+            "judgement_overrides": copy.deepcopy(context.judgement_overrides),
             "action_intent": copy.deepcopy(context.action_intent),
             "last_result": copy.deepcopy(context.last_result),
             "triggered_skill_depth": context.triggered_skill_depth,
@@ -342,7 +409,10 @@ class AbilityRuntime:
                     "kind": frame.kind,
                     "source": frame.source,
                     "target": frame.target,
-                    "facts": copy.deepcopy(frame.facts),
+                    # 事实表按**一层浅拷**：事实里的键是就地替换的（`facts["当前数值"] = …`），
+                    # 值本身没有原地改的写法；深拷事件栈是这份回滚点里最贵的一块（一次尝试
+                    # 少则几层、多则上百层）。这一条用 A/B 逐事件对照与十条语料通道把关。
+                    "facts": dict(frame.facts),
                     "tags": set(frame.tags),
                     "cancelled": frame.cancelled,
                     "transformed_kind": frame.transformed_kind,
@@ -427,10 +497,10 @@ class AbilityRuntime:
         context.left_team[:] = [current[value] for value in snapshot["left_ids"] if value in current]
         context.right_team[:] = [current[value] for value in snapshot["right_ids"] if value in current]
         context.rebuild_indexes()
-        context.records = {key: list(value) for key, value in snapshot["records"].items()}
-        context.relations = [dict(value) for value in snapshot["relations"]]
+        context.records = copy.deepcopy(snapshot["records"])
+        context.relations = copy.deepcopy(snapshot["relations"])
         context.combat_objects = copy.deepcopy(snapshot["objects"])
-        context.battle_rules = [dict(value) for value in snapshot["rules"]]
+        context.battle_rules = copy.deepcopy(snapshot["rules"])
         context.mark_listener_index_dirty()
         context.action_progress = dict(snapshot["progress"])
         context.ability_counters = dict(snapshot["counters"])
@@ -440,19 +510,18 @@ class AbilityRuntime:
         context.rng.setstate(snapshot["rng_state"])
         context.trigger_counts = dict(snapshot["trigger_counts"])
         context.battle_trigger_counts = dict(snapshot["battle_trigger_counts"])
-        context.judgement_overrides = {
-            key: [dict(item) for item in value]
-            for key, value in snapshot["judgement_overrides"].items()
-        }
+        context.judgement_overrides = copy.deepcopy(snapshot["judgement_overrides"])
         context.action_intent = copy.deepcopy(snapshot["action_intent"])
         context.last_result = copy.deepcopy(snapshot["last_result"])
         context.triggered_skill_depth = snapshot["triggered_skill_depth"]
         context.summon_serial = snapshot["summon_serial"]
+        # 回滚会换掉身上的状态（规则表缓存的依据），版本号推一格让缓存整体作废。
+        context.status_rules_version = int(getattr(context, "status_rules_version", 0)) + 1
         for saved in snapshot["frames"]:
             frame = saved["frame"]
             for key in ("kind", "source", "target", "cancelled", "transformed_kind", "original_kind"):
                 setattr(frame, key, saved[key])
-            frame.facts = copy.deepcopy(saved["facts"])
+            frame.facts = dict(saved["facts"])
             frame.tags = set(saved["tags"])
 
     @staticmethod
@@ -460,19 +529,30 @@ class AbilityRuntime:
         return True
 
     def _mark_listeners_dirty_for_status(self, context, status) -> None:
-        """状态上真挂了监听，才需要把监听表标脏。
+        """状态上的监听与锁定技都跟着状态生灭：在这里统一把版本号推一格。
 
-        监听表只装**监听节点**；没有 `监听` 的状态对表没有任何贡献，把它算成脏就是白编一遍
-        ——而重编一次要走遍场上每个单位的所有被动。满员讨伐（15 组、67 个单位、26 万事件）
-        实测：整场仗 **37% 的时间花在重编监听表上**（1597 次重建 / 单场 7.5s / 共 20.2s，
-        见 `data/战斗/内容/待补内容.md` 第 98 轮），而绝大多数状态根本没挂监听。
+        - 监听：只有真挂了 `监听` 的状态才需要重编监听表（没有监听的状态对表没有贡献）；
+        - 锁定技：**无条件**推一格——`_container_rules` 的记忆化按这个版本号失效，
+          推一格很便宜，漏推一格就会拿到过期的规则表。
         """
 
+        context.status_rules_version = int(getattr(context, "status_rules_version", 0)) + 1
         if status.listeners:
             context.mark_listener_index_dirty()
 
     def _compiled_listeners(self, context):
-        """Compile listeners by event for the current structural battle state."""
+        """Compile listeners by event for the current structural battle state.
+
+        除了「事件 → 监听列表」那张排好序的表，还建一张**分桶表**：按
+        `(观察角色, 阵营关系)` 分，再按「同侧 / 对侧」预先并好。派发时就不用把整张表
+        问一遍——「自身」的监听只可能在当事人身上，「己方 / 敌方」的只可能在本方 /
+        对方那几位身上；每一桶里**谁和谁同侧**在装配期就定了，所以按侧并一次就够，
+        不必每次派发再逐个持有者比一遍阵营。
+
+        分桶表：`事件名 -> [(观察角色, 阵营关系, 取法)]`，取法是一个字典，键是
+        「按谁取」——`自身` 那类键是持有者编号，其余键是阵营，`None` 键是「全给」
+        （角色认不出来时的兜底，宁可多问、不许漏问）。
+        """
 
         if not context.listener_index_dirty:
             return context.listener_index
@@ -485,12 +565,85 @@ class AbilityRuntime:
         self._collect_field_listeners(context, sink)
         self._collect_object_listeners(context, sink)
         self._collect_rule_listeners(context, sink)
-        context.listener_index = {
+        ordered = {
             event_name: tuple(sorted(values, key=lambda item: item[0]))
             for event_name, values in sink.grouped.items()
         }
+        context.listener_index = ordered
+        # 分桶：值里带上**它在整张排序表里的位次**，合并时按位次取，顺序与整张表逐条一致。
+        buckets: dict[str, list[tuple[str, str, dict[Any, list[tuple[int, Any]]]]]] = {}
+        sides = tuple(dict.fromkeys(fighter.side for fighter in context.fighters))
+        for event_name, _values in sink.grouped.items():
+            ranked = ordered[event_name]
+            per_key: dict[tuple[str, str], dict[str, list[tuple[int, Any]]]] = {}
+            for position, entry in enumerate(ranked):
+                node = entry[6]
+                key = (
+                    str(node.get("观察角色") or "来源"),
+                    str(node.get("阵营关系") or "自身"),
+                )
+                per_key.setdefault(key, {}).setdefault(entry[1].id, []).append((position, entry))
+            groups: list[tuple[str, str, dict[Any, list[tuple[int, Any]]]]] = []
+            for (role, relation), by_owner in per_key.items():
+                groups.append((role, relation, _merged_by_side(by_owner, relation, sides)))
+            buckets[event_name] = groups
+        context.listener_buckets = buckets
         context.listener_index_dirty = False
         return context.listener_index
+
+    def _event_parties(self, context, frame) -> dict[str, Any]:
+        """事件里的「当事人」：观察角色 → 那个人。
+
+        收窄候选与动态判定问的是同三个角色，所以**一次算好、两处共用**：动态判定
+        原先每次自己造一份（百万次量级），而造它还要按行动者编号查一次人。
+        """
+
+        return {
+            "来源": frame.source,
+            "承受者": frame.target,
+            "行动者": context.fighter_by_id(str(frame.facts.get("行动者") or ""))
+            or frame.source,
+        }
+
+    def _listeners_for(self, context, kind: str, frame, parties=None) -> list[tuple[int, Any]]:
+        """这一条事件**真正需要问**的监听，带位次、顺序与整张排序表逐条一致。
+
+        候选只按「阵营关系」收：自身 → 当事人一个；任意己方 / 其他己方 → 同侧那几位；
+        任意敌方 → 对侧那几位；任意 → 全都给。收到的候选靠位次合并，**顺序与整张表
+        一模一样**（同序是硬要求：结算先后决定结果）；真正的判定仍走动态那一步，
+        所以这里只会「多给」，不会「漏给」。
+
+        **位次要一起给出来**：事件目标会被 `修改事件目标` 一类效果中途改掉，改完得按
+        位次补问「还没问过的那些」，所以调用方要知道每条监听在整张表里的位置。
+        """
+
+        self._compiled_listeners(context)
+        buckets = context.listener_buckets.get(kind)
+        if not buckets:
+            return []
+        if parties is None:
+            parties = self._event_parties(context, frame)
+        groups: list[list[tuple[int, Any]]] = []
+        for role, relation, by_key in buckets:
+            who = parties.get(role)
+            if who is None:
+                # 角色认不出来：全给，交给动态判定（宁可多问，不许漏问）。
+                hits = by_key.get(None)
+            elif relation == "自身":
+                hits = by_key.get(who.id)
+            elif relation in {"任意己方", "其他己方", "任意敌方"}:
+                # 「敌方」那一桶的键也是**当事人自己的阵营**：装配时已经按「不是这侧的」
+                # 并好了，所以这里与「己方」同一写法。
+                hits = by_key.get(who.side)
+            else:  # 任意（或不认识的关系）：全收
+                hits = by_key.get(None)
+            if hits:
+                groups.append(hits)
+        if not groups:
+            return []
+        if len(groups) == 1:
+            return groups[0]
+        return list(heapq.merge(*groups, key=lambda pair: pair[0]))
 
     def _collect_fighter_listeners(self, context, sink: _ListenerSink) -> None:
         """修士自带的监听：被动槽位在前，状态（战丹、长期伤势）在后。
@@ -608,18 +761,29 @@ class AbilityRuntime:
         context.event_stack.append(frame)
         context.event_depth += 1
         try:
-            listeners = () if over_depth else self._compiled_listeners(context).get(kind, ())
-            for (
-                _,
-                owner,
-                activation_id,
-                activation_budget,
-                source_ability,
-                build_instance,
-                node,
-                composition,
-            ) in listeners:
-                if not self._listener_relation_matches(context, owner, frame, node):
+            # 候选集按「事件当下的当事人」收窄（见 `_listeners_for`）。但监听效果里有一类
+            # **改写事件目标**的动作（`修改事件目标`）：目标一改，先前被收窄掉的那批监听
+            # 里就可能有人重新符合条件。所以目标一变就重算候选，**只补跑位次在后面的
+            # 那些**——位次在前面的，原实现（整张表逐条问一遍）已经问过一遍了，当时不合
+            # 就是不合。补跑仍按位次顺序，所以与「整张表逐条问一遍」逐事件一致。
+            parties = self._event_parties(context, frame)
+            pairs = [] if over_depth else self._listeners_for(context, kind, frame, parties)
+            narrowed_target = frame.target
+            index = 0
+            while index < len(pairs):
+                position, entry = pairs[index]
+                index += 1
+                (
+                    _,
+                    owner,
+                    activation_id,
+                    activation_budget,
+                    source_ability,
+                    build_instance,
+                    node,
+                    composition,
+                ) = entry
+                if not self._listener_relation_matches(owner, node, parties):
                     continue
                 if not self._conditions_allow(
                     context, owner, frame.target, node.get("条件") or (), frame.amount, frame.facts, tuple(frame.tags)
@@ -660,6 +824,11 @@ class AbilityRuntime:
                     context.current_build_instance = previous_instance
                     context.current_element_composition = previous_composition
                     context.trigger_stack.discard(activation)
+                if frame.target is not narrowed_target:
+                    narrowed_target = frame.target
+                    parties = self._event_parties(context, frame)
+                    pairs = self._listeners_for(context, kind, frame, parties)
+                    index = bisect.bisect_right(pairs, position, key=lambda pair: pair[0])
             # 转化目标若已经在结算栈上，这次转化没有意义——那等于重入一个正在结算
             # 的事件。此时**放弃转化**，让原事件按自己的语义继续结算。
             #
@@ -687,7 +856,7 @@ class AbilityRuntime:
                         target=frame.target.name,
                         text=frame.transformed_kind or frame.kind,
                         amount=round(frame.amount, 3),
-                        values=copy.deepcopy(frame.facts),
+                        values=copy_value(frame.facts),
                         tags=tuple(sorted(frame.tags)),
                         ability=context.current_ability,
                         source_id=frame.source.id,
@@ -728,13 +897,15 @@ class AbilityRuntime:
             return ()
         return ((str(passive.get("监听键") or "内联被动"), dict(raw)),)
 
-    def _listener_relation_matches(self, context, owner, frame, node) -> bool:
+    def _listener_relation_matches(self, owner, node, parties: Mapping[str, Any]) -> bool:
+        """这条监听此刻该不该问：看它观察的角色与持有者的阵营关系。
+
+        `parties` 由调用方一次算好（见 `_event_parties`）——事件目标中途被改时，
+        调用方会重算它再重算候选，所以这里拿到的永远是**当下**的当事人。
+        """
+
         role = str(node.get("观察角色") or "来源")
-        observed = {
-            "来源": frame.source,
-            "承受者": frame.target,
-            "行动者": context.fighter_by_id(str(frame.facts.get("行动者") or "")) or frame.source,
-        }.get(role)
+        observed = parties.get(role)
         if observed is None:
             raise ValueError(f"未知事件观察角色：{role}")
         relation = str(node.get("阵营关系") or "自身")
@@ -752,11 +923,12 @@ class AbilityRuntime:
 
     def _conditions_allow(self, context, source, target, conditions, event_amount, event_values, tags):
         for raw in conditions or ():
-            condition = dict(raw)
-            executor = self.catalog.parse_node(condition).executor
+            # 执行器按**原条件对象**查（身份缓存），交给判定器的仍是自己那份拷贝。
+            executor = self.catalog.parse_node(raw).executor
             handler = self._condition_handlers.get(executor)
             if handler is None:
                 raise ValueError(f"战斗核心未实现条件执行器：{executor or '<空>'}")
+            condition = dict(raw)
             if not handler(context, source, target, condition, event_amount, event_values, tags):
                 return False
         return True
@@ -1890,11 +2062,11 @@ class AbilityRuntime:
             for key, value in fighter.form_modifiers.items():
                 fighter.attributes[key] = fighter.attributes.get(key, 0.0) + value
             if fighter.base_form_skills is None:
-                fighter.base_form_skills = copy.deepcopy(fighter.skills)
+                fighter.base_form_skills = copy_skills(fighter.skills)
             if definition.get("替换技能"):
                 fighter.skills = [self._skill_from_definition(fighter, index, value) for index, value in enumerate(definition["替换技能"])]
             else:
-                fighter.skills = copy.deepcopy(fighter.base_form_skills)
+                fighter.skills = copy_skills(fighter.base_form_skills)
             if not definition.get("保留冷却", True):
                 fighter.cooldowns.clear()
             fighter.form = name
@@ -2143,7 +2315,7 @@ class AbilityRuntime:
     def _resolve_any(self, context, value, source, target, event_amount=0.0, event_values=None):
         if isinstance(value, Mapping):
             if "能力" not in value:
-                return copy.deepcopy(dict(value))
+                return copy_value(dict(value))
             node = self.catalog.parse_node(value)
             handler = self._value_handlers.get(node.executor)
             if handler is None:
@@ -2304,6 +2476,33 @@ class AbilityRuntime:
             is not None
         )
 
+    def _container_rules(self, container, context) -> dict[str, tuple]:
+        """按拦截点分好的规则表，**带版本号记忆化**。
+
+        规则来自两处：载体自己带的（装配期定死）、在场状态带的（跟状态生灭）。以前每次问都
+        要把身上每个状态扫一遍再排序——实战里 7.6 万次调用、占了一成多时间。现在按
+        `context.status_rules_version` 缓存：状态一进出（或回滚）版本号上加一，缓存作废。
+
+        键是**载体对象自己**（修士或技能行），所以技能行那份也一并享受。
+        """
+
+        version = int(getattr(context, "status_rules_version", 0))
+        if getattr(container, "rules_cache_version", -1) == version:
+            return container.rules_cache
+        built: dict[str, list] = {}
+        for rule in (getattr(container, "rules", None) or {}).values():
+            built.setdefault(str(rule.get("拦截点") or ""), []).append(rule)
+        for status in getattr(container, "statuses", None) or ():
+            for rule in (getattr(status, "rules", None) or {}).values():
+                built.setdefault(str(rule.get("拦截点") or ""), []).append(rule)
+        cache = {
+            point: tuple(sorted(rules, key=lambda rule: int(rule.get("优先级") or 0)))
+            for point, rules in built.items()
+        }
+        container.rules_cache = cache
+        container.rules_cache_version = version
+        return cache
+
     def _rules_denied_rule(
         self,
         context,
@@ -2330,21 +2529,10 @@ class AbilityRuntime:
         **跟状态一起生灭**，所以每次问的时候从在场状态里现取。
         """
 
-        rules = [
-            rule
-            for rule in (getattr(container, "rules", None) or {}).values()
-            if str(rule.get("拦截点") or "") == point
-        ]
-        for status in getattr(container, "statuses", None) or ():
-            rules.extend(
-                rule
-                for rule in (getattr(status, "rules", None) or {}).values()
-                if str(rule.get("拦截点") or "") == point
-            )
+        rules = self._container_rules(container, context).get(point) or ()
         if not rules:
             return None
         subject = owner if owner is not None else container
-        rules.sort(key=lambda rule: int(rule.get("优先级") or 0))
         verdict = None
         decision = None
         for rule in rules:
@@ -2378,10 +2566,9 @@ class AbilityRuntime:
         （1967 场语料对照实测）。所以省略保持原语义，「自身」必须显式写出。
         """
         if value is None:
-            selector: dict[str, Any] = {
-                "能力": TARGET_SELECTOR_ABILITY,
-                "范围": DEFAULT_TARGET_SCOPE,
-            }
+            # 同一个范围永远给同一个 selector 对象：`parse_node` 按对象身份记忆化，
+            # 每次新造一个字典就等于每次都缓存不中（这一条在语料上是百万次量级）。
+            selector = _SCOPE_SELECTORS[DEFAULT_TARGET_SCOPE]
         elif isinstance(value, str):
             scope = value.strip()
             if scope not in TARGET_SCOPES:
@@ -2389,9 +2576,12 @@ class AbilityRuntime:
                     "未知目标范围："
                     f"{scope or '<空>'}；可用：" + "、".join(TARGET_SCOPES)
                 )
-            selector = {"能力": TARGET_SELECTOR_ABILITY, "范围": scope}
+            selector = _SCOPE_SELECTORS[scope]
         elif isinstance(value, Mapping):
-            selector = dict(value)
+            node = self.catalog.parse_node(value)
+            if node.executor != "选择目标":
+                raise ValueError("目标字段必须使用选择目标")
+            return self._target_select(context, source, target, dict(value), 0, {}, ())
         else:
             raise TypeError("目标字段必须是范围名或选择目标对象")
         node = self.catalog.parse_node(selector)

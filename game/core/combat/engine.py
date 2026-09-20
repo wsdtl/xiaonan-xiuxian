@@ -2060,6 +2060,11 @@ class BattleEngine(AbilityRuntime):
             )
         if dropped_with_listeners:
             context.mark_listener_index_dirty()
+        if len(kept) != len(actor.statuses):
+            # 掉了状态：规则表缓存的依据变了（见 `_container_rules`）。
+            context.status_rules_version = (
+                int(getattr(context, "status_rules_version", 0)) + 1
+            )
         actor.statuses = kept
         for obj in list(context.combat_objects.values()):
             if obj.remaining_actions > 0:
