@@ -929,6 +929,19 @@ class AbilityRuntime:
             before, _ = self._resource_values(destination, resource)
             frame = self._dispatch_event(context, kind="资源消耗前", source=source, target=destination, amount=amount, values={"资源": resource, "变化前数值": before}, tags=("消耗", resource))
             destination = frame.target
+            # 锁定技：`资源被消耗` 拦截点——问**被扣资源的那个单位**。
+            if self._rules_deny(
+                context,
+                destination,
+                "资源被消耗",
+                owner=source,
+                tags=(
+                    "方式:消耗",
+                    f"资源:{resource}",
+                    f"来源关系:{self._source_relation(context, source, destination)}",
+                ),
+            ):
+                return False
             before, _ = self._resource_values(destination, resource)
             if frame.cancelled or (before < frame.amount and effect.get("不足时是否失败", True)):
                 return False
@@ -1337,6 +1350,19 @@ class AbilityRuntime:
         amount = self._resolve_value(context, effect.get("数值", 0), source, target, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
+            # 锁定技：`计量被修改` 拦截点——问**计量记在谁身上**。
+            if self._rules_deny(
+                context,
+                fighter,
+                "计量被修改",
+                owner=source,
+                tags=(
+                    f"计量:{name}",
+                    f"方式:{mode}",
+                    f"来源关系:{self._source_relation(context, source, fighter)}",
+                ),
+            ):
+                continue
             key = (fighter.id, instance, name)
             before = context.ability_counters.get(key, float(effect.get("初始值", 0)))
             if mode == "减少" and before < amount and effect.get("不足时是否失败", True):
@@ -1718,6 +1744,18 @@ class AbilityRuntime:
             definition = dict(effect.get("定义") or fighter.forms.get(name) or {})
             if not name or fighter.form == name:
                 continue
+            # 锁定技：`形态被切换` 拦截点——问**要被切形态的那个单位**。
+            if self._rules_deny(
+                context,
+                fighter,
+                "形态被切换",
+                owner=source,
+                tags=(
+                    f"形态:{name}",
+                    f"来源关系:{self._source_relation(context, source, fighter)}",
+                ),
+            ):
+                continue
             before = fighter.form
             for key, value in fighter.form_modifiers.items():
                 fighter.attributes[key] = fighter.attributes.get(key, 0.0) - value
@@ -1867,6 +1905,18 @@ class AbilityRuntime:
             return False
         destination = values[0]
         field = str(effect.get("字段") or "阵营")
+        # 锁定技：`归属被修改` 拦截点——问**被改归属的那个单位**。
+        if self._rules_deny(
+            context,
+            destination,
+            "归属被修改",
+            owner=source,
+            tags=(
+                f"字段:{field}",
+                f"来源关系:{self._source_relation(context, source, destination)}",
+            ),
+        ):
+            return False
         if field == "阵营":
             new_side = source.side if str(effect.get("阵营") or "己方") == "己方" else 1 - source.side
             if destination.side != new_side:

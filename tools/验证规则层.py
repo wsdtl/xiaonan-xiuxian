@@ -145,7 +145,7 @@ def _push_skill() -> dict:
     }
 
 
-def _ban_passive(skill_name: str, field: str = "禁用", value: object = True) -> dict:
+def _ban_passive(skill_name: str, field: str = "禁用", value: object = True, mode: str = "设置") -> dict:
     return {
         "能力": "被动技能",
         "名称": "探针封",
@@ -161,7 +161,7 @@ def _ban_passive(skill_name: str, field: str = "禁用", value: object = True) -
                         "目标": {"能力": "选择目标", "范围": "敌方"},
                         "技能": {"能力": "选择技能", "范围": "指定技能", "名称": skill_name},
                         "字段": field,
-                        "方式": "设置",
+                        "方式": mode,
                         "值": value,
                     }
                 ],
@@ -216,17 +216,48 @@ def _health(result, pid: str) -> float:
     return -1.0
 
 
-def _count(result, *, kind: str, actor: str = "", skill: str = "") -> int:
+def _spirit(result, pid: str) -> float:
+    for value in (*result.left_results, *result.right_results):
+        if value.id == pid:
+            return float(value.spirit)
+    return -1.0
+
+
+def _count(result, *, kind: str, actor: str = "", target: str = "", skill: str = "") -> int:
     total = 0
     for event in result.events:
         if event.kind != kind:
             continue
         if actor and (event.source_id != actor and str(event.values.get("行动者") or "") != actor):
             continue
+        if target and event.target_id != target:
+            continue
         if skill and str(event.values.get("技能") or "") != skill:
             continue
         total += 1
     return total
+
+
+def _consumed(result, pid: str) -> float:
+    """落在目标身上的资源被扣掉的总量（`资源消耗后` 的 `实际数值` 之和）。"""
+
+    return sum(
+        float(event.values.get("实际数值") or 0)
+        for event in result.events
+        if event.kind == "资源消耗后" and event.target_id == pid
+    )
+
+
+def _big_hits(result, pid: str, threshold: float = 500) -> int:
+    """落在目标身上的大额伤害笔数（合成探针用它当「计量加满才落的一刀」）。"""
+
+    return sum(
+        1
+        for event in result.events
+        if event.kind == "造成伤害后"
+        and event.target_id == pid
+        and float(event.values.get("实际数值") or 0) >= threshold
+    )
 
 
 def _healed(result, pid: str) -> float:
@@ -332,13 +363,15 @@ def _scene_event_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, f
 
 
 def _scene_skill_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """技能被改写：对手禁用这个技能名后，自己放出来的次数。
+    """技能被改写：这一行被改的时候，**所挡的那一种**要挡住，别的改写照旧生效。
 
-    **反方向也要成立**：这一行上「别的」改写必须照旧生效。`不可禁用` 只管 `禁用`，
-    对手把这一行的效果清空照样得清得掉。只验正方向的话，一条**没有条件**、把这一处
-    所有请求都拦掉的规则会「两面都通过」——这正是它第一次写出来的样子。
+    标准探针能造三种改写：禁用（`字段:禁用` + `值:真`）、清空效果、冷却延长
+    （`字段:冷却行动` + `方式:增加`）。按规则自己的条件挑哪一种是主观测，另外两种
+    必须**照旧生效**——只验正方向的话，一条把整处请求都拦掉的规则会「两面都通过」。
     """
 
+    tags = probe_tags(rule)
+    主看禁用 = "字段:禁用" in tags
     banner = _fighter("R1", _card(_ban_passive("探针锁")))
     plain = _run(engine, _fighter("L1", _card(_strike_skill("探针锁"))), banner)
     guarded = _run(
@@ -348,7 +381,7 @@ def _scene_skill_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, f
     )
     used_plain = _count(plain, kind="技能施放后", skill="探针锁")
     used_guarded = _count(guarded, kind="技能施放后", skill="探针锁")
-    # 同行别的改写：对手把这一行的 `效果` 清空。没有规则时这一行打不出伤害，
+    # 同行别的改写之一：对手把这一行的 `效果` 清空。没有规则时这一行打不出伤害，
     # 规则放它过去就该一样打不出伤害；被误拦才会打回原样。
     clearer = _fighter("R1", _card(_ban_passive("探针锁", field="效果", value=[])))
     plain_other = _run(engine, _fighter("L1", _card(_strike_skill("探针锁"))), clearer)
@@ -358,11 +391,218 @@ def _scene_skill_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, f
         clearer,
     )
     same = _damage_taken(guarded_other, "R1") == _damage_taken(plain_other, "R1")
+    # 同行别的改写之二：把这一行的冷却**延长**（原值 0 → 3）。
+    cooler = _fighter("R1", _card(_ban_passive("探针锁", field="冷却行动", value=3, mode="增加")))
+    plain_cool = _run(engine, _fighter("L1", _card(_strike_skill("探针锁"))), cooler)
+    guarded_cool = _run(
+        engine,
+        _fighter("L1", _card(_strike_skill("探针锁", rules=[entry]))),
+        cooler,
+    )
+    cool_same = _count(guarded_cool, kind="技能施放后", skill="探针锁") == _count(
+        plain_cool, kind="技能施放后", skill="探针锁"
+    )
+    if 主看禁用:
+        return (
+            "探针锁施展次数（禁用方向；并核清空效果与冷却延长照旧）",
+            used_plain,
+            used_guarded,
+            used_guarded > used_plain and same and cool_same,
+        )
     return (
-        "探针锁施展次数（并核同行别的改写照旧生效）",
-        used_plain,
-        used_guarded,
-        used_guarded > used_plain and same,
+        "探针锁施展次数（冷却被延长后仍放得出来）",
+        _count(plain_cool, kind="技能施放后", skill="探针锁"),
+        _count(guarded_cool, kind="技能施放后", skill="探针锁"),
+        _count(guarded_cool, kind="技能施放后", skill="探针锁")
+        > _count(plain_cool, kind="技能施放后", skill="探针锁")
+        and same
+        and used_guarded == used_plain,
+    )
+
+
+def _scene_resource_consume(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """资源被消耗：对手抽走目标的精神，问**被抽的那个单位**。"""
+
+    drainer = _listener_passive(
+        "战斗开始",
+        [
+            {
+                "能力": "消耗资源",
+                "目标": {"能力": "选择目标", "范围": "敌方"},
+                "资源": "精神",
+                "数值": 300,
+                "不足时是否失败": False,
+            }
+        ],
+        name="探针抽取",
+    )
+    plain = _run(engine, _fighter("L1", _card(drainer)), _fighter("R1", None))
+    guarded = _run(
+        engine,
+        _fighter("L1", _card(drainer)),
+        _fighter("R1", _card(_rules(entry))),
+    )
+    return (
+        "目标被扣掉的精神",
+        _consumed(plain, "R1"),
+        _consumed(guarded, "R1"),
+        _consumed(guarded, "R1") < _consumed(plain, "R1"),
+    )
+
+
+def _scene_action_limit(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """行动被限制：对手给目标挂一条「不许行动」的状态，问被限制的那个单位。"""
+
+    limiter = _listener_passive(
+        "战斗开始",
+        [
+            {
+                "能力": "添加状态",
+                "目标": {"能力": "选择目标", "范围": "敌方"},
+                "状态": {
+                    "名称": "探针锁步",
+                    "类别": "负面",
+                    "剩余行动": 20,
+                    "持续单位": "状态承受者行动",
+                    "行动限制": ["行动"],
+                },
+            }
+        ],
+        name="探针锁步",
+    )
+    plain = _run(engine, _fighter("L1", _card(limiter)), _fighter("R1", None))
+    guarded = _run(
+        engine,
+        _fighter("L1", _card(limiter)),
+        _fighter("R1", _card(_rules(entry))),
+    )
+    return (
+        "目标被跳过行动的次数",
+        _count(plain, kind="行动跳过后", target="R1"),
+        _count(guarded, kind="行动跳过后", target="R1"),
+        _count(guarded, kind="行动跳过后", target="R1") < _count(plain, kind="行动跳过后", target="R1"),
+    )
+
+
+def _scene_ownership(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """归属被修改：对手要把目标拉到自己阵营，问被改归属的那个单位。
+
+    观测量取「这场仗还打不打得起来」：目标被拉走之后我方没有敌人，伤害事件会归零。
+    """
+
+    changer = _listener_passive(
+        "战斗开始",
+        [
+            {
+                "能力": "修改归属",
+                "目标": {"能力": "选择目标", "范围": "敌方"},
+                "字段": "阵营",
+                "阵营": "己方",
+            }
+        ],
+        name="探针夺舍",
+    )
+    plain = _run(engine, _fighter("L1", _card(changer)), _fighter("R1", None))
+    guarded = _run(
+        engine,
+        _fighter("L1", _card(changer)),
+        _fighter("R1", _card(_rules(entry))),
+    )
+    return (
+        "这场仗的伤害事件数",
+        _count(plain, kind="造成伤害后"),
+        _count(guarded, kind="造成伤害后"),
+        _count(guarded, kind="造成伤害后") > _count(plain, kind="造成伤害后"),
+    )
+
+
+def _scene_form(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """形态被切换：对手强切目标的形态，问要被切的那个单位。"""
+
+    switcher = _listener_passive(
+        "战斗开始",
+        [
+            {
+                "能力": "切换形态",
+                "目标": {"能力": "选择目标", "范围": "敌方"},
+                "形态": "探针形态",
+                "定义": {"属性变化": {"攻击": 5}},
+            }
+        ],
+        name="探针变形",
+    )
+    plain = _run(engine, _fighter("L1", _card(switcher)), _fighter("R1", None))
+    guarded = _run(
+        engine,
+        _fighter("L1", _card(switcher)),
+        _fighter("R1", _card(_rules(entry))),
+    )
+    return (
+        "目标被切形态的次数",
+        _count(plain, kind="形态切换后", target="R1"),
+        _count(guarded, kind="形态切换后", target="R1"),
+        _count(guarded, kind="形态切换后", target="R1") < _count(plain, kind="形态切换后", target="R1"),
+    )
+
+
+def _scene_counter(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """计量被修改：对手给目标的计量加数，**加满就触发一刀**，问计量记在谁身上。
+
+    计量本身不进事件流（没有「计量变化后」这种事件），所以观测量取它的后果：
+    加满了才落下来的那一刀有没有落下来。
+    """
+
+    modifier = _listener_passive(
+        "战斗开始",
+        [
+            {
+                "能力": "修改构筑计量",
+                "目标": {"能力": "选择目标", "范围": "敌方"},
+                "计量": "探针计量",
+                "方式": "增加",
+                "数值": 5,
+                "最高值": 100,
+            },
+            {
+                "能力": "条件执行",
+                "条件": [
+                    {
+                        "能力": "数值条件",
+                        "左值": {
+                            "能力": "读取数值",
+                            "来源": "构筑计量",
+                            "目标": {"能力": "选择目标", "范围": "敌方"},
+                            "计量": "探针计量",
+                        },
+                        "比较": "大于等于",
+                        "右值": 5,
+                    }
+                ],
+                "成立效果": [
+                    {
+                        "能力": "造成伤害",
+                        "目标": {"能力": "选择目标", "范围": "敌方"},
+                        "数值": 999,
+                        "能否闪避": False,
+                        "能否暴击": False,
+                        "能否格挡": False,
+                    }
+                ],
+            },
+        ],
+        name="探针记账",
+    )
+    plain = _run(engine, _fighter("L1", _card(modifier)), _fighter("R1", None))
+    guarded = _run(
+        engine,
+        _fighter("L1", _card(modifier)),
+        _fighter("R1", _card(_rules(entry))),
+    )
+    return (
+        "计量加满才落的那一刀",
+        _big_hits(plain, "R1"),
+        _big_hits(guarded, "R1"),
+        _big_hits(guarded, "R1") < _big_hits(plain, "R1"),
     )
 
 
@@ -423,6 +663,11 @@ SCENES = {
     "事件被改写": _scene_event_rewrite,
     "技能被改写": _scene_skill_rewrite,
     "状态被添加": _scene_status_added,
+    "资源被消耗": _scene_resource_consume,
+    "行动被限制": _scene_action_limit,
+    "归属被修改": _scene_ownership,
+    "形态被切换": _scene_form,
+    "计量被修改": _scene_counter,
 }
 
 

@@ -514,7 +514,7 @@ class BattleEngine(AbilityRuntime):
         )
         self._recover_at_action_start(context, actor)
         self._tick_cooldowns(context, actor)
-        if not self._action_restricted(actor, "使用丹药"):
+        if not self._action_restricted(context, actor, "使用丹药"):
             self._use_medicine(context, actor)
         intent = self._decide_action(context, actor, target)
         context.action_intent = intent
@@ -559,7 +559,7 @@ class BattleEngine(AbilityRuntime):
             tags=(f"来源关系:{self._source_relation(context, actor, actual_target)}",),
         ):
             intent.cancelled = True
-        if intent.cancelled or self._action_restricted(actor, "行动"):
+        if intent.cancelled or self._action_restricted(context, actor, "行动"):
             context.event(
                 "行动跳过后",
                 actor,
@@ -1447,7 +1447,7 @@ class BattleEngine(AbilityRuntime):
     ) -> bool:
         """过不了闸返回 `True` 并播报原因；冷却未好是**静默**拒绝，不播报。"""
 
-        if self._action_restricted(actor, "技能"):
+        if self._action_restricted(context, actor, "技能"):
             self._skill_cast_failed(context, actor, target, skill, "行动限制")
             return True
         if not ignore_cooldown and actor.cooldowns.get(skill.key, 0) > 0:
@@ -1583,7 +1583,7 @@ class BattleEngine(AbilityRuntime):
                     )
 
     def _basic_attack(self, context, source, target):
-        if self._action_restricted(source, "普通攻击"):
+        if self._action_restricted(context, source, "普通攻击"):
             return False
         frame = self._dispatch_event(
             context,
@@ -1611,12 +1611,31 @@ class BattleEngine(AbilityRuntime):
         )
         return True
 
-    @staticmethod
-    def _action_restricted(fighter, action):
-        return any(
-            "行动" in status.action_limits or action in status.action_limits
-            for status in fighter.statuses
-        )
+    def _action_restricted(self, context, fighter, action):
+        """这条状态限制得住这次行动吗；**限制也要先过锁定技那一关**。
+
+        `行动被限制` 拦截点问被限制的那个单位：锁定技拒绝时，这条限制对这一位不成立。
+        限制的「来源关系」按**限制是谁挂的**算，所以「不受敌方限制」与「不受任何限制」
+        是两条不同的写法。
+        """
+
+        for status in fighter.statuses:
+            if "行动" not in status.action_limits and action not in status.action_limits:
+                continue
+            source = context.fighter_by_id(status.source)
+            if self._rules_deny(
+                context,
+                fighter,
+                "行动被限制",
+                owner=source,
+                tags=(
+                    f"限制:{action}",
+                    f"来源关系:{self._source_relation(context, source, fighter)}",
+                ),
+            ):
+                continue
+            return True
+        return False
 
     def _deal_attack(
         self,

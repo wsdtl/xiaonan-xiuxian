@@ -110,7 +110,9 @@ INTERCEPTION_POINTS = MappingProxyType(
         "技能被改写": InterceptionPoint(
             note="修改技能落到某个技能时问那个技能自己",
             carriers=("行",),
-            probe_tags=("字段:禁用", "值:真"),
+            #: 标准探针会造三种改写：禁用（`字段:禁用` + `值:真`）与冷却延长（`字段:冷却行动`
+            #: + `方式:增加`）；再加一种就先把 `tools/验证规则层.py` 的对应场景补上。
+            probe_tags=("字段:禁用", "值:真", "字段:冷却行动", "方式:增加"),
         ),
         "状态被添加": InterceptionPoint(
             note="给别人挂状态之前问**被打上的那个单位**",
@@ -118,6 +120,31 @@ INTERCEPTION_POINTS = MappingProxyType(
             #: 请求摊成四类标签：具体状态名、类别、是不是控制、来源关系。
             #: 于是「不受控制」「不吃负面状态」「只不受某一条」都能用现成的条件原子写。
             probe_tags=("状态:探针封", "类别:负面", "控制:真", "来源关系:敌方"),
+        ),
+        "资源被消耗": InterceptionPoint(
+            note="扣某个单位的资源之前问那个单位",
+            carriers=("单位",),
+            probe_tags=("方式:消耗", "资源:精神", "来源关系:敌方"),
+        ),
+        "行动被限制": InterceptionPoint(
+            note="一条状态要限制某次行动时，问被限制的那个单位",
+            carriers=("单位",),
+            probe_tags=("限制:行动", "来源关系:敌方"),
+        ),
+        "归属被修改": InterceptionPoint(
+            note="改阵营 / 主人 / 控制者之前问被改的那个单位",
+            carriers=("单位",),
+            probe_tags=("字段:阵营", "来源关系:敌方"),
+        ),
+        "形态被切换": InterceptionPoint(
+            note="切某个单位的形态之前问那个单位",
+            carriers=("单位",),
+            probe_tags=("形态:探针形态", "来源关系:敌方"),
+        ),
+        "计量被修改": InterceptionPoint(
+            note="动某个单位的构筑计量之前问那个单位",
+            carriers=("单位",),
+            probe_tags=("计量:探针计量", "方式:增加", "来源关系:敌方"),
         ),
     }
 )
