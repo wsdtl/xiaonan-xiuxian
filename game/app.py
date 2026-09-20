@@ -411,6 +411,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("initial_items", character_service_status.initial_item_count),
         )
     )
+    # 种族表归角色核心读（`角色/规则/种族/种族.json`）。道侣核心比它先构造，所以在这里回填：
+    # 回填当场校验 `道侣.json.种族池`，池子里写了没登记的族名照样是启动错误。
+    companion.attach_races(character.races())
     injury = InjuryService(data, database)
     injury_status = injury.initialize()
     logger.opt(colors=True).success(

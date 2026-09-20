@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import random
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -59,7 +60,7 @@ from .contracts import (
     CompanionStatus,
     LocalCultivator,
 )
-from game.core.data import boolean, boolean as _bool, strict_text as _text
+from game.core.data import boolean, boolean as _bool, sequence as _sequence, strict_text as _text
 
 RELATION_STATE = "companion_relation"
 ACTIVE_STATE = "companion_active"
@@ -94,6 +95,10 @@ class CompanionService:
         self._attribute_definitions: Mapping[str, object] = {}
         self._plant_pool_meridians: Mapping[str, str] = {}
         self._five_element_rules: Mapping[str, object] = {}
+        #: 种族：道侣核心构造在角色核心之前，所以种族表由组合根在角色核心就绪后回填
+        #: （`attach_races`），回填时当场校验 `道侣.json.可选种族` 里的族名都登记过。
+        self._race_options: tuple[str, ...] = ()
+        self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
 
     def initialize(self) -> CompanionStatus:
         if self._initialized:
@@ -114,6 +119,7 @@ class CompanionService:
             self._data.dataset("战斗定义").get("属性"), "战斗定义.属性"
         )
         self._plant_pool_meridians = self._load_plant_pool_meridians()
+        self._race_options = self._load_race_options()
         if (
             self._rules.qualification_growth_minimum <= 0
             or self._rules.qualification_growth_maximum
@@ -440,6 +446,7 @@ class CompanionService:
             inventory_owner_id=user_id,
             gender=definition.gender,
             five_elements=dict(instance.five_elements),
+            inherent_rules=self.inherent_rules(instance.companion_id),
         )
 
     async def plan_growth(
@@ -1492,6 +1499,58 @@ class CompanionService:
             _nonnegative_int(weapon.get("经验"), f"道侣 {companion_id}.本命武器.经验"),
             weapon_laws,
         )
+
+    def attach_races(self, races: Mapping[str, Mapping[str, object]]) -> None:
+        """回填种族登记表并**当场校验**道侣的种族池（组合根在角色核心就绪后调用）。
+
+        道侣核心比角色核心先构造，种族表又归角色核心读，所以这一层用「回填」而不是构造
+        注入；回填发生在启动期，池子里写了没登记的族名照样是启动错误。
+        """
+
+        if self._races:
+            raise RuntimeError("道侣核心的种族表已经回填过")
+        unknown = [name for name in self._race_options if name not in races]
+        if unknown:
+            raise JsonDataError(
+                f"道侣.json.可选种族里有未登记的种族：{'、'.join(unknown)}"
+            )
+        self._races = MappingProxyType({str(k): v for k, v in races.items()})
+
+    def race_of(self, companion_id: str) -> str:
+        """这名道侣是哪一族：按编号独立取，同一名道侣永远是同一族。"""
+
+        self._require_initialized()
+        if not self._races:
+            raise RuntimeError("道侣核心的种族表尚未回填")
+        normalized = str(companion_id or "").strip()
+        if not normalized:
+            raise CompanionStateError("道侣编号不能为空")
+        return random.Random(f"道侣种族:{normalized}").choice(self._race_options)
+
+    def inherent_rules(self, companion_id: str) -> tuple[Mapping[str, object], ...]:
+        """这名道侣的**天生锁定技**（种族那一层，交给参战者固有规则）。"""
+
+        self._require_initialized()
+        entry = self._races.get(self.race_of(companion_id))
+        if entry is None:
+            raise JsonDataError(f"道侣的种族没有登记：{self.race_of(companion_id)}")
+        return tuple(
+            copy.deepcopy(dict(item)) for item in entry.get("天生规则") or ()
+        )
+
+    def _load_race_options(self) -> tuple[str, ...]:
+        value = _mapping(
+            self._data.dataset("角色规则").get("道侣"), "角色/规则/主体/道侣.json"
+        )
+        pool = tuple(
+            _text(item, "道侣.可选种族")
+            for item in _sequence(value.get("可选种族"), "道侣.可选种族")
+        )
+        if not pool:
+            raise JsonDataError("道侣.json.可选种族不能为空")
+        if len(set(pool)) != len(pool):
+            raise JsonDataError("道侣.json.可选种族里有重复的种族")
+        return pool
 
     def _require_initialized(self) -> None:
         if not self._initialized:

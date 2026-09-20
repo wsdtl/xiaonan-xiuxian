@@ -95,6 +95,20 @@ def test_generated_enemies_carry_race_rules(services) -> None:
             assert str(dict(rule).get("名称") or "") in layer
 
 
+def test_companions_have_a_registered_race(services) -> None:
+    """道侣也定族：`道侣.json.可选种族` 里的族都登记过，且同一名道侣永远同一族。"""
+
+    races = services.enemy.races()
+    ids = tuple(services.data.entities("道侣"))[:5]
+    assert ids, "库里没有道侣实体"
+    for companion_id in ids:
+        race = services.companion.race_of(companion_id)
+        assert race in races, f"道侣 {companion_id} 的族没登记：{race}"
+        assert services.companion.race_of(companion_id) == race
+        for rule in services.companion.inherent_rules(companion_id):
+            assert str(dict(rule).get("名称") or "") in services.combat.rule_layer()
+
+
 def test_race_rules_come_out_as_inherent_rules(services) -> None:
     """种族交给战斗的那一份，就是「参战者固有规则」的形状。"""
 
