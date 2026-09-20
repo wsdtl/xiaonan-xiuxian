@@ -699,6 +699,69 @@ def _scene_form(engine, entry: dict, rule: dict) -> tuple[str, float, float, boo
     )
 
 
+def _scene_status_removed(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """状态被移除：按 `原因` 挑探针，看状态到底走没走。
+
+    - `原因:清除`：先给目标挂一条状态，再让对手（或同伴／自己）清掉它 → 数「移除状态后」；
+    - `原因:消耗`：把状态层数扣到 0（状态反应吃掉的也是这一条路）→ 同样数「移除状态后」；
+    - `原因:到期`：挂一条「只活 1 次行动」的状态，让它自然走完 → 同样数「移除状态后」。
+    """
+
+    from game.core.combat.rules import probe_tags
+
+    tags = probe_tags(rule)
+    direction = _direction(rule)
+    范围 = _scope(direction)
+    到期 = "原因:到期" in tags
+    消耗 = "原因:消耗" in tags
+    探针状态 = {
+        "名称": "探针封",
+        "类别": "负面",
+        "持续单位": "状态承受者行动",
+        "剩余行动": 1 if 到期 else 5,
+        "层数": 5 if 消耗 else 1,
+        "层数上限": 5 if 消耗 else 1,
+    }
+    效果 = [{"能力": "添加状态", "目标": 范围, "状态": dict(探针状态)}]
+    if 消耗:
+        效果.append(
+            {
+                "能力": "修改状态层数",
+                "方式": "减少",
+                "状态": {"能力": "选择状态", "目标": 范围, "名称": "探针封"},
+                "层数": 5,
+                "不足时是否失败": False,
+            }
+        )
+    elif not 到期:
+        效果.append(
+            {
+                "能力": "移除状态",
+                "目标": 范围,
+                "状态": {"能力": "选择状态", "目标": 范围, "名称": "探针封"},
+            }
+        )
+    eraser = _card(_listener_passive("战斗开始", 效果, name="探针洗"))
+    plain, guarded = _pair_runs(engine, direction, eraser, entry)
+    原因 = "到期" if 到期 else ("消耗" if 消耗 else "清除")
+    if 消耗:
+        # 「消耗」这条路（层数扣到 0）**不发 `移除状态后`**，所以观测量改看终局：
+        # 状态还在身上就是没被吃掉。没规则时它被吃掉 → 身上没有；有规则 → 还在。
+        return (
+            "终局时目标身上还剩几条状态",
+            float(_status_count(plain, "R1")),
+            float(_status_count(guarded, "R1")),
+            _status_count(guarded, "R1") > _status_count(plain, "R1"),
+        )
+    return (
+        f"目标身上状态被移除的次数（{原因}）",
+        float(_count(plain, kind="移除状态后", target="R1")),
+        float(_count(guarded, kind="移除状态后", target="R1")),
+        _count(guarded, kind="移除状态后", target="R1")
+        < _count(plain, kind="移除状态后", target="R1"),
+    )
+
+
 def _scene_counter(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
     """计量被修改：按方向给目标的计量加数，**加满就触发一刀**，问计量记在谁身上。
 
@@ -765,6 +828,15 @@ def _landed_statuses(result, pid: str) -> int:
     return sum(1 for event in result.events if event.kind == "添加状态后" and event.target_id == pid)
 
 
+def _status_count(result, pid: str) -> int:
+    """终局时这个参战者身上还剩几条状态。"""
+
+    for value in (*result.left_results, *result.right_results):
+        if value.id == pid:
+            return len(value.statuses)
+    return -1
+
+
 def _scene_status_added(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
     """状态被添加：对手给别人挂状态时，问**被打上的那个单位**。
 
@@ -822,6 +894,7 @@ SCENES = {
     "归属被修改": _scene_ownership,
     "形态被切换": _scene_form,
     "计量被修改": _scene_counter,
+    "状态被移除": _scene_status_removed,
 }
 
 

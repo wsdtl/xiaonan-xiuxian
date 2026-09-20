@@ -1145,6 +1145,9 @@ class AbilityRuntime:
                 for status in matched:
                     status.stacks -= consume
                     if status.stacks <= 0 and status in target.statuses:
+                        # 锁定技：状态被移除（原因「消耗」）——拒绝时状态反应吃不掉它。
+                        if self._status_removal_denied(context, target, status, "消耗", source):
+                            continue
                         target.statuses.remove(status)
                         self._mark_listeners_dirty_for_status(context, status)
                 generated = reaction.get("生成状态")
@@ -1211,6 +1214,28 @@ class AbilityRuntime:
             result.extend((fighter, status) for status in self._matching_statuses(context, fighter, value))
         return result
 
+    def _status_removal_denied(
+        self, context, owner, status, reason: str, source
+    ) -> bool:
+        """锁定技：`状态被移除` 拦截点——问**状态挂着的那个单位**。
+
+        `原因` 分四类：`清除`（有人主动清）、`消耗`（状态反应吃掉）、`到期`（自然走完）、
+        `来源退场`（挂它的那位没了）。于是「治不好」「不腐」「诅咒摘不掉」都写得出来。
+        """
+
+        return self._rules_deny(
+            context,
+            owner,
+            "状态被移除",
+            owner=source,
+            tags=(
+                f"状态:{status.name}",
+                f"类别:{status.category}",
+                f"原因:{reason}",
+                f"来源关系:{self._source_relation(context, source, owner)}",
+            ),
+        )
+
     def _ability_remove_status(self, context, source, target, effect, multiplier, **_):
         del multiplier
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
@@ -1218,6 +1243,9 @@ class AbilityRuntime:
         for owner, status in pairs:
             frame = self._dispatch_event(context, kind="移除状态前", source=source, target=owner, values={"状态": status.name, "状态层数": status.stacks}, tags=status.tags)
             if frame.cancelled:
+                continue
+            # 锁定技：状态被移除——拒绝时这一次清除不发生（状态还在）。
+            if self._status_removal_denied(context, owner, status, "清除", source):
                 continue
             if status in owner.statuses:
                 owner.statuses.remove(status)
@@ -1248,8 +1276,10 @@ class AbilityRuntime:
             else:
                 status.stacks = min(status.max_stacks, before + amount)
             if status.stacks <= 0 and status in owner.statuses:
-                owner.statuses.remove(status)
-                self._mark_listeners_dirty_for_status(context, status)
+                # 锁定技：状态被移除（原因「消耗」）——拒绝时状态留着，层数按 0 记。
+                if not self._status_removal_denied(context, owner, status, "消耗", source):
+                    owner.statuses.remove(status)
+                    self._mark_listeners_dirty_for_status(context, status)
             self._dispatch_event(context, kind="状态层数变化后", source=source, target=owner, values={"状态": status.name, "变化前数值": before, "变化后数值": status.stacks})
         return True
 
@@ -1885,6 +1915,9 @@ class AbilityRuntime:
         for fighter in context.fighters:
             expired = [status for status in fighter.statuses if status.expire_with_source and status.source == source.id]
             for status in expired:
+                # 锁定技：状态被移除（原因「来源退场」）——拒绝时这条状态不跟着走。
+                if self._status_removal_denied(context, fighter, status, "来源退场", source):
+                    continue
                 fighter.statuses.remove(status)
                 self._mark_listeners_dirty_for_status(context, status)
                 self._dispatch_event(

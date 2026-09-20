@@ -2002,18 +2002,23 @@ class BattleEngine(AbilityRuntime):
                 status.remaining_turns -= 1
             if status.remaining_turns > 0 or status.duration_unit == "整场战斗":
                 kept.append(status)
-            else:
-                # 监听表只装监听节点：掉的是没挂监听的状态，表不用重编（见
-                # `AbilityRuntime._mark_listeners_dirty_for_status`）。
-                dropped_with_listeners = dropped_with_listeners or bool(status.listeners)
-                context.event(
-                    "移除状态后",
-                    actor,
-                    actor,
-                    f"{status.name}消散",
-                    values={"状态": status.name, "原因": "到期"},
-                    tags=status.tags,
-                )
+                continue
+            # 锁定技：状态被移除（原因「到期」）——拒绝时这条状态**不到期**，续上一格再看。
+            if self._status_removal_denied(context, actor, status, "到期", actor):
+                status.remaining_turns = 1
+                kept.append(status)
+                continue
+            # 监听表只装监听节点：掉的是没挂监听的状态，表不用重编（见
+            # `AbilityRuntime._mark_listeners_dirty_for_status`）。
+            dropped_with_listeners = dropped_with_listeners or bool(status.listeners)
+            context.event(
+                "移除状态后",
+                actor,
+                actor,
+                f"{status.name}消散",
+                values={"状态": status.name, "原因": "到期"},
+                tags=status.tags,
+            )
         if dropped_with_listeners:
             context.mark_listener_index_dirty()
         actor.statuses = kept
