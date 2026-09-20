@@ -176,37 +176,37 @@ def check_listener_carriers() -> list[str]:
 
 
 def check_subject_slots() -> list[str]:
-    """**敌方不许比玩家更满编**：各主体的修行槽位不得超过人物（玩家侧的上限）。
+    """**修行槽位随阶梯不倒退**（第 98 轮加、第 99 轮改口径）。
 
-    槽位是「能装几张卡」，不是强度；但它是战斗时长的乘数——敌人满编时，那套「资变 ↔ 伤后」
-    的自环会一层层叠上去（实测 15 组讨伐跑到 445 秒）。人物的槽位就是基准，敌人超出即数据缺陷。
+    一开始写成「各主体不得超过人物」，负责人当场纠正：**敌人不超过玩家，那还叫什么首领**——
+    敌方最高档就是要比玩家满编（现在镇域 `9/9/9`、天灾 `12/12/12`，人物与道侣是 `6/6/6`）。
+    所以这里盯的是另一件事：**同一个主体内部，档次越高槽位不得变少**（抄档时最容易抄漏），
+    以及三项（功法 / 真意 / 气机）必须齐全。超不超过玩家**不是**缺陷。
     """
 
     problems: list[str] = []
     主体 = {
-        "道侣": DATA / "角色/规则/主体/道侣.json",
         "敌方修士": DATA / "角色/规则/主体/敌方修士.json",
         "灵兽": DATA / "角色/规则/主体/灵兽.json",
     }
-    玩家 = json.loads(
-        (DATA / "角色/规则/主体/人物.json").read_text(encoding="utf-8")
-    ).get("修行槽位") or {}
-    if not 玩家:
-        return ["人物.json 没有修行槽位，无法当基准"]
     for 名, path in sorted(主体.items()):
         文档 = json.loads(path.read_text(encoding="utf-8"))
         阶梯们 = 文档.get("阶梯")
         if not isinstance(阶梯们, list):
             continue
+        上一个: dict[str, int] = {}
         for 阶梯 in 阶梯们:
+            标 = str(阶梯.get("阶梯") or 阶梯.get("等级范围") or "?")
             槽 = dict(阶梯.get("修行槽位") or {})
+            缺 = [面 for 面 in ("功法", "真意", "气机") if 面 not in 槽]
+            if 缺:
+                problems.append(f"{名}·{标} 的修行槽位缺 {'、'.join(缺)}")
             for 面, 数 in 槽.items():
-                上限 = 玩家.get(面)
-                if 上限 is None or int(数) <= int(上限):
-                    continue
-                problems.append(
-                    f"{名}·{阶梯.get('阶梯')} 的 {面} 槽位 {数} 超过人物上限 {上限}"
-                )
+                if 面 in 上一个 and int(数) < 上一个[面]:
+                    problems.append(
+                        f"{名}·{标} 的 {面} 槽位 {数} 比上一档的 {上一个[面]} 少（档次越高不该更少）"
+                    )
+            上一个 = {面: int(数) for 面, 数 in 槽.items()} or 上一个
     return problems
 
 
@@ -222,7 +222,7 @@ def main() -> int:
         ("跨方向形状漂移", check_shape_drift()),
         ("权重冲突", check_weight_uniqueness()),
         ("战丹与长期伤势的监听节点", check_listener_carriers()),
-        ("主体的修行槽位超过玩家", check_subject_slots()),
+        ("主体的修行槽位随阶梯不倒退", check_subject_slots()),
     )
     total = sum(len(items) for _, items in groups)
     print()
