@@ -34,6 +34,8 @@ class CombatCatalog:
     environment_rules: Mapping[str, Any]
     five_elements: Mapping[str, Any]
     formation_rules: FormationNodeRules
+    #: 地形战斗节奏（`data/战斗/规则/地形.json`）：地形 → 输出倍率百分比；无名之地按进度加。
+    terrain_pace: Mapping[str, Any] = dataclass_field(default_factory=dict)
     #: 规则层登记表（`data/战斗/定义/规则层.json`）：单位级规则在装配期按它解析。
     rule_layer: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
     #: 构筑模板库。放在最后并给默认值，让既有构造点不必都改。
@@ -66,6 +68,7 @@ class CombatCatalog:
             five_elements=dict(source.get("五行") or {}),
             formation_rules=source["阵法规则"],
             rule_layer=dict(source.get("规则层") or {}),
+            terrain_pace=dict(source.get("地形节奏") or {}),
             templates=dict(templates or {}),
         )
 
@@ -74,6 +77,28 @@ class CombatCatalog:
             return self.events[str(key)]
         except KeyError as exc:
             raise ValueError(f"战斗核心未登记事件：{key}") from exc
+
+    def terrain_percent(self, terrain: str) -> float | None:
+        """这场仗所在**地形**的战斗节奏（百分比）；没登记过这条地形就返回空。"""
+
+        name = str(terrain or "").strip()
+        if not name:
+            return None
+        for row in self.terrain_pace.get("地形") or ():
+            if str(row.get("地形") or "") == name:
+                return float(row.get("输出倍率") or 100)
+        return None
+
+    def formless_percent(self, level: int) -> float:
+        """**无名之地**（没特殊地势 / 场地没登记）的战斗节奏：随进度加。
+
+        倍率 = `基础倍率` + 等级 × `每级加成`——等级越高出手越决，仗打得越快。
+        """
+
+        rule = self.terrain_pace.get("无相地势") or {}
+        base = float(rule.get("基础倍率") or 100)
+        per_level = float(rule.get("每级加成") or 0)
+        return base + max(0, int(level)) * per_level
 
     def parse_node(self, value: Mapping[str, Any]) -> RuleNode:
         ability = str(value.get("能力") or "")

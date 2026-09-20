@@ -46,6 +46,7 @@ def load_battle_foundation(
     result.update(
         {
             "伤害规则": rules["伤害"],
+            "地形节奏": rules["地形"],
             "行动规则": rules["行动"],
             "时序": rules["时序"],
             "状态反应": rules["状态反应"],

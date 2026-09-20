@@ -201,7 +201,11 @@ def _heal_passive(amount: float = 500) -> dict:
 
 
 def _run(engine, left, right):
-    """跑一场：`left` / `right` 可以是单个参战者，也可以是一队（己方方向的探针要同侧）。"""
+    """跑一场：`left` / `right` 可以是单个参战者，也可以是一队（己方方向的探针要同侧）。
+
+    **节奏钉死在基准**（`pace_percent=100`）：地形节奏是给正式对局调快慢的，判据要看的是
+    「这条规则拦不拦得住」，不是「地形凶不凶」——不钉住的话，调一次地势就得重校一遍探针。
+    """
 
     lefts = left if isinstance(left, tuple) else (left,)
     rights = right if isinstance(right, tuple) else (right,)
@@ -212,6 +216,7 @@ def _run(engine, left, right):
         medicine_selection_strategy="",
         seed=SEED,
         action_limit=ACTION_LIMIT,
+        pace_percent=100,
     )
 
 

@@ -791,6 +791,71 @@ def report_contract_coverage() -> None:
         print(f"      {name}: {count} 处重复定义")
 
 
+def check_terrain_pace() -> list[str]:
+    """地形战斗节奏：**每一档地形都要配到**，倍率在合理区间，无相曲线站得住。
+
+    战斗输出倍率 = `伤害.json.输出倍率`（基准）× 地形百分比 / 100；地形没配到就会静默
+    落到「无相」那一档（随进度加），于是「火山打得凶」这种设计就悄悄没了。所以这里查：
+    地形分区里的每个地形都要有一行、不重名、倍率在 100~400 之间；`无相地势` 的基础倍率
+    不低于 100、每级加成非负。
+    """
+
+    import json as _json
+
+    地形路径 = DATA / "战斗" / "规则" / "地形.json"
+    分区路径 = DATA / "世界" / "内容" / "地形分区.json"
+    if not 地形路径.exists() or not 分区路径.exists():
+        return []
+    文档 = _json.loads(地形路径.read_text(encoding="utf-8"))
+    分区 = _json.loads(分区路径.read_text(encoding="utf-8"))
+    problems: list[str] = []
+    需要 = {str(条.get("地形") or "") for 条 in 分区 if isinstance(条, dict)}
+    行 = 文档.get("地形")
+    if not isinstance(行, list) or not 行:
+        return ["战斗/规则/地形.json 的 `地形` 必须是非空数组"]
+    配到: dict[str, float] = {}
+    for 条 in 行:
+        if not isinstance(条, dict):
+            problems.append("战斗/规则/地形.json 的 `地形` 里混了非对象")
+            continue
+        名 = str(条.get("地形") or "").strip()
+        if not 名:
+            problems.append("战斗/规则/地形.json 有一行没写 `地形`")
+            continue
+        if 名 in 配到:
+            problems.append(f"地形重复登记：{名}")
+            continue
+        try:
+            倍率 = float(条.get("输出倍率"))
+        except (TypeError, ValueError):
+            problems.append(f"{名}.输出倍率不是数字：{条.get('输出倍率')}")
+            continue
+        配到[名] = 倍率
+        if not 100 <= 倍率 <= 400:
+            problems.append(f"{名}.输出倍率超出 100~400：{倍率}")
+    漏 = sorted(需要 - set(配到))
+    if 漏:
+        problems.append(f"这些地形没配战斗节奏（会静默落到无相那一档）：{'、'.join(漏)}")
+    多余 = sorted(set(配到) - 需要)
+    if 多余:
+        problems.append(f"这些地形配了战斗节奏但地形分区里没有：{'、'.join(多余)}")
+    无相 = 文档.get("无相地势")
+    if not isinstance(无相, dict):
+        problems.append("战斗/规则/地形.json 缺少 `无相地势`（无名之地的节奏）")
+        return problems
+    try:
+        基础 = float(无相.get("基础倍率"))
+        每级 = float(无相.get("每级加成"))
+    except (TypeError, ValueError):
+        problems.append("无相地势的基础倍率 / 每级加成必须是数字")
+        return problems
+    if 基础 < 100:
+        problems.append(f"无相地势的基础倍率不能低于 100：{基础}")
+    if 每级 < 0:
+        problems.append(f"无相地势的每级加成不能为负：{每级}")
+    return problems
+
+
 def main() -> int:
     source = _game_source()
     print("JSON 驱动完整性审查")
@@ -805,6 +870,15 @@ def main() -> int:
     排版 = check_component_markdown()
     没写 = check_rule_keys_described()
     引代码 = check_data_docs_no_code()
+    地形 = check_terrain_pace()
+    if 地形:
+        print()
+        print(f"地形战斗节奏问题 {len(地形)} 处：")
+        for item in 地形:
+            print(f"  {item}")
+        print()
+        print("每一档地形都要配到倍率，别让它静默落到无相那一档。")
+        return 1
     print()
     if 布局:
         print(f"大类布局问题 {len(布局)} 处：")
@@ -866,6 +940,14 @@ def main() -> int:
         print("一条规则只有在有人读的时候才算规则；没人读的声明接上消费者或者删掉。")
         return 1
     print("规则与展示文案里的键都有消费者")
+    if 地形:
+        print(f"地形战斗节奏问题 {len(地形)} 处：")
+        for item in 地形:
+            print(f"  {item}")
+        print()
+        print("每一档地形都要配到倍率，别让它静默落到无相那一档。")
+        return 1
+    print("地形战斗节奏：地形分区里的每一档都配到了，倍率在区间内")
     if problems:
         print(f"无消费者数据集 {len(problems)} 项：")
         for item in problems:

@@ -176,7 +176,14 @@ class BattleEngine(AbilityRuntime):
         action_limit: int,
         field: PreparedCombatField | None = None,
         formations: tuple[PreparedFormation, ...] = (),
+        pace_percent: float | None = None,
     ) -> CombatResult:
+        """跑一场。
+
+        `pace_percent` 是**给判据用的节奏钉子**：传了就按这个百分比定输出倍率，不看地形、
+        也不看无相曲线——标准探针要固定节奏，免得以后调地势把观测带偏。正式对局不传。
+        """
+
         if not left or not right:
             raise ValueError("战斗双方都必须至少有一名参战者")
         ids = [str(value.id).strip() for value in (*left, *right)]
@@ -190,6 +197,10 @@ class BattleEngine(AbilityRuntime):
         self._share_inventories(left_fighters)
         self._share_inventories(right_fighters)
         runtime_field = self._build_field(field, (*left_fighters, *right_fighters))
+        # 这一场的伤害引擎：输出倍率 = 基准 × 地形节奏（有名地势按特色、无名之地随进度）。
+        self.damage = self._battle_damage(
+            runtime_field, (*left_fighters, *right_fighters), pace_percent=pace_percent
+        )
         runtime_formations = [self._build_formation(value) for value in formations]
         context = BattleContext(
             rng=random.Random(int(seed)),
@@ -350,6 +361,33 @@ class BattleEngine(AbilityRuntime):
             rotations=value.rotations,
             collapsed=value.collapsed,
         )
+
+    def _battle_damage(self, runtime_field, fighters, *, pace_percent: float | None = None) -> DamageEngine:
+        """这一场的伤害引擎：**输出倍率 = 基准 × 地形节奏**。
+
+        - 场地登记过地形：按那个地形的特色倍率（火山比平原凶得多）；
+        - 没有特殊地势（无名之地 / 场地没登记）：走**无相地势**，随参战者的进度加——
+          等级越高出手越决，仗打得越快；
+        - `pace_percent` 传了就压过上面两条（判据固定节奏用，见 `simulate_teams`）。
+
+        倍率只乘在伤害流水线的第一段（`输出倍率`），命中的是**双方**，所以它是节奏旋钮、
+        不是强弱旋钮：谁打谁都更疼，仗更快结束。
+        """
+
+        rules = dict(self.catalog.damage_rules)
+        base = float(rules.get("输出倍率", 100))
+        if pace_percent is not None:
+            percent = float(pace_percent)
+        else:
+            terrain = str(getattr(runtime_field, "terrain", "") or "")
+            percent = self.catalog.terrain_percent(terrain)
+            if percent is None:
+                level = max(
+                    (int(getattr(value, "level", 1) or 1) for value in fighters), default=1
+                )
+                percent = self.catalog.formless_percent(level)
+        rules["输出倍率"] = base * float(percent) / 100.0
+        return DamageEngine(rules, self.catalog.attributes)
 
     @staticmethod
     def _build_field(
