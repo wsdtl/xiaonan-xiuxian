@@ -201,9 +201,13 @@ def _heal_passive(amount: float = 500) -> dict:
 
 
 def _run(engine, left, right):
-    return engine.simulate(
-        left=left,
-        right=right,
+    """跑一场：`left` / `right` 可以是单个参战者，也可以是一队（己方方向的探针要同侧）。"""
+
+    lefts = left if isinstance(left, tuple) else (left,)
+    rights = right if isinstance(right, tuple) else (right,)
+    return engine.simulate_teams(
+        left=lefts,
+        right=rights,
         medicine_definitions={},
         medicine_selection_strategy="",
         seed=SEED,
@@ -280,26 +284,158 @@ def _damage_taken(result, pid: str) -> float:
     )
 
 
-def _scene_targeted(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """被选为目标：目标一共挨了多少伤害。"""
+def _direction(rule: dict) -> str:
+    """这条规则的请求是**谁动谁**：敌方（敌人对你）／己方（同伴对你）／自身（你对自己）。
 
-    attacker = _fighter("L1", _card(_strike_skill()))
-    plain = _run(engine, attacker, _fighter("R1", None))
-    guarded = _run(engine, attacker, _fighter("R1", _card(_rules(entry))))
+    条件是 `来源关系:$来源` 时看参数取的是哪一项——**方向决定探针怎么摆**：敌人要站在对面，
+    同伴要站在同一侧，自己就是承受者本人。
+    """
+
+    tags = probe_tags(rule)
+    if "来源关系:自身" in tags:
+        return "自身"
+    if "来源关系:己方" in tags:
+        return "己方"
+    return "敌方"
+
+
+def _scope(direction: str) -> dict:
+    """按方向给探针选目标。
+
+    己方那一路用「血气比例从低到高」把目标钉在**被护着的那一位**上：探针施法者做成血厚的，
+    目标先掉半管血，于是同侧里被选中的一定是目标（`排出自身` 那一栏在运行期不一定被尊重）。
+    """
+
+    if direction == "自身":
+        return {"能力": "选择目标", "范围": "自身"}
+    if direction == "己方":
+        return {"能力": "选择目标", "范围": "己方", "排序": "血气比例从低到高"}
+    return {"能力": "选择目标", "范围": "敌方"}
+
+
+#: 己方／自身方向的探针里，被护着的那一位先掉半管血（选目标与治疗观测量都要它）。
+GUARDED_HEALTH = 500.0
+
+
+def _self_card(abilities: list[dict], guarded: dict | None) -> dict:
+    """自身的探针：探针能力与规则写在**同一张脸上**（自己动自己）。"""
+
+    nodes = list(abilities)
+    if guarded is not None:
+        nodes = [*nodes, *(guarded.get("能力") or [])]
+    return _card(*nodes)
+
+
+def _sides(direction: str, probe: dict, guarded: dict | None, guarded_extra: list | None = None):
+    """按方向摆两边，返回 `(left, right)`（一边可以是多人）。
+
+    - 敌方：探针在左（L1），目标在右（R1）带规则；
+    - 己方：探针与目标**同侧**（R2 探针 + R1 带规则），对面拿一发直伤让仗打起来；
+    - 自身：目标自己当探针（能力与规则同一张脸），对面同前。
+
+    `guarded_extra` 是给被护着那一位额外塞的能力（例如「限制:技能」的探针要它真的会放技能）。
+    """
+
+    extra = list(guarded_extra or ())
+    rules_nodes = list((guarded or {}).get("能力") or [])
+    if direction == "敌方":
+        card = _card(*extra, *rules_nodes) if (extra or rules_nodes) else None
+        return _fighter("L1", probe), _fighter("R1", card)
+    # 对面要有事做：不然只有探针一方行动，观测量会被行动上限压平（推条、加速都看不出差别）。
+    opponent = _fighter("L1", _card(_strike_skill()))
+    if direction == "己方":
+        card = _card(*extra, *rules_nodes) if (extra or rules_nodes) else None
+        return opponent, (
+            _fighter("R2", probe, tank=True),
+            _fighter("R1", card, health=GUARDED_HEALTH),
+        )
+    return opponent, _fighter(
+        "R1",
+        _card(*extra, *(probe.get("能力") or []), *rules_nodes),
+        health=GUARDED_HEALTH,
+    )
+
+
+def _pair_runs(engine, direction: str, probe: dict, entry: dict, guarded_extra: list | None = None):
+    """同一套摆法跑两场，**只有「规则那一处」不同**：一场带规则、一场不带。
+
+    两场必须同侧同样的人（同伴方向的探针要有同伴在场），否则观测量的差别会来自布阵而不是规则。
+    """
+
+    plain_left, plain_right = _sides(direction, probe, None, guarded_extra)
+    guarded_left, guarded_right = _sides(
+        direction, probe, _card(_rules(entry)), guarded_extra
+    )
+    return _run(engine, plain_left, plain_right), _run(
+        engine, guarded_left, guarded_right
+    )
+
+
+def _scene_targeted(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """被选为目标：**对方**打过来看挨了多少伤害；**同伴/自己**动手看落了没有。
+
+    同伴给自己加的量（治疗）就是观测量：挡同伴指定的规则一旦生效，这一份就落不下来。
+    """
+
+    direction = _direction(rule)
+    if direction == "敌方":
+        attacker = _fighter("L1", _card(_strike_skill()))
+        plain = _run(engine, attacker, _fighter("R1", None))
+        guarded = _run(engine, attacker, _fighter("R1", _card(_rules(entry))))
+        return (
+            "目标受到的伤害",
+            _damage_taken(plain, "R1"),
+            _damage_taken(guarded, "R1"),
+            _damage_taken(guarded, "R1") < _damage_taken(plain, "R1"),
+        )
+    healer = _card(
+        {
+            "能力": "主动技能",
+            "名称": "探针援",
+            "释放顺序": 1,
+            "精神消耗": 0,
+            "冷却行动": 0,
+            "效果": [
+                {
+                    "能力": "恢复资源",
+                    "目标": _scope(direction),
+                    "资源": "血气",
+                    "数值": 300,
+                }
+            ],
+        }
+    )
+    plain, guarded = _pair_runs(engine, direction, healer, entry)
     return (
-        "目标受到的伤害",
-        _damage_taken(plain, "R1"),
-        _damage_taken(guarded, "R1"),
-        _damage_taken(guarded, "R1") < _damage_taken(plain, "R1"),
+        "目标收到的治疗量",
+        _healed(plain, "R1"),
+        _healed(guarded, "R1"),
+        _healed(guarded, "R1") < _healed(plain, "R1"),
     )
 
 
 def _scene_action_bar(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """行动条被改写：对手推条后，目标自己的行动次数。"""
+    """行动条被改写：推条之后，目标自己的行动次数。方向决定谁来推。"""
 
-    pusher = _fighter("L1", _card(_push_skill()))
-    plain = _run(engine, pusher, _fighter("R1", None))
-    guarded = _run(engine, pusher, _fighter("R1", _card(_rules(entry))))
+    direction = _direction(rule)
+    pusher = _card(
+        {
+            "能力": "主动技能",
+            "名称": "探针推",
+            "释放顺序": 1,
+            "精神消耗": 0,
+            "冷却行动": 0,
+            "效果": [
+                {
+                    "能力": "修改行动条",
+                    "目标": _scope(direction),
+                    "方式": "增加",
+                    "数值": 60,
+                }
+            ],
+        }
+    )
+    plain, guarded = _pair_runs(engine, direction, pusher, entry)
     count_plain = _count(plain, kind="行动开始", actor="R1")
     count_guarded = _count(guarded, kind="行动开始", actor="R1")
     return ("目标行动次数", count_plain, count_guarded, count_guarded < count_plain)
@@ -423,29 +559,29 @@ def _scene_skill_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, f
 
 
 def _scene_resource_consume(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """资源被消耗：对手抽走目标的精神，问**被抽的那个单位**。"""
+    """资源被消耗：按方向抽/花目标的精神，问**被扣的那个单位**。"""
 
-    drainer = _listener_passive(
-        "战斗开始",
-        [
-            {
-                "能力": "消耗资源",
-                "目标": {"能力": "选择目标", "范围": "敌方"},
-                "资源": "精神",
-                "数值": 300,
-                "不足时是否失败": False,
-            }
-        ],
-        name="探针抽取",
+    direction = _direction(rule)
+    资源 = "血气" if "资源:血气" in probe_tags(rule) else "精神"
+    drainer = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "消耗资源",
+                    "目标": _scope(direction),
+                    "资源": 资源,
+                    "数值": 300,
+                    "不足时是否失败": False,
+                }
+            ],
+            name="探针抽取",
+        )
     )
-    plain = _run(engine, _fighter("L1", _card(drainer)), _fighter("R1", None))
-    guarded = _run(
-        engine,
-        _fighter("L1", _card(drainer)),
-        _fighter("R1", _card(_rules(entry))),
-    )
+    left, right = _sides(direction, drainer, _card(_rules(entry)))
+    plain, guarded = _pair_runs(engine, direction, drainer, entry)
     return (
-        "目标被扣掉的精神",
+        f"目标被扣掉的{资源}",
         _consumed(plain, "R1"),
         _consumed(guarded, "R1"),
         _consumed(guarded, "R1") < _consumed(plain, "R1"),
@@ -453,63 +589,81 @@ def _scene_resource_consume(engine, entry: dict, rule: dict) -> tuple[str, float
 
 
 def _scene_action_limit(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """行动被限制：对手给目标挂一条「不许行动」的状态，问被限制的那个单位。"""
+    """行动被限制：按方向给目标挂一条「不许行动」的状态，问被限制的那个单位。"""
 
-    limiter = _listener_passive(
-        "战斗开始",
-        [
-            {
-                "能力": "添加状态",
-                "目标": {"能力": "选择目标", "范围": "敌方"},
-                "状态": {
-                    "名称": "探针锁步",
-                    "类别": "负面",
-                    "剩余行动": 20,
-                    "持续单位": "状态承受者行动",
-                    "行动限制": ["行动"],
-                },
-            }
-        ],
-        name="探针锁步",
+    direction = _direction(rule)
+    限制 = "技能" if "限制:技能" in probe_tags(rule) else "行动"
+    limiter = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "添加状态",
+                    "目标": _scope(direction),
+                    "状态": {
+                        "名称": "探针锁步",
+                        "类别": "负面",
+                        "剩余行动": 20,
+                        "持续单位": "状态承受者行动",
+                        "行动限制": [限制],
+                    },
+                }
+            ],
+            name="探针锁步",
+        )
     )
-    plain = _run(engine, _fighter("L1", _card(limiter)), _fighter("R1", None))
-    guarded = _run(
-        engine,
-        _fighter("L1", _card(limiter)),
-        _fighter("R1", _card(_rules(entry))),
+    plain, guarded = _pair_runs(
+        engine, direction, limiter, entry, [_strike_skill()] if 限制 == "技能" else None
     )
+
+    def 受限次数(result) -> int:
+        # 限制「行动」是跳过整次行动（`行动跳过后`）；限制「技能」是这一门技能施放失败
+        # （`技能施放失败后`，探针技能精神消耗为 0，所以失败只可能来自限制）。
+        return _count(result, kind="行动跳过后", target="R1") + _count(
+            result, kind="技能施放失败后", actor="R1"
+        )
+
     return (
-        "目标被跳过行动的次数",
-        _count(plain, kind="行动跳过后", target="R1"),
-        _count(guarded, kind="行动跳过后", target="R1"),
-        _count(guarded, kind="行动跳过后", target="R1") < _count(plain, kind="行动跳过后", target="R1"),
+        f"目标被限制{限制}的次数",
+        受限次数(plain),
+        受限次数(guarded),
+        受限次数(guarded) < 受限次数(plain),
     )
 
 
 def _scene_ownership(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """归属被修改：对手要把目标拉到自己阵营，问被改归属的那个单位。
+    """归属被修改：按方向改目标的阵营，看这场仗还打不打得起来。
 
-    观测量取「这场仗还打不打得起来」：目标被拉走之后我方没有敌人，伤害事件会归零。
+    敌方：对手把目标拉走 → 我方没敌人了，伤害事件归零；
+    己方：同伴把目标推到对面 → 目标掉头打它原来的同伴（伤害落在 R2 身上）；
+    自身：目标自己投敌 → 同上，整场仗的伤害事件归零。
     """
 
-    changer = _listener_passive(
-        "战斗开始",
-        [
-            {
-                "能力": "修改归属",
-                "目标": {"能力": "选择目标", "范围": "敌方"},
-                "字段": "阵营",
-                "阵营": "己方",
-            }
-        ],
-        name="探针夺舍",
+    direction = _direction(rule)
+    阵营 = "己方" if direction == "敌方" else "敌方"
+    changer = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "修改归属",
+                    "目标": _scope(direction),
+                    "字段": "阵营",
+                    "阵营": 阵营,
+                }
+            ],
+            name="探针夺舍",
+        )
     )
-    plain = _run(engine, _fighter("L1", _card(changer)), _fighter("R1", None))
-    guarded = _run(
-        engine,
-        _fighter("L1", _card(changer)),
-        _fighter("R1", _card(_rules(entry))),
-    )
+    plain, guarded = _pair_runs(engine, direction, changer, entry)
+    if direction == "己方":
+        return (
+            "目标掉头打同伴的次数",
+            _count(plain, kind="造成伤害后", actor="R1", target="R2"),
+            _count(guarded, kind="造成伤害后", actor="R1", target="R2"),
+            _count(guarded, kind="造成伤害后", actor="R1", target="R2")
+            < _count(plain, kind="造成伤害后", actor="R1", target="R2"),
+        )
     return (
         "这场仗的伤害事件数",
         _count(plain, kind="造成伤害后"),
@@ -519,26 +673,24 @@ def _scene_ownership(engine, entry: dict, rule: dict) -> tuple[str, float, float
 
 
 def _scene_form(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """形态被切换：对手强切目标的形态，问要被切的那个单位。"""
+    """形态被切换：按方向强切目标的形态，问要被切的那个单位。"""
 
-    switcher = _listener_passive(
-        "战斗开始",
-        [
-            {
-                "能力": "切换形态",
-                "目标": {"能力": "选择目标", "范围": "敌方"},
-                "形态": "探针形态",
-                "定义": {"属性变化": {"攻击": 5}},
-            }
-        ],
-        name="探针变形",
+    direction = _direction(rule)
+    switcher = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "切换形态",
+                    "目标": _scope(direction),
+                    "形态": "探针形态",
+                    "定义": {"属性变化": {"攻击": 5}},
+                }
+            ],
+            name="探针变形",
+        )
     )
-    plain = _run(engine, _fighter("L1", _card(switcher)), _fighter("R1", None))
-    guarded = _run(
-        engine,
-        _fighter("L1", _card(switcher)),
-        _fighter("R1", _card(_rules(entry))),
-    )
+    plain, guarded = _pair_runs(engine, direction, switcher, entry)
     return (
         "目标被切形态的次数",
         _count(plain, kind="形态切换后", target="R1"),
@@ -548,58 +700,57 @@ def _scene_form(engine, entry: dict, rule: dict) -> tuple[str, float, float, boo
 
 
 def _scene_counter(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """计量被修改：对手给目标的计量加数，**加满就触发一刀**，问计量记在谁身上。
+    """计量被修改：按方向给目标的计量加数，**加满就触发一刀**，问计量记在谁身上。
 
     计量本身不进事件流（没有「计量变化后」这种事件），所以观测量取它的后果：
     加满了才落下来的那一刀有没有落下来。
     """
 
-    modifier = _listener_passive(
-        "战斗开始",
-        [
-            {
-                "能力": "修改构筑计量",
-                "目标": {"能力": "选择目标", "范围": "敌方"},
-                "计量": "探针计量",
-                "方式": "增加",
-                "数值": 5,
-                "最高值": 100,
-            },
-            {
-                "能力": "条件执行",
-                "条件": [
-                    {
-                        "能力": "数值条件",
-                        "左值": {
-                            "能力": "读取数值",
-                            "来源": "构筑计量",
-                            "目标": {"能力": "选择目标", "范围": "敌方"},
-                            "计量": "探针计量",
-                        },
-                        "比较": "大于等于",
-                        "右值": 5,
-                    }
-                ],
-                "成立效果": [
-                    {
-                        "能力": "造成伤害",
-                        "目标": {"能力": "选择目标", "范围": "敌方"},
-                        "数值": 999,
-                        "能否闪避": False,
-                        "能否暴击": False,
-                        "能否格挡": False,
-                    }
-                ],
-            },
-        ],
-        name="探针记账",
+    direction = _direction(rule)
+    范围 = _scope(direction)
+    modifier = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "修改构筑计量",
+                    "目标": 范围,
+                    "计量": "探针计量",
+                    "方式": "增加",
+                    "数值": 5,
+                    "最高值": 100,
+                },
+                {
+                    "能力": "条件执行",
+                    "条件": [
+                        {
+                            "能力": "数值条件",
+                            "左值": {
+                                "能力": "读取数值",
+                                "来源": "构筑计量",
+                                "目标": 范围,
+                                "计量": "探针计量",
+                            },
+                            "比较": "大于等于",
+                            "右值": 5,
+                        }
+                    ],
+                    "成立效果": [
+                        {
+                            "能力": "造成伤害",
+                            "目标": 范围,
+                            "数值": 999,
+                            "能否闪避": False,
+                            "能否暴击": False,
+                            "能否格挡": False,
+                        }
+                    ],
+                },
+            ],
+            name="探针记账",
+        )
     )
-    plain = _run(engine, _fighter("L1", _card(modifier)), _fighter("R1", None))
-    guarded = _run(
-        engine,
-        _fighter("L1", _card(modifier)),
-        _fighter("R1", _card(_rules(entry))),
-    )
+    plain, guarded = _pair_runs(engine, direction, modifier, entry)
     return (
         "计量加满才落的那一刀",
         _big_hits(plain, "R1"),
@@ -622,6 +773,8 @@ def _scene_status_added(engine, entry: dict, rule: dict) -> tuple[str, float, fl
     """
 
     tags = probe_tags(rule)
+    direction = _direction(rule)
+    范围 = _scope(direction)
     status: dict = {"名称": "探针封", "类别": "中性", "持续单位": "整场战斗"}
     if "控制:真" in tags:
         status = {
@@ -634,23 +787,22 @@ def _scene_status_added(engine, entry: dict, rule: dict) -> tuple[str, float, fl
         }
     elif "类别:负面" in tags:
         status = {"名称": "探针封", "类别": "负面", "持续单位": "整场战斗"}
-    applier = _listener_passive(
-        "战斗开始",
-        [
-            {
-                "能力": "添加状态",
-                "目标": {"能力": "选择目标", "范围": "敌方"},
-                "状态": status,
-            }
-        ],
-        name="探针下咒",
+    elif "类别:正面" in tags:
+        status = {"名称": "探针封", "类别": "正面", "持续单位": "整场战斗"}
+    applier = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "添加状态",
+                    "目标": 范围,
+                    "状态": status,
+                }
+            ],
+            name="探针下咒",
+        )
     )
-    plain = _run(engine, _fighter("L1", _card(applier)), _fighter("R1", None))
-    guarded = _run(
-        engine,
-        _fighter("L1", _card(applier)),
-        _fighter("R1", _card(_rules(entry))),
-    )
+    plain, guarded = _pair_runs(engine, direction, applier, entry)
     return (
         "目标身上落到的状态数",
         _landed_statuses(plain, "R1"),
