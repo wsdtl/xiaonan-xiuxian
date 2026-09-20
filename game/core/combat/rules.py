@@ -184,8 +184,8 @@ def validate_rule_layer(
 ) -> dict[str, dict]:
     """校验登记表本身（启动期与判据共用同一份）。
 
-    除了归属/拦截点/处置/优先级/可改写/卡面这些结构，**条件也真的校验**：每条条件按原子
-    能力的契约走一遍（未登记的条件、越界字段当场报错），参数必须写在 `字段` 里、且每个
+    除了归属/拦截点/处置/优先级/名额/可改写/卡面这些结构，**条件也真的校验**：每条条件按
+    原子能力的契约走一遍（未登记的条件、越界字段当场报错），参数必须写在 `字段` 里、且每个
     字段至少被一条条件用到——死参数与死条件都不许留。
     """
 
@@ -222,6 +222,12 @@ def validate_rule_layer(
         if priority in priorities:
             raise ValueError(f"规则层优先级重复：{name} 与 {priorities[priority]} 都是 {priority}")
         priorities[priority] = name
+        # 名额：**这一条锁定技全库最多能让几张卡带**。锁定技的价值在于稀有——它不是
+        # 「必发」（必发是这个引擎的默认底色：被动、环境常驻、阵法全都必发），而是
+        # 「这一处判定在你身上不成立」。所以默认 1：想多发一张，先在登记表里抬名额。
+        quota = definition.get("名额")
+        if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
+            raise ValueError(f"规则层.{name}.名额必须是正整数（至少 1）")
         if not str(definition.get("卡面") or "").strip():
             raise ValueError(f"规则层.{name}缺少卡面文案（规则文本由数据渲染，不许手写）")
         rewrite = definition.get("可改写") or ()

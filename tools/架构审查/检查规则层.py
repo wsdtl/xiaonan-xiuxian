@@ -286,12 +286,67 @@ def _status_reactions() -> list[dict]:
     return [dict(item) for item in value if isinstance(item, Mapping)]
 
 
+def check_rule_quota(layer: dict[str, dict]) -> list[str]:
+    """名额：**一条锁定技全库最多让几张卡带**，默认 1。
+
+    锁定技的价值在稀有——它不是「必发」（必发是这个引擎的默认底色：被动、环境常驻、阵法
+    全都必发），而是「这一处判定在你身上不成立」。所以判据要把用量数出来：**超一张就红**，
+    想多发就得先在登记表里抬 `名额`，那是一次显式的设计决定，不是顺手抄过去。
+    """
+
+    from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY
+
+    problems: list[str] = []
+    用量: dict[str, set[str]] = {name: set() for name in layer}
+
+    def 计(名字: object, 卡: str) -> None:
+        name = str(名字 or "")
+        if name in 用量:
+            用量[name].add(卡)
+
+    def walk(node, 卡: str, *, 状态定义: bool = False) -> None:
+        if isinstance(node, Mapping):
+            ability = str(node.get("能力") or "")
+            entries = node.get(RULE_FIELD) if RULE_FIELD in node else None
+            if ability == "修改战场规则":
+                entries = None
+            if entries is not None or 状态定义:
+                if 状态定义 or ability in {RULE_TEXT_ABILITY, "被动技能"} or ability == "主动技能":
+                    for item in entries or ():
+                        if isinstance(item, Mapping):
+                            计(item.get("名称"), 卡)
+            for key, value in node.items():
+                walk(value, 卡, 状态定义=(key == "状态" and isinstance(value, Mapping)))
+        elif isinstance(node, Sequence) and not isinstance(node, (str, bytes)):
+            for item in node:
+                walk(item, 卡)
+
+    for filename, entry in _cards():
+        卡 = str(entry.get("编号") or entry.get("名称") or filename)
+        for node in entry.get("能力") or ():
+            walk(node, 卡)
+    print("  名额用量：" + " · ".join(
+        f"{name} {len(用量[name])}/{int(dict(layer[name]).get('名额') or 0)}"
+        for name in sorted(layer)
+    ))
+    for name, definition in sorted(layer.items()):
+        quota = int(dict(definition).get("名额") or 0)
+        used = len(用量.get(name) or ())
+        if used > quota:
+            problems.append(
+                f"{name} 已有 {used} 张卡带着它，名额只有 {quota}："
+                "要么改内容，要么在登记表里显式抬名额"
+            )
+    return problems
+
+
 CHECKS = (
     ("登记表自洽", check_registry),
     ("拦截点与实现", check_interception_points),
     ("标准探针覆盖", check_probe_coverage),
     ("渲染路径", check_render_path),
     ("内容只用登记过的", check_content_uses),
+    ("名额", check_rule_quota),
 )
 
 
