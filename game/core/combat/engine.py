@@ -1065,7 +1065,6 @@ class BattleEngine(AbilityRuntime):
             tags=tuple(status.tags),
             duration_unit=status.duration_unit,
             action_limits=tuple(status.action_limits),
-            effect_immunities=tuple(status.effect_immunities),
             listeners=tuple(copy.deepcopy(status.listeners)),
             values=copy.deepcopy(status.values),
             expire_with_source=status.expire_with_source,
@@ -1805,8 +1804,6 @@ class BattleEngine(AbilityRuntime):
                     context, kind, chance, roll
                 ),
             )
-        if "伤害" in self._immunities(target):
-            pre.cancelled = True
         target_was_alive = target.alive
         resolution = self.damage.with_limited_damage(
             resolution, 0 if pre.cancelled else pre.amount

@@ -27,9 +27,11 @@ sys.path[:0] = [str(ROOT), str(ROOT / "tools")]
 
 from 全库扫描 import 全库文档  # noqa: E402
 from game.core.combat.card_text import render_body, render_listeners  # noqa: E402
+from 规则层 import load_rule_layer  # noqa: E402
 
 
 def main() -> int:
+    层 = load_rule_layer()
     实体数 = 0
     问题: list[tuple[str, str, str]] = []
     分类: collections.Counter = collections.Counter()
@@ -39,9 +41,9 @@ def main() -> int:
             if not isinstance(实体, dict) or not 实体.get("编号"):
                 continue
             实体数 += 1
-            行, 缺失 = render_body(实体)
+            行, 缺失 = render_body(实体, 层)
             if not 行:
-                行, 缺失2 = render_listeners(实体)
+                行, 缺失2 = render_listeners(实体, 层)
                 缺失 = tuple(缺失) + tuple(缺失2)
             for 项 in 缺失:
                 文本 = str(项)

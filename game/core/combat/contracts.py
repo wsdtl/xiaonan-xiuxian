@@ -221,7 +221,6 @@ class StatusResult:
     tags: tuple[str, ...]
     duration_unit: str
     action_limits: tuple[str, ...]
-    effect_immunities: tuple[str, ...]
     listeners: tuple[Mapping[str, Any], ...]
     values: Mapping[str, Any]
     expire_with_source: bool
@@ -241,7 +240,6 @@ class StatusResult:
             "标签": list(self.tags),
             "持续单位": self.duration_unit,
             "行动限制": list(self.action_limits),
-            "效果免疫": list(self.effect_immunities),
             "监听": [dict(value) for value in self.listeners],
             "记录": dict(self.values),
             "来源退场时移除": self.expire_with_source,

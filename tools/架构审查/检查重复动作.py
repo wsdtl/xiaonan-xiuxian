@@ -22,6 +22,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "tools")]
 
 from 构筑模板展开 import load_build_json  # noqa: E402
 from game.core.combat.card_text import render_body, render_listeners  # noqa: E402
+from 规则层 import load_rule_layer  # noqa: E402
 from game.core.combat.fold import flatten_sequences  # noqa: E402
 
 SEGMENTS = (
@@ -114,6 +115,7 @@ def 找结构重复(node, path, out):
 
 
 def main() -> int:
+    层 = load_rule_layer()
     实体数 = 0
     未支持: list = []
     泄漏: list = []
@@ -137,8 +139,8 @@ def main() -> int:
                 for 类, 位置, 左, 右 in 命中:
                     结构重复.append((面, 编号, 类, 位置,
                                   json.dumps(左, ensure_ascii=False)[:80]))
-                行 = list(render_body(实体)[0]) + list(render_listeners(实体)[0])
-                缺失 = list(render_body(实体)[1]) + list(render_listeners(实体)[1])
+                行 = list(render_body(实体, 层)[0]) + list(render_listeners(实体, 层)[0])
+                缺失 = list(render_body(实体, 层)[1]) + list(render_listeners(实体, 层)[1])
                 for 项 in 缺失:
                     # 渲染器认不出的节点（`〈未支持：…〉`）与**解释层兜底**（数据没写、
                     # 渲染器自己补的说法）都算「描述与设计不一致」，一律要红。

@@ -816,8 +816,6 @@ class AbilityRuntime:
             # 事件可以被监听者改写，资源身份**不跟着事件名走**：`资源变化` 类监听可能
             # 把事件转成别的名字，但这次恢复的仍然是 `requested_resource`。
             destination = frame.target
-            if "恢复" in self._immunities(destination):
-                continue
             # 恢复已满不是执行失败；后续顺序效果仍必须继续执行。
             attempted = True
             before, maximum = self._resource_values(destination, requested_resource)
@@ -1002,13 +1000,11 @@ class AbilityRuntime:
             definition["标签"] = sorted(frame.tags)
             failure = ""
             is_control = bool(definition.get("是否控制", False)) or "控制" in frame.tags
-            immunities = self._immunities(destination)
             # 锁定技：`状态被添加` 拦截点——问**被打上的那个单位**。请求摊成四类标签
             # （状态名 / 类别 / 是不是控制 / 来源关系），所以「不受控制」「不吃负面状态」
             # 「只不受某一条」都能用现成的条件原子写，不必给引擎加词汇。
-            # 拒绝时给出的原因与既有的效果免疫一致（`状态免疫` / `控制免疫`），
-            # 这样战报里读到的说法不因为写法换了而变。
-            by_rule = self._rules_deny(
+            # **拒绝时的说法由登记表给**（规则的 `原因`），所以写法迁移不改战报措辞。
+            refused = self._rules_denied_rule(
                 context,
                 destination,
                 "状态被添加",
@@ -1022,12 +1018,8 @@ class AbilityRuntime:
             )
             if frame.cancelled:
                 failure = "被取消"
-            elif by_rule:
-                failure = "控制免疫" if is_control else "状态免疫"
-            elif "状态" in immunities or "负面状态" in immunities and definition.get("类别") == "负面":
-                failure = "状态免疫"
-            elif "控制" in immunities and is_control:
-                failure = "控制免疫"
+            elif refused is not None:
+                failure = str(refused.get("原因") or "状态免疫")
             if not failure and is_control:
                 control_limit = int(destination.battle_profile.get("同时承受控制上限", 0))
                 active_controls = sum(
@@ -2108,7 +2100,37 @@ class AbilityRuntime:
         values=None,
         amount: float = 0.0,
     ) -> bool:
-        """问一个载体的规则：这次改写/选定被拒绝了吗。
+        """问一个载体的规则：这次改写/选定被拒绝了吗（只看结论）。"""
+
+        return (
+            self._rules_denied_rule(
+                context,
+                container,
+                point,
+                owner=owner,
+                tags=tags,
+                values=values,
+                amount=amount,
+            )
+            is not None
+        )
+
+    def _rules_denied_rule(
+        self,
+        context,
+        container,
+        point: str,
+        *,
+        owner=None,
+        tags: tuple = (),
+        values=None,
+        amount: float = 0.0,
+    ):
+        """问一个载体的规则，返回**拍板拒绝的那一条**（没拒绝就返回 `None`）。
+
+        需要结论的调用方用 `_rules_deny`；需要知道「是谁拦的」的调用方用这个——例如
+        `状态被添加` 要用登记表里的 `原因` 说明这次拒绝叫什么（`控制免疫` / `状态免疫`），
+        这样把内容从旧的写法迁到锁定技，战报里的措辞一个字都不用变。
 
         `container` 是**规则写在谁身上**（参战者，或一条技能行）；`owner` 是条件求值时的
         「来源」（通常就是持有者）。按优先级升序问；后问的规则只有在先成立的那条允许被它
@@ -2131,7 +2153,7 @@ class AbilityRuntime:
                 if str(rule.get("拦截点") or "") == point
             )
         if not rules:
-            return False
+            return None
         subject = owner if owner is not None else container
         rules.sort(key=lambda rule: int(rule.get("优先级") or 0))
         verdict = None
@@ -2151,7 +2173,7 @@ class AbilityRuntime:
                 continue
             verdict = rule
             decision = str(rule.get("处置") or "")
-        return decision == "拒绝"
+        return verdict if decision == "拒绝" else None
 
     def _select_targets(self, context, source, target, value):
         """解析一个「目标/来源目标/归属」字段。
@@ -2319,10 +2341,6 @@ class AbilityRuntime:
         if field is None:
             raise ValueError(f"战斗核心未登记资源的承载字段：{resource}")
         return field
-
-    @staticmethod
-    def _immunities(fighter):
-        return {value for status in fighter.statuses for value in status.effect_immunities}
 
     def _current_event(self, context, expected: str | None = None):
         if not context.event_stack:

@@ -2038,14 +2038,16 @@ def render_body(
 
 def render_listeners(
     holder: Mapping[str, object],
+    rule_layer: Mapping[str, object] | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """只渲染一块状态承载的监听节点。
 
     长期伤势的 `战斗状态` 就是这样：`类别 / 剩余行动 / 属性` 由展示层的结构化行负责，
-    真正带时序规则的是 `监听`，按同一套条件/处理/明细措辞写出来。
+    真正带时序规则的是 `监听`，按同一套条件/处理/明细措辞写出来。**状态自己带的锁定技
+    也走 `_listener` 那套渲染**，所以登记表要一起传进来（理由同 `render_body`）。
     """
 
-    renderer = CardText(holder)
+    renderer = CardText(holder, rule_layer)
     lines: list[str] = []
     for node in holder.get("监听") or ():
         if isinstance(node, Mapping) and node.get("能力") == "监听事件":

@@ -141,6 +141,15 @@ class CombatService:
             formation_count=self._formation.status().formation_count,
         )
 
+    def rule_layer(self) -> Mapping[str, Mapping[str, object]]:
+        """锁定技登记表（`战斗/定义/规则层.json`）的**公共读口**。
+
+        渲染一张卡的正文要用它——规则段的文字由登记表成句，缺了就只会印「缺少登记表」。
+        查看页、渲染工具、判据都从这里取，免得各自去掏引擎的内部字段。
+        """
+
+        return self._require_engine().catalog.rule_layer
+
     async def execute(self, request: CombatRequest) -> CombatResult:
         """执行唯一的公共战斗请求，不阻塞异步消息驱动。"""
 

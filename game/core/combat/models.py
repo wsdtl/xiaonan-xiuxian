@@ -112,7 +112,6 @@ class StatusState:
     tags: tuple[str, ...] = ()
     duration_unit: str = "状态承受者行动"
     action_limits: tuple[str, ...] = ()
-    effect_immunities: tuple[str, ...] = ()
     listeners: tuple[Mapping[str, Any], ...] = ()
     #: 状态自带的**单位级规则**（`规则层.json` 的登记项）：状态在就生效、状态一走就失效。
     #: 规则本身不走效果管线，所以效果里的「取消 / 转化 / 无效」碰不到它。
@@ -124,7 +123,7 @@ class StatusState:
     def from_dict(cls, value: Mapping[str, Any]) -> StatusState:
         allowed = {
             "名称", "类别", "剩余行动", "来源", "来源名称", "来源能力", "构筑实例", "属性", "层数",
-            "层数上限", "标签", "持续单位", "行动限制", "效果免疫", "监听", "规则", "记录",
+            "层数上限", "标签", "持续单位", "行动限制", "监听", "规则", "记录",
             "来源退场时移除", "叠加范围", "重复方式", "允许跨构筑", "是否控制", "控制基础命中率",
         }
         unknown = set(value) - allowed
@@ -144,7 +143,6 @@ class StatusState:
             tags=tuple(str(item) for item in value.get("标签") or ()),
             duration_unit=str(value.get("持续单位") or "状态承受者行动"),
             action_limits=tuple(str(item) for item in value.get("行动限制") or ()),
-            effect_immunities=tuple(str(item) for item in value.get("效果免疫") or ()),
             listeners=tuple(copy.deepcopy(item) for item in value.get("监听") or ()),
             values=copy.deepcopy(dict(value.get("记录") or {})),
             expire_with_source=bool(value.get("来源退场时移除", False)),
@@ -165,7 +163,6 @@ class StatusState:
             "标签": list(self.tags),
             "持续单位": self.duration_unit,
             "行动限制": list(self.action_limits),
-            "效果免疫": list(self.effect_immunities),
             "监听": copy.deepcopy(list(self.listeners)),
             "记录": copy.deepcopy(self.values),
             "来源退场时移除": self.expire_with_source,

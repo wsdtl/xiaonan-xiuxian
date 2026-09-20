@@ -123,6 +123,12 @@ INTERCEPTION_POINTS = MappingProxyType(
 )
 
 
+def spec_allows_empty(spec: Mapping[str, Any]) -> bool:
+    """这个参数留空算不算合法（`允许空`，或者根本没给它默认值）。"""
+
+    return bool(spec.get("允许空")) or spec.get("默认") in (None, "")
+
+
 def _placeholder_names(value: Any) -> set[str]:
     """收集条件里出现的 `$字段` 名。"""
 
@@ -289,6 +295,26 @@ def validate_rule_layer(
                 raise TypeError(f"{where}必须是对象")
             validator.validate_node(node, where, allowed_categories=("条件",))
             used_fields |= _placeholder_names(node)
+            # **可空参数的占位符不许跟固定标签写在同一条条件里**：参数留空时整条条件会被
+            # 丢掉（那是「这一项不设限」的写法），固定标签会被一起吞掉，规则就变成无条件
+            # 拦截。实测踩过：`不受控制` 的条件写成 `[控制:真, 来源关系:$来源]`，卡里不写
+            # 来源（= 不限来源）时整条被丢，于是它拦掉了**所有**状态，连自己挂的状态都挂不上。
+            empty_able = {
+                field
+                for field in _placeholder_names(node)
+                if spec_allows_empty(dict(fields).get(field) or {})
+            }
+            fixed_labels = [
+                str(label)
+                for label in dict(node).get("标签") or ()
+                if PLACEHOLDER not in str(label)
+            ]
+            if empty_able and fixed_labels:
+                raise ValueError(
+                    f"{where}把可空参数（{'、'.join(sorted(empty_able))}）与固定标签"
+                    f"（{'、'.join(fixed_labels)}）写在同一条件里：参数留空会把固定标签一起丢掉，"
+                    "拆成两条条件"
+                )
         unknown = used_fields - set(fields)
         if unknown:
             raise ValueError(f"规则层.{name}的条件引用了未声明参数：{'、'.join(sorted(unknown))}")
