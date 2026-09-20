@@ -313,23 +313,21 @@ def _status_reactions() -> list[dict]:
 
 
 def check_rule_quota(layer: dict[str, dict]) -> list[str]:
-    """名额：**一条锁定技全库最多让几张卡（或几个种族）带**，默认 1。
+    """名额：**一条锁定技最多让几张卡带**，种族另有一本账（`种族名额`），默认与卡同额。
 
     锁定技不是靠稀有保值的（它是结构性文本），这个数防的是**一条闸门被抄到所有卡上**
-    （二十张卡都「不可被指定」，选目标这件事本身就没意义了）。种族是一种新载体，所以
-    「一个种族算一个名额」；判据把用量数出来，**超一个就红**：想多发就得先在登记表里抬
-    `名额`，那是一次显式的设计决定。
+    （二十张卡都「不可被指定」，选目标这件事本身就没意义了）。种族是**天生层**，所以
+    它的发行量单独算：卡的闸门不被种族撑宽，反过来种族也不受卡的额度限制。判据把两笔
+    用量都数出来，**超一个就红**：想多发就得先在登记表里抬对应的那个数。
+
+    行级规则（技能行）不给种族用，所以行级只看卡这一本账。
     """
 
     from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY
 
     problems: list[str] = []
-    用量: dict[str, set[str]] = {name: set() for name in layer}
-
-    def 计(名字: object, 卡: str) -> None:
-        name = str(名字 or "")
-        if name in 用量:
-            用量[name].add(卡)
+    卡用量: dict[str, set[str]] = {name: set() for name in layer}
+    族用量: dict[str, set[str]] = {name: set() for name in layer}
 
     def walk(node, 卡: str, *, 状态定义: bool = False) -> None:
         if isinstance(node, Mapping):
@@ -341,7 +339,9 @@ def check_rule_quota(layer: dict[str, dict]) -> list[str]:
                 if 状态定义 or ability in {RULE_TEXT_ABILITY, "被动技能"} or ability == "主动技能":
                     for item in entries or ():
                         if isinstance(item, Mapping):
-                            计(item.get("名称"), 卡)
+                            名 = str(item.get("名称") or "")
+                            if 名 in 卡用量:
+                                卡用量[名].add(卡)
             for key, value in node.items():
                 walk(value, 卡, 状态定义=(key == "状态" and isinstance(value, Mapping)))
         elif isinstance(node, Sequence) and not isinstance(node, (str, bytes)):
@@ -356,20 +356,61 @@ def check_rule_quota(layer: dict[str, dict]) -> list[str]:
         种族 = str(entry.get("种族") or "")
         for item in entry.get("天生规则") or ():
             if isinstance(item, Mapping):
-                计(item.get("名称"), f"种族:{种族}")
+                名 = str(item.get("名称") or "")
+                if 名 in 族用量:
+                    族用量[名].add(f"种族:{种族}")
     print("  名额用量：" + " · ".join(
-        f"{name} {len(用量[name])}/{int(dict(layer[name]).get('名额') or 0)}"
+        f"{name} 卡{len(卡用量[name])}/{int(dict(layer[name]).get('名额') or 0)}"
+        f"·族{len(族用量[name])}/{race_quota(layer[name])}"
         for name in sorted(layer)
     ))
     for name, definition in sorted(layer.items()):
         quota = int(dict(definition).get("名额") or 0)
-        used = len(用量.get(name) or ())
+        used = len(卡用量.get(name) or ())
         if used > quota:
             problems.append(
-                f"{name} 已有 {used} 个载体（卡 / 种族）带着它，名额只有 {quota}："
+                f"{name} 已有 {used} 张卡带着它，卡名额只有 {quota}："
                 "要么改内容，要么在登记表里显式抬名额"
             )
+        race_used = len(族用量.get(name) or ())
+        race_limit = race_quota(definition)
+        if race_used > race_limit:
+            problems.append(
+                f"{name} 已有 {race_used} 个种族带着它，种族名额只有 {race_limit}："
+                "要么改内容，要么在登记表里显式抬种族名额"
+            )
+        # **卡与种族不共用同一条闸门**：敌人的构筑里随时可能抽到带规则的那几张卡，
+        # 同一张脸上写两条同名规则是启动期错误（「同一条单位级规则在一个参战者身上
+        # 写了两遍」），所以两条发行渠道的名字不许重叠。
+        if used and race_used:
+            problems.append(
+                f"{name} 同时被 {used} 张卡和 {race_used} 个种族带着："
+                "卡与种族不许共用闸门（敌人生成时会撞「同一条规则写了两遍」）"
+            )
     return problems
+
+
+def race_quota(definition: Mapping) -> int:
+    """这条规则的**种族名额**：不写就与卡同额（只有单位级规则该有它）。"""
+
+    value = dict(definition).get("种族名额")
+    if value is None:
+        value = dict(definition).get("名额") or 1
+    return int(value)
+
+
+def _enemy_tiers() -> tuple[str, ...]:
+    """敌方修士的六档阶梯名（种族的 `出现档次` 只能写这些）。"""
+
+    path = ROOT / "data" / "角色" / "规则" / "主体" / "敌方修士.json"
+    if not path.exists():
+        return ()
+    value = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(
+        str(item.get("阶梯") or "")
+        for item in value.get("阶梯") or []
+        if isinstance(item, Mapping)
+    )
 
 
 def _race_entries() -> list[dict]:
@@ -388,14 +429,17 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
     """种族的天生锁定技：登记过、载体对、**有负面必配强正面**、每个种族形状不同。
 
     种族是锁定技的第四种载体（见 `data/战斗/说明.md` 第 67 条），不挂卡、没有卡面，
-    所以它的规则只进这个判据与启动期校验。三条口径：
+    所以它的规则只进这个判据与启动期校验。五条口径：
 
     - **挡同伴 / 挡自己算负面**（条件里带 `来源关系:己方` 或 `来源关系:自身`），
       挡敌方或不设限算正面；
     - **有负面就必须配至少一条强正面**——种族的天生规则是「一正一负」的代价结构，
       只给负面就是纯惩罚，只给正面就是白送；
     - **基准族人族不许有任何天生规则**，而且**两个种族不许长成同一副样子**
-      （组合完全一样就报，逼着每个种族有自己的形状）。
+      （组合完全一样就报，逼着每个种族有自己的形状）；
+    - **每个种族都要在敌方档次里出得来**（`出现档次` 非空、档名是真的档），否则这条
+      种族是躺着没人读的死数据；
+    - **基准族六档全出现**（谁都得能跟人族比），**每档至少三个族**（不然一档就一张脸）。
     """
 
     from game.core.combat.rules import parse_rule_entries, probe_tags
@@ -403,6 +447,8 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
     problems: list[str] = []
     组合: dict[str, str] = {}
     负面标签 = {"来源关系:己方", "来源关系:自身"}
+    档位 = _enemy_tiers()
+    档内: dict[str, list[str]] = {tier: [] for tier in 档位}
     for entry in _race_entries():
         name = str(entry.get("种族") or "").strip()
         if not name:
@@ -410,6 +456,14 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
             continue
         if not str(entry.get("族系") or "").strip():
             problems.append(f"{name} 没有写 `族系`")
+        档 = [str(item) for item in entry.get("出现档次") or ()]
+        if not 档:
+            problems.append(f"{name} 没写 `出现档次`：生成侧抽不到它，等于躺着的死数据")
+        for tier in 档:
+            if tier not in 档内:
+                problems.append(f"{name} 的 `出现档次` 不是敌方档次：{tier}")
+            else:
+                档内[tier].append(name)
         try:
             rules = parse_rule_entries(
                 entry.get("天生规则") or [],
@@ -444,6 +498,11 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
             )
         else:
             组合[签名] = name
+    for tier, names in sorted(档内.items()):
+        if len(names) < 3:
+            problems.append(f"敌方档次 {tier} 只有 {len(names)} 个种族：每档至少三个")
+        if BASE_RACE not in names:
+            problems.append(f"基准族 {BASE_RACE} 必须出现在 {tier} 档：谁都得能跟人族比")
     return problems
 
 

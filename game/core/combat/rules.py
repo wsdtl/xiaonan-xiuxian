@@ -279,6 +279,15 @@ def validate_rule_layer(
         quota = definition.get("名额")
         if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
             raise ValueError(f"规则层.{name}.名额必须是正整数（至少 1）")
+        # 种族名额：**种族是天生层，与卡是两本账**——卡的闸门不被种族撑宽，种族的发行量
+        # 单独一个数。只有单位级规则带它（种族只能用单位级规则），不写就与卡同额。
+        if "种族名额" in definition and carrier != "单位":
+            raise ValueError(
+                f"规则层.{name}：{carrier}级规则不给种族用，不要写种族名额"
+            )
+        race_quota = definition.get("种族名额", quota)
+        if isinstance(race_quota, bool) or not isinstance(race_quota, int) or race_quota < 1:
+            raise ValueError(f"规则层.{name}.种族名额必须是正整数（至少 1）")
         if not str(definition.get("卡面") or "").strip():
             raise ValueError(f"规则层.{name}缺少卡面文案（规则文本由数据渲染，不许手写）")
         rewrite = definition.get("可改写") or ()

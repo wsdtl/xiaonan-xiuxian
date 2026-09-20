@@ -43,15 +43,20 @@ def test_every_race_rule_is_registered(services) -> None:
 
     layer = services.combat.rule_layer()
     races = services.enemy.races()
-    assert len(races) >= 10, f"种族太少，像是表没读进来：{len(races)}"
+    assert len(races) >= 40, f"种族太少，像是表没读进来：{len(races)}"
     assert BASE_RACE in races, "基准族人族必须在表里"
     组合: dict[tuple[str, ...], str] = {}
     for name, entry in races.items():
+        # 签名要带上参数：同一条 `不可被指定`，挡敌方与挡己方是两种完全不同的种族形状。
         names = tuple(
-            sorted(str(dict(item).get("名称") or "") for item in entry.get("天生规则") or ())
+            sorted(
+                str(dict(item).get("名称") or "")
+                + (f"（{dict(item)['来源']}）" if dict(item).get("来源") else "")
+                for item in entry.get("天生规则") or ()
+            )
         )
         for rule_name in names:
-            definition = layer.get(rule_name)
+            definition = layer.get(rule_name.split("（")[0])
             assert definition is not None, f"{name} 用了未登记的规则：{rule_name}"
             assert definition.get("归属") == "单位", f"{name} 的 {rule_name} 不是单位级规则"
         if name == BASE_RACE:
@@ -60,6 +65,34 @@ def test_every_race_rule_is_registered(services) -> None:
         assert names, f"{name} 一条天生规则都没有"
         assert names not in 组合, f"{name} 与 {组合[names]} 的组合完全一样"
         组合[names] = name
+
+
+def test_every_race_is_reachable_by_generation(services) -> None:
+    """每个种族都要在敌方档次里出得来：抽不到就是躺着的死数据。"""
+
+    tiers = services.enemy.races_by_tier()
+    assert tiers, "档次→种族 是空的：生成侧抽不到任何种族"
+    seen: set[str] = set()
+    for names in tiers.values():
+        seen |= set(names)
+    missing = sorted(set(services.enemy.races()) - seen)
+    assert not missing, f"这些种族任何档次都抽不到：{missing}"
+
+
+def test_generated_enemies_carry_race_rules(services) -> None:
+    """敌人真的会带上种族的天生规则（这一条从生成入口走到 `CombatantSpec`）。"""
+
+    pools = services.data.pools()
+    files = tuple(sorted(f for f, s in pools.items() if s == "敌人"))
+    units = services.enemy.generate_category(
+        section="敌人", pool_names=files, count=40, seed=20260921, instance_prefix="试"
+    )
+    layer = services.combat.rule_layer()
+    带规则 = [unit for unit in units if unit.combatant.inherent_rules]
+    assert 带规则, "40 个敌人一个都没带上天生规则"
+    for unit in 带规则:
+        for rule in unit.combatant.inherent_rules:
+            assert str(dict(rule).get("名称") or "") in layer
 
 
 def test_race_rules_come_out_as_inherent_rules(services) -> None:

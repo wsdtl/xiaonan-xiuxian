@@ -50,6 +50,7 @@ class EnemyService:
         self._genders: tuple[str, ...] = ()
         self._five_element_rules: Mapping[str, object] = {}
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
+        self._races_by_tier: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
     def initialize(self) -> EnemyStatus:
         if self._initialized:
@@ -90,6 +91,13 @@ class EnemyService:
             self._definitions_by_section[section] = MappingProxyType(definitions)
         self._definitions = self._definitions_by_section["敌人"]
         self._races = MappingProxyType(self._load_races())
+        by_tier: dict[str, list[str]] = {}
+        for race_name, entry in self._races.items():
+            for tier_name in entry.get("出现档次") or ():
+                by_tier.setdefault(str(tier_name), []).append(race_name)
+        self._races_by_tier = MappingProxyType(
+            {tier_name: tuple(names) for tier_name, names in by_tier.items()}
+        )
         self._initialized = True
         return self.status()
 
@@ -118,6 +126,10 @@ class EnemyService:
             ):
                 node = _mapping(rule, f"{where}.天生规则[{rule_index}]")
                 _text(node.get("名称"), f"{where}.天生规则[{rule_index}].名称")
+            for tier_index, tier in enumerate(
+                _sequence(entry.get("出现档次") or (), f"{where}.出现档次")
+            ):
+                _text(tier, f"{where}.出现档次[{tier_index}]")
             result[name] = entry
         return result
 
@@ -126,6 +138,26 @@ class EnemyService:
 
         self._require_initialized()
         return self._races
+
+    def races_by_tier(self) -> Mapping[str, tuple[str, ...]]:
+        """敌方档次 → 这一档会抽到的种族（按登记表的 `出现档次` 反查）。"""
+
+        self._require_initialized()
+        return self._races_by_tier
+
+    def pick_race(self, tier: str, instance_id: str) -> str:
+        """按**实例编号**独立取一个种族。
+
+        刻意不用生成器那条随机流：种族是后加的一层，走同一条流会把敌人的等级、
+        属性、构筑、掉落全部挪位，基准会跟着乱。这里用 `实例编号 + 种族` 作种子，
+        与既有抽取互不干扰，而且同一实例永远是同一个种族。
+        """
+
+        self._require_initialized()
+        candidates = self._races_by_tier.get(_text(tier, "敌方阶梯"), ())
+        if not candidates:
+            return ""
+        return random.Random(f"{instance_id}:种族").choice(candidates)
 
     def inherent_rules(self, race: str) -> tuple[Mapping[str, object], ...]:
         """某个种族的**天生锁定技**，按「参战者固有规则」的形状交出去。
@@ -392,6 +424,11 @@ class EnemyService:
                         index,
                     )
                 )
+        inherent: tuple[Mapping[str, object], ...] = ()
+        if role_name == "敌方修士":
+            race = self.pick_race(str(tier.get("阶梯") or ""), instance_id)
+            if race:
+                inherent = self.inherent_rules(race)
         combatant = CombatantSpec(
             id=instance_id,
             name=name,
@@ -404,6 +441,7 @@ class EnemyService:
             spirit=float(attributes["精神上限"]),
             gender=gender,
             five_elements=generate_five_elements(self._five_element_rules, source),
+            inherent_rules=inherent,
         )
         return EnemyInstance(
             name, combatant, self._reward(name, raw, role_name, source)
