@@ -75,6 +75,7 @@ def _fighter(
     *,
     health: float | None = None,
     tank: bool = False,
+    inherent_rules: tuple = (),
 ) -> RuntimeCombatantSnapshot:
     return RuntimeCombatantSnapshot(
         id=pid,
@@ -83,6 +84,7 @@ def _fighter(
         level=5,
         health=health,
         techniques=(card,) if card else (),
+        inherent_rules=tuple(inherent_rules),
     )
 
 
@@ -710,7 +712,10 @@ def _overreach(engine, name: str, rule: dict) -> str | None:
 
 
 def _carrier_cards(entry: dict) -> dict[str, dict]:
-    """同一份规则引用的三种写法（都是已有机制，没有新机制）。"""
+    """同一份规则引用的三种**卡面**写法（都是已有机制，没有新机制）。
+
+    第四种「参战者固有规则」不走卡面，由 `_carrier_check` 直接挂在快照上。
+    """
 
     def 挂规则的被动() -> dict:
         node = _listener_passive(
@@ -758,11 +763,11 @@ def _carrier_cards(entry: dict) -> dict[str, dict]:
 
 
 def _carrier_check(engine, layer: dict[str, dict]) -> list[str]:
-    """**写在哪不影响语义**：同一份规则挂在三种已有载体上，行为必须一样。
+    """**写在哪不影响语义**：同一份规则挂在四种载体上，行为必须一样。
 
-    单位级规则有三种写法——卡面根能力 `规则文本`、被动技能行、状态定义。前两种跟参战者
-    一起进战斗，第三种跟状态一起生灭。判据要成立两件事：三处写法挡住的东西一样；状态
-    带的那份**状态一走就失效**（否则「跟状态生灭」只是文档里的一句话）。
+    单位级规则有四种写法——卡面根能力 `规则文本`、被动技能行、状态定义、**参战者固有规则**
+    （种族一类「天生如此」的东西走这一条）。判据要成立三件事：四处写法挡住的东西一样；
+    状态带的那份**状态一走就失效**；固有规则与卡面**同一条写两遍当场报错**（不挑一张悄悄用）。
     """
 
     entry = {"名称": "不可被指定", "来源": "敌方"}
@@ -782,13 +787,32 @@ def _carrier_check(engine, layer: dict[str, dict]) -> list[str]:
             )
         except Exception as exc:  # noqa: BLE001
             problems.append(f"{名} 写法跑不起来（{type(exc).__name__}: {exc}）")
-    for 名 in ("规则文本", "被动技能", "状态·整场战斗"):
+    # 第四种写法：**参战者固有规则**（不走卡面，直接从快照进来）。
+    try:
+        固有 = _fighter("R1", None, inherent_rules=(entry,))
+        结果["固有规则"] = _damage_taken(
+            _run(engine, _fighter("L1", _card(_strike_skill())), 固有),
+            "R1",
+        )
+    except Exception as exc:  # noqa: BLE001
+        problems.append(f"固有规则 写法跑不起来（{type(exc).__name__}: {exc}）")
+    # 同一条规则写两遍（卡面 + 固有）必须当场报错，不许挑一张用。
+    try:
+        _run(
+            engine,
+            _fighter("L1", _card(_strike_skill())),
+            _fighter("R1", _card(_rules(entry)), inherent_rules=(entry,)),
+        )
+        problems.append("卡面与固有规则写了同一条锁定技，却没报错")
+    except ValueError:
+        pass
+    for 名 in ("规则文本", "被动技能", "状态·整场战斗", "固有规则"):
         if 名 in 结果 and 结果[名] != 0:
             problems.append(f"{名} 写法没挡住：目标受到伤害 {结果[名]:.0f}")
     if "状态·1 行动" in 结果 and 结果["状态·1 行动"] <= 0:
         problems.append("状态带的那份规则没有跟状态一起失效")
     print(
-        "  三种写法（没有规则时受伤害 "
+        "  四种写法（没有规则时受伤害 "
         f"{基准:.0f}）："
         + " · ".join(f"{名} {值:.0f}" for 名, 值 in 结果.items())
     )

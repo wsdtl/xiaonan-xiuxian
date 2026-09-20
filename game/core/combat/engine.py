@@ -985,7 +985,7 @@ class BattleEngine(AbilityRuntime):
             ],
             skills=list(skills),
             passives=list(passives),
-            rules=dict(rules),
+            rules=self._inherent_rules(snapshot, dict(rules)),
             cooldowns={str(k): max(0, int(v)) for k, v in snapshot.cooldowns.items()},
             inventory={str(k): max(0, int(v)) for k, v in snapshot.inventory.items()},
             inventory_owner_id=str(snapshot.inventory_owner_id),
@@ -1288,6 +1288,28 @@ class BattleEngine(AbilityRuntime):
                     "节点": copy.deepcopy(dict(raw)),
                 }
             )
+
+    def _inherent_rules(self, snapshot, rules: dict) -> dict:
+        """把**参战者固有规则**并进规则表（种族一类「天生如此」的锁定技走这里）。
+
+        与卡面根能力、被动行、状态定义同一张登记表、同一个合并口径；同一张卡或同一个
+        参战者身上写了两遍同名规则，当场报错（不挑一张悄悄用）。
+        """
+
+        entries = getattr(snapshot, "inherent_rules", ())
+        if not entries:
+            return rules
+        parsed = _line_rules(
+            {"规则": list(entries)},
+            self.catalog.rule_layer,
+            f"{snapshot.name}.固有规则",
+            carrier="单位",
+        )
+        for rule_name, rule in parsed.items():
+            if rule_name in rules:
+                raise ValueError(f"同一条单位级规则在一个参战者身上写了两遍：{rule_name}")
+            rules[rule_name] = rule
+        return rules
 
     def _normalize_attributes(self, values):
         result = {}
@@ -1974,12 +1996,16 @@ class BattleEngine(AbilityRuntime):
 
     def _advance_lifecycles(self, context, actor):
         kept = []
+        dropped_with_listeners = False
         for status in actor.statuses:
             if status.duration_unit == "状态承受者行动":
                 status.remaining_turns -= 1
             if status.remaining_turns > 0 or status.duration_unit == "整场战斗":
                 kept.append(status)
             else:
+                # 监听表只装监听节点：掉的是没挂监听的状态，表不用重编（见
+                # `AbilityRuntime._mark_listeners_dirty_for_status`）。
+                dropped_with_listeners = dropped_with_listeners or bool(status.listeners)
                 context.event(
                     "移除状态后",
                     actor,
@@ -1988,7 +2014,7 @@ class BattleEngine(AbilityRuntime):
                     values={"状态": status.name, "原因": "到期"},
                     tags=status.tags,
                 )
-        if len(kept) != len(actor.statuses):
+        if dropped_with_listeners:
             context.mark_listener_index_dirty()
         actor.statuses = kept
         for obj in list(context.combat_objects.values()):

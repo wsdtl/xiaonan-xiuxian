@@ -134,6 +134,9 @@ class CombatantSpec:
     five_elements: Mapping[str, float] = field(
         default_factory=lambda: {"木": 20, "火": 20, "土": 20, "金": 20, "水": 20}
     )
+    #: **参战者固有规则**（锁定技）：`[{"名称": …, 参数…}]`，与卡面 `规则文本` 同一形状。
+    #: 它不属于任何一张卡——种族、来历这类「这个人天生如此」的东西从这条口子进来。
+    inherent_rules: tuple[Mapping[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)

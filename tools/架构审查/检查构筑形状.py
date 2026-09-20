@@ -28,6 +28,7 @@
 
 from __future__ import annotations
 
+import json
 import pathlib
 import sys
 from collections import defaultdict
@@ -174,6 +175,41 @@ def check_listener_carriers() -> list[str]:
     return problems
 
 
+def check_subject_slots() -> list[str]:
+    """**敌方不许比玩家更满编**：各主体的修行槽位不得超过人物（玩家侧的上限）。
+
+    槽位是「能装几张卡」，不是强度；但它是战斗时长的乘数——敌人满编时，那套「资变 ↔ 伤后」
+    的自环会一层层叠上去（实测 15 组讨伐跑到 445 秒）。人物的槽位就是基准，敌人超出即数据缺陷。
+    """
+
+    problems: list[str] = []
+    主体 = {
+        "道侣": DATA / "角色/规则/主体/道侣.json",
+        "敌方修士": DATA / "角色/规则/主体/敌方修士.json",
+        "灵兽": DATA / "角色/规则/主体/灵兽.json",
+    }
+    玩家 = json.loads(
+        (DATA / "角色/规则/主体/人物.json").read_text(encoding="utf-8")
+    ).get("修行槽位") or {}
+    if not 玩家:
+        return ["人物.json 没有修行槽位，无法当基准"]
+    for 名, path in sorted(主体.items()):
+        文档 = json.loads(path.read_text(encoding="utf-8"))
+        阶梯们 = 文档.get("阶梯")
+        if not isinstance(阶梯们, list):
+            continue
+        for 阶梯 in 阶梯们:
+            槽 = dict(阶梯.get("修行槽位") or {})
+            for 面, 数 in 槽.items():
+                上限 = 玩家.get(面)
+                if 上限 is None or int(数) <= int(上限):
+                    continue
+                problems.append(
+                    f"{名}·{阶梯.get('阶梯')} 的 {面} 槽位 {数} 超过人物上限 {上限}"
+                )
+    return problems
+
+
 def main() -> int:
     print("四类构筑形状审查")
     counts: dict[str, int] = defaultdict(int)
@@ -186,6 +222,7 @@ def main() -> int:
         ("跨方向形状漂移", check_shape_drift()),
         ("权重冲突", check_weight_uniqueness()),
         ("战丹与长期伤势的监听节点", check_listener_carriers()),
+        ("主体的修行槽位超过玩家", check_subject_slots()),
     )
     total = sum(len(items) for _, items in groups)
     print()

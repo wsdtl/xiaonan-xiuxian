@@ -332,6 +332,7 @@ class CombatService:
             group_role=value.group_role,
             form=value.form,
             forms=copy.deepcopy(dict(value.forms)),
+        inherent_rules=tuple(copy.deepcopy(dict(item)) for item in value.inherent_rules),
             tags=tuple(value.tags),
             tactic=tuple(copy.deepcopy(value.tactic)),
             battle_profile=copy.deepcopy(dict(value.battle_profile)),

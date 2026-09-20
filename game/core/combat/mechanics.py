@@ -378,6 +378,18 @@ class AbilityRuntime:
     def _ability_listener(*_args, **_kwargs):
         return True
 
+    def _mark_listeners_dirty_for_status(self, context, status) -> None:
+        """状态上真挂了监听，才需要把监听表标脏。
+
+        监听表只装**监听节点**；没有 `监听` 的状态对表没有任何贡献，把它算成脏就是白编一遍
+        ——而重编一次要走遍场上每个单位的所有被动。满员讨伐（15 组、67 个单位、26 万事件）
+        实测：整场仗 **37% 的时间花在重编监听表上**（1597 次重建 / 单场 7.5s / 共 20.2s，
+        见 `data/战斗/内容/待补内容.md` 第 98 轮），而绝大多数状态根本没挂监听。
+        """
+
+        if status.listeners:
+            context.mark_listener_index_dirty()
+
     def _compiled_listeners(self, context):
         """Compile listeners by event for the current structural battle state."""
 
@@ -1083,7 +1095,7 @@ class AbilityRuntime:
             mode = str(definition.get("重复方式") or "刷新持续")
             if existing is None:
                 destination.statuses.append(status)
-                context.mark_listener_index_dirty()
+                self._mark_listeners_dirty_for_status(context, status)
             elif mode == "不叠加":
                 continue
             elif mode == "增加层数":
@@ -1134,7 +1146,7 @@ class AbilityRuntime:
                     status.stacks -= consume
                     if status.stacks <= 0 and status in target.statuses:
                         target.statuses.remove(status)
-                        context.mark_listener_index_dirty()
+                        self._mark_listeners_dirty_for_status(context, status)
                 generated = reaction.get("生成状态")
                 if isinstance(generated, Mapping):
                     value = copy.deepcopy(dict(generated))
@@ -1142,10 +1154,11 @@ class AbilityRuntime:
                     value["来源名称"] = source.name
                     value["来源能力"] = context.current_ability
                     value["构筑实例"] = self._build_instance(context, value)
-                    target.statuses.append(
-                        self._status_with_rules(value, f"{context.current_ability}.生成状态")
+                    generated_status = self._status_with_rules(
+                        value, f"{context.current_ability}.生成状态"
                     )
-                    context.mark_listener_index_dirty()
+                    target.statuses.append(generated_status)
+                    self._mark_listeners_dirty_for_status(context, generated_status)
                 self._run_effects(context, source, target, reaction.get("效果") or (), multiplier)
                 self._dispatch_event(
                     context,
@@ -1208,7 +1221,7 @@ class AbilityRuntime:
                 continue
             if status in owner.statuses:
                 owner.statuses.remove(status)
-                context.mark_listener_index_dirty()
+                self._mark_listeners_dirty_for_status(context, status)
                 self._dispatch_event(context, kind="移除状态后", source=source, target=owner, values={"状态": status.name, "状态层数": status.stacks}, tags=status.tags)
                 removed = True
         return removed
@@ -1236,7 +1249,7 @@ class AbilityRuntime:
                 status.stacks = min(status.max_stacks, before + amount)
             if status.stacks <= 0 and status in owner.statuses:
                 owner.statuses.remove(status)
-                context.mark_listener_index_dirty()
+                self._mark_listeners_dirty_for_status(context, status)
             self._dispatch_event(context, kind="状态层数变化后", source=source, target=owner, values={"状态": status.name, "变化前数值": before, "变化后数值": status.stacks})
         return True
 
@@ -1269,7 +1282,7 @@ class AbilityRuntime:
                 receiver = frame.target
                 copied.tags = tuple(frame.tags - {"复制"})
                 receiver.statuses.append(copied)
-                context.mark_listener_index_dirty()
+                self._mark_listeners_dirty_for_status(context, copied)
                 self._dispatch_event(
                     context,
                     kind="添加状态后",
@@ -1295,7 +1308,7 @@ class AbilityRuntime:
         for owner, status in pairs:
             owner.statuses.remove(status)
             receivers[0].statuses.append(status)
-            context.mark_listener_index_dirty()
+            self._mark_listeners_dirty_for_status(context, status)
         return True
 
     def _ability_modify_action_progress(self, context, source, target, effect, multiplier, cost=False, **_):
@@ -1873,7 +1886,7 @@ class AbilityRuntime:
             expired = [status for status in fighter.statuses if status.expire_with_source and status.source == source.id]
             for status in expired:
                 fighter.statuses.remove(status)
-                context.mark_listener_index_dirty()
+                self._mark_listeners_dirty_for_status(context, status)
                 self._dispatch_event(
                     context,
                     kind="移除状态后",
@@ -2106,7 +2119,7 @@ class AbilityRuntime:
     def _status_with_rules(self, definition: Mapping[str, Any], path: str):
         """把状态定义里的 `规则[]` 一并解析，再建 `StatusState`。
 
-        状态是**锁定技的第三种写法**：作者把单位级规则写在状态定义里，状态挂上就生效、
+        状态是**锁定技在内容里的第三种写法**：作者把单位级规则写在状态定义里，状态挂上就生效、
         状态一没就失效（规则本身仍不进效果管线）。解析放在这里而不是模型里，是因为
         只有运行期拿得到规则层登记表与报错路径。
         """
@@ -2186,8 +2199,8 @@ class AbilityRuntime:
         「来源」（通常就是持有者）。按优先级升序问；后问的规则只有在先成立的那条允许被它
         改写（`可改写`）时才能改变结论——所以优先级与可改写都真有语义。
 
-        **单位级规则有三处写法**：卡面根能力 `规则文本`、被动技能行、状态定义（见
-        `data/战斗/说明.md`）。前两处在装配期就并进`参战者.规则`；状态带的那一份
+        **单位级规则有四处写法**：卡面根能力 `规则文本`、被动技能行、状态定义、参战者
+        `固有规则`（见 `data/战斗/说明.md`）。前三处在装配期就并进`参战者.规则`；状态带的那一份
         **跟状态一起生灭**，所以每次问的时候从在场状态里现取。
         """
 
