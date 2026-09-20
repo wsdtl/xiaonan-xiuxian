@@ -297,26 +297,42 @@ class AbilityRuntime:
 
     @staticmethod
     def _transaction_snapshot(context) -> dict[str, Any]:
+        """给「尝试执行」存一份回滚点。
+
+        **别整份 `deepcopy`**：一次尝试要把整场状态拷一遍的话，37 个单位的一场仗光深拷贝就吃掉
+        六成时间（实测 12.1M 次 `deepcopy`、42s 里 26s）。这里只存**真会变的那部分**：
+
+        - 标量直接存值（本来就不可变）；
+        - 字典字段各拷一层（`attributes` / `cooldowns` / `team_synergy` …）；
+        - 状态与技能按对象**浅拷**（改的是 `层数`、`剩余行动`、字段这些标量）；
+        - 装配期定死的 `rules`、监听节点直接共享（运行期不原地改）。
+
+        回滚时按同一张清单写回去，并把快照里的容器再拷一层，保证这份回滚点用过还能再用。
+        """
+
         return {
             "fighters": {
-                fighter.id: copy.deepcopy(fighter.__dict__)
+                fighter.id: AbilityRuntime._snapshot_fighter(fighter)
                 for fighter in context.fighters
             },
             "left_ids": [fighter.id for fighter in context.left_team],
             "right_ids": [fighter.id for fighter in context.right_team],
-            "records": copy.deepcopy(context.records),
-            "relations": copy.deepcopy(context.relations),
+            "records": {key: list(value) for key, value in context.records.items()},
+            "relations": [dict(value) for value in context.relations],
             "objects": copy.deepcopy(context.combat_objects),
-            "rules": copy.deepcopy(context.battle_rules),
-            "progress": copy.deepcopy(context.action_progress),
-            "counters": copy.deepcopy(context.ability_counters),
+            "rules": [dict(value) for value in context.battle_rules],
+            "progress": dict(context.action_progress),
+            "counters": dict(context.ability_counters),
             "saved": copy.deepcopy(context.saved_results),
             "event_count": len(context.events),
             "history_count": len(context.effect_history),
             "rng_state": context.rng.getstate(),
-            "trigger_counts": copy.deepcopy(context.trigger_counts),
-            "battle_trigger_counts": copy.deepcopy(context.battle_trigger_counts),
-            "judgement_overrides": copy.deepcopy(context.judgement_overrides),
+            "trigger_counts": dict(context.trigger_counts),
+            "battle_trigger_counts": dict(context.battle_trigger_counts),
+            "judgement_overrides": {
+                key: [dict(item) for item in value]
+                for key, value in context.judgement_overrides.items()
+            },
             "action_intent": copy.deepcopy(context.action_intent),
             "last_result": copy.deepcopy(context.last_result),
             "triggered_skill_depth": context.triggered_skill_depth,
@@ -337,6 +353,69 @@ class AbilityRuntime:
             "summon_serial": context.summon_serial,
         }
 
+    #: 回滚点里按「拷一层」处理的字典字段（值多半是标量或改不动的映射）。
+    _SNAPSHOT_DICTS = (
+        "attributes",
+        "cooldowns",
+        "inventory",
+        "consumed_items",
+        "forms",
+        "form_modifiers",
+        "five_elements",
+        "battle_profile",
+        "team_synergy",
+    )
+    #: 回滚点里按「列表浅拷」处理的字段。
+    _SNAPSHOT_LISTS = ("passives", "tactic")
+
+    @staticmethod
+    def _snapshot_fighter(fighter) -> dict[str, Any]:
+        import copy as _copy
+
+        scalars = {
+            key: value
+            for key, value in fighter.__dict__.items()
+            if key not in AbilityRuntime._SNAPSHOT_DICTS
+            and key not in AbilityRuntime._SNAPSHOT_LISTS
+            and key not in {"statuses", "skills", "base_form_skills", "tags", "rules"}
+            and not isinstance(value, dict | list | set)
+        }
+        return {
+            "scalars": scalars,
+            "dicts": {
+                key: dict(getattr(fighter, key))
+                for key in AbilityRuntime._SNAPSHOT_DICTS
+            },
+            "lists": {key: list(getattr(fighter, key)) for key in AbilityRuntime._SNAPSHOT_LISTS},
+            "tags": set(fighter.tags),
+            "statuses": [_copy.copy(value) for value in fighter.statuses],
+            "skills": [_copy.copy(value) for value in fighter.skills],
+            "base_form_skills": (
+                None
+                if fighter.base_form_skills is None
+                else [_copy.copy(value) for value in fighter.base_form_skills]
+            ),
+        }
+
+    @staticmethod
+    def _restore_fighter(fighter, snapshot: Mapping[str, Any]) -> None:
+        import copy as _copy
+
+        for key, value in snapshot["scalars"].items():
+            setattr(fighter, key, value)
+        for key, value in snapshot["dicts"].items():
+            setattr(fighter, key, dict(value))
+        for key, value in snapshot["lists"].items():
+            setattr(fighter, key, list(value))
+        fighter.tags = set(snapshot["tags"])
+        fighter.statuses = [_copy.copy(value) for value in snapshot["statuses"]]
+        fighter.skills = [_copy.copy(value) for value in snapshot["skills"]]
+        fighter.base_form_skills = (
+            None
+            if snapshot["base_form_skills"] is None
+            else [_copy.copy(value) for value in snapshot["base_form_skills"]]
+        )
+
     @staticmethod
     def _restore_transaction(context, snapshot: Mapping[str, Any]) -> None:
         current = {fighter.id: fighter for fighter in context.fighters}
@@ -344,25 +423,27 @@ class AbilityRuntime:
             fighter = current.get(fighter_id)
             if fighter is None:
                 continue
-            for key, value in values.items():
-                setattr(fighter, key, copy.deepcopy(value))
+            AbilityRuntime._restore_fighter(fighter, values)
         context.left_team[:] = [current[value] for value in snapshot["left_ids"] if value in current]
         context.right_team[:] = [current[value] for value in snapshot["right_ids"] if value in current]
         context.rebuild_indexes()
-        context.records = copy.deepcopy(snapshot["records"])
-        context.relations = copy.deepcopy(snapshot["relations"])
+        context.records = {key: list(value) for key, value in snapshot["records"].items()}
+        context.relations = [dict(value) for value in snapshot["relations"]]
         context.combat_objects = copy.deepcopy(snapshot["objects"])
-        context.battle_rules = copy.deepcopy(snapshot["rules"])
+        context.battle_rules = [dict(value) for value in snapshot["rules"]]
         context.mark_listener_index_dirty()
-        context.action_progress = copy.deepcopy(snapshot["progress"])
-        context.ability_counters = copy.deepcopy(snapshot["counters"])
+        context.action_progress = dict(snapshot["progress"])
+        context.ability_counters = dict(snapshot["counters"])
         context.saved_results = copy.deepcopy(snapshot["saved"])
         del context.events[snapshot["event_count"]:]
         del context.effect_history[snapshot["history_count"]:]
         context.rng.setstate(snapshot["rng_state"])
-        context.trigger_counts = copy.deepcopy(snapshot["trigger_counts"])
-        context.battle_trigger_counts = copy.deepcopy(snapshot["battle_trigger_counts"])
-        context.judgement_overrides = copy.deepcopy(snapshot["judgement_overrides"])
+        context.trigger_counts = dict(snapshot["trigger_counts"])
+        context.battle_trigger_counts = dict(snapshot["battle_trigger_counts"])
+        context.judgement_overrides = {
+            key: [dict(item) for item in value]
+            for key, value in snapshot["judgement_overrides"].items()
+        }
         context.action_intent = copy.deepcopy(snapshot["action_intent"])
         context.last_result = copy.deepcopy(snapshot["last_result"])
         context.triggered_skill_depth = snapshot["triggered_skill_depth"]
