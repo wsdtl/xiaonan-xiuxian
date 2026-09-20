@@ -11,7 +11,11 @@ def invalid_create_format():
     return (
         M.document()
         .section("创建人物")
-        .line(M.status("格式有误", tone="warning"), " 创建人物 姓名 性别（男或女）")
+        .line(
+            M.status("格式有误", tone="warning"),
+            " 创建人物 姓名 性别（男或女）[种族]",
+        )
+        .line(M.status("提示", tone="info"), " 种族可省略，省略时用基准族人族")
         .build()
     )
 
@@ -41,7 +45,7 @@ def created(result: CreateCharacterResult):
         .inline_section("创建结果", M.status("成功", tone="positive"), icon="success")
         .section("身份")
         .row(("姓名", M.text(result.name, tone="emphasis")), ("性别", result.gender))
-        .row(("境界", result.realm_name), ("等级", 1))
+        .row(("种族", result.race or "人族"), ("境界", result.realm_name), ("等级", 1))
         .section("出生地")
         .field("地点", M.command(result.location_name, "位置"))
         .row(("区域", result.region), ("地形", result.terrain))
@@ -79,7 +83,11 @@ def overview(result: CharacterOverviewResult):
         M.document()
         .header(character.name)
         .section("身份", icon="status")
-        .row(("性别", character.gender), ("身份", character.character_type))
+        .row(
+            ("性别", character.gender),
+            ("种族", character.race or "人族"),
+            ("身份", character.character_type),
+        )
         .row(("境界", character.realm_name), ("等级", character.level))
         .row(
             ("经验", M.text(character.experience, tone="cultivation")),

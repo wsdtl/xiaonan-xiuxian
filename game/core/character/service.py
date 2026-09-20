@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import math
 import random
 import re
 from collections.abc import Mapping, Sequence
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from game.core.asset import AssetService, AssetStateError
@@ -66,7 +68,7 @@ from .contracts import (
     InventorySummary,
     WeaponProfile,
 )
-from game.core.data import boolean, boolean as _bool, strict_text
+from game.core.data import boolean, boolean as _bool, sequence as _sequence, strict_text, strict_text as _text
 
 
 class CharacterService:
@@ -100,6 +102,9 @@ class CharacterService:
         self._attributes: Mapping[str, object] = {}
         self._medicine_default = True
         self._five_element_rules: Mapping[str, object] = {}
+        self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
+        self._races_by_tier: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+        self._initial_race = ""
 
     def initialize(self) -> CharacterStatus:
         if self._initialized:
@@ -152,6 +157,19 @@ class CharacterService:
         self._medicine_default = _bool(
             medicine_auto.get("默认开启"), "服丹.自动用药.默认开启"
         )
+        self._races = MappingProxyType(self._load_races())
+        by_tier: dict[str, list[str]] = {}
+        for race_name, entry in self._races.items():
+            for tier_name in entry.get("出现档次") or ():
+                by_tier.setdefault(str(tier_name), []).append(race_name)
+        self._races_by_tier = MappingProxyType(
+            {tier_name: tuple(names) for tier_name, names in by_tier.items()}
+        )
+        self._initial_race = str(creation.get("初始种族") or "").strip()
+        if self._initial_race not in self._races:
+            raise JsonDataError(
+                f"人物.json.创建.初始种族不是登记的种族：{self._initial_race or '<空>'}"
+            )
         self._validate_static_rules()
         self._initialized = True
         initial_items = _initial_items(self._role_rule)
@@ -161,6 +179,68 @@ class CharacterService:
             gender_count=len(self._gender_values),
             initial_item_count=len(initial_items),
         )
+
+    def _load_races(self) -> dict[str, Mapping[str, object]]:
+        """种族登记表：**结构**在启动期查死，语义（登记过 / 正负配对 / 名额）由判据查。
+
+        种族是「天生」那一层：它不挂卡，只给一组天生锁定技（战斗侧叫「参战者固有规则」）。
+        这里读进来给三处用：人物创建（选族）、人物战斗快照（挂天生规则）、以及敌人核心
+        （敌方按档次抽族，见 `data/角色/规则/说明.md` 的「种族」一节）。结构读不通就拒绝启动。
+        """
+
+        entries = _sequence(
+            self._data.dataset("种族").get("种族"), "角色/规则/种族/种族.json"
+        )
+        result: dict[str, Mapping[str, object]] = {}
+        for index, raw in enumerate(entries):
+            where = f"种族[{index}]"
+            entry = _mapping(raw, where)
+            name = _text(entry.get("种族"), f"{where}.种族")
+            if name in result:
+                raise JsonDataError(f"{where}.种族重名：{name}")
+            _text(entry.get("族系"), f"{where}.族系")
+            _text(entry.get("说明"), f"{where}.说明")
+            for rule_index, rule in enumerate(
+                _sequence(entry.get("天生规则") or (), f"{where}.天生规则")
+            ):
+                node = _mapping(rule, f"{where}.天生规则[{rule_index}]")
+                _text(node.get("名称"), f"{where}.天生规则[{rule_index}].名称")
+            for tier_index, tier in enumerate(
+                _sequence(entry.get("出现档次") or (), f"{where}.出现档次")
+            ):
+                _text(tier, f"{where}.出现档次[{tier_index}]")
+            result[name] = entry
+        return result
+
+    def races(self) -> Mapping[str, Mapping[str, object]]:
+        """种族登记表（只读）。"""
+
+        self._require_initialized()
+        return self._races
+
+    def races_by_tier(self) -> Mapping[str, tuple[str, ...]]:
+        """敌方档次 → 这一档会抽到的种族（敌人核心也读这一份）。"""
+
+        self._require_initialized()
+        return self._races_by_tier
+
+    def inherent_rules(self, race: str) -> tuple[Mapping[str, object], ...]:
+        """某个种族的**天生锁定技**，按「参战者固有规则」的形状交出去。"""
+
+        self._require_initialized()
+        name = str(race or "").strip()
+        entry = self._races.get(name)
+        if entry is None:
+            raise JsonDataError(f"未登记的种族：{name or '<空>'}")
+        return tuple(
+            copy.deepcopy(dict(item)) for item in entry.get("天生规则") or ()
+        )
+
+    def initial_race(self) -> str:
+        """没指定种族时用的那一族（人物.json 的 `创建.初始种族`，现在是基准族人族）。"""
+
+        self._require_initialized()
+        return self._initial_race
 
     def status(self) -> CharacterStatus:
         initial_items = _initial_items(self._role_rule) if self._initialized else ()
@@ -229,6 +309,7 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
+            race=_state_text(character.get("种族"), "人物.种族"),
         )
 
     async def public_profiles(
@@ -323,6 +404,7 @@ class CharacterService:
             inventory_owner_id=profile.user_id,
             gender=profile.gender,
             five_elements=dict(profile.five_elements),
+            inherent_rules=self.inherent_rules(profile.race),
         )
 
     async def create(self, command: CharacterCreateCommand) -> CharacterCreationResult:
@@ -362,6 +444,7 @@ class CharacterService:
                     payload={
                         "姓名": command.name,
                         "性别": command.gender,
+                        "种族": command.race or self._initial_race,
                         "出生地": list(command.birth_xy),
                         "初始境界": realm_id,
                     },
@@ -383,6 +466,7 @@ class CharacterService:
             birth_xy=command.birth_xy,
             initial_items=item_rows,
             replayed=receipt.replayed,
+            race=command.race or self._initial_race,
         )
 
     async def plan_growth(
@@ -1388,6 +1472,8 @@ class CharacterService:
         if command.gender not in self._gender_values:
             choices = "或".join(self._gender_values)
             raise CharacterInputError(f"性别只能填写{choices}")
+        if command.race and command.race not in self._races:
+            raise CharacterInputError(f"种族只能填写登记的种族：{command.race}")
 
     def _character_state(
         self, command: CharacterCreateCommand, realm_id: str
@@ -1405,6 +1491,7 @@ class CharacterService:
         return {
             "姓名": command.name,
             "性别": command.gender,
+            "种族": command.race or self._initial_race,
             "角色类型": str(self._role_rule.get("角色类型") or "修士"),
             "境界": realm_id,
             "等级": _positive_int(self._role_rule.get("等级"), "人物初始等级"),

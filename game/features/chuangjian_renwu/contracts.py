@@ -23,6 +23,8 @@ class CreateCharacterRequest:
     request_id: str
     name: str
     gender: str
+    #: 种族（天生那一层）：留空表示用人物规则里的初始种族（基准族人族）。
+    race: str = ""
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,7 @@ class CreateCharacterResult:
     altitude: int
     initial_items: tuple[tuple[str, str, int], ...]
     replayed: bool
+    race: str = ""
 
 
 __all__ = [

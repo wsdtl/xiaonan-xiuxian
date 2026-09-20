@@ -77,6 +77,7 @@ class CreateCharacterFeature:
                     name=request.name,
                     gender=request.gender,
                     birth_xy=location.xy,
+                    race=request.race,
                 )
             )
         except CharacterInputError as exc:
@@ -104,6 +105,7 @@ class CreateCharacterFeature:
             altitude=location.altitude,
             initial_items=item_names,
             replayed=created.replayed,
+            race=created.race,
         )
 
 

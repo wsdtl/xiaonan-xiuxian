@@ -48,6 +48,8 @@ class CharacterCreateCommand:
     name: str
     gender: str
     birth_xy: tuple[int, int]
+    #: 种族（天生那一层）：留空表示用人物.json 的 `创建.初始种族`（基准族人族）。
+    race: str = ""
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,7 @@ class CharacterCreationResult:
     birth_xy: tuple[int, int]
     initial_items: tuple[tuple[str, str, str, int], ...]
     replayed: bool
+    race: str = ""
 
 
 @dataclass(frozen=True)
@@ -120,6 +123,8 @@ class CharacterProfile:
     weapon: WeaponProfile
     inventory: InventorySummary
     five_elements: Mapping[str, float]
+    #: 种族（天生那一层）：人物面板与查看页据此显示，战斗快照据此挂天生锁定技。
+    race: str = ""
 
 
 @dataclass(frozen=True)

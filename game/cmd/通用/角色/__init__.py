@@ -22,7 +22,7 @@ from . import reply
         "help": {
             "category": "角色",
             "summary": "建立当前账号的唯一修士人物",
-            "usage": ("创建人物 姓名 性别",),
+            "usage": ("创建人物 姓名 性别 [种族]",),
             "side_effect": "每个账号只能创建一个人物",
             "order": 10,
         },
@@ -32,10 +32,11 @@ async def create_character(
     *, user_id: str, message: str, message_context, manager
 ) -> None:
     parts = message.split()
-    if len(parts) != 2:
+    if len(parts) not in (2, 3):
         await manager.send(reply.invalid_create_format())
         return
-    name, gender = parts
+    name, gender = parts[0], parts[1]
+    race = parts[2] if len(parts) == 3 else ""
     try:
         result = await current_game_services().features.chuangjian_renwu.create(
             CreateCharacterRequest(
@@ -43,6 +44,7 @@ async def create_character(
                 request_id=message_context.request_id,
                 name=name,
                 gender=gender,
+                race=race,
             )
         )
     except InvalidCreateCharacterError as exc:
