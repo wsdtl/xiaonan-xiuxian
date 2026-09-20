@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import random
 from collections.abc import Mapping
 from dataclasses import replace
@@ -48,6 +49,7 @@ class EnemyService:
         )
         self._genders: tuple[str, ...] = ()
         self._five_element_rules: Mapping[str, object] = {}
+        self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
 
     def initialize(self) -> EnemyStatus:
         if self._initialized:
@@ -87,8 +89,59 @@ class EnemyService:
                 self._validate_definition(name, raw)
             self._definitions_by_section[section] = MappingProxyType(definitions)
         self._definitions = self._definitions_by_section["敌人"]
+        self._races = MappingProxyType(self._load_races())
         self._initialized = True
         return self.status()
+
+    def _load_races(self) -> dict[str, Mapping[str, object]]:
+        """种族登记表：**结构**在启动期查死。
+
+        语义（每条天生规则是否登记过、载体对不对、名额够不够、有负面有没有配强正面）由
+        `tools/架构审查/检查规则层.py` 的「种族登记表」那一项查——那里拿得到规则层；这里
+        只保证形状，免得把一份结构都读不通的表带进战斗。
+        """
+
+        entries = _sequence(
+            self._data.dataset("种族").get("种族"), "种族/规则/种族/种族.json"
+        )
+        result: dict[str, Mapping[str, object]] = {}
+        for index, raw in enumerate(entries):
+            where = f"种族[{index}]"
+            entry = _mapping(raw, where)
+            name = _text(entry.get("种族"), f"{where}.种族")
+            if name in result:
+                raise JsonDataError(f"{where}.种族重名：{name}")
+            _text(entry.get("族系"), f"{where}.族系")
+            _text(entry.get("说明"), f"{where}.说明")
+            for rule_index, rule in enumerate(
+                _sequence(entry.get("天生规则") or (), f"{where}.天生规则")
+            ):
+                node = _mapping(rule, f"{where}.天生规则[{rule_index}]")
+                _text(node.get("名称"), f"{where}.天生规则[{rule_index}].名称")
+            result[name] = entry
+        return result
+
+    def races(self) -> Mapping[str, Mapping[str, object]]:
+        """种族登记表（只读）。"""
+
+        self._require_initialized()
+        return self._races
+
+    def inherent_rules(self, race: str) -> tuple[Mapping[str, object], ...]:
+        """某个种族的**天生锁定技**，按「参战者固有规则」的形状交出去。
+
+        种族不挂卡，所以它给的就是 `CombatantSpec.inherent_rules` 那一份（见
+        `data/战斗/说明.md` 第 67 条）：生成参战者的那一侧把它交进战斗即可。
+        """
+
+        self._require_initialized()
+        name = _text(race, "种族")
+        entry = self._races.get(name)
+        if entry is None:
+            raise JsonDataError(f"未登记的种族：{name}")
+        return tuple(
+            copy.deepcopy(dict(item)) for item in entry.get("天生规则") or ()
+        )
 
     def status(self) -> EnemyStatus:
         return EnemyStatus(self._initialized, len(self._definitions))

@@ -3,7 +3,7 @@
 规则层是 `data/战斗/定义/规则层.json`，代码侧是 `game/core/combat/rules.py` 的
 **拦截点表** `INTERCEPTION_POINTS`。这一层的设计目标是**加一条规则和加一张功法一样简单**：
 一条规则 = 一个拦截点 + 一组条件 + 一个处置，条件用已登记的条件原子写，参数用 `$字段`
-占位。于是判据也必须是通用的——**不为任何具体规则写一条判据**，只核五件事：
+占位。于是判据也必须是通用的——**不为任何具体规则写一条判据**，只核七件事：
 
 1. **登记表自洽**：直接跑启动期那份校验（归属 / 拦截点 / 处置 / 优先级 / 可改写 / 卡面 /
    条件真的按原子能力契约校验 / 参数不许有死项 / **条件不许为空** / 行级载体必须真有
@@ -14,6 +14,9 @@
    否则「加规则自动获得行为验证」不成立——这时要么改条件，要么扩探针场景（那是代码）。
 4. **渲染路径**：每条规则都渲染得出来（拿探针卡跑一遍真渲染器）。
 5. **内容只用登记过的**：六面卡片与战场环境里出现的规则名必须是登记过的，且载体写对。
+6. **种族登记表**：种族的天生锁定技（第四种载体）登记过、**有负面必配强正面**、
+   基准族人族为空、**两个种族不许长成同一副样子**。
+7. **名额**：一条锁定技最多让几个载体（卡 / 种族）带，用量每轮打出来，超一个就红。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查规则层.py
 
@@ -34,6 +37,8 @@ for _path in (str(ROOT), str(ROOT / "tools")):
 
 REGISTRY = ROOT / "data" / "战斗" / "定义" / "规则层.json"
 ABILITIES = ROOT / "data" / "战斗" / "定义" / "原子能力.json"
+#: 基准族：它的天生规则必须是空的（所有种族的强弱都以它为参照）。
+BASE_RACE = "人族"
 
 
 def _abilities() -> dict[str, dict]:
@@ -308,11 +313,12 @@ def _status_reactions() -> list[dict]:
 
 
 def check_rule_quota(layer: dict[str, dict]) -> list[str]:
-    """名额：**一条锁定技全库最多让几张卡带**，默认 1。
+    """名额：**一条锁定技全库最多让几张卡（或几个种族）带**，默认 1。
 
     锁定技不是靠稀有保值的（它是结构性文本），这个数防的是**一条闸门被抄到所有卡上**
-    （二十张卡都「不可被指定」，选目标这件事本身就没意义了）。判据把用量数出来，
-    **超一张就红**：想多发就得先在登记表里抬 `名额`，那是一次显式的设计决定。
+    （二十张卡都「不可被指定」，选目标这件事本身就没意义了）。种族是一种新载体，所以
+    「一个种族算一个名额」；判据把用量数出来，**超一个就红**：想多发就得先在登记表里抬
+    `名额`，那是一次显式的设计决定。
     """
 
     from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY
@@ -346,6 +352,11 @@ def check_rule_quota(layer: dict[str, dict]) -> list[str]:
         卡 = str(entry.get("编号") or entry.get("名称") or filename)
         for node in entry.get("能力") or ():
             walk(node, 卡)
+    for entry in _race_entries():
+        种族 = str(entry.get("种族") or "")
+        for item in entry.get("天生规则") or ():
+            if isinstance(item, Mapping):
+                计(item.get("名称"), f"种族:{种族}")
     print("  名额用量：" + " · ".join(
         f"{name} {len(用量[name])}/{int(dict(layer[name]).get('名额') or 0)}"
         for name in sorted(layer)
@@ -355,9 +366,84 @@ def check_rule_quota(layer: dict[str, dict]) -> list[str]:
         used = len(用量.get(name) or ())
         if used > quota:
             problems.append(
-                f"{name} 已有 {used} 张卡带着它，名额只有 {quota}："
+                f"{name} 已有 {used} 个载体（卡 / 种族）带着它，名额只有 {quota}："
                 "要么改内容，要么在登记表里显式抬名额"
             )
+    return problems
+
+
+def _race_entries() -> list[dict]:
+    """`角色/规则/种族/种族.json`：种族的天生锁定技登记表。"""
+
+    path = ROOT / "data" / "角色" / "规则" / "种族" / "种族.json"
+    if not path.exists():
+        return []
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return []
+    return [dict(item) for item in value if isinstance(item, Mapping)]
+
+
+def check_race_registry(layer: dict[str, dict]) -> list[str]:
+    """种族的天生锁定技：登记过、载体对、**有负面必配强正面**、每个种族形状不同。
+
+    种族是锁定技的第四种载体（见 `data/战斗/说明.md` 第 67 条），不挂卡、没有卡面，
+    所以它的规则只进这个判据与启动期校验。三条口径：
+
+    - **挡同伴 / 挡自己算负面**（条件里带 `来源关系:己方` 或 `来源关系:自身`），
+      挡敌方或不设限算正面；
+    - **有负面就必须配至少一条强正面**——种族的天生规则是「一正一负」的代价结构，
+      只给负面就是纯惩罚，只给正面就是白送；
+    - **基准族人族不许有任何天生规则**，而且**两个种族不许长成同一副样子**
+      （组合完全一样就报，逼着每个种族有自己的形状）。
+    """
+
+    from game.core.combat.rules import parse_rule_entries, probe_tags
+
+    problems: list[str] = []
+    组合: dict[str, str] = {}
+    负面标签 = {"来源关系:己方", "来源关系:自身"}
+    for entry in _race_entries():
+        name = str(entry.get("种族") or "").strip()
+        if not name:
+            problems.append("种族登记表有一条没写 `种族`")
+            continue
+        if not str(entry.get("族系") or "").strip():
+            problems.append(f"{name} 没有写 `族系`")
+        try:
+            rules = parse_rule_entries(
+                entry.get("天生规则") or [],
+                layer,
+                carrier="单位",
+                path=f"{name}.天生规则",
+            )
+        except (TypeError, ValueError) as exc:
+            problems.append(f"{name} 的天生规则不成立：{exc}")
+            continue
+        if name == BASE_RACE:
+            if rules:
+                problems.append(
+                    f"{BASE_RACE} 是基准族，不许有天生规则（现在有 {'、'.join(sorted(rules))}）"
+                )
+            continue
+        if not rules:
+            problems.append(f"{name} 一条天生规则都没有：只有基准族允许空")
+            continue
+        负面 = sorted(n for n, rule in rules.items() if 负面标签 & probe_tags(rule))
+        正面 = sorted(n for n in rules if n not in 负面)
+        if 负面 and not 正面:
+            problems.append(
+                f"{name} 只有负面（{'、'.join(负面)}）：有负面就必须配至少一条强正面"
+            )
+        签名 = "|".join(
+            f"{n}:{'/'.join(sorted(probe_tags(rule)))}" for n, rule in sorted(rules.items())
+        )
+        if 签名 in 组合:
+            problems.append(
+                f"{name} 与 {组合[签名]} 的天生规则组合完全一样：每个种族要有自己的形状"
+            )
+        else:
+            组合[签名] = name
     return problems
 
 
@@ -367,6 +453,7 @@ CHECKS = (
     ("标准探针覆盖", check_probe_coverage),
     ("渲染路径", check_render_path),
     ("内容只用登记过的", check_content_uses),
+    ("种族登记表", check_race_registry),
     ("名额", check_rule_quota),
 )
 
