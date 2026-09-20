@@ -98,8 +98,43 @@ class EnemyService:
         self._races_by_tier = MappingProxyType(
             {tier_name: tuple(names) for tier_name, names in by_tier.items()}
         )
+        self._validate_race_pool_sources()
         self._initialized = True
         return self.status()
+
+    def _validate_race_pool_sources(self) -> None:
+        """种族的 `卡池来源` 必须在每一档都抽得到池子——抽不到就是启动错误，不留到打仗时。
+
+        族里写 `灵兽` 表示它从灵兽阶梯池抽卡（现成池，不新造数据）；这里按它的 `出现档次`
+        把 `{档}灵兽{功法|真意|气机}池` 逐个查一遍。
+        """
+
+        tiers = self._role_rules["敌方修士"].get("阶梯") or ()
+        for name, entry in self._races.items():
+            source = str(entry.get("卡池来源") or "敌方修士")
+            if source == "敌方修士":
+                continue
+            for tier_name in entry.get("出现档次") or ():
+                tier = next(
+                    (
+                        item
+                        for item in tiers
+                        if str(item.get("阶梯") or "") == str(tier_name)
+                    ),
+                    None,
+                )
+                if tier is None:
+                    continue  # 档名不对由判据报（规则层那一项查得更全）
+                for category in ("功法", "真意", "气机"):
+                    pool = str(tier.get(f"{category}池") or "").replace("敌方修士", source)
+                    # 池子的集合永远是**池子自己声明的**（灵兽池声明的是灵兽那一套），
+                    # 所以这里让池层按池名抽一次，抽不出来就是启动错误。
+                    try:
+                        self._pool.draw_pools((pool,), count=1, seed=1)
+                    except JsonDataError as exc:
+                        raise JsonDataError(
+                            f"种族 {name} 的卡池来源 {source} 在 {tier_name} 档抽不到：{pool}"
+                        ) from exc
 
     def _load_races(self) -> dict[str, Mapping[str, object]]:
         """种族登记表：**结构**在启动期查死。
@@ -174,6 +209,30 @@ class EnemyService:
         return tuple(
             copy.deepcopy(dict(item)) for item in entry.get("天生规则") or ()
         )
+
+    def growth_factors(self, race: str) -> dict[str, float]:
+        """种族的**成长修正**：属性 → 倍率（没写就是空表）。"""
+
+        self._require_initialized()
+        entry = self._races.get(str(race or "").strip())
+        if entry is None:
+            return {}
+        raw = entry.get("成长修正") or {}
+        if not isinstance(raw, Mapping):
+            raise JsonDataError(f"{race}.成长修正必须是对象")
+        return {str(key): float(value) for key, value in raw.items()}
+
+    def pool_source(self, race: str) -> str:
+        """种族的**卡池来源**：从哪一套阶梯池抽卡（默认敌方修士，可选灵兽）。"""
+
+        self._require_initialized()
+        entry = self._races.get(str(race or "").strip())
+        if entry is None:
+            return "敌方修士"
+        source = str(entry.get("卡池来源") or "敌方修士")
+        if source not in {"敌方修士", "灵兽"}:
+            raise JsonDataError(f"{race}.卡池来源只能是敌方修士或灵兽：{source}")
+        return source
 
     def status(self) -> EnemyStatus:
         return EnemyStatus(self._initialized, len(self._definitions))
@@ -334,6 +393,15 @@ class EnemyService:
                 ).items()
             }
         )
+        # 种族要在算成长与抽卡之前定下来：成长修正与卡池来源都挂在它身上。
+        # 取族用实例编号作种子，不消耗生成器随机流（见 `pick_race`）。
+        race = (
+            self.pick_race(str(tier.get("阶梯") or ""), instance_id)
+            if role_name == "敌方修士"
+            else ""
+        )
+        growth_factors = self.growth_factors(race) if race else {}
+        pool_source = self.pool_source(race) if race else "敌方修士"
         if role_name == "灵兽":
             per_level = _mapping(raw.get("每级成长"), f"{name}.每级成长")
             growth = {
@@ -343,7 +411,10 @@ class EnemyService:
         else:
             growth = dict(self._growth.cultivator_attribute_growth(max(0, level - 1)))
         for key, value in growth.items():
-            attributes[key] = float(attributes.get(key, 0)) + float(value)
+            # 成长修正：只乘**成长那一份**（等级带来的增量），不动基础与属性覆盖。
+            attributes[key] = float(attributes.get(key, 0)) + float(value) * growth_factors.get(
+                key, 1.0
+            )
         attributes["速度"] = float(attributes.get("速度", 0)) + _number(
             tier.get("每级速度"), f"{role_name}.每级速度"
         ) * max(0, level - 1)
@@ -362,7 +433,13 @@ class EnemyService:
             for key, value in attributes.items()
         }
         pools = {
-            category: _text(tier.get(f"{category}池"), f"{role_name}.{category}池")
+            category: (
+                _text(tier.get(f"{category}池"), f"{role_name}.{category}池").replace(
+                    "敌方修士", pool_source
+                )
+                if pool_source != "敌方修士"
+                else _text(tier.get(f"{category}池"), f"{role_name}.{category}池")
+            )
             for category in ("功法", "真意", "气机")
         }
         slots = _mapping(tier.get("修行槽位"), f"{role_name}.修行槽位")
@@ -425,10 +502,8 @@ class EnemyService:
                     )
                 )
         inherent: tuple[Mapping[str, object], ...] = ()
-        if role_name == "敌方修士":
-            race = self.pick_race(str(tier.get("阶梯") or ""), instance_id)
-            if race:
-                inherent = self.inherent_rules(race)
+        if race:
+            inherent = self.inherent_rules(race)
         combatant = CombatantSpec(
             id=instance_id,
             name=name,

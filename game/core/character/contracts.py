@@ -125,6 +125,8 @@ class CharacterProfile:
     five_elements: Mapping[str, float]
     #: 种族（天生那一层）：人物面板与查看页据此显示，战斗快照据此挂天生锁定技。
     race: str = ""
+    #: 寿元上限（年）：当前境界的寿元 × 种族的寿元系数。这一轮只算上限，不做衰老与寿终。
+    lifespan: int = 0
 
 
 @dataclass(frozen=True)

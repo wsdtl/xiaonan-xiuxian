@@ -23,6 +23,8 @@ class RealmDefinition:
     minimum_level: int
     maximum_level: int
     next_realm_id: str = ""
+    #: 这一境界的自然寿数上限（年）。种族用 `寿元系数` 乘它：仙族活得久、诡异活得短。
+    lifespan: int = 0
 
 
 @dataclass(frozen=True)

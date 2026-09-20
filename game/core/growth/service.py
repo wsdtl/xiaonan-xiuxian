@@ -63,6 +63,7 @@ class GrowthService:
                 _positive_int(value.get("等级下限"), f"境界 {realm_id}.等级下限"),
                 _positive_int(value.get("等级上限"), f"境界 {realm_id}.等级上限"),
                 str(value.get("下一境界") or "").strip(),
+                _positive_int(value.get("寿元"), f"境界 {realm_id}.寿元"),
             )
         build_rules = self._data.dataset("构筑规则")
         generation = _mapping(build_rules.get("生成"), "构筑/生成.json")
@@ -325,6 +326,15 @@ class GrowthService:
         for realm in self._realms.values():
             if realm.next_realm_id and realm.next_realm_id not in self._realms:
                 raise JsonDataError(f"境界下一境界不存在：{realm.realm_id}")
+        # 寿元必须随境界**不倒退**（种族的 `寿元系数` 乘在它上面，倒退会让高境界更短命）。
+        ordered = sorted(self._realms.values(), key=lambda item: item.minimum_level)
+        previous = 0
+        for realm in ordered:
+            if realm.lifespan < previous:
+                raise JsonDataError(
+                    f"境界 {realm.name} 的寿元比上一境界低：{realm.lifespan} < {previous}"
+                )
+            previous = realm.lifespan
         for level in range(1, maximum + 1):
             matches = tuple(
                 realm

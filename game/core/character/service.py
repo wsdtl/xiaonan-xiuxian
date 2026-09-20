@@ -209,6 +209,14 @@ class CharacterService:
                 _sequence(entry.get("出现档次") or (), f"{where}.出现档次")
             ):
                 _text(tier, f"{where}.出现档次[{tier_index}]")
+            lifespan_factor = entry.get("寿元系数")
+            if lifespan_factor is not None:
+                try:
+                    factor = float(lifespan_factor)
+                except (TypeError, ValueError) as exc:
+                    raise JsonDataError(f"{where}.寿元系数必须是数字") from exc
+                if not factor > 0:
+                    raise JsonDataError(f"{where}.寿元系数必须大于 0")
             result[name] = entry
         return result
 
@@ -241,6 +249,53 @@ class CharacterService:
 
         self._require_initialized()
         return self._initial_race
+
+    def race_lifespan_factor(self, race: str) -> float:
+        """种族的**寿元系数**：没写就是 1.0（人族基准）。
+
+        寿元上限 = 当前境界的 `寿元` × 这个系数；这一轮只算上限，衰老与寿终还没做。
+        """
+
+        self._require_initialized()
+        name = str(race or "").strip()
+        entry = self._races.get(name)
+        if entry is None:
+            raise JsonDataError(f"未登记的种族：{name or '<空>'}")
+        return float(entry.get("寿元系数") or 1.0)
+
+    def race_growth_factors(self, race: str) -> dict[str, float]:
+        """种族的**成长修正**：属性 → 倍率（没写就是空表，等于不修正）。"""
+
+        self._require_initialized()
+        name = str(race or "").strip()
+        entry = self._races.get(name)
+        if entry is None:
+            raise JsonDataError(f"未登记的种族：{name or '<空>'}")
+        raw = entry.get("成长修正") or {}
+        if not isinstance(raw, Mapping):
+            raise JsonDataError(f"{name}.成长修正必须是对象")
+        return {str(key): float(value) for key, value in raw.items()}
+
+    def _race_growth(self, race: str, growth: Mapping[str, float]) -> dict[str, float]:
+        """成长那一份按种族系数缩一遍（只乘增量，不动已有属性）。"""
+
+        factors = self.race_growth_factors(race)
+        if not factors:
+            return dict(growth)
+        return {
+            str(key): float(value) * factors.get(str(key), 1.0)
+            for key, value in growth.items()
+        }
+
+    def race_pool_source(self, race: str) -> str:
+        """种族的**卡池来源**：从哪一套阶梯池抽卡（默认敌方修士，可选灵兽）。"""
+
+        self._require_initialized()
+        name = str(race or "").strip()
+        entry = self._races.get(name)
+        if entry is None:
+            raise JsonDataError(f"未登记的种族：{name or '<空>'}")
+        return str(entry.get("卡池来源") or "敌方修士")
 
     def status(self) -> CharacterStatus:
         initial_items = _initial_items(self._role_rule) if self._initialized else ()
@@ -285,6 +340,11 @@ class CharacterService:
         cultivation_slots, equipped_content = self._cultivation_profile(cultivation)
         weapon_profile = self._weapon_profile(weapon)
         inventory = _inventory_summary(states)
+        race = _state_text(character.get("种族"), "人物.种族")
+        # 寿元上限 = 当前境界的寿元 × 种族的寿元系数（这一轮只算上限，不做衰老与寿终）。
+        lifespan = int(
+            round(self._growth.realm(realm_id).lifespan * self.race_lifespan_factor(race))
+        )
         return CharacterProfile(
             user_id=normalized_user_id,
             name=_state_text(character.get("姓名"), "人物.姓名"),
@@ -309,7 +369,8 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
-            race=_state_text(character.get("种族"), "人物.种族"),
+            race=race,
+            lifespan=lifespan,
         )
 
     async def public_profiles(
@@ -503,7 +564,10 @@ class CharacterService:
         character["经验"] = cultivator_advance.experience_after
         character["属性"] = _add_numbers(
             _state_mapping(character.get("属性"), "人物.属性"),
-            self._growth.cultivator_attribute_growth(cultivator_advance.levels_gained),
+            self._race_growth(
+                _state_text(character.get("种族"), "人物.种族"),
+                self._growth.cultivator_attribute_growth(cultivator_advance.levels_gained),
+            ),
         )
         weapon["等级"] = weapon_advance.level_after
         weapon["经验"] = weapon_advance.experience_after
