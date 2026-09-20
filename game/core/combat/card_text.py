@@ -397,9 +397,9 @@ class CardText:
             self._flag("构筑根能力", str(item.get("能力")))
 
         lines: list[str] = []
-        # 规则段（效果外文本）排在最前：它不是效果，是这场战斗里「引擎怎么看这张卡」。
-        # 被动行上写的单位级规则也在这里出现（写在哪儿不影响语义，见 `_rules`）。
-        rules = self._rules([*rulings_nodes, *passives])
+        # 锁定技段排在最前、在主动技能之上：它不是效果，是这场战斗里「引擎怎么看这张卡」。
+        # **一条一个 `•`**，四类载体都进这一段（写在哪儿只影响尾注怎么注，见 `_rules`）。
+        rules = self._rules([*rulings_nodes, *actives, *passives])
         if rules:
             lines.append("规则：")
             lines.extend(rules)
@@ -431,26 +431,24 @@ class CardText:
         return tuple(lines)
 
     def _rules(self, nodes: Sequence[Mapping]) -> list[str]:
-        """规则段：**规则文本由登记表渲染，卡面一个字都不手写**。
+        """锁定技段：**规则文本由登记表渲染，卡面一个字都不手写**。
 
         这样卡面上的「不可被指定（来源：敌方）」与引擎里真正读的那条规则是同一处声明——
         手写规则文本迟早会与行为漂开，而这正是负责人最不能接受的那种漂。
 
-        **单位级规则有三处写法**（根能力 `规则文本`、被动技能行、状态定义），三处都进
-        这一段：写在哪个节点上只影响它跟谁生灭，不影响读者该看到什么。状态带的那一份
-        另在状态句子里再印一次——它跟状态走，读者得知道这一点。
+        **一条一个 `•`，整段排在主动技能之前**；不管它写在哪儿（根能力 `规则文本`、
+        被动技能行、状态定义、主动技能行），都进这一段。跟谁生灭由**尾注**说清楚：
+        根能力上的不带注（它就是这张卡本身），其余带 `〔随…〕`／`〔主动：…〕`，
+        读者不必猜「这条是一直在，还是跟着某个状态」。
         """
 
         lines: list[str] = []
         seen: set[str] = set()
-        for node in nodes:
-            entries = node.get(RULE_FIELD)
-            if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
-                continue
+        for node, note in self._carried_rules(nodes):
             if not self.rule_layer:
-                lines.append("•" + self._flag(RULE_TEXT_ABILITY, "缺少登记表"))
-                return lines
-            for raw in entries:
+                return ["•" + self._flag(RULE_TEXT_ABILITY, "缺少登记表")]
+            entries = node.get(RULE_FIELD)
+            for raw in entries or ():
                 if not isinstance(raw, Mapping):
                     continue
                 name = str(raw.get("名称") or "").strip()
@@ -462,28 +460,46 @@ class CardText:
                     for key, value in raw.items()
                     if key != "名称"
                 }
-                lines.append("•" + self._rule_text(name, params))
+                lines.append("•" + self._rule_text(name, params).rstrip("。") + note + "。")
         return lines
 
-    def _line_rules(self, node: Mapping) -> list[str]:
-        """行级规则：这一行自己的 `规则[]` 里每条都印出登记表的卡面文案。
+    def _carried_rules(self, nodes: Sequence[Mapping]) -> list[tuple[Mapping, str]]:
+        """把这张卡上**所有**带 `规则[]` 的节点找出来，连同「它跟谁生灭」的尾注。
 
-        行级与单位级**同一张登记表、同一个字段名、同一个形状**，所以渲染器照样不认识
-        任何具体规则名——加一条行级规则同样不用改这里。
+        递归是必要的：状态定义藏在 `添加状态` 的效果里，位置不固定。`修改战场规则` 的
+        `规则` 是**战场规则本体**（同名不同物），跳过。
         """
 
-        if not self.rule_layer and node.get(RULE_FIELD):
-            return [self._flag(RULE_TEXT_ABILITY, "缺少登记表")]
-        sentences: list[str] = []
-        for raw in node.get(RULE_FIELD) or ():
-            if not isinstance(raw, Mapping):
-                continue
-            name = str(raw.get("名称") or "").strip()
-            if not name:
-                continue
-            params = {str(key): value for key, value in raw.items() if key != "名称"}
-            sentences.append(self._rule_text(name, params))
-        return sentences
+        found: list[tuple[Mapping, str]] = []
+
+        def collect(value: object, note: str) -> None:
+            if isinstance(value, Mapping):
+                if str(value.get("能力") or "") == "修改战场规则":
+                    return
+                entries = value.get(RULE_FIELD)
+                if isinstance(entries, Sequence) and not isinstance(entries, (str, bytes)) and entries:
+                    found.append((value, note))
+                for key, item in value.items():
+                    if key == "状态" and isinstance(item, Mapping):
+                        collect(item, f"〔随[{item.get('名称') or '状态'}]〕")
+                    else:
+                        collect(item, note)
+            elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                for item in value:
+                    collect(item, note)
+
+        for node in nodes:
+            ability = str(dict(node).get("能力") or "")
+            if ability == RULE_TEXT_ABILITY:
+                note = ""
+            elif ability == "主动技能":
+                note = f"〔主动：{node.get('名称') or '未命名'}〕"
+            elif ability == "被动技能":
+                note = f"〔被动：{node.get('名称') or '未命名'}〕"
+            else:
+                note = ""
+            collect(node, note)
+        return found
 
     def _rule_text(self, name: str, params: Mapping[str, Any]) -> str:
         """按登记表的卡面模板拼规则句；参数缺省时回落到登记的默认值。"""
@@ -525,7 +541,6 @@ class CardText:
         title = [f"耗神{_number(skill['精神消耗'])}"] if "精神消耗" in skill else []
         if "冷却行动" in skill:
             title.append(f"冷却{_number(skill['冷却行动'])}行动")
-        title.extend(text.rstrip("。") for text in self._line_rules(skill))
         lines = [f"{_ordinal(index)}[{name}]：" + ("，".join(title) + "。" if title else "")]
         condition = []
         attempt = skill.get("使用次数")
@@ -590,7 +605,6 @@ class CardText:
 
         lines = [self._trigger(node) + "，依次执行："]
         caps = self._listener_caps(node)
-        caps.extend(text.rstrip("。") for text in self._line_rules(node))
         if caps:
             lines.append("；".join(caps) + "。")
         lines.extend(self._sequence(node.get("效果")))
@@ -1533,12 +1547,9 @@ class CardText:
         attributes = holder.get("属性")
         if isinstance(attributes, Mapping) and attributes:
             detail.append(_join([self._attribute_change(key, value) for key, value in attributes.items()]))
-        sentence = f"{target}获得[{name}]" + (f"（{_join(detail)}）" if detail else "")
-        # 状态自带的单位级规则：它**跟状态一起生灭**，所以印在状态这句里，不并进规则段。
-        carried = self._rules([holder])
-        if carried:
-            return sentence + "，同时" + "；".join(text.lstrip("•").rstrip("。") for text in carried) + "。"
-        return sentence
+        # 状态自带的锁定技**不印在这句里**：它跟别的锁定技一样，进最前那一段、一条一个 `•`，
+        # 尾注写「〔随[状态名]〕」说清它跟状态生灭（见 `_rules`）。
+        return f"{target}获得[{name}]" + (f"（{_join(detail)}）" if detail else "")
 
     def _attribute_change(self, key: object, value: object) -> str:
         number = float(value)

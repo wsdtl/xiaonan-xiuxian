@@ -1003,8 +1003,27 @@ class AbilityRuntime:
             failure = ""
             is_control = bool(definition.get("是否控制", False)) or "控制" in frame.tags
             immunities = self._immunities(destination)
+            # 锁定技：`状态被添加` 拦截点——问**被打上的那个单位**。请求摊成四类标签
+            # （状态名 / 类别 / 是不是控制 / 来源关系），所以「不受控制」「不吃负面状态」
+            # 「只不受某一条」都能用现成的条件原子写，不必给引擎加词汇。
+            # 拒绝时给出的原因与既有的效果免疫一致（`状态免疫` / `控制免疫`），
+            # 这样战报里读到的说法不因为写法换了而变。
+            by_rule = self._rules_deny(
+                context,
+                destination,
+                "状态被添加",
+                owner=source,
+                tags=(
+                    f"状态:{str(definition.get('名称') or '')}",
+                    f"类别:{str(definition.get('类别') or '中性')}",
+                    f"控制:{'真' if is_control else '假'}",
+                    f"来源关系:{self._source_relation(context, source, destination)}",
+                ),
+            )
             if frame.cancelled:
                 failure = "被取消"
+            elif by_rule:
+                failure = "控制免疫" if is_control else "状态免疫"
             elif "状态" in immunities or "负面状态" in immunities and definition.get("类别") == "负面":
                 failure = "状态免疫"
             elif "控制" in immunities and is_control:

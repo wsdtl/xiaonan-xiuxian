@@ -366,11 +366,63 @@ def _scene_skill_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, f
     )
 
 
+def _landed_statuses(result, pid: str) -> int:
+    """落到目标身上的状态数（`添加状态后` 的事件数就是它）。"""
+
+    return sum(1 for event in result.events if event.kind == "添加状态后" and event.target_id == pid)
+
+
+def _scene_status_added(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """状态被添加：对手给别人挂状态时，问**被打上的那个单位**。
+
+    按这条规则拦的是哪种状态挑探针：条件里有 `控制:真` 就用控制型状态，有 `类别:负面`
+    就用负面状态（这是标准探针覆盖表里声明过的那两类）。
+    """
+
+    tags = probe_tags(rule)
+    status: dict = {"名称": "探针封", "类别": "中性", "持续单位": "整场战斗"}
+    if "控制:真" in tags:
+        status = {
+            "名称": "探针封",
+            "类别": "负面",
+            "是否控制": True,
+            "持续单位": "状态承受者行动",
+            "剩余行动": 2,
+            "标签": ["控制"],
+        }
+    elif "类别:负面" in tags:
+        status = {"名称": "探针封", "类别": "负面", "持续单位": "整场战斗"}
+    applier = _listener_passive(
+        "战斗开始",
+        [
+            {
+                "能力": "添加状态",
+                "目标": {"能力": "选择目标", "范围": "敌方"},
+                "状态": status,
+            }
+        ],
+        name="探针下咒",
+    )
+    plain = _run(engine, _fighter("L1", _card(applier)), _fighter("R1", None))
+    guarded = _run(
+        engine,
+        _fighter("L1", _card(applier)),
+        _fighter("R1", _card(_rules(entry))),
+    )
+    return (
+        "目标身上落到的状态数",
+        _landed_statuses(plain, "R1"),
+        _landed_statuses(guarded, "R1"),
+        _landed_statuses(guarded, "R1") < _landed_statuses(plain, "R1"),
+    )
+
+
 SCENES = {
     "被选为目标": _scene_targeted,
     "行动条被改写": _scene_action_bar,
     "事件被改写": _scene_event_rewrite,
     "技能被改写": _scene_skill_rewrite,
+    "状态被添加": _scene_status_added,
 }
 
 

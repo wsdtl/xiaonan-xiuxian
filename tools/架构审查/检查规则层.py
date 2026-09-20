@@ -130,24 +130,30 @@ def check_probe_coverage(layer: dict[str, dict]) -> list[str]:
 
 
 def check_render_path(layer: dict[str, dict]) -> list[str]:
-    """每条规则在三处写法上都渲染得出来：根能力 `规则文本`、被动技能行、状态定义。"""
+    """每条规则都渲染得出来，而且卡面口径成立：整段在主动技能之前，**一条一个 `•`**。
+
+    探针把单位级规则分给三种写法（根能力 / 被动行 / 状态定义）各带一部分，这样三处的
+    尾注都真的出现过——同名规则写两处时只印一次（以先出现的载体为准）。
+    """
 
     from game.core.combat.card_text import render_body
     from game.core.combat.rules import RULE_FIELD, RULE_TEXT_ABILITY, rule_card_text
 
     unit = [name for name, definition in layer.items() if str(definition.get("归属")) == "单位"]
     line = [name for name, definition in layer.items() if str(definition.get("归属")) == "行"]
-    unit_entries = [{"名称": name} for name in unit]
-    line_entries = [{"名称": name} for name in line]
+    切 = max(1, len(unit) // 3)
+    根上 = [{"名称": name} for name in unit[:切]]
+    被动上 = [{"名称": name} for name in unit[切:切 * 2]] or 根上
+    状态上 = [{"名称": name} for name in unit[切 * 2:]] or 根上
     probe = {
         "能力": [
-            {"能力": RULE_TEXT_ABILITY, RULE_FIELD: unit_entries},
+            {"能力": RULE_TEXT_ABILITY, RULE_FIELD: 根上},
             # 单位级规则的第二种写法：被动技能行自己的 `规则[]`。
             {
                 "能力": "被动技能",
                 "名称": "探针载规则",
                 "结算顺序": 1,
-                "规则": unit_entries,
+                "规则": 被动上,
                 "效果": [
                     {
                         "能力": "监听事件",
@@ -170,7 +176,7 @@ def check_render_path(layer: dict[str, dict]) -> list[str]:
                                     "名称": "探针锁势",
                                     "类别": "正面",
                                     "持续单位": "整场战斗",
-                                    RULE_FIELD: unit_entries,
+                                    RULE_FIELD: 状态上,
                                 },
                             },
                         ],
@@ -199,6 +205,15 @@ def check_render_path(layer: dict[str, dict]) -> list[str]:
     lines, misses = render_body(probe, layer)
     text = "\n".join(lines)
     problems = [f"规则 {miss} 渲染不出来" for miss in misses]
+    # 卡面口径（负责人定）：锁定技整段排在**主动技能之前**，**一条一个 `•` 开头的行**；
+    # 不是写在根能力上的那一份要带尾注，说清它跟谁生灭。
+    规则行 = [行 for 行 in lines if 行.startswith("•")]
+    规则段位置 = next((i for i, 行 in enumerate(lines) if 行 == "规则："), -1)
+    主动位置 = next((i for i, 行 in enumerate(lines) if 行 == "主动："), len(lines))
+    if 规则段位置 < 0:
+        problems.append("卡面上没有「规则：」段")
+    elif 规则段位置 > 主动位置:
+        problems.append("「规则：」段没有排在主动技能之前")
     for name, definition in sorted(layer.items()):
         template = str(dict(definition).get("卡面") or "")
         if not template:
@@ -212,6 +227,10 @@ def check_render_path(layer: dict[str, dict]) -> list[str]:
         expected = rule_card_text(name, defaults, layer)
         if expected not in text:
             problems.append(f"规则 {name} 没有渲染进卡面（应出现「{expected}」）")
+        elif not any(expected in 行 for 行 in 规则行):
+            problems.append(f"规则 {name} 没有单独成行（一条要一个 `•` 开头）")
+    if "〔随[探针锁势]〕" not in text:
+        problems.append("状态带来的规则没有尾注（应出现〔随[状态名]〕）")
     return problems
 
 
