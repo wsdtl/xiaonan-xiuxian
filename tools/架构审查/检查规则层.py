@@ -413,6 +413,61 @@ def _enemy_tiers() -> tuple[str, ...]:
     )
 
 
+def _attributes() -> set[str]:
+    """登记过的战斗属性名（种族 `成长修正` 只能写这些键）。"""
+
+    path = ROOT / "data" / "战斗" / "定义" / "属性.json"
+    if not path.exists():
+        return set()
+    return {str(key) for key in json.loads(path.read_text(encoding="utf-8"))}
+
+
+def _race_extra_fields(name: str, entry: Mapping) -> list[str]:
+    """种族另外三样（非锁定技）：成长修正 / 寿元系数 / 卡池来源。
+
+    它们不进效果管线，也不挂规则，但都是**会被引擎读**的字段，所以照样进判据：
+    成长修正的键必须是登记过的属性、倍率是正数；寿元系数是正数；卡池来源只有两种。
+
+    基准族人族不许写这三样——它是「什么都不天生」的那把尺子。
+    """
+
+    problems: list[str] = []
+    if name == BASE_RACE:
+        for key in ("成长修正", "寿元系数", "卡池来源"):
+            if entry.get(key) not in (None, {}):
+                problems.append(f"{BASE_RACE} 是基准族，不该写 {key}")
+        return problems
+    成长 = entry.get("成长修正")
+    if 成长 not in (None, {}):
+        if not isinstance(成长, Mapping):
+            problems.append(f"{name}.成长修正必须是对象")
+        else:
+            属性 = _attributes()
+            for 键, 倍率 in 成长.items():
+                if 属性 and str(键) not in 属性:
+                    problems.append(f"{name}.成长修正用了没登记的属性：{键}")
+                try:
+                    数值 = float(倍率)
+                except (TypeError, ValueError):
+                    problems.append(f"{name}.成长修正.{键}不是数字：{倍率}")
+                    continue
+                if 数值 <= 0:
+                    problems.append(f"{name}.成长修正.{键}必须大于 0：{数值}")
+    寿元 = entry.get("寿元系数")
+    if 寿元 is not None:
+        try:
+            系数 = float(寿元)
+        except (TypeError, ValueError):
+            problems.append(f"{name}.寿元系数不是数字：{寿元}")
+        else:
+            if 系数 <= 0:
+                problems.append(f"{name}.寿元系数必须大于 0：{系数}")
+    卡池 = entry.get("卡池来源")
+    if 卡池 is not None and str(卡池) not in {"敌方修士", "灵兽"}:
+        problems.append(f"{name}.卡池来源只能是敌方修士或灵兽：{卡池}")
+    return problems
+
+
 def _race_entries() -> list[dict]:
     """`角色/规则/种族/种族.json`：种族的天生锁定技登记表。"""
 
@@ -474,6 +529,7 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
         except (TypeError, ValueError) as exc:
             problems.append(f"{name} 的天生规则不成立：{exc}")
             continue
+        problems.extend(_race_extra_fields(name, entry))
         if name == BASE_RACE:
             if rules:
                 problems.append(
