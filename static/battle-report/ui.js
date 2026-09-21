@@ -111,8 +111,43 @@ export function renderParticipantRecord(participant) {
   return details;
 }
 
-export function renderSnapshotParticipant(participant) {
-  const details = node("details", "participant-details");
+// 快照里的参战者记录只带**会变**的那一半（血气 / 状态），不变的那一半（名字、阵营、
+// 颜色、功法能力列表）在载荷的花名册里各有一份——同一个人的功法列表原先被每条行动抄两遍。
+// 加载后先把两份合起来，渲染函数照旧只读合成后的记录。**合不起来就抛错**：宁可在控制台
+// 看见一句「战报缺少角色档案」，也不要页面安静地画成空白（第 117 轮）。
+export function hydrateParticipants(payload, roster) {
+  if (!payload || typeof payload !== "object" || !roster) {
+    return payload;
+  }
+  const fill = (record) => {
+    if (!record || typeof record !== "object" || !record.key) {
+      return record;
+    }
+    const profile = roster[record.key];
+    if (!profile) {
+      throw new Error(`战报缺少角色档案：${record.key}`);
+    }
+    return { ...profile, ...record };
+  };
+  if (Array.isArray(payload.participants)) {
+    payload.participants = payload.participants.map(fill);
+  }
+  if (payload.segment) {
+    hydrateParticipants(payload.segment, roster);
+  }
+  const comparison = payload.comparison;
+  if (comparison) {
+    ["before", "after"].forEach((side) => {
+      const frame = comparison[side];
+      if (frame && Array.isArray(frame.participants)) {
+        frame.participants = frame.participants.map(fill);
+      }
+    });
+  }
+  return payload;
+}
+
+export function renderSnapshotParticipant(participant) {  const details = node("details", "participant-details");
   details.append(
     node("summary", "", [
       node("strong", "", participant.label),

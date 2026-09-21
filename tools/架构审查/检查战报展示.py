@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import pathlib
 import re
@@ -122,9 +123,54 @@ def _run() -> tuple[dict, dict]:
     return result.report, {"main": main, "bundle": bundle}
 
 
-def check_teams(report: dict, presentation: dict) -> list[str]:
-    """阵营分组必须与战报自己写的一致。"""
+def _merged(presentation: dict) -> dict:
+    """合成视图：把花名册合回参战者记录，看**页面最终拿到什么**。
 
+    合不起来本身就是缺陷（键对不上），`_hydrate` 会给记录打 `__缺档案__` 标记，
+    由「快照与花名册」那一项报出来。
+    """
+
+    return _hydrate(copy.deepcopy(presentation))
+
+
+def _hydrate(payload: dict) -> dict:
+    """把花名册合回参战者记录——前端加载后做的同一件事（`hydrateParticipants`）。
+
+    快照里只带会变的那一半（血气 / 状态），不变的那一半（名字、阵营、颜色、功法能力列表）
+    在载荷的 `roster` 里一份。花名册挂在**各自的载荷**上（战报头与明细包各一份），
+    所以往下走的时候带着「离得最近的那份」。
+    """
+
+    def fill(records: list, roster: dict) -> list:
+        合成 = []
+        for record in records:
+            profile = roster.get(record.get("key"))
+            if profile is None:
+                合成.append({**record, "__缺档案__": True})
+            else:
+                合成.append({**profile, **record})
+        return 合成
+
+    def walk(value, roster):
+        if isinstance(value, dict):
+            local = value.get("roster") or roster
+            for key in ("participants", "final_participants", "initial_participants"):
+                if isinstance(value.get(key), list):
+                    value[key] = fill(value[key], local)
+            for item in value.values():
+                walk(item, local)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item, roster)
+
+    walk(payload, {})
+    return payload
+
+
+def check_teams(report: dict, presentation: dict) -> list[str]:
+    """阵营分组必须与战报自己写的一致（读合成视图：花名册 + 快照）。"""
+
+    presentation = _merged(presentation)
     problems: list[str] = []
     sides = {value["id"]: value["side"] for value in report["participants"]}
     records = presentation["bundle"]["segments"]["0"]["segment"]["final_participants"]
@@ -160,6 +206,7 @@ def check_matchup_matches_headline(report: dict, presentation: dict) -> list[str
 
     title = str(report["headline"])
     left, _, right = title.partition(" 对阵 ")
+    presentation = _merged(presentation)
     records = presentation["bundle"]["segments"]["0"]["segment"]["final_participants"]
     grouped: dict[str, list[str]] = {}
     for value in records:
@@ -321,6 +368,60 @@ def _timeline_entries(payload) -> list[dict]:
     return found
 
 
+def check_participant_records(report: dict, presentation: dict) -> list[str]:
+    """快照记录只带会变的那一半，花名册覆盖率与内容要跟战报一致（第 117 轮的分工）。"""
+
+    declared = json.loads(
+        (ROOT / "data" / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8")
+    )
+    record_fields = {str(value) for value in declared["协议"]["参战者字段"]}
+    profile_fields = {str(value) for value in declared["协议"]["花名册字段"]}
+    main = presentation["main"]
+    bundle = presentation["bundle"]
+    problems: list[str] = []
+    for 名, 块 in (("战报头", main), ("明细包", bundle)):
+        roster = 块.get("roster") or {}
+        wanted = {str(value["id"]): value for value in report.get("participants") or ()}
+        if set(roster) != set(wanted):
+            problems.append(
+                f"{名}的花名册与战报的参战者对不上："
+                + "、".join(sorted(set(roster) ^ set(wanted)))
+            )
+        for 键, 档案 in roster.items():
+            if set(档案) - profile_fields:
+                problems.append(
+                    f"{名}的花名册多了字段（{'、'.join(sorted(set(档案) - profile_fields))}）：{键}"
+                )
+            if 键 in wanted and 档案.get("label") != str(wanted[键]["name"]):
+                problems.append(f"{名}的花名册名字与战报不一致：{键}")
+            if not 档案.get("detail_groups"):
+                problems.append(f"{名}的花名册缺功法能力分组：{键}")
+        for 记录 in _participant_records_in(块):
+            if set(记录) - record_fields:
+                problems.append(
+                    f"{名}的快照记录多了字段（{'、'.join(sorted(set(记录) - record_fields))}）："
+                    f"{记录.get('key')}"
+                )
+            if 记录.get("__缺档案__"):
+                problems.append(f"{名}的快照记录在花名册里找不到档案：{记录.get('key')}")
+    return problems
+
+
+def _participant_records_in(payload) -> list[dict]:
+    """把载荷里的参战者快照记录捞出来：带 `key` 与 `gauges` 的字典就是一条。"""
+
+    found: list[dict] = []
+    if isinstance(payload, dict):
+        if "key" in payload and "gauges" in payload:
+            found.append(payload)
+        for value in payload.values():
+            found.extend(_participant_records_in(value))
+    elif isinstance(payload, (list, tuple)):
+        for value in payload:
+            found.extend(_participant_records_in(value))
+    return found
+
+
 CHECKS = (
     ("阵营分组", check_teams),
     ("对阵与标题一致", check_matchup_matches_headline),
@@ -328,6 +429,7 @@ CHECKS = (
     ("内部明细", check_internal_details),
     ("展示字段", check_event_fields),
     ("角色表一致", check_actor_tables),
+    ("快照与花名册", check_participant_records),
 )
 
 

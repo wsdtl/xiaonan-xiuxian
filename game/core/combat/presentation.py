@@ -58,6 +58,8 @@ def build_battle_report_presentation(
     palette = {**visuals, "system": system_visual}
     actors = {value["id"]: value["name"] for value in participants}
     actors["system"] = str(system["name"])
+    # 花名册：每人一份**不变**的那一半（名字、阵营、颜色、功法能力列表）。快照里只留会变的。
+    roster = _participant_static(participants, visuals, team_of, catalog)
     combatants = [
         _combatant(value, visuals[value["id"]], team_of[value["id"]])
         for value in participants
@@ -65,12 +67,8 @@ def build_battle_report_presentation(
 
     initial_state = _initial_state(participants, catalog)
     final_state = _final_state(participants, initial_state)
-    initial_participants = _participant_records(
-        participants, visuals, initial_state, team_of, catalog
-    )
-    final_participants = _participant_records(
-        participants, visuals, final_state, team_of, catalog
-    )
+    initial_participants = _participant_records(participants, initial_state, catalog)
+    final_participants = _participant_records(participants, final_state, catalog)
 
     groups = _event_groups(report.get("events") or ())
     state = deepcopy(initial_state)
@@ -148,12 +146,8 @@ def build_battle_report_presentation(
                 "title": ui["text"]["comparison_title"],
                 "empty_text": ui["text"]["comparison_empty"],
                 "changes": _state_changes(participants, before, after, catalog),
-                "before": _frame(
-                    "行动前状态", round_label, participants, visuals, before, team_of, catalog
-                ),
-                "after": _frame(
-                    "行动后状态", round_label, participants, visuals, after, team_of, catalog
-                ),
+                "before": _frame("行动前状态", round_label, participants, before, catalog),
+                "after": _frame("行动后状态", round_label, participants, after, catalog),
             },
         }
 
@@ -208,6 +202,8 @@ def build_battle_report_presentation(
         #: 角色名字与颜色各一份：事件只记「谁」（键），页面查这两张表。
         "actors": dict(actors),
         "palette": deepcopy(palette),
+        #: 花名册：每人不变的那一半（快照里只留血气与状态）。
+        "roster": deepcopy(roster),
         "document_title": f"{catalog.game_name} · {report['headline']}",
         "summary": {
             "title": report["headline"],
@@ -237,6 +233,7 @@ def build_battle_report_presentation(
     bundle = {
         "actors": dict(actors),
         "palette": deepcopy(palette),
+        "roster": deepcopy(roster),
         "segments": {
             "0": {"schema": schema, "version": version, "segment": segment}
         },
@@ -327,30 +324,51 @@ def _combatant(
     }
 
 
-def _participant_records(
+def _participant_static(
     participants: Sequence[Mapping[str, Any]],
     visuals: Mapping[str, Mapping[str, Any]],
-    state: Mapping[str, Mapping[str, Any]],
     team_of: Mapping[str, tuple[str, str]],
     catalog: BattleReportCatalog,
+) -> dict[str, dict[str, Any]]:
+    """一张仗里**不变**的那一半：名字、阵营、颜色、功法能力列表。
+
+    行动前后状态原先每条行动各存两份完整快照，其中六成是这份不变的东西（8 组实测
+    `detail_groups` 一项就 13.2M 字符）——**同一个人的功法列表被抄了 45 遍**。这里
+    按人算一次，载荷带一张花名册（`roster`），快照里只留会变的血气与状态。
+    """
+
+    return {
+        value["id"]: {
+            "label": value["name"],
+            "team_id": team_of[value["id"]][0],
+            "team_label": team_of[value["id"]][1],
+            "visual": dict(visuals[value["id"]]),
+            "detail_label": catalog.participant_presentation["详情标题"],
+            "detail_groups": _detail_groups(value, catalog),
+        }
+        for value in participants
+    }
+
+
+def _participant_records(
+    participants: Sequence[Mapping[str, Any]],
+    state: Mapping[str, Mapping[str, Any]],
+    catalog: BattleReportCatalog,
 ) -> list[dict[str, Any]]:
+    """快照里的参战者记录：只带**会变**的那一半（血气/护盾/精神与状态），
+    不变的那一半由花名册提供——页面加载后把两份合起来（见 `static/battle-report` 的
+    `hydrateParticipants`，判据侧同样先合再判）。
+    """
+
     return [
-        _participant_record(
-            value,
-            visuals[value["id"]],
-            state[value["id"]],
-            team_of[value["id"]],
-            catalog,
-        )
+        _participant_record(value, state[value["id"]], catalog)
         for value in participants
     ]
 
 
 def _participant_record(
     participant: Mapping[str, Any],
-    visual: Mapping[str, Any],
     state: Mapping[str, Any],
-    team: tuple[str, str],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     resources = state["resources"]
@@ -394,18 +412,12 @@ def _participant_record(
     ]
     return {
         "key": participant["id"],
-        "label": participant["name"],
-        "team_id": team[0],
-        "team_label": team[1],
-        "visual": dict(visual),
         "gauges": gauges,
         "status_group": {
             "id": "temporary_effects",
             **dict(catalog.participant_presentation["状态组"]),
             "items": statuses,
         },
-        "detail_label": catalog.participant_presentation["详情标题"],
-        "detail_groups": _detail_groups(participant, catalog),
     }
 
 
@@ -733,16 +745,14 @@ def _frame(
     title: str,
     label: str,
     participants: Sequence[Mapping[str, Any]],
-    visuals: Mapping[str, Mapping[str, Any]],
     state: Mapping[str, Mapping[str, Any]],
-    team_of: Mapping[str, tuple[str, str]],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     return {
         "title": title,
         "round_turn_label": label,
         "facts": [],
-        "participants": _participant_records(participants, visuals, state, team_of, catalog),
+        "participants": _participant_records(participants, state, catalog),
     }
 
 

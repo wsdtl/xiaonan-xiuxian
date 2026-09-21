@@ -264,6 +264,18 @@ class BattleReportCatalog:
 
         return _strings(self.protocol, "事实字段")
 
+    @property
+    def participant_fields(self) -> frozenset[str]:
+        """快照里的参战者记录**只许有**这些字段（`协议.参战者字段`）：只留会变的那一半。"""
+
+        return _strings(self.protocol, "参战者字段")
+
+    @property
+    def roster_fields(self) -> frozenset[str]:
+        """花名册里一条档案**只许有**这些字段（`协议.花名册字段`）：不变的那一半。"""
+
+        return _strings(self.protocol, "花名册字段")
+
     def settlement_kinds(self, category: str) -> frozenset[str]:
         values = _mapping(self.normalization, "结算事件")
         return frozenset(
@@ -439,6 +451,11 @@ class BattleReportCatalog:
             raise ValueError(
                 "战报协议缺少展示字段名单（`协议.事件字段` / `协议.事实字段`）："
                 "展示载荷靠它对账，缺了就没人管「多发字段」这件事了"
+            )
+        if not self.participant_fields or not self.roster_fields:
+            raise ValueError(
+                "战报协议缺少参战者字段名单（`协议.参战者字段` / `协议.花名册字段`）："
+                "快照与花名册的分工靠它对账"
             )
 
     def validate_event_kinds(self, event_kinds: Sequence[str]) -> None:

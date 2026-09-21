@@ -7,6 +7,7 @@ import {
 import {
   activateMotion,
   controlButton,
+  hydrateParticipants,
   node,
   renderGauge,
   renderParticipantRecord,
@@ -47,7 +48,7 @@ main().catch((error) => {
 
 async function main() {
   const report = await loadReport();
-  if (report.schema !== "game.battle_report.presentation" || report.version !== 5) {
+  if (report.schema !== "game.battle_report.presentation" || report.version !== 6) {
     renderUnsupportedReport(report);
     return;
   }
@@ -56,7 +57,10 @@ async function main() {
   state.mode = report.ui.defaults.mode;
   state.filter = report.ui.defaults.filter;
   state.snapshot = report.ui.defaults.snapshot;
-  report.detail.segments.forEach((segment) => state.segments.set(segment.index, segment));
+  report.detail.segments.forEach((segment) => {
+    hydrateParticipants(segment, report.roster);
+    state.segments.set(segment.index, segment);
+  });
   if (report.detail.segments.length) {
     state.segmentIndex = report.detail.segments[0].index;
   }
@@ -184,6 +188,7 @@ async function ensureSegment(index) {
   }
   const payload = await loadEndpoint("segment", { segmentIndex: index });
   assertProtocol(payload);
+  hydrateParticipants(payload.segment, state.report.roster);
   state.segments.set(index, payload.segment);
   return payload.segment;
 }
@@ -205,6 +210,7 @@ async function ensureParticipants(index, snapshot) {
   }
   const payload = await loadEndpoint("participants", { segmentIndex: index, snapshot });
   assertProtocol(payload);
+  hydrateParticipants(payload, state.report.roster);
   state.participants.set(key, payload);
   return payload;
 }
@@ -216,6 +222,7 @@ async function ensureTransition(index, sequence) {
   }
   const payload = await loadEndpoint("transition", { segmentIndex: index, sequence });
   assertProtocol(payload);
+  hydrateParticipants(payload, state.report.roster);
   state.transitions.set(key, payload);
   return payload;
 }
@@ -555,7 +562,7 @@ function optionExists(options, value) {
 }
 
 function assertProtocol(value) {
-  if (value?.schema !== "game.battle_report.presentation" || value?.version !== 5) {
+  if (value?.schema !== "game.battle_report.presentation" || value?.version !== 6) {
     throw new Error(state.report.ui.text.unsupported_detail);
   }
 }
