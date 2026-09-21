@@ -220,11 +220,18 @@ class AlchemyService:
         )
         missing_values = list(missing)
         if beast is None:
-            missing_values.insert(0, AlchemyMissingMaterial("药引", "兽宝", 1))
+            missing_values.insert(
+                0,
+                AlchemyMissingMaterial(
+                    "药引",
+                    f"{self._asset.grade(difficulty.beast_grade_id).name}及以上兽宝",
+                    1,
+                ),
+            )
         if not missing_values and secondary_count > difficulty.secondary_limit:
             missing_values.append(
                 AlchemyMissingMaterial(
-                    "辅材", "本脉灵植", secondary_count - difficulty.secondary_limit
+                    "辅材", "本脉灵植（旁脉替代已经用满）", secondary_count - difficulty.secondary_limit
                 )
             )
         grade_id, grade_name = self._medicine_grade(difficulty, beast, herbs)
@@ -580,7 +587,11 @@ class AlchemyService:
             if index not in matched:
                 missing_counts[trait] = missing_counts.get(trait, 0) + 1
         missing = tuple(
-            AlchemyMissingMaterial("辅材", trait, quantity)
+            AlchemyMissingMaterial(
+                "辅材",
+                f"{self._asset.grade(minimum_grade_id).name}及以上{trait}灵植",
+                quantity,
+            )
             for trait, quantity in missing_counts.items()
         )
         return materials, missing, sum(item.relation == "旁脉" for item in materials)
