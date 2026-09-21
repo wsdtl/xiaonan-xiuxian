@@ -52,6 +52,21 @@ def copy_value(value: Any) -> Any:
     return copy.deepcopy(value)
 
 
+def record_values(recorded: frozenset[str] | None, facts: Mapping[str, Any]) -> dict[str, Any]:
+    """按登记表筛出**要进日志**的事实，再按需深拷（见 `copy_value`）。
+
+    日志只记重要的动作与数据：名单在 `展示/战报.json` 的 `标准化.记录事实`，由战斗核心
+    在启动时接线（`BattleEngine.recorded_facts`）。不在名单上的键（引擎记账、掷点过程、
+    伤害链的中间值）**在记录这一刻就丢掉**——它们既不进事件、也不进战报与落库记录。
+    筛选发生在拷贝之前，所以顺带省掉拷贝。名单为 `None` 时不筛（没接线时照旧全记）。
+    """
+
+    if recorded is None:
+        return copy_value(facts)
+    kept = {key: value for key, value in facts.items() if key in recorded}
+    return copy_value(kept)
+
+
 @dataclass(frozen=True)
 class CombatCatalog:
     attributes: Mapping[str, Mapping[str, Any]]
@@ -741,6 +756,9 @@ class BattleContext:
             event_values = dict(frame.facts)
             target = frame.target
             kind = frame.transformed_kind or frame.kind
+        # 第二处记录口（战场形成 / 阵法 / 地势这些由引擎直接派发的事件）：与
+        # `mechanics._dispatch_event` 走同一份筛选，不然这些事件会带着整本账进日志。
+        recorded = self.engine.recorded_facts if self.engine is not None else None
         self.events.append(
             BattleEvent(
                 self.action_number,
@@ -749,7 +767,7 @@ class BattleContext:
                 target.name,
                 text,
                 round(float(event_values.get("实际数值", event_values.get("当前数值", amount)) or 0), 3),
-                event_values,
+                record_values(recorded, event_values),
                 tuple(tags),
                 ability,
                 source.id,

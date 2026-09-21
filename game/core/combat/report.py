@@ -466,16 +466,6 @@ def _event_report(
         for key, value in event.values.items()
         if key != "技能键"
     ]
-    steps = [
-        {
-            "label": key.replace("伤害", "") or "伤害",
-            "value": _round(float(event.values[key])),
-            "display": _number_text(float(event.values[key])),
-        }
-        for key in catalog.damage_steps
-        if isinstance(event.values.get(key), int | float)
-        and not isinstance(event.values.get(key), bool)
-    ]
     amount_text = ""
     if event.amount > 0 and category == "damage":
         amount_text = f"{_number_text(event.amount)} 伤害"
@@ -499,7 +489,6 @@ def _event_report(
         "amount_text": amount_text,
         "ability": event.ability,
         "tags": list(event.tags),
-        "steps": steps,
         "details": details,
     }
 

@@ -51,6 +51,10 @@ class BattleReportCatalog:
     #: 而基准是每个属性自己的事（加成类 100、减免类 0），所以要把定义一起带进来，
     #: 不能把「不等于 0」写死。
     attributes: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
+    #: 记录事实名单的缓存（见 `recorded_facts`）：它每条事件都要查一次。
+    _record_cache: frozenset[str] | None = dataclass_field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     @classmethod
     def from_mapping(
@@ -219,8 +223,25 @@ class BattleReportCatalog:
         return tuple(_strings_in_order(self.normalization, "属性摘要"))
 
     @property
-    def damage_steps(self) -> tuple[str, ...]:
-        return tuple(_strings_in_order(self.normalization, "伤害步骤"))
+    def recorded_facts(self) -> frozenset[str]:
+        """进战斗日志的事实键（`标准化.记录事实.保留`）。
+
+        引擎在**记录那一刻**就按它筛：不在名单上的键既不进事件、也不进战报与存储。
+        名单之外还有一份 `丢弃`，那是「明确想过、决定不记」的键——判据靠它对账，
+        引擎不看它（`保留` 是唯一闸门）。每条事件都要查一次，所以算一次就缓存住。
+        """
+
+        cached = self._record_cache
+        if cached is None:
+            cached = _strings(_mapping(self.normalization, "记录事实"), "保留")
+            object.__setattr__(self, "_record_cache", cached)
+        return cached
+
+    @property
+    def dropped_facts(self) -> frozenset[str]:
+        """明确决定**不记**的事实键（`标准化.记录事实.丢弃`）：记账字段与中间过程。"""
+
+        return _strings(_mapping(self.normalization, "记录事实"), "丢弃")
 
     @property
     def damage_facts(self) -> frozenset[str]:
@@ -371,6 +392,32 @@ class BattleReportCatalog:
             for entry in entries:
                 if not entry or len(entry) > 2 or not all(name.strip() for name in entry):
                     raise ValueError(f"战报紧凑事实条目不合法：{kind}")
+        self._validate_records()
+
+    def _validate_records(self) -> None:
+        """记录名单要自洽：保留与丢弃不重叠，屏上不显示的账也不该记。"""
+
+        recorded = self.recorded_facts
+        dropped = self.dropped_facts
+        both = recorded & dropped
+        if both:
+            raise ValueError("战报记录事实同时写在保留与丢弃里：" + "、".join(sorted(both)))
+        if not recorded:
+            raise ValueError("战报记录事实的保留名单不能为空")
+        shown = self.internal_details - dropped
+        if shown:
+            raise ValueError(
+                "战报内部明细必须也在丢弃名单里（屏上不显示的账别记）："
+                + "、".join(sorted(shown))
+            )
+        must_record = self.damage_facts | self.percent_details | self.multiplier_details
+        for kind, entries in self.compact_facts.items():
+            must_record |= {name for entry in entries for name in entry}
+        missing = must_record - recorded
+        if missing:
+            raise ValueError(
+                "战报要显示的事实没在记录名单里（会渲染成空）：" + "、".join(sorted(missing))
+            )
 
     def validate_event_kinds(self, event_kinds: Sequence[str]) -> None:
         declared = {str(value) for value in event_kinds}

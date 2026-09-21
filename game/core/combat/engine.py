@@ -62,8 +62,16 @@ def _line_rules(
 class BattleEngine(AbilityRuntime):
     """执行自动战斗；所有内容规则均来自传入的 JSON 目录。"""
 
-    def __init__(self, combat_rules: Mapping[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        combat_rules: Mapping[str, Any] | None = None,
+        recorded_facts: frozenset[str] | None = None,
+    ) -> None:
         rules = dict(combat_rules or {})
+        #: 战斗日志记哪些事实键（`展示/战报.json` 的 `标准化.记录事实`），见 `_recorded_facts`。
+        #: `None` = 不筛（没接线时照旧全记）：这个方向的默认值是安全的——忘了接线只会
+        #: 「没省下来」，不会把该记的东西丢掉；漏记由 `战报记录通道` 判据兜。
+        self.recorded_facts = None if recorded_facts is None else frozenset(recorded_facts)
         # 事件与能力是**递归派发**的：一层连锁要吃掉好几个 Python 帧。两条链的上限写在
         # 数据里（`规则/行动.json`），所以进程的递归上限必须跟着抬——否则一条合法但很深的
         # 连锁（返照家族的 `资变` ↔ `伤后` 自环，15 组讨伐实测到事件 141 层 / 能力 244 层）

@@ -20,6 +20,7 @@ from .models import (
     attribute_ratio,
     copy_skills,
     copy_value,
+    record_values,
 )
 
 #: 目标范围名 -> `_target_select` 里的分支名。
@@ -856,7 +857,7 @@ class AbilityRuntime:
                         target=frame.target.name,
                         text=frame.transformed_kind or frame.kind,
                         amount=round(frame.amount, 3),
-                        values=copy_value(frame.facts),
+                        values=record_values(self.recorded_facts, frame.facts),
                         tags=tuple(sorted(frame.tags)),
                         ability=context.current_ability,
                         source_id=frame.source.id,

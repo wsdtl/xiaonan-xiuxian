@@ -123,7 +123,9 @@ class CombatService:
         report_catalog = BattleReportCatalog.from_mapping(
             report_dataset["战报"], foundation["属性"]
         )
-        self._engine = BattleEngine(foundation)
+        # 记录事实名单来自展示配置，所以先把展示目录建好，再把它接给引擎：日志在
+        # **记录那一刻**就按它筛（见 `mechanics._recorded_facts`），存储与战报都不带杂物。
+        self._engine = BattleEngine(foundation, recorded_facts=report_catalog.recorded_facts)
         report_catalog.validate_event_kinds(tuple(self._engine.catalog.events))
         self._report_catalog = report_catalog
         return self.status()
