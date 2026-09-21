@@ -2,7 +2,7 @@
   "协议": {
     "战报": "晓楠修仙.战报.v1",
     "展示": "game.battle_report.presentation",
-    "展示版本": 4,
+    "展示版本": 5,
     "事件字段": [
       "kind",
       "label",
@@ -11,8 +11,7 @@
       "text",
       "source",
       "target",
-      "facts",
-      "visual"
+      "facts"
     ],
     "事实字段": ["label", "display"]
   },

@@ -1,5 +1,6 @@
 import {
   applyVisual,
+  configureVisuals,
   renderCompactTimeline,
   renderDetailedTimeline,
 } from "./timeline.js";
@@ -46,11 +47,12 @@ main().catch((error) => {
 
 async function main() {
   const report = await loadReport();
-  if (report.schema !== "game.battle_report.presentation" || report.version !== 4) {
+  if (report.schema !== "game.battle_report.presentation" || report.version !== 5) {
     renderUnsupportedReport(report);
     return;
   }
   state.report = report;
+  configureVisuals(report.palette, report.actors);
   state.mode = report.ui.defaults.mode;
   state.filter = report.ui.defaults.filter;
   state.snapshot = report.ui.defaults.snapshot;
@@ -553,7 +555,7 @@ function optionExists(options, value) {
 }
 
 function assertProtocol(value) {
-  if (value?.schema !== "game.battle_report.presentation" || value?.version !== 4) {
+  if (value?.schema !== "game.battle_report.presentation" || value?.version !== 5) {
     throw new Error(state.report.ui.text.unsupported_detail);
   }
 }

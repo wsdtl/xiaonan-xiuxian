@@ -11,15 +11,15 @@
    `资源消耗后`……一条数字都没有。实测 160 条紧凑事件里 137 条短于 7 个字。
    同一份数据里本来就有 `实际伤害`、`精神 16` 这些事实，只是没带出来。
 
-所以这条审查跑一场战斗，对着**可执行结构**判五件事：
+所以这条审查跑一场战斗，对着**可执行结构**判六件事：
 
 - 展示层的阵营分组与战报的 `阵营` / 标题一致（不多不少，正好两方）；
 - 每个参战者的 `team_label` 是他那一方的单位构成（同方一致，不写单个单位的标题）；
 - 简要行的文本非空，且**不是把事件类型抄一遍**；
 - 事件明细里不出现引擎的内部记账标签与内部编号（`L1`、`L1:战斗对象:1`）；
 - 展示载荷里的事件**只带协议声明的字段**（`协议.事件字段` / `协议.事实字段`），
-  多一个就是白带的重量（第 115 轮：`logical_time` / `subject` / `phase` / `event_index`
-  与事实里的 `key` / `value` 页面上一个都不读，却按事件各抄一遍）。
+  且事件的来源/目标是**角色键**、能在演员表与调色板里查到（第 115、116 轮）；
+- 载荷级的**演员表与调色板**跟战报自己写的参战者一致，并覆盖时间线条上引用的每个角色。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查战报展示.py
 
@@ -231,13 +231,19 @@ def _events_in(payload) -> list[dict]:
 
 
 def check_event_fields(report: dict, presentation: dict) -> list[str]:
-    """展示事件与事实只许带协议声明的字段（名单在 `战报.json` 的 `协议` 里，不另抄一份）。"""
+    """展示事件与事实只许带协议声明的字段（名单在 `战报.json` 的 `协议` 里，不另抄一份）。
+
+    事件的来源与目标**是键（字符串），不是小字典**：名字与颜色由载荷级的演员表与调色板
+    各发一份，页面查表（第 116 轮）。所以这里顺带核「键能不能查到」。
+    """
 
     declared = json.loads(
         (ROOT / "data" / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8")
     )
     event_fields = {str(value) for value in declared["协议"]["事件字段"]}
     fact_fields = {str(value) for value in declared["协议"]["事实字段"]}
+    actors = dict(presentation["main"].get("actors") or {})
+    palette = dict(presentation["main"].get("palette") or {})
     events = _events_in(presentation)
     problems: list[str] = []
     if not events:
@@ -249,6 +255,14 @@ def check_event_fields(report: dict, presentation: dict) -> list[str]:
             problems.append(f"{event.get('label')} 多了字段：" + "、".join(sorted(extra)))
         if missing:
             problems.append(f"{event.get('label')} 少了字段：" + "、".join(sorted(missing)))
+        for field in ("source", "target"):
+            key = event.get(field)
+            if not isinstance(key, str) or not key:
+                problems.append(f"{event.get('label')} 的 {field} 不是角色键：{key!r}")
+            elif key not in actors:
+                problems.append(f"{event.get('label')} 的 {field} 不在演员表里：{key}")
+        if isinstance(event.get("source"), str) and event["source"] not in palette:
+            problems.append(f"{event.get('label')} 的来源不在调色板里：{event['source']}")
         for fact in event.get("facts") or ():
             if set(fact) != fact_fields:
                 problems.append(
@@ -258,12 +272,62 @@ def check_event_fields(report: dict, presentation: dict) -> list[str]:
     return problems
 
 
+def check_actor_tables(report: dict, presentation: dict) -> list[str]:
+    """演员表与调色板要跟战报自己写的参战者一致，且覆盖时间线条上引用的每一个角色。"""
+
+    main = presentation["main"]
+    bundle = presentation["bundle"]
+    problems: list[str] = []
+    for 名, 块 in (("战报头", main), ("明细包", bundle)):
+        actors = dict(块.get("actors") or {})
+        palette = dict(块.get("palette") or {})
+        if not actors or not palette:
+            problems.append(f"{名}缺演员表或调色板")
+            continue
+        for value in report.get("participants") or ():
+            键 = str(value["id"])
+            if actors.get(键) != str(value["name"]):
+                problems.append(f"{名}的演员表与战报不一致：{键} → {actors.get(键)!r}")
+            visual = palette.get(键) or {}
+            if visual.get("key") != 键 or not visual.get("color") or not visual.get("foreground"):
+                problems.append(f"{名}的调色板缺角色颜色：{键}")
+        if actors.get("system") != str((report.get("system") or {}).get("name") or ""):
+            problems.append(f"{名}的演员表缺系统名（system）")
+        if (palette.get("system") or {}).get("key") != "system":
+            problems.append(f"{名}的调色板缺系统色（system）")
+    for 条 in _timeline_entries(presentation):
+        actor = 条.get("actor")
+        if actor is None:
+            continue
+        if actor not in (main.get("actors") or {}):
+            problems.append(f"时间线条上的角色不在演员表里：{actor}")
+        if actor not in (main.get("palette") or {}):
+            problems.append(f"时间线条上的角色不在调色板里：{actor}")
+    return problems
+
+
+def _timeline_entries(payload) -> list[dict]:
+    """把时间线条条目捞出来：带 `sequence` 与 `title` 的字典就是一条。"""
+
+    found: list[dict] = []
+    if isinstance(payload, dict):
+        if "sequence" in payload and "title" in payload:
+            found.append(payload)
+        for value in payload.values():
+            found.extend(_timeline_entries(value))
+    elif isinstance(payload, (list, tuple)):
+        for value in payload:
+            found.extend(_timeline_entries(value))
+    return found
+
+
 CHECKS = (
     ("阵营分组", check_teams),
     ("对阵与标题一致", check_matchup_matches_headline),
     ("简要行", check_compact_lines),
     ("内部明细", check_internal_details),
     ("展示字段", check_event_fields),
+    ("角色表一致", check_actor_tables),
 )
 
 

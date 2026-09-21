@@ -5,6 +5,29 @@ import {
   safeToken,
 } from "./ui.js";
 
+// 角色名字与颜色由载荷各发一份（`actors` / `palette`），事件与时间线条上只记「谁」（键）。
+// 键查不到就**当场抛错**：宁可在控制台看见一句「战报缺少角色颜色」，也不要页面安静地
+// 画成一片空白——这是第 116 轮把每条事件的颜色字典收成一张表时留下的边界。
+let visuals = {};
+let actors = {};
+
+export function configureVisuals(palette, actorTable) {
+  visuals = palette && typeof palette === "object" ? palette : {};
+  actors = actorTable && typeof actorTable === "object" ? actorTable : {};
+}
+
+export function visualOf(key) {
+  const value = visuals[key || "system"];
+  if (!value) {
+    throw new Error(`战报缺少角色颜色：${key || "system"}`);
+  }
+  return value;
+}
+
+function actorLabel(key) {
+  return actors[key] || "";
+}
+
 export function renderCompactTimeline(segment, ui, loadComparison) {
   const mode = ui.modes[0];
   const section = node("section", "mode-panel compact-panel");
@@ -65,7 +88,7 @@ export function renderDetailedTimelineEntries(detail, filter, ui, loadComparison
 
 function renderCompactEntry(entry, ui, loadComparison) {
   const article = node("article", `action-card tone-${safeToken(entry.tone)}`);
-  applyVisual(article, entry.visual);
+  applyVisual(article, visualOf(entry.actor));
   article.append(node("div", "action-head", [node("div", "action-title", entry.title)]));
   if (entry.summary_events.length) {
     const events = node("ol", "event-list compact-event-list");
@@ -80,7 +103,7 @@ function renderCompactEntry(entry, ui, loadComparison) {
 
 function renderDetailedEntry(entry, filter, ui, loadComparison) {
   const article = node("article", `action-card detailed-action tone-${safeToken(entry.tone)}`);
-  applyVisual(article, entry.visual);
+  applyVisual(article, visualOf(entry.actor));
   article.append(
     node("div", "action-head", [
       node("div", "action-title", entry.title),
@@ -126,12 +149,13 @@ function renderEvent(event, includeFacts, ui) {
 
 function renderEventMarker(event, ui) {
   const marker = node("span", "event-marker", "");
-  applyVisual(marker, event.visual);
-  marker.dataset.actorKey = event.visual?.key || "system";
+  const visual = visualOf(event.source);
+  applyVisual(marker, visual);
+  marker.dataset.actorKey = visual.key || "system";
   marker.dataset.eventCategory = event.category || "";
-  marker.title = event.visual?.key === "system"
+  marker.title = visual.key === "system"
     ? event.label
-    : `${event.source?.label || ui.text.participant_fallback} · ${event.label}`;
+    : `${actorLabel(event.source) || ui.text.participant_fallback} · ${event.label}`;
   marker.setAttribute("aria-hidden", "true");
   return marker;
 }

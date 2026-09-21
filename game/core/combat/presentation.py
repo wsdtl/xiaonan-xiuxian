@@ -52,6 +52,12 @@ def build_battle_report_presentation(
         "color": system["color"],
         "foreground": catalog.foreground,
     }
+    # 颜色与名字**一次发一份**：原先每条事件各带一份角色颜色字典与来源/目标小字典
+    # （8 组讨伐实测各 6.6M 字符，同一个参与者的颜色被抄了上万遍）。现在载荷带两张表，
+    # 事件只记「谁」（键），页面查表。表里必须有 `system`：战报里系统事件的来源就是它。
+    palette = {**visuals, "system": system_visual}
+    actors = {value["id"]: value["name"] for value in participants}
+    actors["system"] = str(system["name"])
     combatants = [
         _combatant(value, visuals[value["id"]], team_of[value["id"]])
         for value in participants
@@ -80,12 +86,10 @@ def build_battle_report_presentation(
         _apply_events(state, events, catalog)
         after = deepcopy(state)
         title, actor_id = _transition_title(turn, events, catalog)
-        visual = visuals.get(actor_id, system_visual)
+        actor_key = actor_id if actor_id in palette else "system"
         detailed_events = [
             _public_event(
                 value,
-                visuals,
-                system_visual,
                 catalog,
             )
             for value in events
@@ -111,7 +115,7 @@ def build_battle_report_presentation(
                 "title": title,
                 "round_label": round_label,
                 "tone": tone,
-                "visual": visual,
+                "actor": actor_key,
                 "categories": list(dict.fromkeys(value["category"] for value in compact_events)),
                 "summary_events": compact_events,
                 "comparison_available": True,
@@ -124,7 +128,7 @@ def build_battle_report_presentation(
                 "round_label": round_label,
                 "sequence_label": f"行动 {turn} · 序列 {sequence}",
                 "tone": tone,
-                "visual": visual,
+                "actor": actor_key,
                 "categories": categories,
                 "facts": facts,
                 "events": detailed_events,
@@ -201,6 +205,9 @@ def build_battle_report_presentation(
         "schema": schema,
         "version": version,
         "ui": ui,
+        #: 角色名字与颜色各一份：事件只记「谁」（键），页面查这两张表。
+        "actors": dict(actors),
+        "palette": deepcopy(palette),
         "document_title": f"{catalog.game_name} · {report['headline']}",
         "summary": {
             "title": report["headline"],
@@ -228,6 +235,8 @@ def build_battle_report_presentation(
         "formations": deepcopy(list(report.get("formations") or ())),
     }
     bundle = {
+        "actors": dict(actors),
+        "palette": deepcopy(palette),
         "segments": {
             "0": {"schema": schema, "version": version, "segment": segment}
         },
@@ -626,8 +635,6 @@ def _transition_title(
 
 def _public_event(
     event: Mapping[str, Any],
-    visuals: Mapping[str, Mapping[str, Any]],
-    system_visual: Mapping[str, Any],
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     source = dict(event.get("source") or {})
@@ -649,10 +656,9 @@ def _public_event(
         "tone": _event_tone(category, str(event.get("kind") or ""), catalog),
         "category": category,
         "text": _sentence(event),
-        "source": {"key": source.get("id", "system"), "label": source.get("name", "战场")},
-        "target": {"key": target.get("id", "system"), "label": target.get("name", "战场")},
+        "source": str(source.get("id") or "system"),
+        "target": str(target.get("id") or "system"),
         "facts": facts,
-        "visual": dict(visuals.get(source.get("id"), system_visual)),
     }
 
 
@@ -674,7 +680,7 @@ def _sentence(event: Mapping[str, Any]) -> str:
 def _compact_event(event: Mapping[str, Any], catalog: BattleReportCatalog) -> dict[str, Any]:
     result = {
         key: deepcopy(event[key])
-        for key in ("kind", "label", "tone", "category", "source", "target", "visual")
+        for key in ("kind", "label", "tone", "category", "source", "target")
     }
     result["text"] = _compact_text(event, catalog)
     return result
