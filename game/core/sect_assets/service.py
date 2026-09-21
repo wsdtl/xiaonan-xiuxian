@@ -392,7 +392,7 @@ class SectAssetService:
         )
         before_stones = int(value.get("灵石") or 0)
         if before_stones < cost:
-            raise SectAssetError(f"宗门灵石不足：现有{before_stones}，需要{cost}")
+            raise SectAssetError(f"宗门灵石不足（宗门钱在灵藏里，先入山门再捐入灵藏）：现有{before_stones}，需要{cost}")
         entries = dict(_mapping(value.get("条目", {}), "灵藏.条目"))
         totals: dict[tuple[str, str, str], int] = {}
         for material in materials:
@@ -552,7 +552,7 @@ class SectAssetService:
         before = int(value.get("灵石") or 0)
         after = before + delta
         if after < 0:
-            raise SectAssetError(f"宗门灵石不足：现有{before}，需要{-delta}")
+            raise SectAssetError(f"宗门灵石不足（宗门钱在灵藏里，先入山门再捐入灵藏）：现有{before}，需要{-delta}")
         value["灵石"] = after
         return SharedEntityMutation(
             LINGCANG_TYPE,

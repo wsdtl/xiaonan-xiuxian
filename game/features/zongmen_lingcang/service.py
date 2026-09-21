@@ -164,7 +164,7 @@ class LingcangFeature:
             or current.space_type != "宗门洞天"
             or current.space_id != sect.cave_id
         ):
-            raise LingcangFeatureError("只有身处本宗洞天时才能使用灵藏")
+            raise LingcangFeatureError("只有身处本宗洞天时才能使用灵藏（先入山门进洞天）")
 
 
 def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
