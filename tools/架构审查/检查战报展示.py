@@ -11,12 +11,15 @@
    `资源消耗后`……一条数字都没有。实测 160 条紧凑事件里 137 条短于 7 个字。
    同一份数据里本来就有 `实际伤害`、`精神 16` 这些事实，只是没带出来。
 
-所以这条审查跑一场战斗，对着**可执行结构**判四件事：
+所以这条审查跑一场战斗，对着**可执行结构**判五件事：
 
 - 展示层的阵营分组与战报的 `阵营` / 标题一致（不多不少，正好两方）；
 - 每个参战者的 `team_label` 是他那一方的单位构成（同方一致，不写单个单位的标题）；
 - 简要行的文本非空，且**不是把事件类型抄一遍**；
-- 事件明细里不出现引擎的内部记账标签与内部编号（`L1`、`L1:战斗对象:1`）。
+- 事件明细里不出现引擎的内部记账标签与内部编号（`L1`、`L1:战斗对象:1`）；
+- 展示载荷里的事件**只带协议声明的字段**（`协议.事件字段` / `协议.事实字段`），
+  多一个就是白带的重量（第 115 轮：`logical_time` / `subject` / `phase` / `event_index`
+  与事实里的 `key` / `value` 页面上一个都不读，却按事件各抄一遍）。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查战报展示.py
 
@@ -212,11 +215,55 @@ def check_internal_details(report: dict, presentation: dict) -> list[str]:
     return problems
 
 
+def _events_in(payload) -> list[dict]:
+    """把载荷里的事件捞出来：带 `kind` 与 `facts` 的字典就是一条公开事件。"""
+
+    found: list[dict] = []
+    if isinstance(payload, dict):
+        if "kind" in payload and "facts" in payload:
+            found.append(payload)
+        for value in payload.values():
+            found.extend(_events_in(value))
+    elif isinstance(payload, (list, tuple)):
+        for value in payload:
+            found.extend(_events_in(value))
+    return found
+
+
+def check_event_fields(report: dict, presentation: dict) -> list[str]:
+    """展示事件与事实只许带协议声明的字段（名单在 `战报.json` 的 `协议` 里，不另抄一份）。"""
+
+    declared = json.loads(
+        (ROOT / "data" / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8")
+    )
+    event_fields = {str(value) for value in declared["协议"]["事件字段"]}
+    fact_fields = {str(value) for value in declared["协议"]["事实字段"]}
+    events = _events_in(presentation)
+    problems: list[str] = []
+    if not events:
+        return ["展示载荷里一条事件都没有，这条判据没验到东西"]
+    for event in events:
+        extra = set(event) - event_fields
+        missing = event_fields - set(event)
+        if extra:
+            problems.append(f"{event.get('label')} 多了字段：" + "、".join(sorted(extra)))
+        if missing:
+            problems.append(f"{event.get('label')} 少了字段：" + "、".join(sorted(missing)))
+        for fact in event.get("facts") or ():
+            if set(fact) != fact_fields:
+                problems.append(
+                    f"{event.get('label')} 的事实字段不符："
+                    + "、".join(sorted(str(key) for key in fact))
+                )
+    return problems
+
+
 CHECKS = (
     ("阵营分组", check_teams),
     ("对阵与标题一致", check_matchup_matches_headline),
     ("简要行", check_compact_lines),
     ("内部明细", check_internal_details),
+    ("展示字段", check_event_fields),
 )
 
 

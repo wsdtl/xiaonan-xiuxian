@@ -247,6 +247,23 @@ class BattleReportCatalog:
     def damage_facts(self) -> frozenset[str]:
         return _strings(self.presentation, "伤害事实")
 
+    @property
+    def event_fields(self) -> frozenset[str]:
+        """展示协议里一个事件**只许有**这些字段（`协议.事件字段`）。
+
+        展示包是发给页面的载荷，字段多一个就多一份重复的重量（`logical_time` 每条事件
+        抄一遍同一串时间、`subject` 抄一遍同样的能力名），而页面从来不读。判据
+        （`检查战报展示`）按这份名单核实际载荷，多一个少一个都红。
+        """
+
+        return _strings(self.protocol, "事件字段")
+
+    @property
+    def fact_fields(self) -> frozenset[str]:
+        """展示协议里一条事实**只许有**这些字段（`协议.事实字段`）。"""
+
+        return _strings(self.protocol, "事实字段")
+
     def settlement_kinds(self, category: str) -> frozenset[str]:
         values = _mapping(self.normalization, "结算事件")
         return frozenset(
@@ -417,6 +434,11 @@ class BattleReportCatalog:
         if missing:
             raise ValueError(
                 "战报要显示的事实没在记录名单里（会渲染成空）：" + "、".join(sorted(missing))
+            )
+        if not self.event_fields or not self.fact_fields:
+            raise ValueError(
+                "战报协议缺少展示字段名单（`协议.事件字段` / `协议.事实字段`）："
+                "展示载荷靠它对账，缺了就没人管「多发字段」这件事了"
             )
 
     def validate_event_kinds(self, event_kinds: Sequence[str]) -> None:

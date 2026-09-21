@@ -84,13 +84,11 @@ def build_battle_report_presentation(
         detailed_events = [
             _public_event(
                 value,
-                event_index,
                 visuals,
                 system_visual,
-                report["generated_at"],
                 catalog,
             )
-            for event_index, value in enumerate(events)
+            for value in events
         ]
         public_event_count += len(detailed_events)
         category_counts.update(value["category"] for value in detailed_events)
@@ -628,10 +626,8 @@ def _transition_title(
 
 def _public_event(
     event: Mapping[str, Any],
-    event_index: int,
     visuals: Mapping[str, Mapping[str, Any]],
     system_visual: Mapping[str, Any],
-    logical_time: str,
     catalog: BattleReportCatalog,
 ) -> dict[str, Any]:
     source = dict(event.get("source") or {})
@@ -641,16 +637,12 @@ def _public_event(
     if category == "damage":
         details = [value for value in details if value.get("label") in catalog.damage_facts]
     details = [value for value in details if value.get("label") not in catalog.internal_details]
+    # 每条事实只带**给玩家看的那两个字段**：标签与显示串。原先还跟着 `key`（与标签同值）
+    # 与 `value`（原值，页面从不读），一条事实三个键里两个是白带的——这里只留要用的。
     facts = [
-        {
-            "key": value["label"],
-            "label": value["label"],
-            "value": value.get("value"),
-            "display": value.get("display", ""),
-        }
+        {"label": str(value.get("label") or ""), "display": str(value.get("display") or "")}
         for value in details
     ]
-    subject_label = event.get("ability") or event.get("kind_label") or event.get("kind")
     return {
         "kind": event.get("kind", "unknown"),
         "label": event.get("kind_label") or event.get("kind") or "事件",
@@ -659,11 +651,7 @@ def _public_event(
         "text": _sentence(event),
         "source": {"key": source.get("id", "system"), "label": source.get("name", "战场")},
         "target": {"key": target.get("id", "system"), "label": target.get("name", "战场")},
-        "subject": {"id": event.get("ability") or event.get("kind", "event"), "label": subject_label},
-        "phase": str(event.get("sequence") or event_index),
-        "logical_time": logical_time,
         "facts": facts,
-        "event_index": event_index,
         "visual": dict(visuals.get(source.get("id"), system_visual)),
     }
 

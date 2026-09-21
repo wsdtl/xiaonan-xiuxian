@@ -2,7 +2,19 @@
   "协议": {
     "战报": "晓楠修仙.战报.v1",
     "展示": "game.battle_report.presentation",
-    "展示版本": 4
+    "展示版本": 4,
+    "事件字段": [
+      "kind",
+      "label",
+      "tone",
+      "category",
+      "text",
+      "source",
+      "target",
+      "facts",
+      "visual"
+    ],
+    "事实字段": ["label", "display"]
   },
   "游戏名称": "晓楠修仙",
   "视觉": {
