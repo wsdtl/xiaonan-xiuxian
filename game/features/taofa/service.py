@@ -55,7 +55,7 @@ class RaidFeature:
             )
         except ActionGroupError as exc:
             message = (
-                "当前正在跟随领队，只有领队可以发起讨伐"
+                "当前正在跟随领队，只有领队可以发起讨伐（等领队开阵后一起进）"
                 if exc.code == "member_cannot_start"
                 else "同行状态刚刚发生变化"
             )

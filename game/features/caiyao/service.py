@@ -62,7 +62,7 @@ class HerbGatheringFeature:
             )
         except ActionGroupError as exc:
             message = (
-                "当前正在跟随领队，只有领队可以发起采药"
+                "当前正在跟随领队，只有领队可以发起采药（可看采药进度，等领队统一结束）"
                 if exc.code == "member_cannot_start"
                 else "同行状态刚刚发生变化"
             )

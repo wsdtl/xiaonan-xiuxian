@@ -63,7 +63,7 @@ class TravelFeature:
         except ActionGroupError as exc:
             if exc.code == "member_cannot_start":
                 raise TravelQueryError(
-                    "当前正在跟随领队，只有领队可以发起行路"
+                    "当前正在跟随领队，只有领队可以发起行路（跟着走即可，无需自己发起）"
                 ) from exc
             raise TravelConflictError("同行状态刚刚发生变化") from exc
         public_profiles = await self._character.public_profiles((request.user_id,))

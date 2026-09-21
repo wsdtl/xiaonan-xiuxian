@@ -60,7 +60,7 @@ class ExplorationFeature:
             )
         except ActionGroupError as exc:
             message = (
-                "当前正在跟随领队，只有领队可以发起探险"
+                "当前正在跟随领队，只有领队可以发起探险（可看探险进度，等领队统一结算）"
                 if exc.code == "member_cannot_start"
                 else "同行状态刚刚发生变化"
             )

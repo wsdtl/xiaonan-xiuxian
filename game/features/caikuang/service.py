@@ -58,7 +58,7 @@ class OreGatheringFeature:
             )
         except ActionGroupError as exc:
             message = (
-                "当前正在跟随领队，只有领队可以发起采矿"
+                "当前正在跟随领队，只有领队可以发起采矿（可看采矿进度，等领队统一结束）"
                 if exc.code == "member_cannot_start"
                 else "同行状态刚刚发生变化"
             )
