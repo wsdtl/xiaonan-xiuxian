@@ -28,7 +28,8 @@ from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
 )
-from game.core.item_catalog import ItemCatalogError, ItemCatalogService
+from game.core.item_catalog import ItemCatalogService
+from game.core.medicine import MedicineError, MedicineService
 from game.features.presentation import require_mapping
 
 from .contracts import (
@@ -53,6 +54,7 @@ class CharacterCultivationFeature:
         character: CharacterService,
         assets: AssetService,
         items: ItemCatalogService,
+        medicine: MedicineService,
         growth: GrowthService,
         forging: ForgingService,
         database: DatabaseService,
@@ -62,6 +64,7 @@ class CharacterCultivationFeature:
         self._character = character
         self._assets = assets
         self._items = items
+        self._medicine = medicine
         self._growth = growth
         self._forging = forging
         self._database = database
@@ -76,6 +79,7 @@ class CharacterCultivationFeature:
             (self._character.status().initialized, "角色核心"),
             (self._assets.status().initialized, "资产核心"),
             (self._items.status().initialized, "物品核心"),
+            (self._medicine.status().initialized, "丹药核心"),
             (self._growth.status().initialized, "成长核心"),
             (self._forging.status().initialized, "炼器核心"),
             (self._database.status().initialized, "数据库核心"),
@@ -179,10 +183,10 @@ class CharacterCultivationFeature:
         self, request: CharacterBreakthroughRequest
     ) -> CharacterBreakthroughResult:
         self._require_initialized()
-        medicine = self._resolve_item(request.medicine, "丹药")
+        medicine_id = self._resolve_medicine(request.medicine)
         try:
             stack = await self._lowest_inventory_stack(
-                request.user_id, medicine.item_id
+                request.user_id, medicine_id
             )
             activation: InnateTreasureActivation | None = None
             permanent_ratio = 0.0
@@ -195,7 +199,7 @@ class CharacterCultivationFeature:
                     permanent_ratio = float(effect.values["比例"])
             character_plan = await self._character.plan_breakthrough(
                 request.user_id,
-                medicine_id=medicine.item_id,
+                medicine_id=medicine_id,
                 permanent_attribute_ratio=permanent_ratio,
             )
             if permanent_ratio and character_plan.permanent_attributes:
@@ -207,7 +211,7 @@ class CharacterCultivationFeature:
                 )
             inventory_plan = await self._assets.plan_inventory_changes(
                 request.user_id,
-                (InventoryAdjustment(medicine.item_id, stack.grade.grade_id, -1),),
+                (InventoryAdjustment(medicine_id, stack.grade.grade_id, -1),),
             )
             receipt = await self._database.commit(
                 TransactionCommand(
@@ -215,7 +219,7 @@ class CharacterCultivationFeature:
                     request.request_id,
                     "人物突破",
                     inventory_plan.operations + (character_plan.operation,),
-                    {"丹药编号": medicine.item_id},
+                    {"丹药编号": medicine_id},
                 )
             )
             profile = await self._character.profile(request.user_id)
@@ -233,7 +237,7 @@ class CharacterCultivationFeature:
         ) as exc:
             raise CharacterCultivationFeatureError(str(exc)) from exc
         return CharacterBreakthroughResult(
-            profile, medicine.name, character_plan.realm_name_after, receipt.replayed
+            profile, self._medicine_name(medicine_id), character_plan.realm_name_after, receipt.replayed
             , activation
         )
 
@@ -275,14 +279,18 @@ class CharacterCultivationFeature:
             raise CharacterCultivationFeatureError("纳戒中没有该丹药")
         return stacks[0]
 
-    def _resolve_item(self, identifier: str, category: str):
+    def _resolve_medicine(self, identifier: str) -> str:
+        """突破丹按丹药核心解析：基础物品目录里没有丹药这一类。"""
+
         try:
-            item = self._items.inspect(identifier)
-        except ItemCatalogError as exc:
+            return self._medicine.resolve(identifier)
+        except MedicineError as exc:
             raise CharacterCultivationFeatureError(str(exc)) from exc
-        if item.category != category:
-            raise CharacterCultivationFeatureError(f"该物品不是{category}")
-        return item
+
+    def _medicine_name(self, medicine_id: str) -> str:
+        value = self._data.entity("丹药", medicine_id)
+        name = value.get("名称")
+        return str(name).strip() if name else medicine_id
 
     def _resolve_entity(self, section: str, identifier: str) -> str:
         query = str(identifier or "").strip()

@@ -801,6 +801,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         character,
         asset,
         item_catalog,
+        medicine,
         growth,
         forging,
         database,
