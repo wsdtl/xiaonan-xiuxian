@@ -12,9 +12,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from game.core.combat import CombatService
+from game.core.duel import DuelService
 from game.core.sect_war import SectWarService
 
 #: 一次调用要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应。
@@ -24,9 +26,12 @@ VIEWS = ("header", "segment", "events", "participants", "transition")
 class BattleReportFeature:
     """按战报编号供应页面要的那一份画面。"""
 
-    def __init__(self, combat: CombatService, sect_war: SectWarService) -> None:
+    def __init__(
+        self, combat: CombatService, sect_war: SectWarService, duel: DuelService
+    ) -> None:
         self._combat = combat
         self._sect_war = sect_war
+        self._duel = duel
         self._initialized = False
 
     def initialize(self) -> None:
@@ -59,7 +64,7 @@ class BattleReportFeature:
         key = str(report_id or "").strip()
         if not key:
             return None
-        stored = await self._sect_war.report(key)
+        stored = await self._stored(key)
         if stored is None:
             return None
         report, _version = stored
@@ -73,6 +78,21 @@ class BattleReportFeature:
         if part == "participants":
             return (parts.get("participants") or {}).get(f"{index}:{snapshot}")
         return (parts.get("transitions") or {}).get(f"{index}:{sequence}")
+
+    async def _stored(self, key: str) -> tuple[Mapping[str, object], int] | None:
+        """按分享地址里的编号取存档战报。
+
+        两种编号：**宗门战**直接用宗门战编号（它的存档是共享实体，按编号就能取）；
+        **切磋**的结果挂在发起者名下，所以地址写成 `切磋:<发起者>:<切磋编号>`
+        （第 121 轮：试玩时发现切磋打完了没有入口能看那份战报）。
+        """
+
+        if key.startswith("切磋:"):
+            parts = key.split(":", 2)
+            if len(parts) != 3 or not parts[1] or not parts[2]:
+                raise ValueError("切磋战报的编号要写成 切磋:<发起者>:<切磋编号>")
+            return await self._duel.report(parts[1], parts[2])
+        return await self._sect_war.report(key)
 
     def _require_initialized(self) -> None:
         if not self._initialized:

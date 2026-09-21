@@ -50,7 +50,7 @@ def _battle(services) -> dict:
 
 
 class _StoredWar:
-    """替身：只实现页面要用的那一个读口（战报 + 版本）。"""
+    """替身：只实现页面要用的那两个读口（宗门战按编号、切磋按发起者+编号）。"""
 
     def __init__(self, report: dict) -> None:
         self._report = report
@@ -59,12 +59,23 @@ class _StoredWar:
         return (self._report, 1) if war_id == "war-1" else None
 
 
+class _StoredDuel:
+    """切磋的存档挂在发起者名下：地址写成 `切磋:<发起者>:<编号>`。"""
+
+    def __init__(self, report: dict) -> None:
+        self._report = report
+
+    async def report(self, owner: str, challenge_id: str):
+        return (self._report, 1) if (owner, challenge_id) == ("甲", "d-1") else None
+
+
 def test_views_match_the_whole_payload() -> None:
     services = build_game_services()
     try:
         header, parts = services.core.combat.build_report_view(_report(services))
         feature = services.features.zhanbao
         feature._sect_war = _StoredWar({"占位": True})
+        feature._duel = _StoredDuel({"占位": True})
         feature._combat.build_report_view = lambda report: (header, parts)
 
         first = header["detail"]["segments"][0]["index"]
@@ -84,6 +95,15 @@ def test_views_match_the_whole_payload() -> None:
         ) == parts["transitions"][f"{first}:0"]
         assert asyncio.run(feature.view("war-404")) is None
         assert asyncio.run(feature.view("war-1", part="segment", index=99)) is None
+        # 切磋的战报：同样是这一条接口，按「切磋:<发起者>:<编号>」取（第 121 轮补）。
+        assert asyncio.run(feature.view("切磋:甲:d-1")) == header
+        assert asyncio.run(feature.view("切磋:甲:d-404")) is None
+        try:
+            asyncio.run(feature.view("切磋:甲"))
+        except ValueError as exc:
+            assert "切磋:<发起者>" in str(exc)
+        else:
+            raise AssertionError("编号写坏时要报错，不能当成宗门战去查")
     finally:
         services.core.database.close()
 

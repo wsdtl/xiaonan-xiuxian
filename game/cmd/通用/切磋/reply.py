@@ -43,6 +43,10 @@ def result(
             (target_name, len(value.target_participants)),
         )
         .row(("行动", value.actions), ("战斗事件", value.events))
+        .field(
+            feature.text("结果", "完整战报"),
+            M.text(f"切磋:{value.owner}:{value.challenge_id}", tone="muted"),
+        )
         .build()
     )
 

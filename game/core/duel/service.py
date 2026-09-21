@@ -243,6 +243,24 @@ class DuelService:
         except StateConflictError as exc:
             raise DuelError("切磋状态已经变化，请重试") from exc
 
+    async def report(self, owner: str, challenge_id: str) -> tuple[Mapping[str, object], int] | None:
+        """按「发起者 + 切磋编号」取存下来的战报与版本（战报页面用）。
+
+        切磋结果挂在**发起者名下**（`StateAddress(发起者, 结果类型, 切磋编号)`），所以
+        编号之外还要发起者；分享地址写成 `切磋:<发起者>:<切磋编号>`。没打完或编号不存在
+        时返回 `None`。
+        """
+
+        record = await self._database.get(
+            StateAddress(_text(owner, "发起者"), RESULT_STATE, _text(challenge_id, "切磋编号"))
+        )
+        if record is None:
+            return None
+        value = record.value.get("战报") if isinstance(record.value, Mapping) else None
+        if not isinstance(value, Mapping) or not value:
+            return None
+        return value, int(record.version)
+
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("切磋核心尚未初始化")
@@ -261,7 +279,7 @@ def _challenge(value: Mapping[str, object], *, replayed: bool) -> DuelChallenge:
 
 
 def _result(value: Mapping[str, object], *, replayed: bool) -> DuelResult:
-    return DuelResult(_text(value.get("切磋编号"), "切磋编号"), _text(value.get("胜方"), "胜方"), tuple(_texts(value.get("发起方"), "发起方")), tuple(_texts(value.get("目标方"), "目标方")), int(value.get("行动数", 0)), int(value.get("事件数", 0)), replayed)
+    return DuelResult(_text(value.get("切磋编号"), "切磋编号"), _text(value.get("发起者"), "发起者"), _text(value.get("胜方"), "胜方"), tuple(_texts(value.get("发起方"), "发起方")), tuple(_texts(value.get("目标方"), "目标方")), int(value.get("行动数", 0)), int(value.get("事件数", 0)), replayed)
 
 
 def _expired(value: Mapping[str, object]) -> bool:
