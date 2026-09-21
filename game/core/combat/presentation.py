@@ -225,7 +225,10 @@ def build_battle_report_presentation(
             "available": True,
             "retention_notice": "",
             "segment_count": 1,
-            "segments": [segment],
+            #: **只带片段的头部信息**，不带时间线与参战者：页面先拿这一份渲染概览，
+            #: 片段本身按需取（服务端的 `/segments/<序>`，单文件预览包里的 `segments`）。
+            #: 第 118 轮以前这里塞的是整份片段，于是同一份 6.1M 的数据在两个部件里各存一份。
+            "segments": [_segment_summary(segment)],
         },
         "game_name": catalog.game_name,
         "formations": deepcopy(list(report.get("formations") or ())),
@@ -265,6 +268,27 @@ def build_battle_report_presentation(
         "transitions": transitions,
     }
     return main, bundle
+
+
+#: 片段头部信息的字段：概览与切换片段要用的都在这，时间线与参战者不在（按需取）。
+_SEGMENT_SUMMARY_FIELDS = (
+    "index",
+    "position_label",
+    "title",
+    "outcome",
+    "started_at",
+    "finished_at",
+    "duration_label",
+    "system_visual",
+    "counts",
+    "formations",
+)
+
+
+def _segment_summary(segment: Mapping[str, Any]) -> dict[str, Any]:
+    """把一份片段收成**头部信息**：页面先靠它渲染概览与片段列表。"""
+
+    return {key: deepcopy(segment[key]) for key in _SEGMENT_SUMMARY_FIELDS if key in segment}
 
 
 def _formation_summary_line(value: Mapping[str, Any]) -> str:

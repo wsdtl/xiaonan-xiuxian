@@ -57,12 +57,11 @@ async function main() {
   state.mode = report.ui.defaults.mode;
   state.filter = report.ui.defaults.filter;
   state.snapshot = report.ui.defaults.snapshot;
-  report.detail.segments.forEach((segment) => {
-    hydrateParticipants(segment, report.roster);
-    state.segments.set(segment.index, segment);
-  });
+  // `/data` 只带片段的头部信息（时间线与参战者按需取）：`/segments/<序>`，
+  // 单文件预览包里就是 `segments[<序>]`。首片要先取回来才谈得上渲染。
   if (report.detail.segments.length) {
     state.segmentIndex = report.detail.segments[0].index;
+    await ensureSegment(state.segmentIndex);
   }
   document.title = report.document_title;
   renderReport();

@@ -11,8 +11,8 @@ data/                       正式定义、规则、内容与展示 JSON（7 大
 database/                   游戏数据库与运行日志数据库，不进入版本库
 .runtime/                   历史备份与控制台媒体，不进入版本库
 game/core/                  38 个跨玩法公共微服务，按包注入（见 系统架构.md）
-game/features/              39 个具体玩法微服务，不依赖命令协议
-game/cmd/                   40 个二级命令组件（通用 22、专属 17、后台 1）
+game/features/              40 个具体玩法微服务，不依赖命令协议
+game/cmd/                   41 个二级命令组件（通用 23、专属 17、后台 1）
 game/startup/               跨命令、跨核心服务的启动契约
 game/config.py              从框架自定义项中解释游戏配置
 game/app.py                 游戏微服务的唯一组合根

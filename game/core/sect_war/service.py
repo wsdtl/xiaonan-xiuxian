@@ -397,9 +397,11 @@ class SectWarService:
                 action_limit=self._actions,
                 medicine_definitions=_medicine_definitions(medicine_stacks),
                 medicine_selection_strategy=self._medicine.selection_strategy,
+                # 只存战报，不存展示包：展示包由战报页面按需重建（`game/cmd/通用/战报`）。
+                # 展示包比战报还大（一次 15 人对 15 人实测几十兆字符），而它每一步都能从
+                # 战报现算——存两份等于把同一件事存两遍。
                 report=CombatReportSpec(
                     scene=location.location_name or location.terrain,
-                    include_presentation=True,
                 ),
                 field=CombatFieldSpec(
                     environment_id=location.environment_id,
@@ -469,7 +471,6 @@ class SectWarService:
                 "乙方存活": sum(item.alive for item in result.right_results),
                 "战报编号": record.entity_id,
                 "战报": materialize(result.report or {}),
-                "战报展示": materialize(result.presentation or ()),
             }
         )
         value["战果"] = {
@@ -886,6 +887,20 @@ class SectWarService:
         if not self._sect.is_officer(member.role):
             raise SectWarError("officer_required")
         return member
+
+    async def report(self, war_id: str) -> Mapping[str, object] | None:
+        """按宗门战编号取**存下来的战报**（公开读口，战报页面用）。
+
+        宗门战记录是共享实体，按编号就能取，不需要问「谁发起的」——所以战报页面的分享
+        地址可以只用编号。没打过、还没结算或编号不存在时返回 `None`，由调用方决定怎么
+        对外说（页面回 404）。
+        """
+
+        record = await self._db.get_shared_entity(ENTITY_TYPE, str(war_id or "").strip())
+        if record is None:
+            return None
+        value = record.value.get("战报") if isinstance(record.value, Mapping) else None
+        return value if isinstance(value, Mapping) and value else None
 
     async def _record(self, war_id: str):
         record = await self._db.get_shared_entity(

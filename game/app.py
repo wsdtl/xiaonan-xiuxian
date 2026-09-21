@@ -76,6 +76,7 @@ from .features.xiantian_lingbao import InnateTreasureFeature
 from .features.xinglu import TravelFeature
 from .features.yixing import YixingFeature
 from .features.zengsong import GiftFeature
+from .features.zhanbao import BattleReportFeature
 from .features.zongmen import SectFeature
 from .features.zongmen_cangjing import CangjingFeature
 from .features.zongmen_lingcang import LingcangFeature
@@ -175,6 +176,7 @@ class FeatureServices:
     xiantian_lingbao: InnateTreasureFeature
     qiecuo: DuelFeature
     zengsong: GiftFeature
+    zhanbao: BattleReportFeature
 
 
 @dataclass(frozen=True)
@@ -811,6 +813,8 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     qiecuo.initialize()
     zengsong = GiftFeature(data, gift, item_catalog, character)
     zengsong.initialize()
+    zhanbao = BattleReportFeature(combat, sect_war)
+    zhanbao.initialize()
     daolv_peiyang = CompanionCultivationFeature(
         data,
         companion,
@@ -881,6 +885,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         xiantian_lingbao=xiantian_lingbao,
         qiecuo=qiecuo,
         zengsong=zengsong,
+        zhanbao=zhanbao,
     )
     return GameServices(core=core, features=features)
 

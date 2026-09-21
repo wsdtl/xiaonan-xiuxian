@@ -152,6 +152,28 @@ class CombatService:
 
         return self._require_engine().catalog.rule_layer
 
+    def report_catalog(self) -> BattleReportCatalog:
+        """战报展示目录（`战斗/展示/战报.json` 的**公共读口**）。
+
+        战报页面按编号取到存档战报之后，要用它把展示包现算出来（第 118 轮起宗门战只存
+        战报、不存展示包）。查看页、渲染工具、判据也走这里，免得各自去掏内部字段。
+        """
+
+        return self._require_report_catalog()
+
+    def build_report_presentation(
+        self, report: Mapping[str, object]
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        """把一份存档战报算成展示包：`（战报头, 明细包）`。
+
+        展示包比战报还大（15 人对 15 人实测几十兆字符），而且每一步都能从战报现算——
+        所以不存它，用的时候现算（战报页面按片段取，见 `game/cmd/通用/战报`）。
+        """
+
+        from .presentation import build_battle_report_presentation
+
+        return build_battle_report_presentation(report, self._require_report_catalog())
+
     async def execute(self, request: CombatRequest) -> CombatResult:
         """执行唯一的公共战斗请求，不阻塞异步消息驱动。"""
 
