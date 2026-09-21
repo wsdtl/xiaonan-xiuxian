@@ -32,7 +32,6 @@ const state = {
   events: new Map(),
   participants: new Map(),
   transitions: new Map(),
-  previewBundle: null,
 };
 
 root.addEventListener("click", (event) => {
@@ -57,8 +56,7 @@ async function main() {
   state.mode = report.ui.defaults.mode;
   state.filter = report.ui.defaults.filter;
   state.snapshot = report.ui.defaults.snapshot;
-  // `/data` 只带片段的头部信息（时间线与参战者按需取）：`/segments/<序>`，
-  // 单文件预览包里就是 `segments[<序>]`。首片要先取回来才谈得上渲染。
+  // 首屏只给片段表，片段内容按需向服务端要（每次现取，见 loadEndpoint）。
   if (report.detail.segments.length) {
     state.segmentIndex = report.detail.segments[0].index;
     await ensureSegment(state.segmentIndex);
@@ -68,15 +66,6 @@ async function main() {
 }
 
 async function loadReport() {
-  const embedded = document.querySelector("#battleReportPreviewData");
-  if (embedded) {
-    return JSON.parse(embedded.textContent || "null");
-  }
-  const localPath = new URLSearchParams(window.location.search).get("report");
-  const preview = document.querySelector('meta[name="battle-report-preview-data"]');
-  if (localPath || preview) {
-    return fetchJson(localPath || preview.content);
-  }
   const path = reportBasePath();
   if (!path) {
     throw new Error("分享地址无效。");
@@ -181,10 +170,10 @@ async function selectSegment(index) {
   announce(fillTemplate(state.report.ui.text.switched_segment, { 当前片段: index + 1 }));
 }
 
+// 每一次取数都**现取**：服务端只有一个数据接口（`/data?view=…`），它每次按存档现算。
+// 这里不做「取过一次就不再取」的缓存——战报记录只留很短一段时间，而画面与存档一旦错开，
+// 玩家看到的就是上一版。翻片段、切模式、看前后状态，都会重新要一次。
 async function ensureSegment(index) {
-  if (state.segments.has(index)) {
-    return state.segments.get(index);
-  }
   const payload = await loadEndpoint("segment", { segmentIndex: index });
   assertProtocol(payload);
   hydrateParticipants(payload.segment, state.report.roster);
@@ -193,9 +182,6 @@ async function ensureSegment(index) {
 }
 
 async function ensureEvents(index) {
-  if (state.events.has(index)) {
-    return state.events.get(index);
-  }
   const payload = await loadEndpoint("events", { segmentIndex: index });
   assertProtocol(payload);
   state.events.set(index, payload);
@@ -204,9 +190,6 @@ async function ensureEvents(index) {
 
 async function ensureParticipants(index, snapshot) {
   const key = `${index}:${snapshot}`;
-  if (state.participants.has(key)) {
-    return state.participants.get(key);
-  }
   const payload = await loadEndpoint("participants", { segmentIndex: index, snapshot });
   assertProtocol(payload);
   hydrateParticipants(payload, state.report.roster);
@@ -216,9 +199,6 @@ async function ensureParticipants(index, snapshot) {
 
 async function ensureTransition(index, sequence) {
   const key = `${index}:${sequence}`;
-  if (state.transitions.has(key)) {
-    return state.transitions.get(key);
-  }
   const payload = await loadEndpoint("transition", { segmentIndex: index, sequence });
   assertProtocol(payload);
   hydrateParticipants(payload, state.report.roster);
@@ -226,45 +206,20 @@ async function ensureTransition(index, sequence) {
   return payload;
 }
 
+// 只有一个数据接口：`/data?view=…`。没有离线模式、没有本地缓存——每次调用都是现算的画面。
 async function loadEndpoint(kind, values) {
-  const preview = document.querySelector('meta[name="battle-report-preview-data"]');
-  if (preview) {
-    const bundle = await loadPreviewBundle(preview.content);
-    return previewValue(bundle, kind, values);
-  }
   const base = reportBasePath();
-  const index = values.segmentIndex;
-  const paths = {
-    segment: `${base}/segments/${index}`,
-    events: `${base}/segments/${index}/events`,
-    participants: `${base}/segments/${index}/participants/${encodeURIComponent(values.snapshot || "")}`,
-    transition: `${base}/segments/${index}/transitions/${values.sequence}`,
-  };
-  return fetchJson(paths[kind]);
-}
-
-async function loadPreviewBundle(url) {
-  if (!state.previewBundle) {
-    state.previewBundle = fetchJson(url);
-  }
-  return state.previewBundle;
-}
-
-function previewValue(bundle, kind, values) {
-  const index = String(values.segmentIndex);
-  if (kind === "segment") {
-    return bundle.segments[index];
-  }
-  if (kind === "events") {
-    return bundle.events[index];
+  const query = new URLSearchParams({ view: kind });
+  if (kind !== "header") {
+    query.set("index", String(values.segmentIndex));
   }
   if (kind === "participants") {
-    return bundle.participants[`${index}:${values.snapshot}`];
+    query.set("snapshot", values.snapshot || "");
   }
   if (kind === "transition") {
-    return bundle.transitions[`${index}:${values.sequence}`];
+    query.set("sequence", String(values.sequence));
   }
-  throw new Error(state.report.ui.text.unsupported_detail);
+  return fetchJson(`${base}/data?${query.toString()}`);
 }
 
 function renderReport() {

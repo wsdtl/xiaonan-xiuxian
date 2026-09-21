@@ -888,19 +888,23 @@ class SectWarService:
             raise SectWarError("officer_required")
         return member
 
-    async def report(self, war_id: str) -> Mapping[str, object] | None:
-        """按宗门战编号取**存下来的战报**（公开读口，战报页面用）。
+    async def report(self, war_id: str) -> tuple[Mapping[str, object], int] | None:
+        """按宗门战编号取**存下来的战报与它的版本**（公开读口，战报页面用）。
 
         宗门战记录是共享实体，按编号就能取，不需要问「谁发起的」——所以战报页面的分享
-        地址可以只用编号。没打过、还没结算或编号不存在时返回 `None`，由调用方决定怎么
-        对外说（页面回 404）。
+        地址可以只用编号。版本是记录自己的修订号：页面那边**按版本决定要不要重算画面**，
+        这样永远不会拿到比存档旧的画面（第 119 轮）。
+
+        没打过、还没结算或编号不存在时返回 `None`，由调用方决定怎么对外说（页面回 404）。
         """
 
         record = await self._db.get_shared_entity(ENTITY_TYPE, str(war_id or "").strip())
         if record is None:
             return None
         value = record.value.get("战报") if isinstance(record.value, Mapping) else None
-        return value if isinstance(value, Mapping) and value else None
+        if not isinstance(value, Mapping) or not value:
+            return None
+        return value, int(record.version)
 
     async def _record(self, war_id: str):
         record = await self._db.get_shared_entity(

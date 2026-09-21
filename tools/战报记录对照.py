@@ -164,11 +164,14 @@ def 骨架(结果) -> list[tuple]:
     ]
 
 
-def 显示(结果) -> list[tuple]:
-    """玩家看得见的那层：简要行 + 参战者快照（当前资源与状态）。"""
+def 显示(结果, 核心) -> list[tuple]:
+    """玩家看得见的那层：简要行 + 参战者快照（当前资源与状态）。
 
-    份 = 结果.presentation
-    层 = list(份) if isinstance(份, (list, tuple)) else [份]
+    战报头只带概览与片段表（第 119 轮），所以这里把**各份片段数据**也算出来再看。
+    """
+
+    _, 份 = 核心.combat.build_report_view(结果.report or {})
+    层 = [份]
     行: list[tuple] = []
     for 一块 in 层:
         if not isinstance(一块, dict):
@@ -191,10 +194,13 @@ def 跑一遍(核心, 引擎, 请求: CombatRequest, 名单) -> tuple[list, list
     引擎.recorded_facts = 名单
     结果 = asyncio.run(核心.combat.execute(请求))
     报 = json.dumps(结果.report, ensure_ascii=False, sort_keys=True)
-    展 = json.dumps(结果.presentation, ensure_ascii=False, sort_keys=True)
+    # 展示那边量的是**各份片段数据合计**（战报头只有概览与片段表，第 119 轮起）。
+    _, 份 = 核心.combat.build_report_view(结果.report or {})
+    #: 页面按 `view` 一份份取：这里把五份都算上，才是「玩家全看一遍」的体积。
+    全份 = json.dumps([份.get("segments"), 份.get("events"), 份.get("participants"), 份.get("transitions")], ensure_ascii=False, sort_keys=True)
     行数 = sum(len(事件.get("details") or ()) for 事件 in (结果.report or {}).get("events") or ())
     键 = {键 for 事件 in 结果.events for 键 in 事件.values}
-    return 骨架(结果), 显示(结果), len(报), len(展), 行数, 键
+    return 骨架(结果), 显示(结果, 核心), len(报), len(全份), 行数, 键
 
 
 配置 = json.loads((DATA_DIR / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8"))

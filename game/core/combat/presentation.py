@@ -14,8 +14,28 @@ from .catalog import BattleReportCatalog
 def build_battle_report_presentation(
     report: Mapping[str, Any],
     catalog: BattleReportCatalog,
+) -> dict[str, Any]:
+    """把一份战报算成**战报头**：页面首屏要的概览、演员表、花名册与片段表。
+
+    片段内容（时间线、事件、参战者、行动前后状态）不在这里——页面是**实时查看**的，
+    按当前视图向服务端要那几份（见 `game/cmd/通用/战报`）。以前这里还返回一个「离线包」
+    （把整场的五份数据打成一包，供单文件预览），那份包与片段数据互为副本，且页面上
+    看的是缓存快照而不是当前值——第 119 轮连同离线模式一起删掉。
+    """
+
+    header, _parts = build_battle_report_view(report, catalog)
+    return header
+
+
+def build_battle_report_view(
+    report: Mapping[str, Any],
+    catalog: BattleReportCatalog,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """返回公开战报头和静态明细包；页面只负责解释这两个后端对象。"""
+    """`（战报头, 各份片段数据）`。
+
+    战报头给首屏；各份片段数据按「片段 / 事件 / 参战者 / 行动前后状态」分好键，
+    页面要哪份给哪份（一个接口带参数，见战斗核心的 `build_report_view`）。
+    """
 
     if report.get("schema") != catalog.report_schema:
         raise ValueError(f"战报展示适配器只接受{catalog.report_schema}")
@@ -233,10 +253,7 @@ def build_battle_report_presentation(
         "game_name": catalog.game_name,
         "formations": deepcopy(list(report.get("formations") or ())),
     }
-    bundle = {
-        "actors": dict(actors),
-        "palette": deepcopy(palette),
-        "roster": deepcopy(roster),
+    parts = {
         "segments": {
             "0": {"schema": schema, "version": version, "segment": segment}
         },
@@ -267,7 +284,7 @@ def build_battle_report_presentation(
         },
         "transitions": transitions,
     }
-    return main, bundle
+    return main, parts
 
 
 #: 片段头部信息的字段：概览与切换片段要用的都在这，时间线与参战者不在（按需取）。

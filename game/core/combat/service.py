@@ -163,16 +163,25 @@ class CombatService:
 
     def build_report_presentation(
         self, report: Mapping[str, object]
-    ) -> tuple[dict[str, object], dict[str, object]]:
-        """把一份存档战报算成展示包：`（战报头, 明细包）`。
+    ) -> dict[str, object]:
+        """把一份存档战报算成**战报头**（页面首屏要的那份）。
 
-        展示包比战报还大（15 人对 15 人实测几十兆字符），而且每一步都能从战报现算——
-        所以不存它，用的时候现算（战报页面按片段取，见 `game/cmd/通用/战报`）。
+        片段内容不在这里——页面是实时查看的，按当前视图向服务端要（见
+        `build_report_view`）。
         """
 
         from .presentation import build_battle_report_presentation
 
         return build_battle_report_presentation(report, self._require_report_catalog())
+
+    def build_report_view(
+        self, report: Mapping[str, object]
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        """`（战报头, 各份片段数据）`：页面首屏拿头，翻片段时按份取。"""
+
+        from .presentation import build_battle_report_view as _build
+
+        return _build(report, self._require_report_catalog())
 
     async def execute(self, request: CombatRequest) -> CombatResult:
         """执行唯一的公共战斗请求，不阻塞异步消息驱动。"""

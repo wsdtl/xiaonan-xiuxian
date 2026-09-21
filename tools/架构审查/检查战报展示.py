@@ -119,8 +119,8 @@ def _run() -> tuple[dict, dict]:
         )
     finally:
         core.database.close()
-    main, bundle = result.presentation
-    return result.report, {"main": main, "bundle": bundle}
+    header, parts = core.combat.build_report_view(result.report)
+    return result.report, {"main": header, "parts": parts}
 
 
 def _merged(presentation: dict) -> dict:
@@ -137,8 +137,7 @@ def _hydrate(payload: dict) -> dict:
     """把花名册合回参战者记录——前端加载后做的同一件事（`hydrateParticipants`）。
 
     快照里只带会变的那一半（血气 / 状态），不变的那一半（名字、阵营、颜色、功法能力列表）
-    在载荷的 `roster` 里一份。花名册挂在**各自的载荷**上（战报头与明细包各一份），
-    所以往下走的时候带着「离得最近的那份」。
+    在**战报头**的 `roster` 里一份（片段数据里不再各带一份）。
     """
 
     def fill(records: list, roster: dict) -> list:
@@ -163,7 +162,7 @@ def _hydrate(payload: dict) -> dict:
             for item in value:
                 walk(item, roster)
 
-    walk(payload, {})
+    walk(payload, (payload.get("main") or {}).get("roster") or {})
     return payload
 
 
@@ -173,7 +172,7 @@ def check_teams(report: dict, presentation: dict) -> list[str]:
     presentation = _merged(presentation)
     problems: list[str] = []
     sides = {value["id"]: value["side"] for value in report["participants"]}
-    records = presentation["bundle"]["segments"]["0"]["segment"]["final_participants"]
+    records = presentation["parts"]["segments"]["0"]["segment"]["final_participants"]
     by_id = {value["key"]: value for value in records}
     for key, side in sides.items():
         record = by_id.get(key)
@@ -207,7 +206,7 @@ def check_matchup_matches_headline(report: dict, presentation: dict) -> list[str
     title = str(report["headline"])
     left, _, right = title.partition(" 对阵 ")
     presentation = _merged(presentation)
-    records = presentation["bundle"]["segments"]["0"]["segment"]["final_participants"]
+    records = presentation["parts"]["segments"]["0"]["segment"]["final_participants"]
     grouped: dict[str, list[str]] = {}
     for value in records:
         grouped.setdefault(value["team_id"], []).append(value["label"])
@@ -226,7 +225,7 @@ def check_compact_lines(report: dict, presentation: dict) -> list[str]:
     """简要行不能是内部阶段名，也不能是空的。"""
 
     problems: list[str] = []
-    for segment in presentation["bundle"]["segments"].values():
+    for segment in presentation["parts"]["segments"].values():
         for entry in segment["segment"]["timeline"]:
             for event in entry["summary_events"]:
                 text = str(event.get("text") or "").strip()
@@ -249,7 +248,7 @@ def check_internal_details(report: dict, presentation: dict) -> list[str]:
     )
     kinds = {str(value) for value in declared["标准化"]["内部明细"]}
     problems: list[str] = []
-    for events in presentation["bundle"]["events"].values():
+    for events in presentation["parts"]["events"].values():
         for entry in events["timeline"]:
             for event in entry["events"]:
                 for fact in event.get("facts") or ():
@@ -323,9 +322,9 @@ def check_actor_tables(report: dict, presentation: dict) -> list[str]:
     """演员表与调色板要跟战报自己写的参战者一致，且覆盖时间线条上引用的每一个角色。"""
 
     main = presentation["main"]
-    bundle = presentation["bundle"]
+    parts = presentation["parts"]
     problems: list[str] = []
-    for 名, 块 in (("战报头", main), ("明细包", bundle)):
+    for 名, 块 in (("战报头", main),):
         actors = dict(块.get("actors") or {})
         palette = dict(块.get("palette") or {})
         if not actors or not palette:
@@ -377,9 +376,9 @@ def check_participant_records(report: dict, presentation: dict) -> list[str]:
     record_fields = {str(value) for value in declared["协议"]["参战者字段"]}
     profile_fields = {str(value) for value in declared["协议"]["花名册字段"]}
     main = presentation["main"]
-    bundle = presentation["bundle"]
+    parts = presentation["parts"]
     problems: list[str] = []
-    for 名, 块 in (("战报头", main), ("明细包", bundle)):
+    for 名, 块 in (("战报头", main),):
         roster = 块.get("roster") or {}
         wanted = {str(value["id"]): value for value in report.get("participants") or ()}
         if set(roster) != set(wanted):
@@ -396,14 +395,15 @@ def check_participant_records(report: dict, presentation: dict) -> list[str]:
                 problems.append(f"{名}的花名册名字与战报不一致：{键}")
             if not 档案.get("detail_groups"):
                 problems.append(f"{名}的花名册缺功法能力分组：{键}")
-        for 记录 in _participant_records_in(块):
-            if set(记录) - record_fields:
-                problems.append(
-                    f"{名}的快照记录多了字段（{'、'.join(sorted(set(记录) - record_fields))}）："
-                    f"{记录.get('key')}"
-                )
-            if 记录.get("__缺档案__"):
-                problems.append(f"{名}的快照记录在花名册里找不到档案：{记录.get('key')}")
+    # 快照记录散在各份片段数据里（战报头只给片段表与花名册，不带内容）。
+    for 记录 in _participant_records_in(parts):
+        if set(记录) - record_fields:
+            problems.append(
+                "片段数据里的快照记录多了字段"
+                f"（{'、'.join(sorted(set(记录) - record_fields))}）：{记录.get('key')}"
+            )
+        if 记录.get("__缺档案__"):
+            problems.append(f"片段数据里的快照记录在花名册里找不到档案：{记录.get('key')}")
     return problems
 
 

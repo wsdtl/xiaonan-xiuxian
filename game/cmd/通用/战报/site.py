@@ -1,23 +1,23 @@
-"""战报页面与它的五份数据接口。
+"""战报页面与它的数据接口。
 
-页面按「分享地址」设计（见 `static/说明.md`）：页面本身住在 `/battle/<战报编号>`，
-数据从**同前缀**取。装配的五个口与页面里 `loadEndpoint` 拼的路径一一对应：
+页面按「分享地址」设计（见 `static/说明.md`）：页面住在 `/battle/<战报编号>`，数据从
+同前缀的 `/battle/<编号>/data` 取——**只有一个数据接口**，用 `view` 参数说明要哪一份：
 
-    /battle/<编号>                          页面（HTML）
-    /battle/<编号>/data                     战报头（概览、演员表、花名册、片段列表）
-    /battle/<编号>/segments/<序>             一个片段的全部内容
-    /battle/<编号>/segments/<序>/events      一个片段的全部事件
-    /battle/<编号>/segments/<序>/participants/<快照>
-    /battle/<编号>/segments/<序>/transitions/<序>
+    /battle/<编号>                     页面（HTML）
+    /battle/<编号>/data                首屏：概览、演员表、花名册、片段表
+    /battle/<编号>/data?view=segment&index=0
+    /battle/<编号>/data?view=events&index=0
+    /battle/<编号>/data?view=participants&index=0&snapshot=after
+    /battle/<编号>/data?view=transition&index=0&sequence=3
 
-数据从**存档战报现算**（`宗门战` 记录里的 `战报`），展示包不进存档：一次十五人对
-十五人的仗，展示包比战报还大，而它每一步都能从战报算出来。算好的按编号留最近几份
-（见 `Bank`），编号对不上就回 404，不拿空壳糊页面。
+画面**每次现算**（从存档战报），服务器不缓存：这类页面多半只看一次，战报记录本身也只留
+很短一段时间；缓存一旦与存档错开，玩家看到的就是上一版画面。**没有离线/预览模式**——
+那是同一份数据的第二份副本，早就该删。
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from game.app import current_game_services
@@ -46,6 +46,7 @@ def _page_headers() -> dict[str, str]:
 
 def _data_headers() -> dict[str, str]:
     return {
+        # 画面是实时的：不许任何一层拿旧的糊弄玩家。
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
     }
@@ -57,54 +58,21 @@ async def battle_report_page(report_id: str) -> HTMLResponse:
 
 
 @router.get("/{report_id}/data", response_class=JSONResponse)
-async def battle_report_data(report_id: str) -> JSONResponse:
-    payload = await current_game_services().features.zhanbao.main(report_id)
-    if payload is None:
-        raise HTTPException(status_code=404, detail="没有这份战报")
-    return JSONResponse(payload, headers=_data_headers())
-
-
-@router.get("/{report_id}/segments/{index}", response_class=JSONResponse)
-async def battle_report_segment(report_id: str, index: int) -> JSONResponse:
-    payload = await current_game_services().features.zhanbao.segment(report_id, index)
-    if payload is None:
-        raise HTTPException(status_code=404, detail="没有这个片段")
-    return JSONResponse(payload, headers=_data_headers())
-
-
-@router.get("/{report_id}/segments/{index}/events", response_class=JSONResponse)
-async def battle_report_events(report_id: str, index: int) -> JSONResponse:
-    payload = await current_game_services().features.zhanbao.events(report_id, index)
-    if payload is None:
-        raise HTTPException(status_code=404, detail="没有这个片段的事件")
-    return JSONResponse(payload, headers=_data_headers())
-
-
-@router.get(
-    "/{report_id}/segments/{index}/participants/{snapshot}", response_class=JSONResponse
-)
-async def battle_report_participants(
-    report_id: str, index: int, snapshot: str
+async def battle_report_data(
+    report_id: str,
+    view: str = Query("header"),
+    index: int = Query(0),
+    snapshot: str = Query(""),
+    sequence: int = Query(0),
 ) -> JSONResponse:
-    payload = await current_game_services().features.zhanbao.participants(
-        report_id, index, snapshot
-    )
+    try:
+        payload = await current_game_services().features.zhanbao.view(
+            report_id, part=view, index=index, snapshot=snapshot, sequence=sequence
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if payload is None:
-        raise HTTPException(status_code=404, detail="没有这一侧的参战者状态")
-    return JSONResponse(payload, headers=_data_headers())
-
-
-@router.get(
-    "/{report_id}/segments/{index}/transitions/{sequence}", response_class=JSONResponse
-)
-async def battle_report_transition(
-    report_id: str, index: int, sequence: int
-) -> JSONResponse:
-    payload = await current_game_services().features.zhanbao.transition(
-        report_id, index, sequence
-    )
-    if payload is None:
-        raise HTTPException(status_code=404, detail="没有这次行动的前后状态")
+        raise HTTPException(status_code=404, detail="没有这一份画面（战报不存在或还没打完）")
     return JSONResponse(payload, headers=_data_headers())
 
 

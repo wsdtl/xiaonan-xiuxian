@@ -1,11 +1,12 @@
-"""战报页面服务端的契约：五个接口切出来的东西，要与整份展示包逐项相同。
+"""战报页面服务端的契约：一个数据接口按 `view` 现算五种画面，与整份逐项相同。
 
-页面按「分享地址」取五份数据（`/data`、片段、事件、参战者、行动前后状态）。这五份是
-**从存档战报现算的展示包**里切出来的，所以判据只有一条：**切出来的每一份，与一次算完整份
-的对应部分一模一样**——切片只是搬运，不许自己再拼一遍（拼一遍就会两处漂）。
+页面是**实时查看**用的：`/battle/<编号>/data?view=…` 一个接口，每次调用都按存档现算，
+服务端不缓存、也没有离线/预览模式。所以判据是两条：
 
-顺带钉住这一轮的两件事：`/data` 里**不带片段内容**（片段按需取），路由必须正好是页面拼的
-那五条（多一条少一条都会让页面拿到 404 或读不到数据）。
+- **切片只是搬运**：五种画面与一次算完整的对应部分一模一样（自己再拼一遍就会两处漂）；
+- **接口只有一个、参数就是页面拼的那几个**：多一个少一个都会让页面拿到 404。
+
+顺带钉住「首屏不给片段内容」（片段按需取）与「战报头里带花名册」这两件第 118/119 轮定的事。
 """
 
 from __future__ import annotations
@@ -29,8 +30,6 @@ CARD = "410154"
 
 
 def _battle(services) -> dict:
-    """跑一场真战斗，返回它的**展示包**（与页面现算的是同一条路）。"""
-
     def side(pid: str) -> CombatantSpec:
         return CombatantSpec(
             id=pid, name=pid, attributes=dict(ATTRS),
@@ -51,53 +50,75 @@ def _battle(services) -> dict:
 
 
 class _StoredWar:
-    """替身：只实现页面要用的那一个读口。"""
+    """替身：只实现页面要用的那一个读口（战报 + 版本）。"""
 
     def __init__(self, report: dict) -> None:
         self._report = report
 
     async def report(self, war_id: str):
-        return self._report if war_id == "war-1" else None
+        return (self._report, 1) if war_id == "war-1" else None
 
 
-def test_slices_match_the_whole_payload() -> None:
+def test_views_match_the_whole_payload() -> None:
     services = build_game_services()
     try:
-        main, bundle = _battle(services)
+        header, parts = services.core.combat.build_report_view(_report(services))
         feature = services.features.zhanbao
         feature._sect_war = _StoredWar({"占位": True})
-        # 直接喂展示包：切片的判据不该依赖「战报重新算一遍是否稳定」——那条由战报通道管。
-        feature._combat.build_report_presentation = lambda report: (main, bundle)
+        feature._combat.build_report_view = lambda report: (header, parts)
 
-        first = main["detail"]["segments"][0]["index"]
-        assert main["detail"]["segments"][0].keys() == {
-            "index", "position_label", "title", "outcome", "started_at",
-            "finished_at", "duration_label", "system_visual", "counts", "formations",
-        }, "战报头里不许再带片段内容（时间线与参战者按需取）"
+        first = header["detail"]["segments"][0]["index"]
+        assert "timeline" not in header["detail"]["segments"][0], (
+            "首屏不许带片段内容（时间线按需取）"
+        )
+        assert header["roster"] and header["actors"] and header["palette"], "首屏要带花名册与角色表"
 
-        assert asyncio.run(feature.main("war-1")) == main
-        assert asyncio.run(feature.segment("war-1", first)) == bundle["segments"][str(first)]
-        assert asyncio.run(feature.events("war-1", first)) == bundle["events"][str(first)]
+        assert asyncio.run(feature.view("war-1")) == header
+        assert asyncio.run(feature.view("war-1", part="segment", index=first)) == parts["segments"][str(first)]
+        assert asyncio.run(feature.view("war-1", part="events", index=first)) == parts["events"][str(first)]
         assert asyncio.run(
-            feature.participants("war-1", first, "after")
-        ) == bundle["participants"][f"{first}:after"]
+            feature.view("war-1", part="participants", index=first, snapshot="after")
+        ) == parts["participants"][f"{first}:after"]
         assert asyncio.run(
-            feature.transition("war-1", first, 0)
-        ) == bundle["transitions"][f"{first}:0"]
-        assert asyncio.run(feature.main("war-404")) is None
+            feature.view("war-1", part="transition", index=first, sequence=0)
+        ) == parts["transitions"][f"{first}:0"]
+        assert asyncio.run(feature.view("war-404")) is None
+        assert asyncio.run(feature.view("war-1", part="segment", index=99)) is None
     finally:
         services.core.database.close()
 
 
-def test_routes_match_the_page_paths() -> None:
+def _report(services) -> dict:
+    result = asyncio.run(
+        services.core.combat.execute(
+            CombatRequest(
+                left_team=(
+                    CombatantSpec(
+                        id="L", name="L", attributes=dict(ATTRS),
+                        build=(CombatBuildRef("真意", CARD, instance_id=f"L:{CARD}", born_order=0),),
+                    ),
+                ),
+                right_team=(
+                    CombatantSpec(
+                        id="R", name="R", attributes=dict(ATTRS),
+                        build=(CombatBuildRef("真意", CARD, instance_id=f"R:{CARD}", born_order=0),),
+                    ),
+                ),
+                seed=20260911, action_limit=60,
+                report=CombatReportSpec(scene="切磋", generated_at="2026-01-01T00:00:00+08:00"),
+            )
+        )
+    )
+    return result.report
+
+
+def test_the_page_has_one_data_interface() -> None:
     from game.cmd.通用.战报.site import router
 
     paths = {route.path for route in router.routes}
-    assert paths == {
-        "/battle/{report_id}",
-        "/battle/{report_id}/data",
-        "/battle/{report_id}/segments/{index}",
-        "/battle/{report_id}/segments/{index}/events",
-        "/battle/{report_id}/segments/{index}/participants/{snapshot}",
-        "/battle/{report_id}/segments/{index}/transitions/{sequence}",
-    }, "路由要与页面 `loadEndpoint` 拼的路径一一对应"
+    assert paths == {"/battle/{report_id}", "/battle/{report_id}/data"}, (
+        "页面与数据各一条路：数据只有一个接口，用 `view` 参数说明要哪一份"
+    )
+    data = next(route for route in router.routes if route.path.endswith("/data"))
+    params = {param.name for param in data.dependant.query_params}
+    assert params == {"view", "index", "snapshot", "sequence"}, f"数据接口的参数变了：{params}"
