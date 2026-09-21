@@ -449,7 +449,9 @@ class ExplorationService:
                         terrain=location.terrain,
                     ),
                     left_formation=formation_spec if battle_index == 1 else None,
-                    left_groups=ally_groups,
+                    left_groups=_living_groups(
+                        ally_groups, {value.id for value in living}
+                    ),
                     right_groups=enemy_group_specs,
                 )
             )
@@ -1058,6 +1060,31 @@ def _allocate_rewards(
             for user_id in living_users:
                 result[user_id]["掉落"][(drop.item_id, drop.grade_id)] += share
     return result
+
+
+def _living_groups(
+    groups: Sequence[CombatGroupSpec], living_ids: set[str]
+) -> tuple[CombatGroupSpec, ...]:
+    """每场战斗的编组契约只保留本场仍存活的我方参战者。
+
+    同一场探险可能连打多场，上一场倒下的角色不会进入下一场；编组契约若还带着他们，
+    战斗核心会判「编组引用未知参战者」而整单失败。整组阵亡的编组直接去掉。
+    """
+
+    alive_groups: list[CombatGroupSpec] = []
+    for group in groups:
+        members = tuple(value for value in group.member_ids if value in living_ids)
+        if not members:
+            continue
+        primaries = tuple(value for value in group.primary_ids if value in living_ids)
+        alive_groups.append(
+            CombatGroupSpec(
+                group_id=group.group_id,
+                member_ids=members,
+                primary_ids=primaries or members,
+            )
+        )
+    return tuple(alive_groups)
 
 
 def _battle_value(
