@@ -335,7 +335,9 @@ class AssetService:
             raise AssetStateError("道藏状态键与编号不一致")
         stored_grade = self.grade(_text(value.get("品级"), "道藏实例.品级"))
         if stored_grade.grade_id != normalized_grade_id:
-            raise AssetStateError("道藏状态键与品级不一致")
+            raise AssetStateError(
+                f"道藏中的这门功法是{stored_grade.name}，请按{stored_grade.name}装配"
+            )
         return CultivationOwnership(
             normalized_category,
             normalized_content_id,
