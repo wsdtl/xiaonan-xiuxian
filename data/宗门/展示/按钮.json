@@ -86,5 +86,29 @@
     "命令": "宗门 退出",
     "行为": "callback",
     "样式": "secondary"
+  },
+  {
+    "页面": "宗主",
+    "编号": "sect.enter.leader",
+    "名称": "入山门",
+    "命令": "入山门",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "页面": "长老",
+    "编号": "sect.enter.elder",
+    "名称": "入山门",
+    "命令": "入山门",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "页面": "弟子",
+    "编号": "sect.enter.member",
+    "名称": "入山门",
+    "命令": "入山门",
+    "行为": "callback",
+    "样式": "secondary"
   }
 ]
