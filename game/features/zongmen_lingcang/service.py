@@ -140,6 +140,28 @@ class LingcangFeature:
         except SectAssetError as exc:
             raise LingcangFeatureError(str(exc)) from exc
 
+    async def take_material(
+        self,
+        user_id: str,
+        request_id: str,
+        category: str,
+        identifier: str,
+        grade: str,
+        quantity: int,
+    ):
+        await self._require_write(user_id)
+        try:
+            item = self._items.inspect(identifier)
+            if item.category != category:
+                raise LingcangFeatureError(f"{item.name}不属于{category}")
+            return await self._assets.take_material(
+                user_id, request_id, category, item.item_id, grade, quantity
+            )
+        except ItemCatalogError as exc:
+            raise LingcangFeatureError(str(exc)) from exc
+        except SectAssetError as exc:
+            raise LingcangFeatureError(str(exc)) from exc
+
     async def donate_stones(self, user_id: str, request_id: str, quantity: int):
         await self._require_write(user_id)
         try:
