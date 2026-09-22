@@ -249,6 +249,7 @@ class GatheringService:
                     unit_count,
                     source,
                     gathering_multiplier,
+                    await self._sect_grade_floor(user_id),
                 ),
             }
 
@@ -484,6 +485,7 @@ class GatheringService:
         unit_count: int,
         source: random.Random,
         multiplier: float = 1.0,
+        grade_floor: str = "01",
     ) -> list[dict[str, object]]:
         count_per_round = unit_count * mode.draws_per_unit
         draws = self._pool.draw(
@@ -503,6 +505,9 @@ class GatheringService:
                     f"{mode.kind}资源池混入{record.number_category}：{entry.entity_id}"
                 )
             grade = self._asset.draw_drop_grade(seed=source.getrandbits(64))
+            if self._asset.grade(grade_floor).order > grade.order:
+                # 宗门等级带来的采集品级下限：抽到的档低于下限就抬到下限
+                grade = self._asset.grade(grade_floor)
             quantity = _scaled_quantity(mode.quantity_per_draw, multiplier, source)
             result.append(
                 {
@@ -513,6 +518,26 @@ class GatheringService:
                 }
             )
         return result
+
+    async def _sect_grade_floor(self, user_id: str) -> str:
+        """宗门等级带来的采集品级下限（没入宗就是最低档）。
+
+        等级越高，保底品级越高：5 级起至少玄品、10 级起至少地品、15 级起至少天品。
+        """
+
+        if self._sect is None or self._progress is None:
+            return "01"
+        membership = await self._sect.membership(user_id)
+        if membership is None:
+            return "01"
+        level = int((await self._progress.snapshot(membership.sect_id)).level)
+        if level >= 15:
+            return "04"
+        if level >= 10:
+            return "03"
+        if level >= 5:
+            return "02"
+        return "01"
 
     async def _gathering_multiplier(self, user_id: str) -> float:
         if self._sect is None or self._progress is None:
