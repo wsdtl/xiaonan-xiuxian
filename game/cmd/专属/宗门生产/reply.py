@@ -98,8 +98,6 @@ def collected(
     if not value.outputs and not value.spirit_stones:
         builder.line(M.status("无产出", tone="muted"), " ", common["没有产出"])
     builder.field("灵藏灵石", M.text(value.spirit_stones_after, tone="cultivation"))
-        builder.small("每 30 分钟一轮，可连续收取；在宗门洞天内由宗主或长老开启")
-
     return builder.actions(message_actions(actions)).build()
 
 
