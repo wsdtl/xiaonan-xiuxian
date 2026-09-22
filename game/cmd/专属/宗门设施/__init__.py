@@ -14,7 +14,7 @@ _ALCHEMY_CATEGORIES = {"恢复丹", "战丹", "突破丹", "特殊丹"}
 
 
 @GameCommand.command(
-    cmd=("百炼堂", "宗门百炼堂"),
+    cmd="百炼堂",
     metadata={
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
@@ -36,7 +36,7 @@ async def bailiantang(
 
 
 @GameCommand.command(
-    cmd=("丹鼎阁", "宗门丹鼎阁"),
+    cmd="丹鼎阁",
     metadata={
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
@@ -58,7 +58,7 @@ async def dandingge(
 
 
 @GameCommand.command(
-    cmd=("演阵台", "宗门演阵台"),
+    cmd="演阵台",
     metadata={
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
