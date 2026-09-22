@@ -103,6 +103,9 @@ def page(
                 _text(copy, "查看", "距下级"),
                 str(value.next_level_contribution - value.total_contribution),
             )
+        builder.small(
+            "捐献换算：灵石 100 = 贡献 1；基础材料按参考价 ÷ 100 取整（在洞天里捐入灵藏）"
+        )
         builder.row(
             (
                 _text(copy, "查看", "资源增益"),
