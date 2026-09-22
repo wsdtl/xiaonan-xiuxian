@@ -14,7 +14,7 @@ from game.app import build_game_services
 from game.core.asset import AssetEntry
 
 DATA = Path(__file__).resolve().parents[1] / "data"
-难度二丹 = "140015"  # 周天丹：难度 2，药引要玄品以上
+难度二丹 = "140029"  # 凝海丹：难度 2，药引要玄品以上（周天丹已按负责人定案降档，不再适合做样例）
 难度一丹 = "140001"  # 聚气丹：难度 1，黄品即可
 
 

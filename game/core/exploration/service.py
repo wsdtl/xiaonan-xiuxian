@@ -478,7 +478,9 @@ class ExplorationService:
                 for value in formal_left_results
                 if value.alive and value.owner_id
             }
-            allocations = _allocate_rewards(defeated, living_users)
+            allocations = _allocate_rewards(
+                defeated, living_users, tuple(user_results)
+            )
             for user_id, allocation in allocations.items():
                 user_results[user_id]["灵石"] += allocation["灵石"]
                 user_results[user_id]["掉落"].update(allocation["掉落"])
@@ -1043,21 +1045,32 @@ def _carried_medicine_definitions(
 
 
 def _allocate_rewards(
-    defeated: Sequence[EnemyInstance], living_users: set[str]
+    defeated: Sequence[EnemyInstance],
+    living_users: set[str],
+    participants: Sequence[str] = (),
 ) -> dict[str, dict[str, object]]:
-    result = {user_id: {"灵石": 0, "掉落": Counter()} for user_id in living_users}
-    if not living_users:
+    """按存活者分配战果；**全员阵亡但确有战果时按参与者保底分配**。
+
+    组队低境界常出现「三人全灭、但确实打死了敌人」的情况——原来这种时候一份战利品都拿不到，
+    组队因此严格劣于独狼。这里给最后一场的参与者兜底：只要有战败敌人，就按参与者人数均分。
+    """
+
+    receivers = set(living_users)
+    if not receivers and defeated and participants:
+        receivers = set(participants)
+    result = {user_id: {"灵石": 0, "掉落": Counter()} for user_id in receivers}
+    if not receivers:
         return result
-    count = len(living_users)
+    count = len(receivers)
     for enemy in defeated:
         stone_share = enemy.reward.spirit_stones // count
-        for user_id in living_users:
+        for user_id in receivers:
             result[user_id]["灵石"] += stone_share
         for drop in enemy.reward.drops:
             share = drop.quantity // count
             if share < 1:
                 continue
-            for user_id in living_users:
+            for user_id in receivers:
                 result[user_id]["掉落"][(drop.item_id, drop.grade_id)] += share
     return result
 
