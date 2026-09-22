@@ -72,13 +72,7 @@ def taken_material(copy: LingcangCopy, result):
         .header(_text(copy, "标题"))
         .section("取用灵藏", icon="success")
         .line(M.status("取用完成", tone="positive"))
-        .line(
-            _text(
-                copy,
-                "取用材料",
-                {"品级": entry.grade_name, "名称": entry.name, "数量": entry.quantity},
-            )
-        )
+        .line(f"已将{entry.grade_name}{entry.name}取到纳戒，共{entry.quantity}份。")
     )
     return builder.build()
 
