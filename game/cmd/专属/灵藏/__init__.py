@@ -122,7 +122,7 @@ async def take_lingcang(
             result = await feature.take_stones(
                 user_id, message_context.request_id, quantity
             )
-            await manager.send(reply.donated_stones(feature.copy(), quantity, result))
+            await manager.send(reply.taken_stones(feature.copy(), quantity, result))
             return
         if len(parts) != 4 or parts[0] not in _CATEGORIES:
             raise LingcangFeatureError(
@@ -136,7 +136,7 @@ async def take_lingcang(
             parts[2],
             _positive(parts[3], "捐献数量"),
         )
-        await manager.send(reply.donated_material(feature.copy(), result))
+        await manager.send(reply.taken_material(feature.copy(), result))
     except LingcangFeatureError as exc:
         await manager.send(reply.error(feature.copy(), str(exc)))
 

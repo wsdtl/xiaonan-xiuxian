@@ -230,6 +230,9 @@ class SectAssetService:
             grade_id=grade.grade_id,
             quantity_delta=-normalized_quantity,
         )
+        remaining = getattr(entry, "quantity", None)
+        if remaining is not None and int(remaining) < 0:
+            raise SectAssetError("灵藏中没有这么多材料")
         try:
             personal = await self._asset.plan_inventory_changes(
                 user_id,
