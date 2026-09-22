@@ -46,6 +46,7 @@ class GiftService:
             raise JsonDataError("玩家赠送.允许物品类别不能为空")
         self._allowed = frozenset(str(value) for value in allowed)
         self._maximum_quantity = _positive_int(rules.get("单次数量上限"), "玩家赠送.单次数量上限")
+        self._same_location_required = bool(rules.get("双方必须同地", True))
         self._initialized = True
 
     async def resolve_target(self, user_id: str, query: str) -> str:
@@ -57,6 +58,10 @@ class GiftService:
         profiles = await self._character.public_profiles(ids)
         matches = tuple(value.user_id for value in profiles if value.name == query)
         if not matches:
+            # 驿站式跨地赠送：不在附近时允许按用户编号点名（名录/宗门/队伍里能拿到的编号）
+            profiles = await self._character.public_profiles((query,))
+            if profiles and profiles[0].name:
+                return query
             raise GiftError("目标不在附近")
         if len(matches) > 1:
             raise GiftError("目标姓名重名，请改用用户编号")
@@ -72,9 +77,15 @@ class GiftService:
         cached = await self._database.get(StateAddress(sender, RESULT_STATE, request_id))
         if cached is not None:
             return _result(cached.value, replayed=True)
-        first, second = await self._location.current(sender), await self._location.current(target)
-        if (first.space_type, first.space_id, first.xy) != (second.space_type, second.space_id, second.xy):
-            raise GiftError("赠送双方必须处于同一位置")
+        if self._same_location_required:
+            first = await self._location.current(sender)
+            second = await self._location.current(target)
+            if (first.space_type, first.space_id, first.xy) != (
+                second.space_type,
+                second.space_id,
+                second.xy,
+            ):
+                raise GiftError("赠送双方必须处于同一位置")
         if command.spirit_stones < 0:
             raise GiftError("灵石数量不能为负数")
         if command.spirit_stones > 0:
