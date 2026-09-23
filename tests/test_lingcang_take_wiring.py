@@ -83,7 +83,7 @@ def test_玩家可见说明里不把取灵藏当命令() -> None:
         if not path.is_file() or path.suffix not in {".md", ".json"}:
             continue
         if path.name == "待补内容.md":
-            continue  # 那份是历次盘点的历史日志，按性质保留旧记录
+            continue  # 那份是待补清单，按性质会点名历史命令
         文本 = path.read_text(encoding="utf-8")
         去掉历史点名 = 历史点名.sub("", 文本)
         for 名字 in 取用命令:
