@@ -16,7 +16,7 @@ from . import reply
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "资源",
-            "summary": "向附近玩家赠送灵石或基础物资",
+            "summary": "向指定玩家赠送灵石或基础物资（可按用户编号跨地点名送达）",
             "usage": ("赠送 玩家 灵石 数量", "赠送 玩家 物品编号 品级 数量"),
             "side_effect": "在同一事务中转移资产",
             "order": 83,
