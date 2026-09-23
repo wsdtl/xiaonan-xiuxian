@@ -37,7 +37,7 @@
   },
   "错误": {
     "challenge_format": "格式：约战 宗门名 灵石数量",
-    "history_format": "格式：宗门战记录 [页码]",
+    "history_format": "格式：战录 [页码]（别名 查看宗门战记录 / 宗门战记录）",
     "target_invalid": "没有找到这个敌对宗门，或不能向本宗约战。",
     "active_exists": "其中一方已有尚未结束的宗门战。",
     "surface_required": "宗门战只能在地表发起。",
