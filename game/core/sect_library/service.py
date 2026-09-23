@@ -67,7 +67,7 @@ class SectLibraryService:
             raise JsonDataError("藏经阁必须按功法编号聚合本宗最高品级")
         if borrow.get("所有权") != "不转移":
             raise JsonDataError("藏经阁借阅的所有权必须不转移")
-        if _失效条件(borrow.get("失效条件")) != INVALIDATION_CONDITIONS:
+        if _invalidation_conditions(borrow.get("失效条件")) != INVALIDATION_CONDITIONS:
             raise JsonDataError(
                 "藏经阁借阅的失效条件必须是退出宗门、被逐出宗门与宗门解散"
             )
@@ -295,7 +295,7 @@ def _mapping(value: object, label: str) -> Mapping[str, object]:
     return mapping(value, label, error=SectLibraryError)
 
 
-def _失效条件(value: object) -> tuple[str, ...]:
+def _invalidation_conditions(value: object) -> tuple[str, ...]:
     if (
         not isinstance(value, Sequence)
         or isinstance(value, (str, bytes))
