@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from game.core.asset import AssetService
 from game.core.data import (
@@ -10,6 +10,7 @@ from game.core.data import (
     JsonDataService,
     mapping,
     mapping as _json_mapping,
+    nonempty_text as _rule_text,
     sequence,
 )
 from game.core.database import (
@@ -31,6 +32,9 @@ from .contracts import (
     SectLibraryView,
     SectTechnique,
 )
+
+#: 借阅失效条件：三条都要在规则里声明，且不得多写（规则与实现对得上才启动）。
+INVALIDATION_CONDITIONS = ("退出宗门", "被逐出宗门", "宗门解散")
 
 
 class SectLibraryService:
@@ -61,8 +65,12 @@ class SectLibraryService:
         borrow = _json_mapping(rule.get("借阅"), "藏经阁.借阅")
         if source.get("类别") != "功法" or source.get("同编号处理") != "取最高品级":
             raise JsonDataError("藏经阁必须按功法编号聚合本宗最高品级")
-        if borrow.get("所有权") != "不转移" or borrow.get("离开藏经阁") != "保持生效":
-            raise JsonDataError("藏经阁借阅生命周期与正式规则不一致")
+        if borrow.get("所有权") != "不转移":
+            raise JsonDataError("藏经阁借阅的所有权必须不转移")
+        if _失效条件(borrow.get("失效条件")) != INVALIDATION_CONDITIONS:
+            raise JsonDataError(
+                "藏经阁借阅的失效条件必须是退出宗门、被逐出宗门与宗门解散"
+            )
         self._initialized = True
         return self.status()
 
@@ -147,6 +155,64 @@ class SectLibraryService:
             raise SectLibraryConflictError("人物构筑刚刚发生变化，请重试") from exc
         return SectBorrowResult(slot, technique, receipt.replayed)
 
+    async def clear_borrowed(
+        self, user_id: str, request_id: str
+    ) -> int:
+        """离开宗门时清掉借阅记录，把借出过的槽还原成原本的功法。
+
+        规则的三条失效条件（`退出宗门`、`被逐出宗门`、`宗门解散`）都落到这里：调用点
+        在成员关系已经删除之后，因此只按「槽里的借阅记录还指着哪个宗门」判——成员关系
+        还在同一宗门时保留借阅，否则还原。重复调用是安全的：借阅记录清掉之后本方法
+        再也找不到可清的槽，直接返回 0，不写事务。
+        """
+
+        self._require_initialized()
+        user = _rule_text(user_id, "user_id")
+        snapshot = await self._database.get(
+            StateAddress(user, "cultivation", "main")
+        )
+        if snapshot is None:
+            return 0
+        cultivation = dict(_mapping(snapshot.value, "cultivation/main"))
+        techniques = list(_slots(cultivation.get("功法"), "功法"))
+        member = await self._sect.membership(user)
+        cleared = 0
+        for index, raw in enumerate(techniques):
+            if not isinstance(raw, Mapping):
+                continue
+            borrowed = raw.get("藏经阁借阅")
+            if not isinstance(borrowed, Mapping):
+                continue
+            sect_id = str(borrowed.get("宗门编号") or "")
+            if member is not None and member.sect_id == sect_id:
+                continue
+            techniques[index] = borrowed.get("原功法")
+            cleared += 1
+        if not cleared:
+            return 0
+        cultivation["功法"] = techniques
+        try:
+            await self._database.commit(
+                TransactionCommand(
+                    user,
+                    _rule_text(request_id, "request_id"),
+                    "清除宗门借阅",
+                    (
+                        StateMutation(
+                            user,
+                            "cultivation",
+                            "main",
+                            cultivation,
+                            snapshot.version,
+                        ),
+                    ),
+                    {"宗门编号": "", "清除槽位数": cleared},
+                )
+            )
+        except (StateConflictError, IdempotencyConflictError) as exc:
+            raise SectLibraryConflictError("人物构筑刚刚发生变化，请重试") from exc
+        return cleared
+
     async def effective_cultivation(
         self, user_id: str, cultivation: Mapping[str, object]
     ) -> Mapping[str, object]:
@@ -227,6 +293,16 @@ class SectLibraryService:
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:
     return mapping(value, label, error=SectLibraryError)
+
+
+def _失效条件(value: object) -> tuple[str, ...]:
+    if (
+        not isinstance(value, Sequence)
+        or isinstance(value, (str, bytes))
+        or not all(isinstance(item, str) for item in value)
+    ):
+        raise JsonDataError("藏经阁.借阅.失效条件必须是字符串数组")
+    return tuple(value)
 
 
 def _slots(value: object, label: str) -> tuple[object, ...]:

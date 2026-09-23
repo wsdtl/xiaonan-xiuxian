@@ -738,7 +738,14 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     )
     yixing.initialize()
     zongmen = SectFeature(
-        data, sect, character, location, world, player_state, sect_progress
+        data,
+        sect,
+        character,
+        location,
+        world,
+        player_state,
+        sect_progress,
+        sect_library,
     )
     zongmen.initialize()
     zongmen_tongxing = SectFollowFeature(

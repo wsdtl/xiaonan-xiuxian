@@ -14,6 +14,7 @@ from game.core.location import (
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectConflictError, SectService
 from game.core.sect_progress import SectProgressService
+from game.core.sect_library import SectLibraryError, SectLibraryService
 from game.core.world import LocationQuery, WorldService
 
 from .contracts import (
@@ -36,6 +37,7 @@ class SectFeature:
         world: WorldService,
         player_state: PlayerStateService,
         progress: SectProgressService | None = None,
+        library: SectLibraryService | None = None,
     ) -> None:
         self._data = data
         self._sect = sect
@@ -44,6 +46,7 @@ class SectFeature:
         self._world = world
         self._player_state = player_state
         self._progress = progress
+        self._library = library
         self._copy: SectCopy | None = None
         self._buttons = ()
 
@@ -163,6 +166,8 @@ class SectFeature:
             await self._sect.leave(user_id, request_id)
         except SectConflictError as exc:
             raise SectFeatureError(exc.code) from exc
+        finally:
+            await self._clear_borrowed(user_id, request_id)
         return SectOperationResult("退出", "", await self.page(user_id))
 
     async def kick(
@@ -173,6 +178,8 @@ class SectFeature:
             await self._sect.kick(user_id, member.user_id, request_id)
         except SectConflictError as exc:
             raise SectFeatureError(exc.code) from exc
+        finally:
+            await self._clear_borrowed(member.user_id, request_id)
         return SectOperationResult("逐出", member.name, await self.page(user_id))
 
     async def transfer(
@@ -214,6 +221,9 @@ class SectFeature:
             await self._sect.disband(user_id, request_id)
         except SectConflictError as exc:
             raise SectFeatureError(exc.code) from exc
+        finally:
+            for value in members:
+                await self._clear_borrowed(value.user_id, request_id)
         cave_users = []
         for value in members:
             location = await self._location.current(value.user_id)
@@ -233,6 +243,21 @@ class SectFeature:
             except LocationConflictError as exc:
                 raise SectFeatureError("洞天位置清理失败") from exc
         return SectOperationResult("解散", "", await self.page(user_id))
+
+    async def _clear_borrowed(self, user_id: str, request_id: str) -> None:
+        """成员关系终止后清掉藏经阁借阅并还原原功法（规则的三条失效条件）。
+
+        三条失效条件都走成员删除：退出与逐出删一个人的成员记录，解散清空全部成员记录。
+        清理排在核心事务之后（`finally`，失败也要清），清完借阅记录就不在了，重复调用
+        自然变成空操作；读取构筑那一侧的还原仍留着兜底，所以中途出错也不会让借阅复活。
+        """
+
+        if self._library is None:
+            return
+        try:
+            await self._library.clear_borrowed(user_id, f"{request_id}:清除借阅")
+        except SectLibraryError as exc:
+            raise SectFeatureError("借阅功法清理失败") from exc
 
     async def _resolve_nearby(self, user_id: str, query: str) -> CharacterPublicProfile:
         normalized = str(query or "").strip()
