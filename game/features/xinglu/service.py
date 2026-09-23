@@ -50,6 +50,7 @@ class TravelFeature:
             raise RuntimeError("玩家位置核心必须先于行路玩法启动")
         if not self._action_group.status().initialized:
             raise RuntimeError("行动编排核心必须先于行路玩法启动")
+        self._action_group.require_common_action("去", "行路玩法")
         if not self._player_state.status().initialized:
             raise RuntimeError("人物状态核心必须先于行路玩法启动")
         self._initialized = True

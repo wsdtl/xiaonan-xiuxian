@@ -43,6 +43,7 @@ class OreGatheringFeature:
         self._gathering.mode_status(KIND)
         if not self._action_group.status().initialized:
             raise RuntimeError("行动编排核心必须先于采矿玩法启动")
+        self._action_group.require_common_action("采矿", "采矿玩法")
         self._copy, self._buttons = load_presentation(self._data)
 
     def copy(self) -> OreGatheringCopy:

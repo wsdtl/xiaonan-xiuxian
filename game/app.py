@@ -327,7 +327,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("initialized", sect_library_status.initialized),
         )
     )
-    action_group = ActionGroupService(team, sect)
+    action_group = ActionGroupService(data, team, sect)
     action_group.initialize()
     logger.opt(colors=True).success(C.ok("行动组核心微服务已启动"))
     hosting = HostingService(data, database, player_state, action_group)
