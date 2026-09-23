@@ -20,6 +20,8 @@ class SectProductionFacility:
     base_multiplier: float
     primary_range: tuple[int, int]
     material_range: tuple[int, int]
+    #: 可以选定的地形池；只有灵田有，灵脉为空（空表示该设施不能选地形）。
+    terrain_options: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,8 @@ class SectProductionView:
     last_settled_at: datetime | None
     pending_cycles: int
     next_cycle_seconds: int
+    #: 已选定的地形池；空表示未选，按该设施原本的随机池产出。
+    terrain: str = ""
 
 
 @dataclass(frozen=True)

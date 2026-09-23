@@ -42,6 +42,10 @@ from .contracts import (
 
 _FACILITY_TYPES = ("灵脉", "灵田")
 _ENTITY_TYPES = {"灵脉": "宗门灵脉", "灵田": "宗门灵田"}
+#: 灵植池的命名约定：一个地形一个池，池名就是 `灵植-<地形>`。
+_TERRAIN_PREFIX = "灵植-"
+_TERRAIN_KEY = "选定地形"
+_OFFICER_DENIED = "只有宗主和长老可以收取宗门资源"
 
 
 class SectProductionService:
@@ -100,6 +104,7 @@ class SectProductionService:
                 _range(
                     output.get(material_key), f"宗门生产.产出.{kind}.{material_key}"
                 ),
+                self._terrain_options(kind, output),
             )
         self._facilities = MappingProxyType(loaded)
         self._validate_outputs(raw, loaded)
@@ -174,6 +179,7 @@ class SectProductionService:
         value = _mapping(record.value, entity_type)
         last = _time(value.get("上次结算时间"), f"{entity_type}.上次结算时间")
         sequence = _nonnegative_int(value.get("结算序号"), f"{entity_type}.结算序号")
+        terrain = _selected_terrain(value, facility)
         cycles = min(
             facility.catch_up_limit,
             max(0, int((current - last).total_seconds() // facility.period_seconds)),
@@ -187,7 +193,7 @@ class SectProductionService:
                 await self._progress.snapshot(member.sect_id)
             ).production_multiplier
         outputs, spirit_stones = self._roll(
-            facility, member.sect_id, sequence, cycles, multiplier
+            facility, member.sect_id, sequence, cycles, multiplier, terrain
         )
         gain = await self._assets.plan_resource_gain(
             member.sect_id,
@@ -207,6 +213,7 @@ class SectProductionService:
             settled_at,
             self._rule_version,
             sequence=sequence + cycles,
+            terrain=terrain,
         )
         operations = (
             *gain.operations,
@@ -256,17 +263,147 @@ class SectProductionService:
             receipt.replayed,
         )
 
-    async def _context(self, kind: str, user_id: str, *, officer: bool):
+    async def select_terrain(
+        self,
+        kind: str,
+        user_id: str,
+        request_id: str,
+        terrain: str,
+        *,
+        now: datetime | None = None,
+    ) -> SectProductionView:
+        """给灵田选定一处地形，之后按该地形的灵植池产出。"""
+
+        chosen = _terrain_choice(self._facility(kind), terrain)
+        return await self._write_terrain(kind, user_id, request_id, chosen, now)
+
+    async def clear_terrain(
+        self,
+        kind: str,
+        user_id: str,
+        request_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> SectProductionView:
+        """清空灵田地形，回到该设施原本的全池随机。"""
+
+        return await self._write_terrain(kind, user_id, request_id, "", now)
+
+    async def _write_terrain(
+        self,
+        kind: str,
+        user_id: str,
+        request_id: str,
+        terrain: str,
+        now: datetime | None,
+    ) -> SectProductionView:
+        member, facility = await self._context(
+            kind,
+            user_id,
+            officer=True,
+            denied="只有宗主和长老可以选定或清空灵田地形",
+        )
+        if not facility.terrain_options:
+            raise SectProductionError(f"{facility.kind}不能选定地形")
+        entity_type = _ENTITY_TYPES[facility.kind]
+        record = await self._database.get_shared_entity(entity_type, member.sect_id)
+        if record is None:
+            raise SectProductionError(
+                f"{facility.kind}尚未开启，请先发送：{facility.kind} 开启"
+            )
+        current = _utc(now)
+        value = _mapping(record.value, entity_type)
+        last = _time(value.get("上次结算时间"), f"{entity_type}.上次结算时间")
+        sequence = _nonnegative_int(value.get("结算序号"), f"{entity_type}.结算序号")
+        next_value = _state_value(
+            member.sect_id,
+            facility.kind,
+            last,
+            self._rule_version,
+            sequence=sequence,
+            terrain=terrain,
+        )
+        try:
+            await self._database.commit(
+                TransactionCommand(
+                    user_id,
+                    _request(request_id),
+                    f"{facility.kind}选地形",
+                    (
+                        SharedEntityMutation(
+                            entity_type, member.sect_id, next_value, record.version
+                        ),
+                    ),
+                    {
+                        "宗门编号": member.sect_id,
+                        "设施": facility.kind,
+                        _TERRAIN_KEY: terrain,
+                        "规则版本": self._rule_version,
+                    },
+                )
+            )
+        except (
+            SharedConstraintError,
+            StateConflictError,
+            IdempotencyConflictError,
+        ) as exc:
+            raise SectProductionError(
+                "宗门资源生产状态刚刚发生变化，请重试"
+            ) from exc
+        return self._view_from_values(facility, member.role, next_value, current)
+
+    def _facility(self, kind: str) -> SectProductionFacility:
         self._require()
-        normalized_kind = str(kind or "").strip()
-        facility = self._facilities.get(normalized_kind)
+        facility = self._facilities.get(str(kind or "").strip())
         if facility is None:
             raise SectProductionError("未知宗门资源设施")
+        return facility
+
+    def _terrain_options(
+        self, kind: str, output: Mapping[str, object]
+    ) -> tuple[str, ...]:
+        """读设施的可选地形，并核到已登记的灵植池上。
+
+        灵植池的命名约定是 `灵植-<地形>`，成员只能是灵植。声明了却对不上池子，
+        就等于给玩家一个抽不出东西的选项——这类错必须在启动期报出来。
+        """
+
+        declared = output.get("可选地形")
+        if kind != "灵田":
+            if declared is not None:
+                raise JsonDataError(f"宗门生产.产出.{kind} 不能声明可选地形")
+            return ()
+        options = _texts(declared, f"宗门生产.产出.{kind}.可选地形")
+        if not options:
+            raise JsonDataError("宗门灵田必须声明可选地形")
+        if len(set(options)) != len(options):
+            raise JsonDataError("宗门灵田的可选地形不能重复")
+        pools = self._data.pools()
+        for name in options:
+            if not name.startswith(_TERRAIN_PREFIX):
+                raise JsonDataError(f"宗门灵田可选地形必须是灵植池：{name}")
+            if pools.get(name) != "基础物品":
+                raise JsonDataError(f"宗门灵田可选地形不是已登记的灵植池：{name}")
+            for item_id in self._data.pool_members((name,), "基础物品"):
+                record = self._data.entity_record("基础物品", item_id)
+                if record.number_category != "灵植":
+                    raise JsonDataError(f"灵植池混入了非灵植：{name}/{item_id}")
+        return options
+
+    async def _context(
+        self,
+        kind: str,
+        user_id: str,
+        *,
+        officer: bool,
+        denied: str = _OFFICER_DENIED,
+    ):
+        facility = self._facility(kind)
         member = await self._sect.membership(user_id)
         if member is None:
             raise SectProductionError("尚未加入宗门")
         if officer and not self._sect.is_officer(member.role):
-            raise SectProductionError("只有宗主和长老可以收取宗门资源")
+            raise SectProductionError(denied)
         sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
         if (
@@ -284,6 +421,7 @@ class SectProductionService:
         sequence: int,
         cycles: int,
         multiplier: float = 1.0,
+        terrain: str = "",
     ) -> tuple[tuple[SectProductionOutput, ...], int]:
         totals: dict[tuple[str, str, str], int] = {}
         stones = 0
@@ -310,7 +448,7 @@ class SectProductionService:
                     multiplier,
                     rng,
                 )
-            item_id = self._pool.draw_item_category(category, seed=seed ^ 0xA5A5A5A5)[0]
+            item_id = self._draw_item(category, terrain, seed ^ 0xA5A5A5A5)
             grade = self._asset.draw_drop_grade(seed=seed ^ 0x5A5A5A5A)
             key = (category, item_id, grade.grade_id)
             totals[key] = totals.get(key, 0) + quantity
@@ -326,6 +464,13 @@ class SectProductionService:
             for (category, content_id, grade_id), quantity in sorted(totals.items())
         )
         return outputs, stones
+
+    def _draw_item(self, category: str, terrain: str, seed: int) -> str:
+        """抽一件产出物：灵田选了地形就只从那个池里抽，否则沿用原来的全池。"""
+
+        if terrain:
+            return self._pool.draw_pools((terrain,), count=1, seed=seed)[0]
+        return self._pool.draw_item_category(category, seed=seed)[0]
 
     def _view_from_record(self, facility, role, record, current):
         if record is None:
@@ -356,6 +501,7 @@ class SectProductionService:
             last,
             pending,
             remaining,
+            _selected_terrain(value, facility),
         )
 
     def _validate_outputs(self, raw, facilities) -> None:
@@ -376,8 +522,8 @@ class SectProductionService:
             raise RuntimeError("宗门资源生产核心尚未初始化")
 
 
-def _state_value(sect_id, kind, settled_at, version, *, sequence=0):
-    return {
+def _state_value(sect_id, kind, settled_at, version, *, sequence=0, terrain=""):
+    value = {
         "名称": kind,
         "宗门编号": sect_id,
         "设施": kind,
@@ -385,6 +531,30 @@ def _state_value(sect_id, kind, settled_at, version, *, sequence=0):
         "结算序号": sequence,
         "规则版本": version,
     }
+    if kind == "灵田":
+        value[_TERRAIN_KEY] = terrain
+    return value
+
+
+def _selected_terrain(value, facility) -> str:
+    """读已保存的地形；不在当前可选清单里的（改名后的旧档）按未选处理。"""
+
+    stored = str(value.get(_TERRAIN_KEY) or "").strip()
+    return stored if stored in facility.terrain_options else ""
+
+
+def _terrain_choice(facility, value) -> str:
+    """把玩家给的地形收成池名，并核到该设施声明的可选地形上。"""
+
+    if not facility.terrain_options:
+        raise SectProductionError(f"{facility.kind}不能选定地形")
+    name = str(value or "").strip()
+    if not name:
+        raise SectProductionError(f"{facility.kind}地形不能为空")
+    pool = name if name.startswith(_TERRAIN_PREFIX) else f"{_TERRAIN_PREFIX}{name}"
+    if pool not in facility.terrain_options:
+        raise SectProductionError(f"未知{facility.kind}地形：{name}")
+    return pool
 
 
 def _seed(version, sect_id, kind, sequence):

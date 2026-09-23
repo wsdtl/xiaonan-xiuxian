@@ -38,5 +38,15 @@
     "命令": "灵田 收取",
     "行为": "callback",
     "样式": "primary"
+  },
+  {
+    "页面": "查看",
+    "设施": "灵田",
+    "条件": "已经开始",
+    "编号": "sect-production.lingtian.terrain",
+    "名称": "选种地形",
+    "命令": "灵田 选地形",
+    "行为": "callback",
+    "样式": "secondary"
   }
 ]

@@ -107,6 +107,22 @@ class SectProductionFeature:
         except SectProductionError as exc:
             raise SectProductionFeatureError(str(exc)) from exc
 
+    async def select_terrain(
+        self, kind: str, user_id: str, request_id: str, terrain: str
+    ):
+        try:
+            return await self._production.select_terrain(
+                kind, user_id, request_id, terrain
+            )
+        except SectProductionError as exc:
+            raise SectProductionFeatureError(str(exc)) from exc
+
+    async def clear_terrain(self, kind: str, user_id: str, request_id: str):
+        try:
+            return await self._production.clear_terrain(kind, user_id, request_id)
+        except SectProductionError as exc:
+            raise SectProductionFeatureError(str(exc)) from exc
+
 
 def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:
     if any(button["页面"] != "查看" for button in buttons):
