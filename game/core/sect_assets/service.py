@@ -203,62 +203,6 @@ class SectAssetService:
             "灵藏", "捐入", entry, 0, receipt.replayed, contribution, activation
         )
 
-    async def take_material(
-        self,
-        user_id: str,
-        request_id: str,
-        category: str,
-        content_id: str,
-        grade_id: str,
-        quantity: int,
-    ) -> SectAssetTransfer:
-        """把灵藏里的材料取到个人纳戒（与捐入对称：灵藏扣、个人加，同一笔提交）。"""
-
-        member = await self._member(user_id)
-        normalized_category = _required_category(category, self._materials)
-        normalized_quantity = _positive_int(quantity, "取用数量")
-        record = self._data.entity_record("基础物品", content_id)
-        if record.number_category != normalized_category:
-            raise SectAssetError("该物品不属于指定基础材料类别")
-        grade = self._asset.grade(grade_id)
-        mutation, entry = await self._change_entry(
-            LINGCANG_TYPE,
-            member.sect_id,
-            "灵藏",
-            category=normalized_category,
-            content_id=content_id,
-            grade_id=grade.grade_id,
-            quantity_delta=-normalized_quantity,
-        )
-        remaining = getattr(entry, "quantity", None)
-        if remaining is not None and int(remaining) < 0:
-            raise SectAssetError("灵藏中没有这么多材料")
-        try:
-            personal = await self._asset.plan_inventory_changes(
-                user_id,
-                (
-                    InventoryAdjustment(
-                        content_id, grade.grade_id, normalized_quantity
-                    ),
-                ),
-            )
-        except AssetStateError as exc:
-            raise SectAssetError(str(exc)) from exc
-        receipt = await self._commit(
-            user_id,
-            request_id,
-            "取用灵藏",
-            (mutation,) + personal.operations,
-            {
-                "宗门编号": member.sect_id,
-                "条目": entry.entry_key,
-                "数量": normalized_quantity,
-            },
-        )
-        return SectAssetTransfer(
-            "灵藏", "取出", entry, 0, receipt.replayed, 0, None
-        )
-
     async def donate_stones(
         self, user_id: str, request_id: str, quantity: int
     ) -> SectAssetTransfer:

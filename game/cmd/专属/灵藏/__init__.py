@@ -20,7 +20,7 @@ _CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
             "category": "行动",
             "summary": "在本宗洞天分类查看宗门基础资源",
             "usage": ("灵藏", "灵藏 灵植", "灵藏 灵矿 2"),
-            "side_effect": "只读查询；灵藏中的已捐献资源不能自由取回",
+            "side_effect": "只读查询；灵藏只捐入不取用，成品由万珍殿发放",
             "order": 80,
         },
     },
@@ -53,7 +53,7 @@ async def show_lingcang(*, user_id: str, message: str, manager, **_) -> None:
                 "捐入灵藏 灵石 数量",
                 "捐入灵藏 灵植/灵矿/兽宝 编号或名称 品级 数量",
             ),
-            "side_effect": "原子扣除个人资源并计入宗门灵藏，捐献后不能自由取回",
+            "side_effect": "原子扣除个人资源并计入宗门灵藏；灵藏只捐入不取用，成品由万珍殿发放",
             "order": 81,
         },
     },
@@ -92,53 +92,6 @@ def _positive(value: str, label: str) -> int:
     if not value.isdecimal() or int(value) < 1:
         raise LingcangFeatureError(f"{label}必须是正整数")
     return int(value)
-
-
-@GameCommand.command(
-    cmd=("取灵藏", "取出灵藏"),
-    metadata={
-        "scope": "专属",
-        "guard_rule": "自主空闲或休息",
-        "help": {
-            "category": "行动",
-            "summary": "向本宗灵藏捐献基础材料或灵石",
-            "usage": (
-                "取灵藏 灵石 数量",
-                "取灵藏 灵植/灵矿/兽宝 编号或名称 品级 数量",
-            ),
-            "side_effect": "原子扣除个人资源并计入宗门灵藏，捐献后不能自由取回",
-            "order": 81,
-        },
-    },
-)
-async def take_lingcang(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
-    feature = current_game_services().features.zongmen_lingcang
-    parts = str(message or "").split()
-    try:
-        if len(parts) == 2 and parts[0] == "灵石":
-            quantity = _positive(parts[1], "灵石数量")
-            result = await feature.take_stones(
-                user_id, message_context.request_id, quantity
-            )
-            await manager.send(reply.taken_stones(feature.copy(), quantity, result))
-            return
-        if len(parts) != 4 or parts[0] not in _CATEGORIES:
-            raise LingcangFeatureError(
-                "格式：取灵藏 灵石 数量，或取灵藏 类别 编号或名称 品级 数量"
-            )
-        result = await feature.take_material(
-            user_id,
-            message_context.request_id,
-            parts[0],
-            parts[1],
-            parts[2],
-            _positive(parts[3], "捐献数量"),
-        )
-        await manager.send(reply.taken_material(feature.copy(), result))
-    except LingcangFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
 
 
 __all__ = []

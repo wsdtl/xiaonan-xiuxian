@@ -63,20 +63,6 @@ def donated_material(copy: LingcangCopy, result):
     return builder.build()
 
 
-def taken_material(copy: LingcangCopy, result):
-    entry = result.entry
-    if entry is None:
-        return error(copy, "灵藏取用结果缺少材料条目")
-    builder = (
-        M.document()
-        .header(_text(copy, "标题"))
-        .section("取用灵藏", icon="success")
-        .line(M.status("取用完成", tone="positive"))
-        .line(f"已将{entry.grade_name}{entry.name}取到纳戒，共{entry.quantity}份。")
-    )
-    return builder.build()
-
-
 def donated_stones(copy: LingcangCopy, quantity: int, result):
     builder = (
         M.document()
