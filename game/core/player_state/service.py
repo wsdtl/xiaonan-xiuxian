@@ -11,6 +11,7 @@ from game.core.database import (
     DatabaseService,
     StateAddress,
     StateMutation,
+    StateSnapshot,
     TransactionCommand,
 )
 
@@ -268,25 +269,93 @@ class PlayerStateService:
         """按人物是否存在及三个状态槽的组合规则判断命令准入。"""
 
         self._require_initialized()
+        rule = self._guard_rule(rule_name)
+        if _rule_needs_reading(rule):
+            character = await self._database.get(
+                StateAddress(user_id, CHARACTER_STATE_TYPE, CHARACTER_STATE_KEY)
+            )
+            snapshot = await self._database.get(
+                StateAddress(user_id, STATE_TYPE, STATE_KEY)
+            )
+        else:
+            character, snapshot = None, None
+        return self._decide(user_id, rule, character, snapshot)
+
+    async def authorize_many(
+        self, user_ids: tuple[str, ...], rule_name: str
+    ) -> tuple[StateGuardResult, ...]:
+        """批量判准入：一次读齐人物与状态，再**按输入顺序**逐人判。
+
+        与「逐个 `authorize` 的循环」等价：遇第一个不通过的就停（它后面的既不读也不判，
+        所以谁先被报出来、报什么，与逐个判一致）；全员通过时返回的成绩单与输入一一对应。
+        """
+
+        self._require_initialized()
+        rule = self._guard_rule(rule_name)
+        normalized = tuple(_text(value, "user_id") for value in user_ids)
+        if not normalized or not _rule_needs_reading(rule):
+            return tuple(StateGuardResult(True) for _ in normalized)
+
+        addresses = tuple(
+            StateAddress(user_id, state_type, state_key)
+            for user_id in dict.fromkeys(normalized)
+            for state_type, state_key in (
+                (CHARACTER_STATE_TYPE, CHARACTER_STATE_KEY),
+                (STATE_TYPE, STATE_KEY),
+            )
+        )
+        loaded = {
+            (snapshot.address.user_id, snapshot.address.state_type): snapshot
+            for snapshot in await self._database.get_many(addresses)
+        }
+        results: list[StateGuardResult] = []
+        for user_id in normalized:
+            result = self._decide(
+                user_id,
+                rule,
+                loaded.get((user_id, CHARACTER_STATE_TYPE)),
+                loaded.get((user_id, STATE_TYPE)),
+            )
+            results.append(result)
+            if not result.allowed:
+                break
+        return tuple(results)
+
+    def _guard_rule(self, rule_name: str) -> Mapping[str, Any]:
+        """按名字取守卫规则；登记表就是以 `名称` 为键，所以 `rule["名称"]` 与入参同名。"""
+
         normalized_rule = _text(rule_name, "状态守卫规则")
         rule = self._guard_rules.get(normalized_rule)
         if rule is None:
             raise PlayerStateRuleError(f"未知状态守卫规则：{normalized_rule}")
+        return rule
+
+    def _decide(
+        self,
+        user_id: str,
+        rule: Mapping[str, Any],
+        character: StateSnapshot | None,
+        snapshot: StateSnapshot | None,
+    ) -> StateGuardResult:
+        """按已经读到的两个存档行判断一个人是否准入。
+
+        读取顺序与逐个 `authorize` 一致：先解释状态快照（坏存档当场抛），再看两个快照
+        是否成对，最后才按人物要求与三槽/资源要求判。
+        """
 
         character_requirement = str(rule["人物要求"])
         state_requirements = _mapping(
-            rule["状态要求"], f"状态守卫.{normalized_rule}.状态要求"
+            rule["状态要求"], f"状态守卫.{rule['名称']}.状态要求"
         )
         resource_requirements = _mapping(
-            rule.get("资源要求", {}), f"状态守卫.{normalized_rule}.资源要求"
+            rule.get("资源要求", {}), f"状态守卫.{rule['名称']}.资源要求"
         )
         if character_requirement == "不限" and not state_requirements and not resource_requirements:
             return StateGuardResult(True)
 
-        character = await self._database.get(
-            StateAddress(user_id, CHARACTER_STATE_TYPE, CHARACTER_STATE_KEY)
+        states = (
+            self._parse_snapshot(snapshot.value) if snapshot is not None else None
         )
-        snapshot = await self.current(user_id)
         if (character is None) != (snapshot is None):
             raise PlayerStateRuleError("人物与玩家状态快照不完整，请联系管理者处理")
 
@@ -296,16 +365,16 @@ class PlayerStateService:
             return StateGuardResult(False, "已经创建人物")
         if character_requirement == "已创建" and character is None:
             return StateGuardResult(False, "尚未创建人物")
-        if snapshot is None:
+        if states is None:
             return StateGuardResult(True)
 
         current_names = MappingProxyType(
-            {state_type: slot.name for state_type, slot in snapshot.states.items()}
+            {state_type: slot.name for state_type, slot in states.items()}
         )
         failures: list[str] = []
         for state_type, raw_allowed in state_requirements.items():
-            allowed = _strings(raw_allowed, f"状态守卫.{normalized_rule}.{state_type}")
-            current_slot = snapshot.states[state_type]
+            allowed = _strings(raw_allowed, f"状态守卫.{rule['名称']}.{state_type}")
+            current_slot = states[state_type]
             if current_slot.state_id in allowed:
                 continue
             allowed_names = "或".join(
@@ -326,11 +395,11 @@ class PlayerStateService:
             for resource_name, raw_requirement in resource_requirements.items():
                 requirement = _mapping(
                     raw_requirement,
-                    f"状态守卫.{normalized_rule}.资源要求.{resource_name}",
+                    f"状态守卫.{rule['名称']}.资源要求.{resource_name}",
                 )
                 threshold = _nonnegative_number(
                     requirement.get("大于"),
-                    f"状态守卫.{normalized_rule}.资源要求.{resource_name}.大于",
+                    f"状态守卫.{rule['名称']}.资源要求.{resource_name}.大于",
                 )
                 current = _nonnegative_number(
                     resources.get(resource_name), f"人物.资源.{resource_name}"
@@ -403,16 +472,26 @@ class PlayerStateService:
         )
 
     async def plan_transition(
-        self, command: StateTransitionCommand
+        self,
+        command: StateTransitionCommand,
+        *,
+        snapshot: PlayerStateSnapshot | None = None,
     ) -> StateTransitionPlan:
-        """校验状态转换并只返回可并入跨领域事务的变更。"""
+        """校验状态转换并只返回可并入跨领域事务的变更。
+
+        `snapshot` 可由调用方传入——同一次命令里**刚读过**的同一个人的三槽快照
+        （`current` 或 `current_many` 的结果）。同一处 `plan_transition` 原先要自己再读
+        一遍；一场 15 对 15 的宗门战结算要按 30 个人各规划一次结束行为，能省一趟是一趟。
+        不传时的行为与从前完全一致；传进来的快照对不上号时也退回自己读，绝不拿错人。
+        """
 
         self._require_initialized()
         state_type = _state_type(command.state_type)
         target_state_id = _text(command.target_state_id, "目标状态编号")
         if self._state_types_by_id.get(target_state_id) != state_type:
             raise PlayerStateRuleError(f"{state_type}不存在状态编号：{target_state_id}")
-        snapshot = await self.current(command.user_id)
+        if snapshot is None or snapshot.user_id != command.user_id:
+            snapshot = await self.current(command.user_id)
         if snapshot is None:
             raise PlayerStateCharacterMissingError("尚未创建人物")
         current_slot = snapshot.states[state_type]
@@ -457,10 +536,15 @@ class PlayerStateService:
         user_id: str,
         *,
         expected_version: int | None = None,
+        snapshot: PlayerStateSnapshot | None = None,
     ) -> StateTransitionPlan:
-        """按当前行为的结束目标只生成状态变更。"""
+        """按当前行为的结束目标只生成状态变更。
 
-        snapshot = await self.current(user_id)
+        `snapshot` 同 `plan_transition`：刚读过的三槽快照可以传进来，省掉重复读取。
+        """
+
+        if snapshot is None:
+            snapshot = await self.current(user_id)
         if snapshot is None:
             raise PlayerStateCharacterMissingError("尚未创建人物")
         current = snapshot.states["行为"]
@@ -476,7 +560,8 @@ class PlayerStateService:
                 expected_version=(
                     snapshot.version if expected_version is None else expected_version
                 ),
-            )
+            ),
+            snapshot=snapshot,
         )
 
     async def finish_behavior(
@@ -673,6 +758,16 @@ class PlayerStateService:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("玩家状态核心微服务尚未初始化")
+
+
+def _rule_needs_reading(rule: Mapping[str, Any]) -> bool:
+    """这条守卫是否要看盘：什么都不要求时（不限 + 无状态 + 无资源）当场就过。"""
+
+    return not (
+        str(rule["人物要求"]) == "不限"
+        and not rule["状态要求"]
+        and not rule.get("资源要求", {})
+    )
 
 
 def _index_states(value: object, label: str) -> dict[str, Mapping[str, Any]]:

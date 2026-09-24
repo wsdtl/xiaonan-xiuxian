@@ -46,6 +46,7 @@ from .builds import load_build_contracts as load_build_contracts
 from .builds import validate_builds as validate_builds
 from .card_text import render_body as render_body
 from .card_text import render_listeners as render_listeners
+from .presentation import VIEW_PARTS as VIEW_PARTS
 from .service import CombatService as CombatService
 
 __all__ = [
@@ -69,6 +70,7 @@ __all__ = [
     "CombatantResult",
     "CombatantSpec",
     "StatusResult",
+    "VIEW_PARTS",
     "generate_five_elements",
     "load_build_contracts",
     "render_body",

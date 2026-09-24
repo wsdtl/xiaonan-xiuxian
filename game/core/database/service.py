@@ -83,6 +83,12 @@ class DatabaseService:
         self._require_initialized()
         return await asyncio.to_thread(self._store.get_location, user_id)
 
+    async def get_locations(
+        self, user_ids: tuple[str, ...]
+    ) -> tuple[LocationRecord, ...]:
+        self._require_initialized()
+        return await asyncio.to_thread(self._store.get_locations, user_ids)
+
     async def get_shared_entity(
         self, entity_type: str, entity_id: str
     ) -> SharedEntityRecord | None:

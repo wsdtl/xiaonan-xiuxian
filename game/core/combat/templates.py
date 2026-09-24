@@ -304,14 +304,45 @@ def expand_in_place(node: Any, templates: Mapping[str, Mapping[str, Any]]) -> An
 
 
 def _expand(node: Any, templates: Mapping[str, Mapping[str, Any]], chain: tuple[str, ...]) -> None:
-    if isinstance(node, dict):
-        for value in list(node.values()):
-            _expand(value, templates, chain)
+    """就地展开树里所有模板引用。
+
+    标量子节点**不进递归**：它既不是对象也不是数组，原实现也会递归进去、什么都不做就
+    返回。实测一次启动这条递归要走 42 万个节点，其中大多数是标量叶子，那些调用全是
+    白跑的函数调用开销。先按具体类型判（展开时的容器一律是 `dict`／`list`），落不到
+    具体类型才退回抽象基类判据。
+    """
+
+    kind = type(node)
+    if kind is dict or (kind is not list and isinstance(node, dict)):
+        for value in node.values():
+            child = type(value)
+            if child is dict or child is list:
+                _expand(value, templates, chain)
+            elif (
+                child is not str
+                and child is not int
+                and child is not float
+                and child is not bool
+                and value is not None
+                and isinstance(value, (dict, list))
+            ):
+                _expand(value, templates, chain)
         if _is_reference(node):
             _substitute(node, templates, chain)
-    elif isinstance(node, list):
+    elif kind is list or isinstance(node, list):
         for item in node:
-            _expand(item, templates, chain)
+            child = type(item)
+            if child is dict or child is list:
+                _expand(item, templates, chain)
+            elif (
+                child is not str
+                and child is not int
+                and child is not float
+                and child is not bool
+                and item is not None
+                and isinstance(item, (dict, list))
+            ):
+                _expand(item, templates, chain)
 
 
 def _is_reference(node: Mapping[str, Any]) -> bool:
@@ -328,9 +359,12 @@ def _substitute(node: dict, templates: Mapping[str, Mapping[str, Any]], chain: t
 
     body_template = raw.get("主体")
     bound = bind_parameters(template_id, node.get(PARAMETER_KEY), body_template, raw)
-    # **必须深拷贝**：浅拷贝会让展开就地改写模板库里的对象，同一个模板第二次展开
-    # 就拿不到占位符了（第一遍已经把 `{"$参数": …}` 换成了具体值）。
-    body = _materialize(copy.deepcopy(body_template), bound, template_id)
+    # **不必再深拷贝**：`_materialize` 对每个对象与数组都构造新容器，等价于一次
+    # 「边拷贝边替换占位符」，返回的树与模板库里的对象不共享任何可变容器。原先多做的
+    # 那一次 `copy.deepcopy` 是纯开销——它先复制一份，`_materialize` 再把复制品整个重建。
+    # 两者只在模板主体含**元组**时才有差别（元组不被 `_materialize` 重建），而模板库由
+    # JSON 生成、只有对象与数组。
+    body = _materialize(body_template, bound, template_id)
     order = node.get(ORDER_KEY)
     if isinstance(order, Mapping):
         body = _order_by_spec(body, order)
@@ -360,19 +394,7 @@ def bind_parameters(
     if not isinstance(provided, Mapping):
         raise TemplateError(f"构筑模板 {template_id} 的参数必须是对象")
 
-    true_name = _placeholders(body)
-    # 实参的键认三种写法：**占位符名**（`p1`）、**短名**（`层数` / `名称2`）、
-    # **位置路径**（`/效果/[0]/层数`）。落盘用的是短名。
-    #
-    # 短名**现算**，不在模板库里另存一份参数表：存了就要跟主体永远保持一致，
-    # 那正是「一句话写两遍」——实测已经漂移过（219 条引用展不开）。
-    alias: dict[str, str] = {}
-    for position, card_name in true_name.items():
-        alias.setdefault(card_name, card_name)
-        alias.setdefault(position, card_name)
-    for position, short_name in index_map(body).items():
-        alias.setdefault(short_name, true_name[position])
-
+    alias = _parameter_alias(template_id, body)
     bound: dict[str, Any] = {}
     for key, value in provided.items():
         card_name = alias.get(str(key))
@@ -382,6 +404,38 @@ def bind_parameters(
             )
         bound[card_name] = value
     return bound
+
+
+#: `位置/短名 -> 占位符名` 的别名表缓存。
+#:
+#: 别名表只由**模板主体**决定，与实参无关，而同一份主体在一次启动里要被展开成百上千
+#: 次（实测 8472 次展开、1299 份主体）。原先每次重算 `_placeholders` 与 `index_map`，
+#: 两次都是对整份主体递归拼路径字符串。这里按编号缓存，并用 `is` 校验主体仍是同一对象：
+#: 模板库重新生成后编号不变而对象换新时，缓存自动失效。
+_ALIAS_CACHE: dict[str, tuple[Any, dict[str, str]]] = {}
+
+
+def _parameter_alias(template_id: str, body: Any) -> dict[str, str]:
+    """`实参键 -> 占位符名`。实参的键认三种写法：**占位符名**（`p1`）、**短名**
+    （`层数` / `名称2`）、**位置路径**（`/效果/[0]/层数`）。落盘用的是短名。
+
+    短名**现算**，不在模板库里另存一份参数表：存了就要跟主体永远保持一致，
+    那正是「一句话写两遍」——实测已经漂移过（219 条引用展不开）。
+    """
+
+    cached = _ALIAS_CACHE.get(template_id)
+    if cached is not None and cached[0] is body:
+        return cached[1]
+
+    true_name = _placeholders(body)
+    alias: dict[str, str] = {}
+    for position, card_name in true_name.items():
+        alias.setdefault(card_name, card_name)
+        alias.setdefault(position, card_name)
+    for position, short_name in index_map(body).items():
+        alias.setdefault(short_name, true_name[position])
+    _ALIAS_CACHE[template_id] = (body, alias)
+    return alias
 
 
 def _bindings_from_original(body: Any, original: Any) -> dict[str, Any]:
@@ -449,10 +503,15 @@ def _reorder_at(node: Any, path: str, order: Mapping[str, Any]) -> Any:
 
 
 def _materialize(node: Any, bound: Mapping[str, Any], template_id: str) -> Any:
-    """把占位符换成实参；绑到 `OMIT` 的占位符返回哨兵，由上层删键。"""
+    """把占位符换成实参；绑到 `OMIT` 的占位符返回哨兵，由上层删键。
+
+    判占位符用 `len(node) == 1 and PLACEHOLDER_KEY in node`，**不要**写
+    `set(node) == {PLACEHOLDER_KEY}`：那会给每一个对象节点都现造一个集合，
+    实测一次启动要过 28 万个节点。
+    """
 
     if isinstance(node, dict):
-        if set(node) == {PLACEHOLDER_KEY}:
+        if len(node) == 1 and PLACEHOLDER_KEY in node:
             name = str(node[PLACEHOLDER_KEY])
             if name not in bound:
                 return _raise_missing(template_id, name)

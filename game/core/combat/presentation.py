@@ -10,6 +10,9 @@ from typing import Any
 
 from .catalog import BattleReportCatalog
 
+#: 一次调用可以只要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应。
+VIEW_PARTS = ("header", "segment", "events", "participants", "transition")
+
 
 def build_battle_report_presentation(
     report: Mapping[str, Any],
@@ -23,19 +26,38 @@ def build_battle_report_presentation(
     看的是缓存快照而不是当前值——第 119 轮连同离线模式一起删掉。
     """
 
-    header, _parts = build_battle_report_view(report, catalog)
+    header, _parts = build_battle_report_view(report, catalog, only="header")
     return header
 
 
 def build_battle_report_view(
     report: Mapping[str, Any],
     catalog: BattleReportCatalog,
+    *,
+    only: str | None = None,
+    sequence: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """`（战报头, 各份片段数据）`。
 
     战报头给首屏；各份片段数据按「片段 / 事件 / 参战者 / 行动前后状态」分好键，
     页面要哪份给哪份（一个接口带参数，见战斗核心的 `build_report_view`）。
+
+    `only` 说明这一次**只要哪一份**：给了就只算那一份（翻页、取片段不再为整份视图
+    付钱），没给就整份都算（判据与离线工具走这条路）。结果是同一段代码算出来的，
+    用不上的部分跳过不碰，所以与「整份算完再挑一份」逐字相同。
+    `only="transition"` 再配 `sequence` 时只算那一条行动的「行动前后状态」，其余行动
+    只推进状态、不做快照。
     """
+
+    if only is not None and only not in VIEW_PARTS:
+        raise ValueError(f"战报视图不认识这一份：{only}")
+    want = VIEW_PARTS if only is None else (only,)
+    want_header = "header" in want
+    want_segment = "segment" in want
+    want_events = "events" in want
+    want_participants = "participants" in want
+    want_transition = "transition" in want
+    want_detail = want_segment or want_events
 
     if report.get("schema") != catalog.report_schema:
         raise ValueError(f"战报展示适配器只接受{catalog.report_schema}")
@@ -79,107 +101,139 @@ def build_battle_report_view(
     actors = {value["id"]: value["name"] for value in participants}
     actors["system"] = str(system["name"])
     # 花名册：每人一份**不变**的那一半（名字、阵营、颜色、功法能力列表）。快照里只留会变的。
-    roster = _participant_static(participants, visuals, team_of, catalog)
-    combatants = [
-        _combatant(value, visuals[value["id"]], team_of[value["id"]])
-        for value in participants
-    ]
+    roster = (
+        _participant_static(participants, visuals, team_of, catalog) if want_header else {}
+    )
+    combatants = (
+        [
+            _combatant(value, visuals[value["id"]], team_of[value["id"]])
+            for value in participants
+        ]
+        if want_segment
+        else []
+    )
 
-    initial_state = _initial_state(participants, catalog)
-    final_state = _final_state(participants, initial_state)
-    initial_participants = _participant_records(participants, initial_state, catalog)
-    final_participants = _participant_records(participants, final_state, catalog)
+    if want_segment or want_participants or want_transition:
+        initial_state = _initial_state(participants, catalog)
+        final_state = _final_state(participants, initial_state)
+        initial_participants = _participant_records(participants, initial_state, catalog)
+        final_participants = _participant_records(participants, final_state, catalog)
+    else:
+        initial_state = {}
+        final_state = {}
+        initial_participants = []
+        final_participants = []
 
     groups = _event_groups(report.get("events") or ())
-    state = deepcopy(initial_state)
+    state = deepcopy(initial_state) if want_transition else {}
     compact_timeline: list[dict[str, Any]] = []
     detailed_timeline: list[dict[str, Any]] = []
     transitions: dict[str, dict[str, Any]] = {}
     public_event_count = 0
     category_counts: Counter[str] = Counter()
 
-    for sequence, (turn, values) in enumerate(groups.items()):
-        events = [dict(value) for value in values]
-        before = deepcopy(state)
-        _apply_events(state, events, catalog)
-        after = deepcopy(state)
-        title, actor_id = _transition_title(turn, events, catalog)
-        actor_key = actor_id if actor_id in palette else "system"
-        detailed_events = [
-            _public_event(
-                value,
-                catalog,
-            )
-            for value in events
-        ]
-        public_event_count += len(detailed_events)
-        category_counts.update(value["category"] for value in detailed_events)
-        categories = list(dict.fromkeys(value["category"] for value in detailed_events))
-        tone = catalog.dominant_tone(categories)
+    for seq, (turn, values) in enumerate(groups.items()):
+        events = (
+            [dict(value) for value in values] if (want_detail or want_transition) else values
+        )
         round_label = "战斗建立" if turn == 0 else f"第 {turn} 次行动"
-        facts = [
-            _fact("序列", sequence),
-            _fact("行动", turn),
-            _fact("事件", len(detailed_events)),
-        ]
-        compact_events = [
-            _compact_event(value, catalog)
-            for value in detailed_events
-            if value["kind"] not in catalog.compact_hidden_kinds
-        ]
-        compact_timeline.append(
-            {
-                "sequence": sequence,
-                "title": title,
-                "round_label": round_label,
-                "tone": tone,
-                "actor": actor_key,
-                "categories": list(dict.fromkeys(value["category"] for value in compact_events)),
-                "summary_events": compact_events,
-                "comparison_available": True,
-            }
-        )
-        detailed_timeline.append(
-            {
-                "sequence": sequence,
-                "title": title,
-                "round_label": round_label,
-                "sequence_label": f"行动 {turn} · 序列 {sequence}",
-                "tone": tone,
-                "actor": actor_key,
-                "categories": categories,
-                "facts": facts,
-                "events": detailed_events,
-                "comparison": {
-                    "available": True,
-                    "sequence": sequence,
-                    "title": ui["text"]["comparison_title"],
-                },
-            }
-        )
-        transitions[f"0:{sequence}"] = {
-            "schema": schema,
-            "version": version,
-            "segment_index": 0,
-            "sequence": sequence,
-            "comparison": {
-                "title": ui["text"]["comparison_title"],
-                "empty_text": ui["text"]["comparison_empty"],
-                "changes": _state_changes(participants, before, after, catalog),
-                "before": _frame("行动前状态", round_label, participants, before, catalog),
-                "after": _frame("行动后状态", round_label, participants, after, catalog),
-            },
-        }
+        if want_segment or want_events:
+            title, actor_id = _transition_title(turn, events, catalog)
+            actor_key = actor_id if actor_id in palette else "system"
+        if want_detail:
+            detailed_events = [
+                _public_event(
+                    value,
+                    catalog,
+                )
+                for value in events
+            ]
+            public_event_count += len(detailed_events)
+            categories = list(dict.fromkeys(value["category"] for value in detailed_events))
+            tone = catalog.dominant_tone(categories)
+        elif want_header:
+            # 首屏只报事件条数：不解释事件、也不演进状态。
+            public_event_count += len(values)
+        if want_events:
+            category_counts.update(value["category"] for value in detailed_events)
+            facts = [
+                _fact("序列", seq),
+                _fact("行动", turn),
+                _fact("事件", len(detailed_events)),
+            ]
+            detailed_timeline.append(
+                {
+                    "sequence": seq,
+                    "title": title,
+                    "round_label": round_label,
+                    "sequence_label": f"行动 {turn} · 序列 {seq}",
+                    "tone": tone,
+                    "actor": actor_key,
+                    "categories": categories,
+                    "facts": facts,
+                    "events": detailed_events,
+                    "comparison": {
+                        "available": True,
+                        "sequence": seq,
+                        "title": ui["text"]["comparison_title"],
+                    },
+                }
+            )
+        if want_segment:
+            compact_events = [
+                _compact_event(value, catalog)
+                for value in detailed_events
+                if value["kind"] not in catalog.compact_hidden_kinds
+            ]
+            compact_timeline.append(
+                {
+                    "sequence": seq,
+                    "title": title,
+                    "round_label": round_label,
+                    "tone": tone,
+                    "actor": actor_key,
+                    "categories": list(dict.fromkeys(value["category"] for value in compact_events)),
+                    "summary_events": compact_events,
+                    "comparison_available": True,
+                }
+            )
+        if want_transition:
+            if sequence is None or sequence == seq:
+                before = deepcopy(state)
+                _apply_events(state, events, catalog)
+                after = deepcopy(state)
+                transitions[f"0:{seq}"] = {
+                    "schema": schema,
+                    "version": version,
+                    "segment_index": 0,
+                    "sequence": seq,
+                    "comparison": {
+                        "title": ui["text"]["comparison_title"],
+                        "empty_text": ui["text"]["comparison_empty"],
+                        "changes": _state_changes(participants, before, after, catalog),
+                        "before": _frame("行动前状态", round_label, participants, before, catalog),
+                        "after": _frame("行动后状态", round_label, participants, after, catalog),
+                    },
+                }
+            else:
+                # 不是要看的那一条：只把状态推到它前面，不做快照、不拼画面。
+                _apply_events(state, events, catalog)
 
-    filters = [
-        {
-            **value,
-            "count": public_event_count
-            if value["id"] == "all"
-            else category_counts.get(value["id"], 0),
-        }
-        for value in ui["filters"]
-    ]
+    filters = (
+        [
+            {
+                **value,
+                "count": public_event_count
+                if value["id"] == "all"
+                else category_counts.get(value["id"], 0),
+            }
+            for value in ui["filters"]
+        ]
+        if want_events
+        else []
+    )
+    # 片段本体按需要填：首屏只用它的头部信息（`_segment_summary`），时间线与参战者
+    # 那三格不参与成句，所以只算首屏时留空——**键一个字都不少**，形状照旧。
     segment = {
         "index": 0,
         "position_label": "1 / 1",
@@ -189,19 +243,19 @@ def build_battle_report_view(
         "finished_at": report["generated_at"],
         "duration_label": f"{report['result']['actions']} 次行动",
         "system_visual": system_visual,
-        "combatants": combatants,
-        "initial_participants": initial_participants,
-        "final_participants": final_participants,
+        "combatants": combatants if want_segment else [],
+        "initial_participants": initial_participants if want_segment else [],
+        "final_participants": final_participants if want_segment else [],
         "counts": {
             "actions": report["result"]["actions"],
             "events": public_event_count,
         },
         "formations": deepcopy(list(report.get("formations") or ())),
-        "timeline": compact_timeline,
+        "timeline": compact_timeline if want_segment else [],
     }
     field = report.get("field")
     field_lines = []
-    if isinstance(field, Mapping):
+    if want_header and isinstance(field, Mapping):
         field_lines = [
             f"战场: {field['name']} · {field['stage_name']}",
             f"地势承伤: {field['accumulated_damage']} / {field['health_basis']}",
@@ -212,52 +266,60 @@ def build_battle_report_view(
                 1,
                 f"xy: ({xy['x']}, {xy['y']}) · 海拔 {field['altitude']} 米",
             )
-    formation_lines = [
-        _formation_summary_line(value) for value in report.get("formations") or ()
-    ]
-    main = {
-        "schema": schema,
-        "version": version,
-        "ui": ui,
-        #: 角色名字与颜色各一份：事件只记「谁」（键），页面查这两张表。
-        "actors": dict(actors),
-        "palette": deepcopy(palette),
-        #: 花名册：每人不变的那一半（快照里只留血气与状态）。
-        "roster": deepcopy(roster),
-        "document_title": f"{catalog.game_name} · {report['headline']}",
-        "summary": {
-            "title": report["headline"],
-            "outcome": report["result"]["title"],
-            "tone": catalog.result_tone(report["result"]["code"]),
-            "lines": [
-                f"地点: {report['scene']}",
-                *field_lines,
-                *formation_lines,
-                f"战斗行动: {report['result']['actions']}",
-                f"后端事件: {public_event_count}",
-                f"触发次数: {report['result']['trigger_count']}",
-            ],
-        },
-        "started_at": report["generated_at"],
-        "finished_at": report["generated_at"],
-        "time_label": _time_label(str(report["generated_at"])),
-        "detail": {
-            "available": True,
-            "retention_notice": "",
-            "segment_count": 1,
-            #: **只带片段的头部信息**，不带时间线与参战者：页面先拿这一份渲染概览，
-            #: 片段本身按需取（服务端的 `/segments/<序>`，单文件预览包里的 `segments`）。
-            #: 第 118 轮以前这里塞的是整份片段，于是同一份 6.1M 的数据在两个部件里各存一份。
-            "segments": [_segment_summary(segment)],
-        },
-        "game_name": catalog.game_name,
-        "formations": deepcopy(list(report.get("formations") or ())),
-    }
-    parts = {
-        "segments": {
+    formation_lines = (
+        [_formation_summary_line(value) for value in report.get("formations") or ()]
+        if want_header
+        else []
+    )
+    main = (
+        {
+            "schema": schema,
+            "version": version,
+            "ui": ui,
+            #: 角色名字与颜色各一份：事件只记「谁」（键），页面查这两张表。
+            "actors": dict(actors),
+            "palette": deepcopy(palette),
+            #: 花名册：每人不变的那一半（快照里只留血气与状态）。
+            "roster": deepcopy(roster),
+            "document_title": f"{catalog.game_name} · {report['headline']}",
+            "summary": {
+                "title": report["headline"],
+                "outcome": report["result"]["title"],
+                "tone": catalog.result_tone(report["result"]["code"]),
+                "lines": [
+                    f"地点: {report['scene']}",
+                    *field_lines,
+                    *formation_lines,
+                    f"战斗行动: {report['result']['actions']}",
+                    f"后端事件: {public_event_count}",
+                    f"触发次数: {report['result']['trigger_count']}",
+                ],
+            },
+            "started_at": report["generated_at"],
+            "finished_at": report["generated_at"],
+            "time_label": _time_label(str(report["generated_at"])),
+            "detail": {
+                "available": True,
+                "retention_notice": "",
+                "segment_count": 1,
+                #: **只带片段的头部信息**，不带时间线与参战者：页面先拿这一份渲染概览，
+                #: 片段本身按需取（服务端的 `/segments/<序>`，单文件预览包里的 `segments`）。
+                #: 第 118 轮以前这里塞的是整份片段，于是同一份 6.1M 的数据在两个部件里各存一份。
+                "segments": [_segment_summary(segment)],
+            },
+            "game_name": catalog.game_name,
+            "formations": deepcopy(list(report.get("formations") or ())),
+        }
+        if want_header
+        else {}
+    )
+    parts: dict[str, dict[str, Any]] = {}
+    if want_segment:
+        parts["segments"] = {
             "0": {"schema": schema, "version": version, "segment": segment}
-        },
-        "events": {
+        }
+    if want_events:
+        parts["events"] = {
             "0": {
                 "schema": schema,
                 "version": version,
@@ -265,8 +327,9 @@ def build_battle_report_view(
                 "filters": filters,
                 "timeline": detailed_timeline,
             }
-        },
-        "participants": {
+        }
+    if want_participants:
+        parts["participants"] = {
             "0:before": {
                 "schema": schema,
                 "version": version,
@@ -281,9 +344,9 @@ def build_battle_report_view(
                 "snapshot": "after",
                 "participants": final_participants,
             },
-        },
-        "transitions": transitions,
-    }
+        }
+    if want_transition:
+        parts["transitions"] = transitions
     return main, parts
 
 

@@ -121,6 +121,38 @@ class LocationService:
             record.space_id,
         )
 
+    async def current_many(
+        self, user_ids: tuple[str, ...]
+    ) -> tuple[PlayerLocation, ...]:
+        """批量读一批人物的当前位置，语义与逐个 `current` 等价。
+
+        一条连接读完；**任一人没有位置就抛同一句话的 `LocationMissingError`**
+        （逐个读时也是在缺位置的那个人身上抛），返回值顺序与输入一致。
+        """
+
+        self._require_initialized()
+        normalized = tuple(_text(value, "user_id") for value in user_ids)
+        records = {
+            record.user_id: record
+            for record in await self._database.get_locations(normalized)
+        }
+        values: list[PlayerLocation] = []
+        for user_id in normalized:
+            record = records.get(user_id)
+            if record is None:
+                raise LocationMissingError("人物缺少地表位置")
+            values.append(
+                PlayerLocation(
+                    record.user_id,
+                    record.xy,
+                    record.version,
+                    record.updated_at,
+                    record.space_type,
+                    record.space_id,
+                )
+            )
+        return tuple(values)
+
     async def nearby_players(self, user_id: str) -> NearbyPlayerCandidates:
         self._require_initialized()
         origin = await self.current(user_id)

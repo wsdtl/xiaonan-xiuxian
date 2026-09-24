@@ -154,6 +154,29 @@ class SectService:
             record.version,
         )
 
+    async def membership_many(
+        self, user_ids: tuple[str, ...]
+    ) -> tuple[SectMember | None, ...]:
+        """批量取一批人的宗门籍，语义与逐个 `membership` 等价。
+
+        一次读完；没有登记的人在该位置返回 `None`（与逐个 `membership` 的 None 同义），
+        返回值顺序与输入一致。
+        """
+
+        self._require_initialized()
+        normalized = tuple(_text(value, "user_id") for value in user_ids)
+        unique = tuple(dict.fromkeys(normalized))
+        if not unique:
+            return ()
+        rows = await self._database.get_shared_members(ENTITY_TYPE, unique)
+        by_user = {row.user_id: row for row in rows}
+        return tuple(
+            SectMember(row.entity_id, row.user_id, row.role, row.join_order, row.version)
+            if (row := by_user.get(user_id)) is not None
+            else None
+            for user_id in normalized
+        )
+
     async def members(self, sect_id: str) -> tuple[SectMember, ...]:
         rows = await self._database.list_shared_members(
             ENTITY_TYPE, _text(sect_id, "sect_id")

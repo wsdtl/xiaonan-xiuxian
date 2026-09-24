@@ -15,12 +15,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from game.core.combat import CombatService
+from game.core.combat import VIEW_PARTS, CombatService
 from game.core.duel import DuelService
 from game.core.sect_war import SectWarService
 
-#: 一次调用要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应。
-VIEWS = ("header", "segment", "events", "participants", "transition")
+#: 一次调用要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应（核心定的名单）。
+VIEWS = VIEW_PARTS
 
 
 class BattleReportFeature:
@@ -68,7 +68,10 @@ class BattleReportFeature:
         if stored is None:
             return None
         report, _version = stored
-        header, parts = self._combat.build_report_view(report)
+        # 只算这一次要的那一份：翻页、取片段不再为整份视图付钱（结果与整份一致）。
+        header, parts = self._combat.build_report_view(
+            report, only=part, sequence=sequence
+        )
         if part == "header":
             return header
         if part == "segment":

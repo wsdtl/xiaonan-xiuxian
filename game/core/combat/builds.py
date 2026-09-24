@@ -182,9 +182,19 @@ def _validate_weight(
 def _validate_event_binding(
     value: Any, path: str, *, damage_event: bool = False
 ) -> None:
-    """转移伤害只能在伤害事件监听里执行；构筑不能再绕过这条约束。"""
+    """转移伤害只能在伤害事件监听里执行；构筑不能再绕过这条约束。
 
-    if isinstance(value, Mapping):
+    只有**对象与数组**才可能藏着下一层监听，标量进来什么也不做，所以这里直接跳过
+    标量子节点：路径串只为报错而拼，原先对每个标量叶子也拼一遍 `路径.键`，
+    实测一棵树上绝大多数子节点是标量，那些拼接全是白做。
+
+    「还能不能往下走一层」原先还要过一趟 `_holds_nodes` 函数（实测一次启动 30.9 万次），
+    而紧接着的分支条件又是同一件事。这里把它并进分支：`dict` 是唯一会继续走的容器
+    （`验证器校验过的树` 里数组已经经 `materialize` 化成 `list`，对象是 `dict`），
+    标量按具体类型直接跳过，只在落不到具体类型时才退回抽象基类。
+    """
+
+    if type(value) is dict:
         ability = str(value.get("能力") or "")
         current = damage_event
         if ability == "监听事件":
@@ -192,10 +202,53 @@ def _validate_event_binding(
         if ability == "转移伤害" and not current:
             raise BuildContractError(f"{path}.转移伤害只能在伤害事件监听中执行")
         for key, child in value.items():
-            _validate_event_binding(child, f"{path}.{key}", damage_event=current)
+            kind = type(child)
+            if kind is dict or kind is list:
+                _validate_event_binding(child, f"{path}.{key}", damage_event=current)
+            elif _holds_nodes(child):
+                _validate_event_binding(child, f"{path}.{key}", damage_event=current)
+    elif type(value) is list:
+        for index, child in enumerate(value):
+            kind = type(child)
+            if kind is dict or kind is list:
+                _validate_event_binding(
+                    child, f"{path}[{index}]", damage_event=damage_event
+                )
+            elif _holds_nodes(child):
+                _validate_event_binding(
+                    child, f"{path}[{index}]", damage_event=damage_event
+                )
+    elif isinstance(value, Mapping):
+        ability = str(value.get("能力") or "")
+        current = damage_event
+        if ability == "监听事件":
+            current = str(value.get("事件") or "") in {"造成伤害前", "受到致命伤害"}
+        if ability == "转移伤害" and not current:
+            raise BuildContractError(f"{path}.转移伤害只能在伤害事件监听中执行")
+        for key, child in value.items():
+            if _holds_nodes(child):
+                _validate_event_binding(child, f"{path}.{key}", damage_event=current)
     elif isinstance(value, list):
         for index, child in enumerate(value):
-            _validate_event_binding(child, f"{path}[{index}]", damage_event=damage_event)
+            if _holds_nodes(child):
+                _validate_event_binding(
+                    child, f"{path}[{index}]", damage_event=damage_event
+                )
+
+
+def _holds_nodes(value: Any) -> bool:
+    """这个值还能再往下走一层吗（对象或数组）。
+
+    先按**具体类型**判，落不到具体类型时才退回抽象基类：正式数据里的容器一律是
+    `dict`（快照里是 `mappingproxy`）与 `list`，叶子是字符串／数字／布尔／空。
+    """
+
+    kind = type(value)
+    if kind is dict or kind is list:
+        return True
+    if kind is str or kind is int or kind is float or kind is bool or value is None:
+        return False
+    return isinstance(value, (Mapping, list))
 
 
 __all__ = [

@@ -24,6 +24,12 @@ from typing import Any
 
 from .contracts import JsonDataError
 
+#: 数字判据的候选类型元组。
+#:
+#: **不要写成 `isinstance(value, int | float)`**：`int | float` 是每次求值都新建一个
+#: `UnionType` 的表达式，热路径上（实测一次启动要校验 28 万个字段）纯属白做。
+_NUMBER_TYPES = (int, float)
+
 
 class SchemaError(JsonDataError):
     """数据不符合已声明的字段契约。
@@ -216,17 +222,23 @@ class SchemaValidator:
         """校验一个对象是否满足声明的子字段规则。"""
 
         result = self._object(value, path)
-        unknown = set(result) - set(fields)
+        # 两边都是 `dict` 时直接用键视图相减：省掉 `set(result)` 与 `set(fields)` 两次
+        # 建集合。实测一次启动要过 7.3 万个对象，而字段表在节点间高度重复。
+        if type(result) is dict and type(fields) is dict:
+            unknown = result.keys() - fields.keys()
+        else:
+            unknown = set(result) - set(fields)
         if unknown:
             self._unknown_fields(path, unknown)
         for field_name, raw_spec in fields.items():
-            spec = dict(raw_spec)
-            field_path = f"{path}.{field_name}"
+            # 字段规格是**只读**的（`validate_field` 及其下游只取值、不改写），所以已经是
+            # 普通字典时不必再复制一份——实测一次启动有 28 万次字段校验。
+            spec = raw_spec if type(raw_spec) is dict else dict(raw_spec)
             if field_name not in result:
                 if spec.get("必填") and "默认" not in spec:
-                    raise self._error(f"{field_path}：缺少字段")
+                    raise self._error(f"{path}.{field_name}：缺少字段")
                 continue
-            self.validate_field(result[field_name], spec, field_path)
+            self.validate_field(result[field_name], spec, f"{path}.{field_name}")
 
     def validate_constraints(
         self,
@@ -325,8 +337,18 @@ class SchemaValidator:
         path: str,
         label: str,
     ) -> None:
-        if allowed is not None and value not in {str(item) for item in allowed}:
-            raise self._error(f"{path}：{label} {value} 不在当前节点允许范围内")
+        if allowed is None:
+            return
+        # 允许清单几乎每次都是 `tuple`/`list`（来自字段规格），逐项 `str()` 建集合纯属白做；
+        # 先按键序列分派，只有真出现非字符串项时才退回「先转字符串再比」的老路
+        # （实测一次启动要过 20.9 万次，其中 `{str(item) for item in allowed}` 占大头）。
+        # 清单是生成器时这一趟只判一次，之后那个集合可能不含已取出的项——所以只对
+        # **序列**用这条快路，生成器等其它可迭代对象照旧。
+        if (type(allowed) is tuple or type(allowed) is list) and value in allowed:
+            return
+        if value in {str(item) for item in allowed}:
+            return
+        raise self._error(f"{path}：{label} {value} 不在当前节点允许范围内")
 
     def _choice(self, value: Any, spec: Mapping[str, Any], path: str) -> None:
         choices = spec.get("选项")
@@ -351,18 +373,32 @@ class SchemaValidator:
 
         正式 JSON 快照是不可变映射（`mappingproxy`），因此这里接受任何
         `Mapping` 而不是只认 `dict`；传入 `dict` 时返回同一对象，行为不变。
+
+        `dict` 是绝大多数调用（快照经 `materialize` 之后树里只有 `dict`），先按具体类型
+        短路，省掉每个对象一次 `Mapping` 抽象基类的实例检查。
         """
 
+        if type(value) is dict:
+            return value
         if not isinstance(value, Mapping):
             raise self._error(f"{path}：必须是对象")
         return value if isinstance(value, dict) else dict(value)
 
     def _string(self, value: Any, path: str, *, allow_empty: bool) -> str:
-        if not isinstance(value, str) or (not allow_empty and not value.strip()):
+        """要求字符串并返回去掉首尾空白的那份。
+
+        先按 `type(value) is str` 短路（正式数据里的字符串一律是真 `str`），
+        `strip()` 只算一次——原先判空与返回各算一次，实测一次启动要过 37 万次。
+        """
+
+        if type(value) is not str and not isinstance(value, str):
             raise self._error(
                 f"{path}：必须是非空字符串" if not allow_empty else f"{path}：必须是字符串"
             )
-        return value.strip()
+        result = value.strip()
+        if not allow_empty and not result:
+            raise self._error(f"{path}：必须是非空字符串")
+        return result
 
     def _nonempty_string(self, value: Any, path: str) -> str:
         return self._string(value, path, allow_empty=False)
@@ -378,7 +414,7 @@ class SchemaValidator:
         return names
 
     def _number(self, value: Any, path: str, spec: Mapping[str, Any]) -> float:
-        if isinstance(value, bool) or not isinstance(value, int | float):
+        if isinstance(value, bool) or not isinstance(value, _NUMBER_TYPES):
             raise self._error(f"{path}：必须是数字")
         result = float(value)
         if "最小" in spec and result < float(spec["最小"]):

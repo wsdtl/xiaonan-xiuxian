@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -37,6 +37,19 @@ class LoadedGameData:
     entity_records: Mapping[str, Mapping[str, JsonEntity]]
     number_category_members: Mapping[str, tuple[str, ...]]
     pool_definitions: Mapping[str, PoolDefinition]
+    #: `(池文件, 集合) -> 该池展开后的成员`，**进程内只展开一次**。
+    #:
+    #: 池定义在装载期已经冻结，一个池展开成什么只取决于池子自己（与调用方、与
+    #: `deduplicate` 都无关），而同一份池子会被反复展开（实测启动期 342 次抽取里
+    #: 绝大多数落在少数几个池名上，每次都要重走一遍源池递归）。
+    #:
+    #: **只缓存成功的展开**：环引用与坏池子照旧每次报同样的错、同样的链。
+    #: 语义论证：一次成功展开意味着「栈里没有任何节点能从它到达」；若后来的调用带着
+    #: 一个可从它到达的栈元素，那这条环在第一次展开时就已经被走到底并报错了，
+    #: 根本不会有缓存命中。所以命中时跳过环检查不改变任何结果。
+    _pool_members: dict[tuple[str, str], list[tuple[str, Mapping[str, Any]]]] = field(
+        default_factory=dict, compare=False, repr=False
+    )
 
     @property
     def entity_count(self) -> int:
@@ -105,6 +118,9 @@ class LoadedGameData:
             raise JsonDataError(
                 f"资源池集合不匹配：{document.relative_path} 是 {pool.section}，不是 {section}"
             )
+        cached = self._pool_members.get((canonical, section))
+        if cached is not None:
+            return cached
         cycle_key = canonical.casefold()
         stack_keys = tuple(value.casefold() for value in stack)
         if cycle_key in stack_keys:
@@ -122,6 +138,7 @@ class LoadedGameData:
         next_stack = (*stack, canonical)
         for source_file in pool.source_files:
             result.extend(self._resolve_pool_file(source_file, section, next_stack))
+        self._pool_members[(canonical, section)] = result
         return result
 
 
@@ -446,22 +463,43 @@ def _validate_number_prefixes(
 def _iter_pool_references(value: Any) -> tuple[tuple[str, str], ...]:
     result: list[tuple[str, str]] = []
 
+    def visit_mapping(current: Any) -> None:
+        for raw_key, raw_value in current.items():
+            key = str(raw_key)
+            if key.endswith("池"):
+                if isinstance(raw_value, str):
+                    result.append((key, raw_value))
+                elif _is_array(raw_value) and all(
+                    isinstance(item, str) for item in raw_value
+                ):
+                    result.extend((key, item) for item in raw_value)
+                else:
+                    raise JsonDataError(
+                        f"资源池引用必须是文件名或文件名数组：{key}"
+                    )
+            visit(raw_value)
+
     def visit(current: Any) -> None:
-        if isinstance(current, Mapping):
-            for raw_key, raw_value in current.items():
-                key = str(raw_key)
-                if key.endswith("池"):
-                    if isinstance(raw_value, str):
-                        result.append((key, raw_value))
-                    elif _is_array(raw_value) and all(
-                        isinstance(item, str) for item in raw_value
-                    ):
-                        result.extend((key, item) for item in raw_value)
-                    else:
-                        raise JsonDataError(
-                            f"资源池引用必须是文件名或文件名数组：{key}"
-                        )
-                visit(raw_value)
+        # 快照里的容器只有 `mappingproxy`（对象）与 `tuple`（数组），先按**具体类型**
+        # 判，避免每个节点都走一次 `Mapping`/`Sequence` 抽象基类的实例检查——实测这条
+        # 递归要走 25 万个节点。落到具体类型之外时仍退回原来的抽象基类判据。
+        kind = type(current)
+        if kind is dict or kind is MappingProxyType:
+            visit_mapping(current)
+        elif kind is tuple or kind is list:
+            for item in current:
+                visit(item)
+        elif (
+            kind is str
+            or kind is int
+            or kind is float
+            or kind is bool
+            or current is None
+        ):
+            # 字符串不是数组、其它标量更不是，直接跳过（省掉 `Sequence` 抽象基类检查）。
+            return
+        elif isinstance(current, Mapping):
+            visit_mapping(current)
         elif _is_array(current):
             for item in current:
                 visit(item)
@@ -479,4 +517,15 @@ def _entity_signature(value: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _is_array(value: Any) -> bool:
-    return isinstance(value, Sequence) and not isinstance(value, str | bytes)
+    """数组判据：`Sequence` 但不是字符串。
+
+    先按具体类型短路（快照里的数组一律是 `tuple`，字符串是绝大多数非数组值），
+    其余才走 `Sequence` 抽象基类；`str | bytes` 也不写成每次新建 `UnionType` 的表达式。
+    """
+
+    kind = type(value)
+    if kind is tuple or kind is list:
+        return True
+    if kind is str or kind is bytes:
+        return False
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes))

@@ -429,10 +429,20 @@ class CharacterService:
             for user_id in normalized
         )
 
-    async def combatant(self, user_id: str) -> CombatantSpec:
-        """把人物事实转换成战斗核心公共快照。"""
+    async def combatant(
+        self, user_id: str, *, profile: CharacterProfile | None = None
+    ) -> CombatantSpec:
+        """把人物事实转换成战斗核心公共快照。
 
-        profile = await self.profile(user_id)
+        `profile` 可由调用方传入——同一次命令里**刚读过**的同一个人物事实。一个人物的
+        整份状态读取实测约 2 ms（每次都要新开一次 sqlite 连接），而一次 15 对 15
+        的宗门战要读 30 个人物，能省一趟是一趟。不传时的行为与从前完全一致；
+        传进来的人物对不上号时也退回自己读，绝不拿错人。
+        """
+
+        normalized = str(user_id or "").strip()
+        if profile is None or profile.user_id != normalized:
+            profile = await self.profile(user_id)
         attributes = dict(profile.attributes)
         resources = dict(profile.resources)
         build = tuple(

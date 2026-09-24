@@ -32,6 +32,22 @@ ATTRIBUTE_CALIBERS: Mapping[str, str] = {
 _BASELINE_IS_100 = ("加成",)
 _BASELINE_IS_ZERO = ("减免", "比率")
 
+#: `时序.事件监听.排序` 的**唯一出处**：数据里那张单子的**先后**，就是战斗核心拼监听排序键的先后。
+#: `mechanics.py` 的 `_ListenerSink.add` 照它拼键、`_passive_listener_entries` 照它按位次重拼
+#: （下标由这张单子算出来，不写字面量），所以**加减字段时只改这一处、另一处跟着走**。
+#:
+#: 这里按**顺序逐字**校验，不只是比集合：顺序错了不会抛错，只会静默换掉结算先后——同一事件上
+#: 两个监听谁先结算决定结果（见 `规则/说明.md` 的「监听优先级」），所以必须在启动期就挡住。
+EVENT_LISTENER_SORT_ORDER: tuple[str, ...] = (
+    "来源层级升序",
+    "监听优先级降序",
+    "结算顺序升序",
+    "参战位序",
+    "装配位序",
+    "物品编号",
+    "能力序号",
+)
+
 
 def load_battle_foundation(
     data: JsonDataService,
@@ -580,20 +596,12 @@ def _validate_timing(value: Mapping[str, Any]) -> None:
     if listener["事件转化"] != {"原事件提交后": True, "新事件链": True}:
         raise ValueError("事件转化必须在原事件提交后开启新事件链")
     listener_order = _strings(listener["排序"], "时序.事件监听.排序")
-    if (
-        set(listener_order)
-        != {
-            "来源层级升序",
-            "监听优先级降序",
-            "结算顺序升序",
-            "参战位序",
-            "装配位序",
-            "物品编号",
-            "能力序号",
-        }
-        or len(listener_order) != 7
-    ):
-        raise ValueError("时序.事件监听.排序必须完整且不可重复")
+    if listener_order != EVENT_LISTENER_SORT_ORDER:
+        raise ValueError(
+            "时序.事件监听.排序必须与战斗核心拼排序键的先后逐字一致"
+            f"（期望 {' -> '.join(EVENT_LISTENER_SORT_ORDER)}，实为 {' -> '.join(listener_order)}）；"
+            "加减字段时改 `foundation.EVENT_LISTENER_SORT_ORDER`，`mechanics.py` 的键布局要跟着改"
+        )
     formation = _mapping(value["阵法轮转"], "时序.阵法轮转")
     if set(formation) != {"执行时点", "双方结算", "冲击判定", "排序", "基准周期"}:
         raise ValueError("时序.阵法轮转字段必须完整")

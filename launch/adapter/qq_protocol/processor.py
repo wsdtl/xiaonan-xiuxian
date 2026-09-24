@@ -20,6 +20,7 @@ from ..context import (
     MessageContext,
     ReplyTarget,
 )
+from ..request_scope import request_scope
 from ..shared_dispatch import MessageDispatchMixin
 from .event import QqMessageEvent, parse_message_event
 from .manager import current_event, manager
@@ -144,39 +145,41 @@ async def process_message_event(event: QqMessageEvent) -> bool:
 
     event_token = current_event.set(event)
     try:
-        matched = registry.match(event.content)
-        if not matched:
-            logger.opt(colors=True).debug(
-                C.join(C.warn("QQ 消息未命中命令"), *event_log_parts(event))
-            )
-            return False
+        # 一条消息 = 一次请求：业务挂在这段范围里的资源（核心库连接复用）随消息收尾。
+        with request_scope():
+            matched = registry.match(event.content)
+            if not matched:
+                logger.opt(colors=True).debug(
+                    C.join(C.warn("QQ 消息未命中命令"), *event_log_parts(event))
+                )
+                return False
 
-        logger.opt(colors=True).success(
-            C.join(
-                C.ok("QQ 命令命中"),
-                *event_log_parts(event),
-                C.kv("cmd", matched_commands_text(matched)),
-                C.kv("handlers", len(matched)),
+            logger.opt(colors=True).success(
+                C.join(
+                    C.ok("QQ 命令命中"),
+                    *event_log_parts(event),
+                    C.kv("cmd", matched_commands_text(matched)),
+                    C.kv("handlers", len(matched)),
+                )
             )
-        )
-        execution_plan = MessageDispatchMixin._execution_plan(matched)
-        if await MessageDispatchMixin._guards_blocked(
-            execution_plan,
-            event,
-            message_context=message_context,
-            manager=manager,
-        ):
-            return True
-
-        for item in execution_plan:
-            await MessageDispatchMixin._call_rule(
-                item,
+            execution_plan = MessageDispatchMixin._execution_plan(matched)
+            if await MessageDispatchMixin._guards_blocked(
+                execution_plan,
                 event,
                 message_context=message_context,
                 manager=manager,
-                raw_message=event.content,
-            )
-        return True
+            ):
+                return True
+
+            for item in execution_plan:
+                await MessageDispatchMixin._call_rule(
+                    item,
+                    event,
+                    message_context=message_context,
+                    manager=manager,
+                    raw_message=event.content,
+                )
+            return True
     finally:
         current_event.reset(event_token)
 

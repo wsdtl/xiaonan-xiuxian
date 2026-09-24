@@ -24,6 +24,7 @@ from .models import (
     BattleContext,
     CombatCatalog,
     Fighter,
+    copy_definition,
     PreparedCombatField,
     PreparedFormation,
     RuntimeCombatantSnapshot,
@@ -80,6 +81,14 @@ class BattleEngine(AbilityRuntime):
             sys.setrecursionlimit(RECURSION_LIMIT)
         templates = rules.pop("构筑模板库", None)
         self.catalog = CombatCatalog.from_mapping(rules, templates)
+        # `时序.来源层级` 只由装配期的静态内容决定（启动期已校验：来源非空不重复、序位非负
+        # 不重复），而派发监听与排主动技能一场要问它 10 万次（见 `_source_layer`），所以
+        # 在装配期一次摊成「来源 → 序位」。`setdefault` 保留**第一条**命中的来源，与原先
+        # 「逐条扫描、命中即返回」同口径（校验已保证来源不重复，这里只是把口径写死）。
+        source_layers: dict[str, int] = {}
+        for entry in self.catalog.timing.get("来源层级") or ():
+            source_layers.setdefault(str(entry.get("来源") or ""), int(entry["序位"]))
+        self._source_layers = source_layers
         self.damage = DamageEngine(self.catalog.damage_rules, self.catalog.attributes)
         self._ability_handlers: dict[str, Callable[..., bool]] = {
             "顺序执行": self._ability_sequence,
@@ -383,18 +392,13 @@ class BattleEngine(AbilityRuntime):
         """
 
         rules = dict(self.catalog.damage_rules)
+        # **输出倍率 = `伤害.json` 里那一个数，直接、固定，不乘任何东西。**
+        # 原实现是 `基准 × 地形节奏`（有名地势按特色倍率、无名之地按等级递增），现已按负责人
+        # 口径拆掉：那是个「开关」，只会掩饰数值本身没调好的问题（同一场仗因为站在哪就快慢不同，
+        # 调平衡时看不见真因）。地形的战斗语义从此为空，`地形.json` 里那张倍率表一并移除。
+        # `pace_percent` 只留给**判据/工具**钉死节奏用（正式战斗永不传，见 `simulate_teams`）。
         base = float(rules.get("输出倍率", 100))
-        if pace_percent is not None:
-            percent = float(pace_percent)
-        else:
-            terrain = str(getattr(runtime_field, "terrain", "") or "")
-            percent = self.catalog.terrain_percent(terrain)
-            if percent is None:
-                level = max(
-                    (int(getattr(value, "level", 1) or 1) for value in fighters), default=1
-                )
-                percent = self.catalog.formless_percent(level)
-        rules["输出倍率"] = base * float(percent) / 100.0
+        rules["输出倍率"] = base if pace_percent is None else base * float(pace_percent) / 100.0
         return DamageEngine(rules, self.catalog.attributes)
 
     @staticmethod
@@ -1219,7 +1223,15 @@ class BattleEngine(AbilityRuntime):
         ):
             for index, raw in enumerate(instance.get("能力") or ()):
                 node = dict(raw)
-                executor = self.catalog.parse_node(node).executor
+                # 这里**故意把 `raw` 而不是 `node`（刚做的副本）交给 `parse_node`**：解析只读
+                # `value.get("能力")`（见 `CombatCatalog.parse_node`），而 `node` 是 `raw` 的
+                # 逐键副本、`能力` 一字不差，所以两者的 `RuleNode` 与 `executor` 必然相同；
+                # 但 `parse_node` 的缓存是**按对象身份**认的（`dict.get(id(value))` + `values is value`），
+                # 副本每次都是新对象 ⇒ 永远命不中。实测这一处 3,546 次调用 **零命中**、7.1 ms
+                # （单次 ~2 µs，因为每次都要走一遍 `abilities` 查表 + 建 `RuleNode`）；
+                # 改交 `raw` 后 `raw`（来自构筑的 `能力` 列表）在一场里身份不变 ⇒ 只剩首见那几次未命中。
+                # 后面 `handler(...)` 拿到的仍是那个副本 `node`，可变、可写，语义未动。
+                executor = self.catalog.parse_node(raw).executor
                 handler = self._assembly_handlers.get(executor)
                 if handler is None:
                     raise ValueError(f"战斗核心未实现装配执行器：{executor}")
@@ -1281,14 +1293,14 @@ class BattleEngine(AbilityRuntime):
                 multiplier=float(instance.get("威力倍率", 1)),
                 spirit_cost=max(0.0, float(node.get("精神消耗", 0))),
                 cooldown_actions=max(0, int(node.get("冷却行动", 0))),
-                effects=tuple(copy.deepcopy(node.get("效果") or ())),
+                effects=tuple(copy_definition(node.get("效果") or ())),
                 tags=tuple(str(value) for value in node.get("标签") or ()),
-                costs=tuple(copy.deepcopy(node.get("额外代价") or ())),
+                costs=tuple(copy_definition(node.get("额外代价") or ())),
                 use_limit=max(0, int(node.get("使用次数", 0))),
                 cooldown_group=str(node.get("共享冷却") or ""),
                 rollback_on_failure=bool(node.get("失败时回滚", False)),
                 rules=_line_rules(node, self.catalog.rule_layer, f"{source_name}.规则"),
-                element_composition=copy.deepcopy(
+                element_composition=copy_definition(
                     dict(node.get("属性构成") or instance.get("属性构成") or {"无相": 100})
                 ),
             )
@@ -1326,13 +1338,13 @@ class BattleEngine(AbilityRuntime):
                     "物品编号": source_id,
                     "来源类别": str(instance.get("来源类别") or "功法"),
                     "构筑实例": str(instance.get("实例") or ""),
-                    "属性构成": copy.deepcopy(
+                    "属性构成": copy_definition(
                         dict(node.get("属性构成") or instance.get("属性构成") or {"无相": 100})
                     ),
                     "能力序号": index,
                     "效果序号": effect_index,
-                    "词条": copy.deepcopy(dict(instance.get("词条") or {})),
-                    "节点": copy.deepcopy(dict(raw)),
+                    "词条": copy_definition(dict(instance.get("词条") or {})),
+                    "节点": copy_definition(dict(raw)),
                 }
             )
 

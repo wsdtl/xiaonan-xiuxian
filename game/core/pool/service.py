@@ -34,6 +34,10 @@ class PoolService:
             tuple[tuple[str, ...], str, bool, bool],
             tuple[PoolEntry, ...],
         ] = {}
+        #: `(池文件, 集合) -> 该池文件的加权候选`。池成员与权重在 `initialize` 之后就固定，
+        #: 而同一个池会被反复抽取（实测启动期一次校验就抽 342 次，落点集中在少数池名上），
+        #: 每次都重新展开成员并重建 `PoolEntry` 是白做。
+        self._entry_cache: dict[tuple[str, str], tuple[PoolEntry, ...]] = {}
         self._weights: dict[str, dict[str, int]] = {}
 
     def initialize(self) -> PoolStatus:
@@ -124,14 +128,15 @@ class PoolService:
         seen: set[str] = set()
         for file_id in file_ids:
             section = self._data.pool_section(str(file_id))
-            weights = self._weights.get(section) or {}
-            for entity_id in self._data.pool_members((str(file_id),), section):
-                if entity_id in seen:
+            cached = self._entries(str(file_id), section)
+            if len(file_ids) == 1:
+                candidates = list(cached)
+                break
+            for entry in cached:
+                if entry.entity_id in seen:
                     continue
-                seen.add(entity_id)
-                candidates.append(
-                    PoolEntry(entity_id=entity_id, weight=int(weights.get(entity_id, 1)))
-                )
+                seen.add(entry.entity_id)
+                candidates.append(entry)
         if not candidates:
             joined = "、".join(str(value) for value in file_ids) or "<空>"
             raise ValueError(f"资源池为空：{joined}")
@@ -165,6 +170,26 @@ class PoolService:
             random.Random(seed), candidates, weights, count=count, replace=True
         )
         return tuple(selected)
+
+    def _entries(self, file_id: str, section: str) -> tuple[PoolEntry, ...]:
+        """一个池文件的加权候选，**只建一次**。
+
+        池成员与权重在 `initialize` 之后不再变（快照已冻结），所以同一份池文件的候选
+        永远是同一批；把 `PoolEntry` 一起缓存，省掉反复展开成员与重建条目。
+        集合仍由池子自己声明（`pool_section` 先查过），这里不替调用方猜。
+        """
+
+        key = (file_id, section)
+        cached = self._entry_cache.get(key)
+        if cached is not None:
+            return cached
+        weights = self._weights.get(section) or {}
+        entries = tuple(
+            PoolEntry(entity_id=entity_id, weight=int(weights.get(entity_id, 1)))
+            for entity_id in self._data.pool_members((file_id,), section)
+        )
+        self._entry_cache[key] = entries
+        return entries
 
     def _candidates(
         self,

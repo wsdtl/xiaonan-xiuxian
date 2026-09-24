@@ -161,8 +161,14 @@ class SectWarService:
         target = await self._db.get_shared_entity_by_name("宗门", target_name.strip())
         if target is None or target.entity_id == member.sect_id:
             raise SectWarError("target_invalid")
-        await self._expire_for_sects((member.sect_id, target.entity_id), user_id)
-        if await self._active(member.sect_id) or await self._active(target.entity_id):
+        # 战书列表整份读一次（每次三十几毫秒，见 `_current_record`）：先用它结过期战书，
+        # 再用同一份挑「有没有在打的」——原先这三步各读一遍。
+        records = await self._db.list_shared_entities(ENTITY_TYPE)
+        if await self._expire_for_sects((member.sect_id, target.entity_id), user_id, records):
+            records = await self._db.list_shared_entities(ENTITY_TYPE)
+        if self._has_active(records, member.sect_id) or self._has_active(
+            records, target.entity_id
+        ):
             raise SectWarError("active_exists")
         location = await self._location.current(user_id)
         if location.space_type != "地表":
@@ -421,6 +427,11 @@ class SectWarService:
         left_enemy_ids = tuple(item.id for item in result.right_results)
         right_enemy_ids = tuple(item.id for item in result.left_results)
         for item in result.left_results:
+            if item.id not in left_injuries:
+                # **战斗构造物不是参战者**：它们的单位编号形如 `xxx:战斗对象:n`，
+                # 战斗里由效果现造，开战前那份 `injuries` 里自然没有它们（只有人物与道侣），
+                # 长期伤势也就无从结算。战报里照旧有它们（那是 `report` 层的事），这里只结算"人"。
+                continue
             state, realm_id = left_injuries[item.id]
             injury_results[item.id] = self._injury.evolve(
                 state,
@@ -431,6 +442,8 @@ class SectWarService:
                 battle_id=record.entity_id,
             )
         for item in result.right_results:
+            if item.id not in right_injuries:
+                continue
             state, realm_id = right_injuries[item.id]
             injury_results[item.id] = self._injury.evolve(
                 state,
@@ -493,7 +506,11 @@ class SectWarService:
                     for change in injury_results[item.id].changes
                 ],
             }
+            # **只收参战者**：战斗构造物（单位编号形如 `xxx:战斗对象:n`）是战斗中由效果现造的，
+            # 开战前那份 `injuries` 里没有它们、也就没有长期伤势可写；战报本身照旧记着它们
+            # （那是 `report` 层的事）。不收它们，`开始宗门战` 就不会再因构造物 KeyError 崩。
             for item in (*result.left_results, *result.right_results)
+            if item.id in injury_results
         }
         operations: list[object] = [
             SharedEntityMutation(ENTITY_TYPE, record.entity_id, value, record.version)
@@ -723,8 +740,19 @@ class SectWarService:
         )
         return await self._view(value)
 
-    async def _expire_for_sects(self, sect_ids: tuple[str, ...], user_id: str) -> None:
-        for record in await self._db.list_shared_entities(ENTITY_TYPE):
+    async def _expire_for_sects(
+        self,
+        sect_ids: tuple[str, ...],
+        user_id: str,
+        records: Sequence = (),
+    ) -> bool:
+        """把过期的战书结算掉；`records` 是调用方**刚读过**的全量记录，省掉一次整份读取。
+
+        返回「有没有真的结掉过期战书」——有的话调用方手里那份记录已经旧了，必须重读。
+        """
+
+        changed = False
+        for record in records or await self._db.list_shared_entities(ENTITY_TYPE):
             if not set(sect_ids).intersection(
                 (record.value.get("甲方"), record.value.get("乙方"))
             ) or not _expired(record.value):
@@ -739,12 +767,20 @@ class SectWarService:
                 )
             except StateConflictError:
                 continue
+            changed = True
+        return changed
 
     async def _current_record(self, sect_id: str, user_id: str):
-        await self._expire_for_sects((sect_id,), user_id)
+        # 战书列表是**共享实体**，一条记录里带着整份战报（15 对 15 实测 600 KB 上下）：
+        # 读一次要三十几毫秒。原先「先结算过期战书、再挑当前战书」各读一遍，同一次命令里
+        # 把同一份列表整份读了两遍——这里读一次，两边共用。
+        records = await self._db.list_shared_entities(ENTITY_TYPE)
+        if await self._expire_for_sects((sect_id,), user_id, records):
+            # 刚结掉一条过期战书：手里那份已经旧了，重读一次（与从前一样准）。
+            records = await self._db.list_shared_entities(ENTITY_TYPE)
         active = [
             record
-            for record in await self._db.list_shared_entities(ENTITY_TYPE)
+            for record in records
             if sect_id in (record.value.get("甲方"), record.value.get("乙方"))
             and record.value.get("状态") not in _TERMINAL
         ]
@@ -753,11 +789,14 @@ class SectWarService:
         active.sort(key=lambda item: item.updated_at, reverse=True)
         return active[0]
 
-    async def _active(self, sect_id: str) -> bool:
+    @staticmethod
+    def _has_active(records: Sequence, sect_id: str) -> bool:
+        """这份战书列表里有没有这个宗门还没了结的一战。"""
+
         return any(
             sect_id in (record.value.get("甲方"), record.value.get("乙方"))
             and record.value.get("状态") not in _TERMINAL
-            for record in await self._db.list_shared_entities(ENTITY_TYPE)
+            for record in records
         )
 
     async def _formation_entry(self, sect_id: str, entry_key: str) -> SectAssetEntry:
@@ -794,7 +833,8 @@ class SectWarService:
         injuries = {}
         for user_id in user_ids:
             profile = await self._character.profile(user_id)
-            character = await self._character.combatant(user_id)
+            # 把刚读到的人物事实交给它，省掉同一次命令里第二次整份状态读取。
+            character = await self._character.combatant(user_id, profile=profile)
             character_injuries = await self._injury.state(user_id, PLAYER_KEY)
             if profile.prepared_battle_medicine is not None:
                 definition = self._medicine.battle(
@@ -865,13 +905,20 @@ class SectWarService:
     async def _release_operations(
         self, participants: Sequence[str]
     ) -> list[StateMutation]:
+        # 一次读齐（`current_many` 一条连接读完），再把刚读到的那份交给规划口——
+        # 原先按人读一次、`plan_finish_behavior` 与 `plan_transition` 各自又读一次，
+        # 一场 15 对 15 的结算要为 30 个人读 90 次状态行。
+        unique = tuple(dict.fromkeys(participants))
+        snapshots = {
+            value.user_id: value for value in await self._state.current_many(unique)
+        }
         operations = []
-        for participant in dict.fromkeys(participants):
-            snapshot = await self._state.current(participant)
+        for participant in unique:
+            snapshot = snapshots.get(participant)
             if snapshot is None or snapshot.states["行为"].state_id != self._behavior:
                 continue
             plan = await self._state.plan_finish_behavior(
-                participant, expected_version=snapshot.version
+                participant, expected_version=snapshot.version, snapshot=snapshot
             )
             operations.append(plan.mutation)
         return operations

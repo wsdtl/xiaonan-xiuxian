@@ -916,16 +916,23 @@ def initialize_game_services() -> None:
     global _services
     if _services is not None:
         raise RuntimeError("游戏微服务已经初始化")
+    from launch.adapter.request_scope import register_request_scope
+
     from .cmd.access_guard import (
         register_game_access_guard,
         unregister_game_access_guard,
     )
+    from .core.database import open_request_connections
 
     services = build_game_services()
     try:
         validate_startup_contracts(services.core)
         register_game_access_guard()
+        # 核心库的连接只在**一条命令**内复用：驱动器进出请求范围时开、关，
+        # 句柄不跨请求存活（见 game/core/database/说明.md）。
+        register_request_scope(open_request_connections)
     except Exception:
+        unregister_request_scope(open_request_connections)
         unregister_game_access_guard()
         services.core.database.close()
         raise
@@ -937,8 +944,12 @@ def shutdown_game_services() -> None:
     """在具体玩法停止后释放本进程的游戏微服务集合。"""
 
     global _services
-    from .cmd.access_guard import unregister_game_access_guard
+    from launch.adapter.request_scope import unregister_request_scope
 
+    from .cmd.access_guard import unregister_game_access_guard
+    from .core.database import open_request_connections
+
+    unregister_request_scope(open_request_connections)
     unregister_game_access_guard()
     if _services is not None:
         _services.core.database.close()

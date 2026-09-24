@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from typing import Any
 
 _COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+#: `_derived` 的「没缓存」哨兵：缓存里可能合法地存 `None`。
+_MISSING = object()
 
 _UI_TEXT_FIELDS = {
     "brand_suffix": "品牌后缀",
@@ -55,6 +57,24 @@ class BattleReportCatalog:
     _record_cache: frozenset[str] | None = dataclass_field(
         default=None, init=False, repr=False, compare=False
     )
+    #: 派生量缓存（见 `_derived`）：`标准化` / `展示` 下的名单与定义都是**只读** `raw`
+    #: 上的纯函数，而一份战报构建会把同一份名单取上千次——15 对 15 的 `events` 视图
+    #: 实测 `内部明细` 取 4707 次、`伤害事实` 取 4001 次，每次都从原始配置重算一遍
+    #: frozenset。与 `recorded_facts` 同一手法：算一次就存住。
+    #: 缓存里只放**不可变值**（frozenset / tuple / `raw` 自己的子对象）。
+    _derived_cache: dict[str, Any] = dataclass_field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+
+    def _derived(self, key: str, compute: Callable[[], Any]) -> Any:
+        """取一个从只读 `raw` 上算出来的派生量；同一次装载里只算一次。"""
+
+        cache = self._derived_cache
+        value = cache.get(key, _MISSING)
+        if value is _MISSING:
+            value = compute()
+            cache[key] = value
+        return value
 
     @classmethod
     def from_mapping(
@@ -95,19 +115,19 @@ class BattleReportCatalog:
 
     @property
     def protocol(self) -> Mapping[str, Any]:
-        return _mapping(self.raw, "协议")
+        return self._derived("protocol", lambda: _mapping(self.raw, "协议"))
 
     @property
     def visual(self) -> Mapping[str, Any]:
-        return _mapping(self.raw, "视觉")
+        return self._derived("visual", lambda: _mapping(self.raw, "视觉"))
 
     @property
     def normalization(self) -> Mapping[str, Any]:
-        return _mapping(self.raw, "标准化")
+        return self._derived("normalization", lambda: _mapping(self.raw, "标准化"))
 
     @property
     def presentation(self) -> Mapping[str, Any]:
-        return _mapping(self.raw, "展示")
+        return self._derived("presentation", lambda: _mapping(self.raw, "展示"))
 
     @property
     def system(self) -> Mapping[str, Any]:
@@ -136,16 +156,19 @@ class BattleReportCatalog:
 
     @property
     def category_definitions(self) -> tuple[Mapping[str, Any], ...]:
-        return tuple(
-            {
-                "id": definition["标识"],
-                "label": definition["名称"],
-                "color": definition["颜色"],
-                "tone": definition["色调"],
-                "priority": int(definition["优先级"]),
-            }
-            for value in _sequence(self.normalization, "分类")
-            for definition in (_mapping_value(value, "标准化.分类"),)
+        return self._derived(
+            "category_definitions",
+            lambda: tuple(
+                {
+                    "id": definition["标识"],
+                    "label": definition["名称"],
+                    "color": definition["颜色"],
+                    "tone": definition["色调"],
+                    "priority": int(definition["优先级"]),
+                }
+                for value in _sequence(self.normalization, "分类")
+                for definition in (_mapping_value(value, "标准化.分类"),)
+            ),
         )
 
     @property
@@ -172,7 +195,9 @@ class BattleReportCatalog:
 
     @property
     def compact_hidden_kinds(self) -> frozenset[str]:
-        return _strings(self.normalization, "紧凑隐藏类型")
+        return self._derived(
+            "compact_hidden_kinds", lambda: _strings(self.normalization, "紧凑隐藏类型")
+        )
 
     @property
     def internal_details(self) -> frozenset[str]:
@@ -184,7 +209,9 @@ class BattleReportCatalog:
         后面跟着七个记账字段——**玩家要看的是战斗，不是引擎的账本**。
         """
 
-        return _strings(self.normalization, "内部明细")
+        return self._derived(
+            "internal_details", lambda: _strings(self.normalization, "内部明细")
+        )
 
     @property
     def compact_facts(self) -> dict[str, tuple[tuple[str, ...], ...]]:
@@ -194,33 +221,51 @@ class BattleReportCatalog:
         `_compact_text` 按序取第一个有值的，拼成 `类型名 · 事实`。
         """
 
-        return {
-            str(kind): tuple(
-                (str(entry),) if isinstance(entry, str) else tuple(str(name) for name in entry)
-                for entry in entries
-            )
-            for kind, entries in _mapping(self.normalization, "紧凑事实")["类型"].items()
-        }
+        return self._derived(
+            "compact_facts",
+            lambda: {
+                str(kind): tuple(
+                    (str(entry),)
+                    if isinstance(entry, str)
+                    else tuple(str(name) for name in entry)
+                    for entry in entries
+                )
+                for kind, entries in _mapping(self.normalization, "紧凑事实")[
+                    "类型"
+                ].items()
+            },
+        )
 
     @property
     def system_kinds(self) -> frozenset[str]:
-        return _strings(self.normalization, "系统类型")
+        return self._derived(
+            "system_kinds", lambda: _strings(self.normalization, "系统类型")
+        )
 
     @property
     def percent_details(self) -> frozenset[str]:
-        return _strings(self.normalization, "百分比明细")
+        return self._derived(
+            "percent_details", lambda: _strings(self.normalization, "百分比明细")
+        )
 
     @property
     def multiplier_details(self) -> frozenset[str]:
-        return _strings(self.normalization, "倍率明细")
+        return self._derived(
+            "multiplier_details", lambda: _strings(self.normalization, "倍率明细")
+        )
 
     @property
     def percent_attributes(self) -> frozenset[str]:
-        return _strings(self.normalization, "百分比属性")
+        return self._derived(
+            "percent_attributes", lambda: _strings(self.normalization, "百分比属性")
+        )
 
     @property
     def attribute_summary(self) -> tuple[str, ...]:
-        return tuple(_strings_in_order(self.normalization, "属性摘要"))
+        return self._derived(
+            "attribute_summary",
+            lambda: tuple(_strings_in_order(self.normalization, "属性摘要")),
+        )
 
     @property
     def recorded_facts(self) -> frozenset[str]:
@@ -241,11 +286,16 @@ class BattleReportCatalog:
     def dropped_facts(self) -> frozenset[str]:
         """明确决定**不记**的事实键（`标准化.记录事实.丢弃`）：记账字段与中间过程。"""
 
-        return _strings(_mapping(self.normalization, "记录事实"), "丢弃")
+        return self._derived(
+            "dropped_facts",
+            lambda: _strings(_mapping(self.normalization, "记录事实"), "丢弃"),
+        )
 
     @property
     def damage_facts(self) -> frozenset[str]:
-        return _strings(self.presentation, "伤害事实")
+        return self._derived(
+            "damage_facts", lambda: _strings(self.presentation, "伤害事实")
+        )
 
     @property
     def event_fields(self) -> frozenset[str]:
@@ -256,25 +306,29 @@ class BattleReportCatalog:
         （`检查战报展示`）按这份名单核实际载荷，多一个少一个都红。
         """
 
-        return _strings(self.protocol, "事件字段")
+        return self._derived("event_fields", lambda: _strings(self.protocol, "事件字段"))
 
     @property
     def fact_fields(self) -> frozenset[str]:
         """展示协议里一条事实**只许有**这些字段（`协议.事实字段`）。"""
 
-        return _strings(self.protocol, "事实字段")
+        return self._derived("fact_fields", lambda: _strings(self.protocol, "事实字段"))
 
     @property
     def participant_fields(self) -> frozenset[str]:
         """快照里的参战者记录**只许有**这些字段（`协议.参战者字段`）：只留会变的那一半。"""
 
-        return _strings(self.protocol, "参战者字段")
+        return self._derived(
+            "participant_fields", lambda: _strings(self.protocol, "参战者字段")
+        )
 
     @property
     def roster_fields(self) -> frozenset[str]:
         """花名册里一条档案**只许有**这些字段（`协议.花名册字段`）：不变的那一半。"""
 
-        return _strings(self.protocol, "花名册字段")
+        return self._derived(
+            "roster_fields", lambda: _strings(self.protocol, "花名册字段")
+        )
 
     def settlement_kinds(self, category: str) -> frozenset[str]:
         values = _mapping(self.normalization, "结算事件")

@@ -792,12 +792,14 @@ def report_contract_coverage() -> None:
 
 
 def check_terrain_pace() -> list[str]:
-    """地形战斗节奏：**每一档地形都要配到**，倍率在合理区间，无相曲线站得住。
+    """地形**不再参与输出倍率**，这条判据改为**反向看门**（第 41 轮拆掉的开关）。
 
-    战斗输出倍率 = `伤害.json.输出倍率`（基准）× 地形百分比 / 100；地形没配到就会静默
-    落到「无相」那一档（随进度加），于是「火山打得凶」这种设计就悄悄没了。所以这里查：
-    地形分区里的每个地形都要有一行、不重名、倍率在 100~400 之间；`无相地势` 的基础倍率
-    不低于 100、每级加成非负。
+    旧契约是「每一档地形都要配到倍率，别让它静默落到无相那一档」——它守的是
+    `输出倍率 = 伤害.json.输出倍率 × 地形百分比 / 100` 那层耦合。新契约恰好相反：
+    **输出倍率只有 `伤害.json.输出倍率` 一个出处**，地形只描述战场形态。所以现在查：
+    ① 任何一条地形都不许再出现 `输出倍率`；② 整个文档不许再有 `无相地势`；
+    ③ 地形清单仍要与 `世界/内容/地形分区.json` 对得上（少列 / 多列都报）。
+    ① ② 是把那个开关**堵在门外**：谁把它加回来，`tools/全量核对.py` 当场报错。
     """
 
     import json as _json
@@ -809,11 +811,16 @@ def check_terrain_pace() -> list[str]:
     文档 = _json.loads(地形路径.read_text(encoding="utf-8"))
     分区 = _json.loads(分区路径.read_text(encoding="utf-8"))
     problems: list[str] = []
+    if "无相地势" in 文档:
+        problems.append(
+            "战斗/规则/地形.json 不得再声明 `无相地势`：地形不再调节输出倍率"
+            "（输出倍率只有 `伤害.json.输出倍率` 一个出处）"
+        )
     需要 = {str(条.get("地形") or "") for 条 in 分区 if isinstance(条, dict)}
     行 = 文档.get("地形")
     if not isinstance(行, list) or not 行:
         return ["战斗/规则/地形.json 的 `地形` 必须是非空数组"]
-    配到: dict[str, float] = {}
+    登记: set[str] = set()
     for 条 in 行:
         if not isinstance(条, dict):
             problems.append("战斗/规则/地形.json 的 `地形` 里混了非对象")
@@ -822,37 +829,20 @@ def check_terrain_pace() -> list[str]:
         if not 名:
             problems.append("战斗/规则/地形.json 有一行没写 `地形`")
             continue
-        if 名 in 配到:
+        if 名 in 登记:
             problems.append(f"地形重复登记：{名}")
             continue
-        try:
-            倍率 = float(条.get("输出倍率"))
-        except (TypeError, ValueError):
-            problems.append(f"{名}.输出倍率不是数字：{条.get('输出倍率')}")
-            continue
-        配到[名] = 倍率
-        if not 100 <= 倍率 <= 400:
-            problems.append(f"{名}.输出倍率超出 100~400：{倍率}")
-    漏 = sorted(需要 - set(配到))
+        if "输出倍率" in 条:
+            problems.append(
+                f"{名} 又声明了 `输出倍率`：地形不得调节输出倍率，倍率请改 `伤害.json.输出倍率`"
+            )
+        登记.add(名)
+    漏 = sorted(需要 - 登记)
     if 漏:
-        problems.append(f"这些地形没配战斗节奏（会静默落到无相那一档）：{'、'.join(漏)}")
-    多余 = sorted(set(配到) - 需要)
+        problems.append(f"这些地形没登记：{'、'.join(漏)}")
+    多余 = sorted(登记 - 需要)
     if 多余:
-        problems.append(f"这些地形配了战斗节奏但地形分区里没有：{'、'.join(多余)}")
-    无相 = 文档.get("无相地势")
-    if not isinstance(无相, dict):
-        problems.append("战斗/规则/地形.json 缺少 `无相地势`（无名之地的节奏）")
-        return problems
-    try:
-        基础 = float(无相.get("基础倍率"))
-        每级 = float(无相.get("每级加成"))
-    except (TypeError, ValueError):
-        problems.append("无相地势的基础倍率 / 每级加成必须是数字")
-        return problems
-    if 基础 < 100:
-        problems.append(f"无相地势的基础倍率不能低于 100：{基础}")
-    if 每级 < 0:
-        problems.append(f"无相地势的每级加成不能为负：{每级}")
+        problems.append(f"这些地形登记了但地形分区里没有：{'、'.join(多余)}")
     return problems
 
 
@@ -877,7 +867,7 @@ def main() -> int:
         for item in 地形:
             print(f"  {item}")
         print()
-        print("每一档地形都要配到倍率，别让它静默落到无相那一档。")
+        print("地形不再调节输出倍率：地形.json 里不许出现 `输出倍率` 或 `无相地势`。")
         return 1
     print()
     if 布局:
@@ -945,7 +935,7 @@ def main() -> int:
         for item in 地形:
             print(f"  {item}")
         print()
-        print("每一档地形都要配到倍率，别让它静默落到无相那一档。")
+        print("地形不再调节输出倍率：地形.json 里不许出现 `输出倍率` 或 `无相地势`。")
         return 1
     print("地形战斗节奏：地形分区里的每一档都配到了，倍率在区间内")
     if problems:

@@ -76,9 +76,7 @@ class GateFeature:
         await self._require_group_same_sect(group.participant_user_ids, sect.sect_id)
         if group.mode != "personal" and group.leader_user_id != user_id:
             raise GateFeatureError("not_leader")
-        locations = [
-            await self._location.current(value) for value in group.participant_user_ids
-        ]
+        locations = await self._location.current_many(group.participant_user_ids)
         await self._require_mutable_group(group.participant_user_ids)
         if any(
             value.space_type != "地表" or value.xy != sect.entrance_xy
@@ -105,9 +103,7 @@ class GateFeature:
         await self._require_group_same_sect(group.participant_user_ids, sect.sect_id)
         if group.mode != "personal" and group.leader_user_id != user_id:
             raise GateFeatureError("not_leader")
-        locations = [
-            await self._location.current(value) for value in group.participant_user_ids
-        ]
+        locations = await self._location.current_many(group.participant_user_ids)
         await self._require_mutable_group(group.participant_user_ids)
         if any(
             value.space_type != self._space_type or value.space_id != sect.cave_id
@@ -144,14 +140,16 @@ class GateFeature:
     async def _require_group_same_sect(
         self, user_ids: tuple[str, ...], sect_id: str
     ) -> None:
-        for user_id in user_ids:
-            member = await self._sect.membership(user_id)
+        # 一次读完再按原顺序判：谁先不合格、报哪句话，与逐个读时一致。
+        members = await self._sect.membership_many(user_ids)
+        for member in members:
             if member is None or member.sect_id != sect_id:
                 raise GateFeatureError("external_member")
 
     async def _require_mutable_group(self, user_ids: tuple[str, ...]) -> None:
-        for user_id in user_ids:
-            result = await self._player_state.authorize(user_id, "自主空闲或休息")
+        # 同上：批量读一次，判定仍按原顺序，第一个不通过的当场报出来。
+        results = await self._player_state.authorize_many(user_ids, "自主空闲或休息")
+        for result in results:
             if not result.allowed:
                 raise GateFeatureError("current_busy")
 

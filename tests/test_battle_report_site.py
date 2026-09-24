@@ -76,7 +76,7 @@ def test_views_match_the_whole_payload() -> None:
         feature = services.features.zhanbao
         feature._sect_war = _StoredWar({"占位": True})
         feature._duel = _StoredDuel({"占位": True})
-        feature._combat.build_report_view = lambda report: (header, parts)
+        feature._combat.build_report_view = lambda report, **_kwargs: (header, parts)
 
         first = header["detail"]["segments"][0]["index"]
         assert "timeline" not in header["detail"]["segments"][0], (

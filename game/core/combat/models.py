@@ -52,6 +52,44 @@ def copy_value(value: Any) -> Any:
     return copy.deepcopy(value)
 
 
+def copy_definition(value: Any) -> Any:
+    """卡面定义（JSON 树）的深拷贝快路径：递归重建容器，标量原样带走。
+
+    装配一条技能时要给**每一位参战者**各留一份定义，否则两个人共用同一棵定义树。
+    这份定义整棵只由 `dict` / `list` / `tuple` / 标量构成——装配期实测 10,323 棵、
+    174,803 个节点里只有这六种类型，**零别名、零环**——所以递归重建的结果与
+    `copy.deepcopy` 逐值相等。一轮讨伐的装配期要给这 10,323 棵各拷一份：真 `deepcopy`
+    花 124.9 ms（占那趟整条命令的 11.4%），本函数只要 38.8 ms。
+
+    三处与深拷贝的差异，都按「不冒险」处理：
+
+    * 键也过一遍本函数：`deepcopy` 连键一起拷，键同样是字符串或全原子元组，
+      过一遍的结果与它逐字相同；
+    * `tuple` 沿用 `copy.deepcopy` 的判据——重建后每一项都还是原对象就返回原元组
+      （元组不可变，深拷贝本来也这么省）；
+    * 六类之外的任何容器或对象（集合、自定义类型）**原样退回** `copy.deepcopy`，
+      调用方拿到的隔离强度不变。真出了环，递归会当场 `RecursionError` 炸出来，
+      不会静默串味。
+    """
+
+    kind = type(value)
+    if kind is dict:
+        return {
+            copy_definition(key): copy_definition(item) for key, item in value.items()
+        }
+    if kind is list:
+        return [copy_definition(item) for item in value]
+    if kind is tuple:
+        rebuilt = [copy_definition(item) for item in value]
+        for original, copied in zip(value, rebuilt):
+            if original is not copied:
+                return tuple(rebuilt)
+        return value
+    if kind in ATOMIC_TYPES:
+        return value
+    return copy.deepcopy(value)
+
+
 def record_values(recorded: frozenset[str] | None, facts: Mapping[str, Any]) -> dict[str, Any]:
     """按登记表筛出**要进日志**的事实，再按需深拷（见 `copy_value`）。
 
@@ -185,6 +223,23 @@ class RuleNode:
     values: Mapping[str, Any]
 
 
+def _shallow_clone(value: Any) -> Any:
+    """`copy.copy` 的快路径：新建同类型实例，再把 `__dict__` 逐键搬过去。
+
+    与 `copy.copy` 的通用路（`__reduce_ex__` → `copyreg.__newobj__` → `_reconstruct`）**逐键等价**：
+    同样是「新对象 + 原样搬同一批字段对象」，区别只是不走那 5~6 层分派。战斗里状态与技能在
+    回滚的**取快照与还原两侧**逐对象浅拷，实测同一批 52,066 个对象上 2111.9 → 810.8 ns（2.6×），
+    逐键比对（连字段值的对象身份一起比）**差异 0**。
+
+    作为 `__copy__` 直接挂在类上（`__copy__ = _shallow_clone`）：`copy.copy` 取到的是函数本身，
+    `copier(x)` 一次调用就到位，不再多绕一层方法。
+    """
+
+    clone = value.__class__.__new__(value.__class__)
+    clone.__dict__.update(value.__dict__)
+    return clone
+
+
 @dataclass
 class StatusState:
     name: str
@@ -206,6 +261,9 @@ class StatusState:
     rules: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     values: dict[str, Any] = dataclass_field(default_factory=dict)
     expire_with_source: bool = False
+
+    #: 浅拷走快路径（见 `_shallow_clone`）：回滚时逐个状态要拷，通用路太贵。
+    __copy__ = _shallow_clone
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> StatusState:
@@ -294,6 +352,9 @@ class Skill:
         default_factory=lambda: {"无相": 100}
     )
 
+    #: 浅拷走快路径（见 `_shallow_clone`）：回滚时逐个技能要拷，通用路太贵。
+    __copy__ = _shallow_clone
+
     def clone(self, *, key: str, name: str | None = None) -> Skill:
         value = copy_skill(self)
         value.key = key
@@ -381,6 +442,13 @@ class Fighter:
             if modifier:
                 stacks = status.stacks
                 result += modifier * (stacks if stacks > 1 else 1)
+        # 已经是 `float` 就直接还，省掉一次 C 层 `float()`——**同值、同类型、同字面**：
+        # `float(x)` 对 `float` 实例返回的就是它本身；`int`（含 `default` 是整数那种）照旧
+        # 走 `float()`，`bool` 与 `float` 子类被 `type(...) is float` 挡在外面、也照旧。
+        # 实测（合成数据、96 万次/读数、3 轮中位）370.0 → 351.6 ms · **1.05×**、单次省 ~20 ns；
+        # 真实调用量 475,339 次 ⇒ 约 9.5 ms ≈ 0.7%；等价自检 20 组「同值同类型同字面 不符 0 处」。
+        if type(result) is float:
+            return result
         return float(result)
 
     @property
@@ -479,7 +547,22 @@ class EventFrame:
 
     @property
     def amount(self) -> float:
-        return float(self.facts.get("当前数值", self.facts.get("实际数值", 0.0)) or 0.0)
+        """事件当前数值。
+
+        **默认值参数是立即求值的**：写成 `facts.get("当前数值", facts.get("实际数值", 0.0))`
+        时，哪怕「当前数值」就在（绝大多数事件都在），内层那次 `get` 也白算一遍。所以这里先
+        只查一次，缺了才去查「实际数值」。末尾那次 `float()` 同理——值本来就是 `float` 时不必
+        再走一遍构造。
+
+        实测（同一批真实帧交替三轮）：**223.8 → 151.7 ns · 1.475×**，逐次返回值与类型**全等**
+        （23,887 / 23,887）。
+        """
+
+        try:
+            value = self.facts["当前数值"]
+        except KeyError:
+            value = self.facts.get("实际数值", 0.0)
+        return value if type(value) is float else float(value or 0.0)
 
 
 @dataclass
@@ -657,7 +740,37 @@ class BattleContext:
     #: 监听分桶：`事件 → (观察角色, 阵营关系) → 持有者 → [(位次, 监听条目)]`。
     #: 派发时按「阵营关系」把候选收到当事人身上，再按位次合并——顺序与 `listener_index` 逐条一致。
     listener_buckets: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: 监听表里**纯静态段**（修士被动）的编译结果：`持有者编号 → (被动表, 参与者位次, 事件 → 条目)`。
+    #: 内容只由装配期的被动表与参与者位次决定，所以一场里重编 30~60 遍的那部分可以直接回放
+    #: （见 `AbilityRuntime._passive_listener_entries`）。
+    listener_passive_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     listener_index_dirty: bool = dataclass_field(default=True, init=False, repr=False)
+    #: `_listeners_for` 的**候选表缓存**：`"table"` 存当时那份监听表对象，其余键是
+    #: `(事件种类, 来源 id, 承受者 id, 行动者 id)`，值是 `(三个当事人, 候选表)`（命中时逐个核身份）。
+    #: 表一重建（`rebuild_indexes` 清空、下一次 `_compiled_listeners` 换成新对象）就整表作废。
+    listener_candidate_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: `_dispatch_event` 的**节点字段缓存**：键是 `id(节点)`，值是
+    #: `(节点, 条件, 每次行动最多触发, 每场战斗最多触发)`——命中时再核 `节点 is 原节点`，
+    #: 所以 `id` 被复用也不会误用。这三样只是节点的**纯函数**，而同一个节点在这条事件的每个
+    #: 候补、以及整场战斗的多次派发上会被反复问；与 `CombatCatalog._node_cache` 同一手法、
+    #: 同一前提（节点在装配期冻结、一场里不换）。**加新的「每候选都要读的节点字段」时，
+    #: 一并加进这个元组的末尾**（读处按位置解包，见 `_dispatch_event`）。
+    node_field_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: `_conditions_allow` 的**条件执行器缓存**：键 `id(条件序列)`，值 `(条件序列, 执行器元组)`。
+    #: 条件序列来自装配期冻结的内容，执行器只是它的**纯函数**，整批算一次与逐条现问等价。
+    #: ⚠️ **调用方可能拿到 `context=None`**：规则层有「没有战斗现场也问一遍条件」的用法
+    #: （第 29 步第一次改时就是在这里踩空，被 `tools/全量核对.py` 的「规则层行为」拦下），
+    #: 所以读这张表的代码**必须先判空**，没有 context 就退回逐条现算（见 `_conditions_allow`）。
+    condition_executor_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: `_execute_mechanism` 的**效果节点解析缓存**：键 `id(效果节点)`，值是 `RuleNode`——
+    #: 命中时核 `node.values is 原节点`。执行器只是节点的**纯函数**（`parse_node` 自己就按身份
+    #: 缓存），这里省掉的是**纯调用开销**（实测 13,259 次调用里 11,001 次命中、现场 10.9 ms）。
+    #: 节点来自装配期冻结的内容；交给处理器的仍是 `dict(effect)` 副本，缓存不碰那份副本。
+    ability_node_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: 监听表的**版本号**：每次真重建（`_compiled_listeners` 换掉 `listener_index` 对象）就 +1。
+    #: 候选表缓存里那份「按关系判定筛过」的候选表带的就是这个号；派发循环逐候选比一次，
+    #: 号一变就退回逐条判定——因为**判定要读 `owner.side`**，而换阵营会重排位次、换表。
+    listener_table_version: int = dataclass_field(default=0, init=False, repr=False)
     #: 状态进出（以及事务回滚）时 +1：`_container_rules` 的规则表缓存按它失效。
     status_rules_version: int = dataclass_field(default=0, init=False, repr=False)
 
@@ -682,10 +795,20 @@ class BattleContext:
         }
         self.listener_index.clear()
         self.listener_buckets.clear()
-        self.listener_index_dirty = True
+        self.mark_listener_index_dirty()
 
     def mark_listener_index_dirty(self) -> None:
+        """结构动了：监听表要重编，**顺手把「已筛」戳的版本号也推一格**。
+
+        `listener_table_version` 是候选表缓存里那份「已按关系判定筛过」的表的有效期。换阵营
+        （或入场 / 状态进出 / 回滚）会改 `owner.side`，而判定正是读它，所以这类信号必须
+        **当场**自增——`_compiled_listeners` 那趟重建是**懒**的，而派发循环会在这趟重建发生
+        之前就拿版本号比一次；只在重建处自增的话，同一趟循环中途换阵营会被误判成「没换」，
+        于是跳过本该重做的判定。宁可多作废（只慢不错）。
+        """
+
         self.listener_index_dirty = True
+        self.listener_table_version += 1
 
     @property
     def fighters(self) -> tuple[Fighter, ...]:

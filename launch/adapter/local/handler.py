@@ -17,6 +17,7 @@ from ..context import (
     MessageContext,
     ReplyTarget,
 )
+from ..request_scope import request_scope
 from ..shared_dispatch import MessageDispatchMixin
 from .event import LocalCommandEvent, local_command_event
 from .manager import LocalDispatchResult, current_event, manager
@@ -93,50 +94,52 @@ class LocalEventHandler(MessageDispatchMixin, BaseMessageHandler):
         result_token = manager.bind_result(result)
         event_token = current_event.set(event)
         try:
-            emit_message_event(
-                event_from_incoming(
-                    adapter="local",
-                    user_id=event.user_id,
-                    request_id=event.event_id,
-                    message_type="text",
-                    content=event.raw_message,
-                    sender_name=event.sender_name,
-                )
-            )
-            matched = await LocalEventHandler._match_event(event)
-            result.matched = bool(matched)
-            result.matched_count = len(matched)
-            if not matched:
-                logger.opt(colors=True).debug(
-                    C.join(
-                        C.warn("本地消息未命中命令"),
-                        C.kv("user", event.user_id or "-"),
-                        C.kv(
-                            "message", LocalEventHandler._short_text(event.raw_message)
-                        ),
+            # 一条消息 = 一次请求：业务挂在这段范围里的资源（核心库连接复用）随消息收尾。
+            with request_scope():
+                emit_message_event(
+                    event_from_incoming(
+                        adapter="local",
+                        user_id=event.user_id,
+                        request_id=event.event_id,
+                        message_type="text",
+                        content=event.raw_message,
+                        sender_name=event.sender_name,
                     )
                 )
-                return result
+                matched = await LocalEventHandler._match_event(event)
+                result.matched = bool(matched)
+                result.matched_count = len(matched)
+                if not matched:
+                    logger.opt(colors=True).debug(
+                        C.join(
+                            C.warn("本地消息未命中命令"),
+                            C.kv("user", event.user_id or "-"),
+                            C.kv(
+                                "message", LocalEventHandler._short_text(event.raw_message)
+                            ),
+                        )
+                    )
+                    return result
 
-            execution_plan = LocalEventHandler._execution_plan(matched)
-            if await LocalEventHandler._guards_blocked(
-                execution_plan,
-                event,
-                message_context=LocalEventHandler._message_context,
-                manager=manager,
-            ):
-                return result
-
-            for item in execution_plan:
-                await LocalEventHandler._call_rule(
-                    item,
+                execution_plan = LocalEventHandler._execution_plan(matched)
+                if await LocalEventHandler._guards_blocked(
+                    execution_plan,
                     event,
                     message_context=LocalEventHandler._message_context,
                     manager=manager,
-                    raw_message=event.raw_message,
-                )
+                ):
+                    return result
 
-            return result
+                for item in execution_plan:
+                    await LocalEventHandler._call_rule(
+                        item,
+                        event,
+                        message_context=LocalEventHandler._message_context,
+                        manager=manager,
+                        raw_message=event.raw_message,
+                    )
+
+                return result
         finally:
             current_event.reset(event_token)
             manager.reset_result(result_token)

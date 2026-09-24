@@ -26,6 +26,7 @@ from .contracts import (
     TransactionReceipt,
 )
 from .service import DatabaseService
+from .storage import open_request_connections
 
 __all__ = [
     "CommittedTransaction",
@@ -52,4 +53,5 @@ __all__ = [
     "StateSnapshot",
     "TransactionCommand",
     "TransactionReceipt",
+    "open_request_connections",
 ]

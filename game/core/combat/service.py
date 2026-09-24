@@ -37,6 +37,28 @@ from .report import RuntimeBattleReportParticipant, build_battle_report
 from .templates import expand_in_place
 
 
+def _template_library():
+    """本进程唯一的构筑模板库。
+
+    `template_data.library()` 每次都现造一份 1299 份模板的嵌套常量（实测 ~4.5 ms），
+    而 `expand_build_section` 会被装载期逐段调用（实测 25 次），`CombatService.initialize`
+    还要再一次——同一份只读常量因此被反复构造。这里单例装载：**只有第一次付构造开销**。
+
+    安全性：模板库是纯只读常量，唯一的消费方是 `expand_in_place`，它对模板主体只读、
+    把展开结果写进引用节点自己的新容器（见 `templates._substitute`），不会改模板库。
+    """
+
+    global _TEMPLATES
+    if _TEMPLATES is None:
+        from .template_data import library as _templates
+
+        _TEMPLATES = _templates()
+    return _TEMPLATES
+
+
+_TEMPLATES: Any = None
+
+
 def expand_build_section(section: str, values: Any) -> Any:
     """装载期展开器：把某一段实体里的模板引用展开成独立的树。
 
@@ -45,13 +67,15 @@ def expand_build_section(section: str, values: Any) -> Any:
 
     四个要点：
 
-    1. **深拷贝后再展开。** 同一段里重复的引用在解析后是同一个对象，原地展开会让
-       第一次展开污染其余引用。
+    1. **展开结果必须是独立的树。** 同一段里重复的引用在解析后是同一个对象，原地展开
+       会污染其余引用；`templates._substitute` 靠 `_materialize` 重建整棵树来避免这一点。
     2. **段名是实体类别，不是模板化的面名。** 现在是构筑四段（功法/真意/气机/器律）
        加上战场环境 / 伤势 / 丹药——后三者与模板面一一对应（面名 `战丹` 对应的实体
        类别是 `丹药`）。少一段就会出现「JSON 里是引用、快照里也是引用」，
        读取方各拿一种形态（实测战丹 148 条监听全部报「不是监听事件节点」）。
-    3. 没有引用时不做任何拷贝，避免无谓开销。
+    3. 没有引用时不做任何拷贝，避免无谓开销。**先按原文扫一遍**：整段一条引用都没有的
+       段落直接原样返回，连 `materialize` 的整段深拷贝都不做（实测 25 个段落里有段落
+       一条引用都没有）。
     4. **这里只做展开，不做任何修正。** 「一个时点只算一次」必须在**数据与模板主体**
        里就成立（见 `game.core.combat.fold`），装载期不替数据兜底——解释层折叠会把
        数据的问题藏起来，下一个人再抄一遍照样出。
@@ -62,20 +86,24 @@ def expand_build_section(section: str, values: Any) -> Any:
         "战场环境", "伤势", "丹药",
     ):
         return values
-    from .template_data import library as _templates
 
-    templates = _templates()
+    templates = _template_library()
     if not templates:
         return values
-    expanded: dict[str, Any] = {}
-    touched = False
-    for content_id, raw in values.items():
-        value = {str(key): materialize(item) for key, item in raw.items()}
-        if _holds_template(value):
-            expand_in_place(value, templates)
-            touched = True
-        expanded[str(content_id)] = value
-    return expanded if touched else values
+    # 引用是否存在的判据与容器类型无关（只看键），所以在**不可变原文**上先扫一遍，
+    # 结果与在 materialize 之后扫完全一致，但省掉了「先深拷贝再发现没有引用」。
+    hits = tuple(
+        content_id for content_id, raw in values.items() if _holds_template(raw)
+    )
+    if not hits:
+        return values
+    expanded: dict[str, Any] = {
+        str(content_id): {str(key): materialize(item) for key, item in raw.items()}
+        for content_id, raw in values.items()
+    }
+    for content_id in hits:
+        expand_in_place(expanded[str(content_id)], templates)
+    return expanded
 
 
 def _holds_template(node: Any) -> bool:
@@ -105,9 +133,8 @@ class CombatService:
             raise RuntimeError("战斗核心已经初始化")
         if not self._formation.status().initialized:
             raise RuntimeError("阵法核心必须先于战斗核心启动")
-        from .template_data import library as _templates
 
-        templates = _templates()
+        templates = _template_library()
         # 构筑模板库是引擎基础设施（生成自真实实例，见 tools/构筑模板代码化.py），
         # 不进 JSON 快照；交给基石同时用于校验与引擎。
         foundation = load_battle_foundation(
@@ -175,13 +202,22 @@ class CombatService:
         return build_battle_report_presentation(report, self._require_report_catalog())
 
     def build_report_view(
-        self, report: Mapping[str, object]
+        self,
+        report: Mapping[str, object],
+        *,
+        only: str | None = None,
+        sequence: int | None = None,
     ) -> tuple[dict[str, object], dict[str, object]]:
-        """`（战报头, 各份片段数据）`：页面首屏拿头，翻片段时按份取。"""
+        """`（战报头, 各份片段数据）`：页面首屏拿头，翻片段时按份取。
+
+        `only` 给「只要哪一份」，只算那一份（结果与整份算完再挑那份一致）。
+        """
 
         from .presentation import build_battle_report_view as _build
 
-        return _build(report, self._require_report_catalog())
+        return _build(
+            report, self._require_report_catalog(), only=only, sequence=sequence
+        )
 
     async def execute(self, request: CombatRequest) -> CombatResult:
         """执行唯一的公共战斗请求，不阻塞异步消息驱动。"""

@@ -225,7 +225,7 @@ class RaidService:
         replay = await self._database.get(StateAddress(owner, SESSION_STATE, _session_id(owner, command.request_id)))
         if replay is not None:
             return _started(replay.value, replayed=True)
-        locations = [await self._location.current(user_id) for user_id in participants]
+        locations = await self._location.current_many(participants)
         if len({(item.space_type, item.space_id, item.xy) for item in locations}) != 1:
             raise RaidError("同行修士必须处于同一位置")
         current = locations[0]
@@ -249,15 +249,21 @@ class RaidService:
             value.user_id: value
             for value in await self._character.public_profiles(participants)
         }
-        for user_id in participants:
-            guard = await self._player_state.authorize(
-                user_id, "自主空闲且可行动"
-            )
+        # 满员讨伐是 15 个用户一起进：准入、状态快照都按批读一次（`authorize_many` /
+        # `current_many` 各一条连接读完），而不是逐人各读一遍；准入先按输入顺序判完，
+        # 谁先被报出来、报什么，与逐人判一致（`authorize_many` 自己就是那个语义）。
+        guards = await self._player_state.authorize_many(participants, "自主空闲且可行动")
+        for user_id, guard in zip(participants, guards):
             if not guard.allowed:
                 name = public_profiles.get(user_id)
                 raise RaidError(
                     f"{name.name if name else '有同行修士'}无法参加讨伐：{guard.reason}"
                 )
+        state_snapshots = {
+            value.user_id: value
+            for value in await self._player_state.current_many(participants)
+        }
+        for user_id in participants:
             transition_operations.append(
                 (await self._player_state.plan_transition(StateTransitionCommand(
                     user_id=user_id,
@@ -265,7 +271,7 @@ class RaidService:
                     state_type="行为",
                     target_state_id=self._state_id,
                     context={"讨伐编号": session_id, "发起者": owner},
-                ))).mutation
+                ), snapshot=state_snapshots.get(user_id))).mutation
             )
             player = replace(await self._character.combatant(user_id), group_id=f"玩家编组:{user_id}")
             members = [player.id]
@@ -332,8 +338,18 @@ class RaidService:
             "战报": materialize(result.report or {}),
         }
         operations = [StateMutation(owner, SESSION_STATE, session_id, session, 0), *transition_operations]
+        # 「最近讨伐」的版本号一次读齐（满员 15 人时原先是 15 次 `get`）。
+        latest_rows = {
+            snapshot.address.user_id: snapshot
+            for snapshot in await self._database.get_many(
+                tuple(
+                    StateAddress(user_id, LATEST_STATE, "main")
+                    for user_id in dict.fromkeys(participants)
+                )
+            )
+        }
         for user_id in participants:
-            latest = await self._database.get(StateAddress(user_id, LATEST_STATE, "main"))
+            latest = latest_rows.get(user_id)
             operations.append(StateMutation(user_id, LATEST_STATE, "main", {"发起者": owner, "讨伐编号": session_id}, latest.version if latest else 0))
         try:
             receipt = await self._database.commit(TransactionCommand(owner, command.request_id, "讨伐开始", tuple(operations), {"讨伐编号": session_id}))
