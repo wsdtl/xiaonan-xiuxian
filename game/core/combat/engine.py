@@ -81,6 +81,40 @@ class BattleEngine(AbilityRuntime):
             sys.setrecursionlimit(RECURSION_LIMIT)
         templates = rules.pop("构筑模板库", None)
         self.catalog = CombatCatalog.from_mapping(rules, templates)
+        self._attribute_defaults = {
+            name: float(definition.get("默认值", 0.0))
+            for name, definition in self.catalog.attributes.items()
+        }
+        self._event_names = frozenset(self.catalog.events)
+        self._event_depth_limit = int(
+            self.catalog.action_rules.get("事件链深度上限", AbilityRuntime.MAX_EVENT_DEPTH)
+        )
+        self._ability_depth_limit = int(
+            self.catalog.action_rules.get("能力链深度上限", AbilityRuntime.MAX_ABILITY_DEPTH)
+        )
+        # 资源定义在战斗期间只读；资源结算是高频路径，避免每次通过目录映射再做
+        # 一层动态查找，同时保留未登记资源的原有报错。
+        self._resource_definitions = dict(self.catalog.resources)
+        # 恢复资源是最密集的原子路径之一。字段名与上限属性均来自冻结的资源定义，
+        # 提前摊平后，战斗内每次读取只需一次资源名查表，仍保留未知资源的报错边界。
+        self._resource_runtime = {
+            name: (
+                definition,
+                AbilityRuntime._RESOURCE_FIELDS.get(name),
+                str(definition.get("上限属性") or ""),
+                float(definition.get("最低值", 0.0) or 0.0),
+            )
+            for name, definition in self._resource_definitions.items()
+        }
+        five_elements = self.catalog.five_elements
+        self._element_generating = {
+            str(item["来源"]): str(item["目标"])
+            for item in five_elements.get("相生", ())
+        }
+        self._element_overcoming = {
+            str(item["来源"]): str(item["目标"])
+            for item in five_elements.get("相克", ())
+        }
         # `时序.来源层级` 只由装配期的静态内容决定（启动期已校验：来源非空不重复、序位非负
         # 不重复），而派发监听与排主动技能一场要问它 10 万次（见 `_source_layer`），所以
         # 在装配期一次摊成「来源 → 序位」。`setdefault` 保留**第一条**命中的来源，与原先
@@ -194,6 +228,7 @@ class BattleEngine(AbilityRuntime):
         field: PreparedCombatField | None = None,
         formations: tuple[PreparedFormation, ...] = (),
         pace_percent: float | None = None,
+        event_capture_filter: frozenset[str] | None = None,
     ) -> CombatResult:
         """跑一场。
 
@@ -229,6 +264,13 @@ class BattleEngine(AbilityRuntime):
             left_team=left_fighters,
             right_team=right_fighters,
             formations=runtime_formations,
+            event_capture_filter=event_capture_filter,
+            event_capture_zero_change_kinds=(
+                frozenset(str(definition.get("恢复后事件") or "资源恢复后")
+                          for definition in self._resource_definitions.values())
+                | {"状态层数变化后", "行动条变化后"}
+                if event_capture_filter is not None else frozenset()
+            ),
         )
         context.engine = self
         context.action_progress = {fighter.id: 0.0 for fighter in context.fighters}
@@ -255,7 +297,8 @@ class BattleEngine(AbilityRuntime):
                 context.action_number += 1
                 context.trigger_counts.clear()
                 context.saved_results.clear()
-                self._take_action(context, actor)
+                with self.root_chain(context):
+                    self._take_action(context, actor)
                 if context.action_number >= max(1, int(action_limit)):
                     break
         left_alive = [
@@ -292,6 +335,7 @@ class BattleEngine(AbilityRuntime):
             right=right_results[0] if right_results else self._fighter_result(right_anchor),
             actions=context.action_number,
             events=tuple(context.events),
+            total_event_count=context.event_count,
             trigger_activations=sum(context.battle_trigger_counts.values()),
             left_team=left_results,
             right_team=right_results,
@@ -554,6 +598,11 @@ class BattleEngine(AbilityRuntime):
         )
 
     def _take_action(self, context: BattleContext, actor: Fighter) -> None:
+        # 仅持有者自己的主行动刷新其预算；其他人的行动、追加攻击不刷新。
+        context.support_window = {
+            key: value for key, value in context.support_window.items()
+            if key[0] != actor.id
+        }
         target = context.opponent_of(actor)
         context.event(
             "行动开始",
@@ -1482,7 +1531,13 @@ class BattleEngine(AbilityRuntime):
             )
             return False
         target = frame.target
-        snapshot = self._transaction_snapshot(context)
+        # 没有代价且失败不回滚时，没有任何分支会读取事务快照。
+        # 触发技忽略代价的情况也相同；其余情况仍在付代价前保存全场。
+        snapshot = (
+            self._transaction_snapshot(context)
+            if skill.rollback_on_failure or (not ignore_cost and (spirit_cost > 0 or skill.costs))
+            else None
+        )
         if not self._pay_skill_costs(
             context,
             actor,
@@ -2056,6 +2111,7 @@ class BattleEngine(AbilityRuntime):
     def _advance_lifecycles(self, context, actor):
         kept = []
         dropped_with_listeners = False
+        dropped_with_rules = False
         for status in actor.statuses:
             if status.duration_unit == "状态承受者行动":
                 status.remaining_turns -= 1
@@ -2070,6 +2126,7 @@ class BattleEngine(AbilityRuntime):
             # 监听表只装监听节点：掉的是没挂监听的状态，表不用重编（见
             # `AbilityRuntime._mark_listeners_dirty_for_status`）。
             dropped_with_listeners = dropped_with_listeners or bool(status.listeners)
+            dropped_with_rules = dropped_with_rules or bool(status.rules)
             context.event(
                 "移除状态后",
                 actor,
@@ -2080,7 +2137,7 @@ class BattleEngine(AbilityRuntime):
             )
         if dropped_with_listeners:
             context.mark_listener_index_dirty()
-        if len(kept) != len(actor.statuses):
+        if dropped_with_rules:
             # 掉了状态：规则表缓存的依据变了（见 `_container_rules`）。
             context.status_rules_version = (
                 int(getattr(context, "status_rules_version", 0)) + 1

@@ -6,11 +6,12 @@ import bisect
 import copy
 import math
 from collections.abc import Mapping
-from itertools import chain
-from operator import itemgetter
+from itertools import chain, filterfalse
+from operator import attrgetter, itemgetter
 from typing import Any
 
 from .contracts import BattleEvent
+from .chains import ChainRuntime, response_level
 from .foundation import EVENT_LISTENER_SORT_ORDER
 from .models import (
     CombatObject,
@@ -18,10 +19,13 @@ from .models import (
     Fighter,
     Skill,
     StatusState,
-    attribute_ratio,
+    ModifierMap,
+    copy_definition,
+    compile_definition_copy,
     copy_skills,
     copy_value,
     record_values,
+    same_definition,
 )
 
 #: 目标范围名 -> `_target_select` 里的分支名。
@@ -93,6 +97,16 @@ _LISTENER_ENTRY_FIELDS = (
     "构筑实例",
     "节点",
     "元素构成",
+    "条件",
+    "行动上限",
+    "战斗上限",
+    "效果",
+    "条件确定性",
+    "激活键",
+    "响应等级",
+    "根链上限",
+    "结算阶段",
+    "同源根链上限",
 )
 _LISTENER_ENTRY_LEN = len(_LISTENER_ENTRY_FIELDS)
 
@@ -123,11 +137,55 @@ class _CandidateList(list):
     对不上就逐条问；反过来「当它一定筛过、于是干脆不判定」会**静默漏触发**。
     """
 
-    __slots__ = ("filtered_version",)
+    __slots__ = ("filtered_version", "uncapped", "count_stamp")
 
     def __init__(self, values=(), *, filtered_version: int) -> None:
         super().__init__(values)
         self.filtered_version = filtered_version
+        self.uncapped = None
+        self.count_stamp = None
+
+    def available(self, context):
+        # 短表也可能在名额耗尽后被重复派发数千次；同样缓存耗尽结果，
+        # 让空候选直接返回，不再反复进事件栈和逐条检查名额。
+        if not self:
+            return self
+        stamp = self.count_stamp
+        budget_version = context.listener_budget_version
+        if (stamp is None or stamp[0] != context.action_number
+                or stamp[1] is not context.trigger_counts or stamp[2] is not context.battle_trigger_counts
+                or stamp[3] != context.chain_serial or stamp[4] is not context.chain_counts
+                or stamp[6] is not context.support_window):
+            self.uncapped = None
+        elif (self.uncapped is not None and not self.uncapped) or stamp[5] == budget_version:
+            # 没有新监听耗尽名额，上一轮筛选结果仍有效。长候选表会在同一根链内经历很多
+            # 没有监听成功的事件；不必为这些事件重复扫描整张候选表。
+            # 若整表已经耗尽，其他监听继续耗费名额也不会使本表重新可用。
+            return self if self.uncapped is None else self.uncapped
+        # 同一行动/根链中名额单调消耗，只需复筛上次尚未耗尽的条目。
+        # 回滚会替换计数字典，上面的身份检查会恢复整表。
+        self.count_stamp = (context.action_number, context.trigger_counts, context.battle_trigger_counts,
+                            context.chain_serial, context.chain_counts, budget_version, context.support_window)
+        counts = context.trigger_counts
+        battle_counts = context.battle_trigger_counts
+        chain_counts = context.chain_counts
+        support_counts = context.support_window
+        values = self if self.uncapped is None else self.uncapped
+        uncapped = [pair for pair in values if not (
+            chain_counts.get(pair[1][13], 0) >= (
+                pair[1][15] if len(pair[1]) > 15
+                else int((pair[1][6] or {}).get("每条根链最多触发", 1) or 0)
+            ) > 0
+        ) and (not pair[1][12] or not (
+            pair[1][9] and counts.get(pair[1][13], 0) >= pair[1][9]
+            or pair[1][10] and battle_counts.get(pair[1][13], 0) >= pair[1][10]))
+            and not (
+                (limit := int((pair[1][6] or {}).get("自身行动间隔最多触发", 0) or 0))
+                and support_counts.get(pair[1][13], 0) >= limit
+            )]
+        if len(uncapped) != len(values):
+            self.uncapped = uncapped
+        return self if self.uncapped is None else self.uncapped
 
 
 class _ListenerSink:
@@ -147,11 +205,13 @@ class _ListenerSink:
         self,
         engine: Any,
         order: tuple[str, ...],
-        participant_order: Mapping[str, int],
+        participant_order: Mapping[str, Any],
+        participant_order_fallback: Any = None,
     ) -> None:
         self.engine = engine
         self.order = order
         self.participant_order = participant_order
+        self.participant_order_fallback = len(participant_order) if participant_order_fallback is None else participant_order_fallback
         self.grouped: dict[str, list[tuple[Any, ...]]] = {}
 
     def add(
@@ -195,10 +255,11 @@ class _ListenerSink:
         # `(能力序号, 效果序号)` 一对）。这张布局的出处是 `foundation.EVENT_LISTENER_SORT_ORDER`，
         # 启动期按顺序逐字校验过；改那张单子时这里要跟着改（`PARTICIPANT_ORDER_INDEX` 自动跟着走）。
         key = (
+            -response_level(node),
             self.engine._source_layer(source_category),
             -int(node.get("优先级", 0)),
             int(settlement_order),
-            self.participant_order.get(owner.id, len(self.participant_order)),
+            self.participant_order.get(owner.id, self.participant_order_fallback),
             int(build_order),
             str(item_id),
             (int(ability_order), int(effect_order)),
@@ -214,22 +275,44 @@ class _ListenerSink:
                 str(build_instance),
                 node,
                 dict(element_composition or {"无相": 100}),
+                node.get("条件") or (),
+                int(node.get("每次行动最多触发", 0) or 0),
+                int(node.get("每场战斗最多触发", 0) or 0),
+                node.get("效果") or (),
+                self.engine._listener_conditions_deterministic(node.get("条件") or ()),
+                (owner.id, activation_budget),
+                response_level(node),
+                int(node.get("每条根链最多触发", 1) or 0),
+                str(node.get("结算阶段") or ""),
+                int(node.get("同一事件来源每条根链最多触发", 0) or 0),
             )
         )
 
 
-class AbilityRuntime:
+class AbilityRuntime(ChainRuntime):
     """只实现组合语义，不决定具体功法内容。"""
 
     MAX_EVENT_DEPTH = 32
     MAX_ABILITY_DEPTH = 64
     MAX_REPEAT = 100
     MAX_TRIGGERED_SKILLS = 8
+    _condition_type_aliases = {"资源类型": "资源", "行动类型": "行动类型", "技能类型": "技能类型"}
+    _executors_using_event_context = frozenset({
+        "顺序执行", "条件执行", "随机执行", "遍历目标", "重复执行", "尝试执行", "事务执行",
+        "造成伤害", "恢复资源", "消耗资源", "支付代价", "设置资源", "转移资源",
+        "转移状态", "修改构筑计量", "转移伤害", "修改事件数值", "记录战斗事实",
+        "保存结果", "回放效果",
+    })
 
     #: `时序.来源层级` 在装配期摊成的「来源 → 序位」（由 `BattleEngine.__init__` 填，
     #: 见 `_source_layer`）。类上先留一份空的：这样任何构造路径下 `_source_layer`
     #: 都只会（在查不到时）报 `ValueError`，不会冒出 `AttributeError`。
     _source_layers: Mapping[str, int] = {}
+    _element_generating: Mapping[str, str] = {}
+    _element_overcoming: Mapping[str, str] = {}
+    _event_names: frozenset[str] = frozenset()
+    _event_depth_limit: int = MAX_EVENT_DEPTH
+    _ability_depth_limit: int = MAX_ABILITY_DEPTH
 
     def _execute_mechanism(
         self,
@@ -243,7 +326,7 @@ class AbilityRuntime:
         event_values: Mapping[str, Any] | None = None,
         tags: tuple[str, ...] = (),
     ) -> bool:
-        depth_limit = int(self.catalog.action_rules.get("能力链深度上限", self.MAX_ABILITY_DEPTH))
+        depth_limit = self._ability_depth_limit
         if context.ability_depth >= depth_limit:
             # 到顶不是报错，是**这一层不再往下执行**：一条合法但很深的连锁（返照家族的
             # `资变` ↔ `伤后` 自环会跨 9 张真意叠上去）不该让整场战斗炸掉。留痕，便于事后审。
@@ -262,68 +345,83 @@ class AbilityRuntime:
         # **13,259 次调用 / 11,001 次命中 / 现场 10.9 ms**。交给处理器的仍是下面 `dict(effect)`
         # 那份副本，缓存不碰它。
         # 这里**不必判 `context is None`**：上面已经读过 `context.ability_depth`，真为 None 早炸了。
-        node = context.ability_node_cache.get(id(effect))
-        if node is None or node.values is not effect:
+        cached = context.ability_handler_cache.get(id(effect))
+        if cached is None or cached[0] is not effect:
             node = self.catalog.parse_node(effect)
-            context.ability_node_cache[id(effect)] = node
-        effective = dict(effect)
-        if (
-            node.executor in {"造成伤害", "恢复资源"}
-            and "属性构成" not in effective
-            and context.current_element_composition
-        ):
-            effective["属性构成"] = dict(context.current_element_composition)
-        handler = self._ability_handlers.get(node.executor)
-        if handler is None:
-            raise ValueError(f"战斗核心未实现执行器：{node.executor or '<空>'}")
-        before_events = len(context.events)
+            handler = self._ability_handlers.get(node.executor)
+            if handler is None:
+                raise ValueError(f"战斗核心未实现执行器：{node.executor or '<空>'}")
+            if getattr(handler, '__func__', None) is AbilityRuntime._ability_conditional:
+                handler = self._compile_conditional(effect)
+            cached = (effect, node, handler, node.executor in self._executors_using_event_context,
+                      node.executor in {'造成伤害', '恢复资源'} and '属性构成' not in effect,
+                      node.category == '效果' and node.executor not in {'回放效果', '保存结果'})
+            context.ability_handler_cache[id(effect)] = cached
+        _, node, handler, uses_event, needs_composition, keeps_history = cached
+        effective = effect
+        if needs_composition and context.current_element_composition:
+            effective = dict(effect)
+            effective['属性构成'] = dict(context.current_element_composition)
+        before_events = context.event_count
         previous_result = context.last_result
         context.ability_depth += 1
         try:
-            result = handler(
-                context,
-                source,
-                target,
-                effective,
-                multiplier,
-                event_amount=event_amount,
-                event_values=dict(event_values or {}),
-                tags=tuple(tags),
-            )
+            if uses_event:
+                result = handler(
+                    context,
+                    source,
+                    target,
+                    effective,
+                    multiplier,
+                    event_amount=event_amount,
+                    event_values=event_values or {},
+                    tags=tags if type(tags) is tuple else tuple(tags),
+                )
+            else:
+                result = handler(context, source, target, effective, multiplier)
         finally:
             context.ability_depth -= 1
         success = True if result is None else bool(result)
+        # 原子执行器没有产生新详情时清空旧详情；每次都替换对象，让外层组合
+        # 执行器能够按身份判断子效果是否产生了结果。原地更新会混入前次伤害。
         details = context.last_result if context.last_result is not previous_result else {}
         context.last_result = {
             **details,
             "成功": success,
-            "新增事件数": len(context.events) - before_events,
+            "新增事件数": context.event_count - before_events,
             "能力": node.ability,
             "执行器": node.executor,
         }
-        if node.category == "效果" and node.executor not in {"回放效果", "保存结果"}:
-            # `effective` 是本次调用新造的字典，除了这条历史之外没有别的持有者；
-            # 执行器只读它（改写技能/状态都是「先深拷、再换字段」），而读历史的一方
-            # （`_ability_replay_effect`）自己会先深拷一份。所以这里不必再拷一次。
+        if keeps_history:
+            # 执行器只读节点（改写技能/状态都是「先深拷、再换字段」），而读历史的一方
+            # （`_ability_replay_effect`）自己会先深拷一份，所以这里不必再拷一次。
+            # 失败效果仍占用历史窗口位置以保持淘汰时序，但只留失败标记；回放只读取成功条目。
             context.effect_history.append(
                 {
                     "来源": source.id,
                     "目标": target.id,
                     "节点": effective,
                     "倍率": multiplier,
-                    "成功": success,
+                    "成功": True,
                 }
+                if success else {"成功": False}
             )
             del context.effect_history[:-100]
         return success
 
-    def _run_effects(self, context, source, target, effects, multiplier, **kwargs) -> bool:
+    def _run_effects(self, context, source, target, effects, multiplier, *,
+                     event_amount=0.0, event_values=None, tags=()) -> bool:
         # 传**原节点**而不是 `dict(child)`：`_execute_mechanism` 自己会造一份 `effective`
         # 再改，节点本身不动；而 `parse_node` 按对象身份记忆化，每次现造一个字典就等于
         # 每次都缓存不中。
-        for child in effects or ():
-            if not self._execute_mechanism(
-                context, source, target, child, multiplier, **kwargs
+        children = effects or ()
+        execute = self._execute_mechanism
+        shared_values = event_values or {}
+        shared_tags = tags if type(tags) is tuple else tuple(tags)
+        for child in children:
+            if not execute(
+                context, source, target, child, multiplier,
+                event_amount=event_amount, event_values=shared_values, tags=shared_tags,
             ):
                 return False
         return True
@@ -348,6 +446,37 @@ class AbilityRuntime:
         )
         branch = effect.get("成立效果" if allowed else "不成立效果") or ()
         return self._run_effects(context, source, target, branch, multiplier, **kwargs)
+
+    def _compile_conditional(self, effect):
+        conditions = effect.get("条件") or ()
+        plan = self._compile_condition_sequence(conditions)
+        yes, no = effect.get("成立效果") or (), effect.get("不成立效果") or ()
+        if all(raw is None for raw, _, _ in plan):
+            branch = yes if all(handler for _, handler, _ in plan) else no
+            def execute_constant(context, source, target, _effect, multiplier, *,
+                                 event_amount=0.0, event_values=None, tags=()):
+                if not branch:
+                    return True
+                return self._run_effects(
+                    context, source, target, branch, multiplier,
+                    event_amount=event_amount, event_values=event_values, tags=tags,
+                )
+            return execute_constant
+
+        def execute(context, source, target, _effect, multiplier, *,
+                    event_amount=0.0, event_values=None, tags=()):
+            allowed = not conditions or self._evaluate_condition_plan(
+                context, source, target, plan, event_amount, event_values or {}, tags
+            )
+            branch = yes if allowed else no
+            if not branch:
+                return True
+            return self._run_effects(
+                context, source, target, branch, multiplier,
+                event_amount=event_amount, event_values=event_values, tags=tags,
+            )
+
+        return execute
 
     def _ability_random(self, context, source, target, effect, multiplier, **kwargs):
         options = list(effect.get("选项") or ())
@@ -445,11 +574,21 @@ class AbilityRuntime:
             "progress": dict(context.action_progress),
             "counters": dict(context.ability_counters),
             "saved": copy.deepcopy(context.saved_results),
-            "event_count": len(context.events),
-            "history_count": len(context.effect_history),
+            "event_count": context.event_count,
+            "captured_event_count": len(context.events),
+            # 历史窗口会从头淘汰旧条目，不能只保存长度并截尾恢复。
+            # 条目发布后只读；回放方另做深拷，因此这里只保存窗口副本。
+            "effect_history": list(context.effect_history),
             "rng_state": context.rng.getstate(),
             "trigger_counts": dict(context.trigger_counts),
+            "support_window": dict(context.support_window),
             "battle_trigger_counts": dict(context.battle_trigger_counts),
+            "chain_counts": dict(context.chain_counts),
+            "chain_exhausted": set(context.chain_exhausted),
+            "chain_source_counts": dict(context.chain_source_counts),
+            "chain_pending": list(context.chain_pending),
+            "chain_queued": set(context.chain_queued),
+            "battle_rule_serial": context.battle_rule_serial,
             "judgement_overrides": copy.deepcopy(context.judgement_overrides),
             "action_intent": copy.deepcopy(context.action_intent),
             "last_result": copy.deepcopy(context.last_result),
@@ -488,19 +627,51 @@ class AbilityRuntime:
     )
     #: 回滚点里按「列表浅拷」处理的字段。
     _SNAPSHOT_LISTS = ("passives", "tactic")
+    _SNAPSHOT_CONTAINERS = frozenset((*_SNAPSHOT_DICTS, *_SNAPSHOT_LISTS,
+                                    "statuses", "skills", "base_form_skills", "tags", "rules"))
+    _SNAPSHOT_SCALAR_FIELDS = tuple(filterfalse(
+        (_SNAPSHOT_CONTAINERS | {"rules_cache"}).__contains__, Fighter.__slots__
+    ))
+    _SNAPSHOT_SCALAR_GETTER = attrgetter(*_SNAPSHOT_SCALAR_FIELDS)
+
+    @staticmethod
+    def _snapshot_instances(values):
+        # 快照只需要字段状态，无须先制造几千个临时 Skill/StatusState 对象。
+        # 保留类型与独立字段表，真正回滚时才重建对象；字段的浅拷语义不变。
+        return [value.snapshot_state() for value in values]
+
+    @staticmethod
+    def _restore_instances(values):
+        restored = []
+        for kind, state in values:
+            value = kind.__new__(kind)
+            value.__dict__.update(state)
+            restored.append(value)
+        return restored
 
     @staticmethod
     def _snapshot_fighter(fighter) -> dict[str, Any]:
-        import copy as _copy
-
-        scalars = {
-            key: value
-            for key, value in fighter.__dict__.items()
-            if key not in AbilityRuntime._SNAPSHOT_DICTS
-            and key not in AbilityRuntime._SNAPSHOT_LISTS
-            and key not in {"statuses", "skills", "base_form_skills", "tags", "rules"}
-            and not isinstance(value, dict | list | set)
-        }
+        if type(fighter) is Fighter:
+            # 固定字段批量读取；大多数尝试成功，不必在每份快照上逐字段筛类型。
+            # 恢复时仍跳过原来的可变值。规则缓存通常是字典，不额外保留它。
+            scalars = dict(zip(AbilityRuntime._SNAPSHOT_SCALAR_FIELDS,
+                               AbilityRuntime._SNAPSHOT_SCALAR_GETTER(fighter)))
+            if not isinstance(fighter.rules_cache, (dict, list, set)):
+                scalars['rules_cache'] = fighter.rules_cache
+            scalars.update({key: value for key, value in fighter.__dict__.items()
+                            if key not in AbilityRuntime._SNAPSHOT_CONTAINERS
+                            and not isinstance(value, (dict, list, set))})
+        else:
+            # 扩展子类可能自定义属性读取，保留原读取顺序和筛选行为。
+            scalars = {
+                key: value
+                for key, value in chain(
+                    ((key, getattr(fighter, key)) for key in Fighter.__slots__),
+                    fighter.__dict__.items(),
+                )
+                if key not in AbilityRuntime._SNAPSHOT_CONTAINERS
+                and not isinstance(value, (dict, list, set))
+            }
         return {
             "scalars": scalars,
             "dicts": {
@@ -509,32 +680,31 @@ class AbilityRuntime:
             },
             "lists": {key: list(getattr(fighter, key)) for key in AbilityRuntime._SNAPSHOT_LISTS},
             "tags": set(fighter.tags),
-            "statuses": [_copy.copy(value) for value in fighter.statuses],
-            "skills": [_copy.copy(value) for value in fighter.skills],
+            "statuses": AbilityRuntime._snapshot_instances(fighter.statuses),
+            "skills": AbilityRuntime._snapshot_instances(fighter.skills),
             "base_form_skills": (
                 None
                 if fighter.base_form_skills is None
-                else [_copy.copy(value) for value in fighter.base_form_skills]
+                else AbilityRuntime._snapshot_instances(fighter.base_form_skills)
             ),
         }
 
     @staticmethod
     def _restore_fighter(fighter, snapshot: Mapping[str, Any]) -> None:
-        import copy as _copy
-
         for key, value in snapshot["scalars"].items():
-            setattr(fighter, key, value)
+            if not isinstance(value, (dict, list, set)):
+                setattr(fighter, key, value)
         for key, value in snapshot["dicts"].items():
             setattr(fighter, key, dict(value))
         for key, value in snapshot["lists"].items():
             setattr(fighter, key, list(value))
         fighter.tags = set(snapshot["tags"])
-        fighter.statuses = [_copy.copy(value) for value in snapshot["statuses"]]
-        fighter.skills = [_copy.copy(value) for value in snapshot["skills"]]
+        fighter.statuses = AbilityRuntime._restore_instances(snapshot["statuses"])
+        fighter.skills = AbilityRuntime._restore_instances(snapshot["skills"])
         fighter.base_form_skills = (
             None
             if snapshot["base_form_skills"] is None
-            else [_copy.copy(value) for value in snapshot["base_form_skills"]]
+            else AbilityRuntime._restore_instances(snapshot["base_form_skills"])
         )
 
     @staticmethod
@@ -556,11 +726,19 @@ class AbilityRuntime:
         context.action_progress = dict(snapshot["progress"])
         context.ability_counters = dict(snapshot["counters"])
         context.saved_results = copy.deepcopy(snapshot["saved"])
-        del context.events[snapshot["event_count"]:]
-        del context.effect_history[snapshot["history_count"]:]
+        context.event_count = snapshot["event_count"]
+        del context.events[snapshot["captured_event_count"]:]
+        context.effect_history[:] = snapshot["effect_history"]
         context.rng.setstate(snapshot["rng_state"])
         context.trigger_counts = dict(snapshot["trigger_counts"])
+        context.support_window = dict(snapshot["support_window"])
         context.battle_trigger_counts = dict(snapshot["battle_trigger_counts"])
+        context.chain_counts = dict(snapshot["chain_counts"])
+        context.chain_exhausted = set(snapshot["chain_exhausted"])
+        context.chain_source_counts = dict(snapshot["chain_source_counts"])
+        context.chain_pending = list(snapshot["chain_pending"])
+        context.chain_queued = set(snapshot["chain_queued"])
+        context.battle_rule_serial = snapshot["battle_rule_serial"]
         context.judgement_overrides = copy.deepcopy(snapshot["judgement_overrides"])
         context.action_intent = copy.deepcopy(snapshot["action_intent"])
         context.last_result = copy.deepcopy(snapshot["last_result"])
@@ -583,11 +761,12 @@ class AbilityRuntime:
         """状态上的监听与锁定技都跟着状态生灭：在这里统一把版本号推一格。
 
         - 监听：只有真挂了 `监听` 的状态才需要重编监听表（没有监听的状态对表没有贡献）；
-        - 锁定技：**无条件**推一格——`_container_rules` 的记忆化按这个版本号失效，
-          推一格很便宜，漏推一格就会拿到过期的规则表。
+        - 锁定技：只有状态携带规则才推一格；无规则状态不改变规则集合。
+          回滚会替换状态对象，因此仍整体作废规则缓存。
         """
 
-        context.status_rules_version = int(getattr(context, "status_rules_version", 0)) + 1
+        if status.rules:
+            context.status_rules_version = int(getattr(context, "status_rules_version", 0)) + 1
         if status.listeners:
             context.mark_listener_index_dirty()
 
@@ -610,7 +789,8 @@ class AbilityRuntime:
         sink = _ListenerSink(
             engine=self,
             order=tuple(self.catalog.timing["事件监听"]["排序"]),
-            participant_order=context.fighter_order,
+            participant_order=context.listener_fighter_order,
+            participant_order_fallback=(2, 0),
         )
         self._collect_fighter_listeners(context, sink)
         self._collect_field_listeners(context, sink)
@@ -620,72 +800,105 @@ class AbilityRuntime:
             event_name: tuple(sorted(values, key=lambda item: item[0]))
             for event_name, values in sink.grouped.items()
         }
+        membership = tuple((id(fighter), fighter.id, fighter.side) for fighter in context.fighters)
+        previous_index = context.listener_index
+        unchanged = set()
+        previous_membership = context.listener_membership
+        # 仅新增单位且已有单位的身份/阵营不变时，未变的监听仍可复用。
+        # 新增阵营会改变敌方分桶，成员移除、换阵营也必须重新建立路由。
+        if previous_membership == membership or (
+            previous_membership
+            and set(previous_membership) <= set(membership)
+            and {row[2] for row in previous_membership} == {row[2] for row in membership}
+        ):
+            for kind, entries in ordered.items():
+                previous = previous_index.get(kind, ())
+                if len(previous) == len(entries) and all(a is b for a, b in zip(previous, entries)):
+                    unchanged.add(kind)
+        context.listener_membership = membership
         context.listener_index = ordered
+        context.listener_max_levels = {
+            event: max(entry[14] for entry in entries) for event, entries in ordered.items()
+        }
         # 布局一处定义、重建后逐条核（规矩 ⑥）：新加的字段若只加在造的一侧、忘了读的一侧，
         # 这里就会当场抛错，而不是静默按错位的下标读下去。
         _validate_listener_entries(ordered)
         # 兜底再推一格：真正换表也算一次作废（作废点一律走 `mark_listener_index_dirty`，
         # 这里只是防「有人直接置脏」——多推一格只慢不错）。
         context.listener_table_version += 1
-        # 分桶：值里带上**它在整张排序表里的位次**，合并时按位次取，顺序与整张表逐条一致。
-        # `ordered[事件名]` 本身就是按位次排好的，所以**顺着它遍历一趟直接写进最终桶**：
-        # 原先分两趟（先按持有者归堆、再按侧并表），第二趟每次「并表」都要把同一个事件
-        # 的那批条目**重新排一遍**，而它要的顺序正是这一趟的遍历顺序——那份排序是白花的。
-        # 每组的「取法键」仍与原先逐字对应（`自身` 按持有者、己方 / 敌方按阵营、
-        # `None` 是「全给」的兜底），连**插入先后**也照旧：自身那一组的编号在前、
-        # `None` 在最后一位；己方 / 敌方那一组 `None` 在前，再按 `sides` 的先后逐个建键
-        # （该侧一条都没有也留一张空表）；`任意` 或不认识的关系只留 `None`。
-        buckets: dict[str, list[tuple[str, str, dict[Any, list[tuple[int, Any]]]]]] = {}
-        sides = tuple(dict.fromkeys(fighter.side for fighter in context.fighters))
-        for event_name, _values in sink.grouped.items():
-            grouped: dict[tuple[str, str], dict[Any, list[tuple[int, Any]]]] = {}
-            # 「自身」那一组的取法键是持有者编号，编号要到条目上才知道，所以它那份
-            # 「全给」先寄在这儿，收完再挂到最后一位（与原先 `{**by_owner, None: …}` 同序）。
-            self_full: dict[tuple[str, str], list[tuple[int, Any]]] = {}
-            for position, entry in enumerate(ordered[event_name]):
-                node = entry[6]
-                role = str(node.get("观察角色") or "来源")
-                relation = str(node.get("阵营关系") or "自身")
-                key = (role, relation)
-                slot = grouped.get(key)
-                if slot is None:
-                    if relation == "自身":
-                        slot = {}
-                        self_full[key] = []
-                    elif relation in {"任意己方", "其他己方", "任意敌方"}:
-                        slot = {None: []}
-                        for side in sides:
-                            slot[side] = []
-                    else:  # 任意（或不认识的关系）：全收，交给动态判定
-                        slot = {None: []}
-                    grouped[key] = slot
-                pair = (position, entry)
-                owner = entry[1]
-                if relation == "自身":
-                    self_full[key].append(pair)
-                    slot.setdefault(owner.id, []).append(pair)
-                elif relation in {"任意己方", "其他己方"}:
-                    slot[None].append(pair)
-                    hits = slot.get(owner.side)
-                    if hits is not None:
-                        hits.append(pair)
-                elif relation == "任意敌方":
-                    slot[None].append(pair)
-                    for side in sides:
-                        if side != owner.side:
-                            hits = slot.get(side)
-                            if hits is not None:
-                                hits.append(pair)
-                else:
-                    slot[None].append(pair)
-            for key, full in self_full.items():
-                grouped[key][None] = full
-            buckets[event_name] = [
-                (role, relation, slot) for (role, relation), slot in grouped.items()
-            ]
-        context.listener_buckets = buckets
+        context.listener_buckets = {kind: buckets for kind, buckets in context.listener_buckets.items() if kind in unchanged}
+        context.listener_roles = {kind: roles for kind, roles in context.listener_roles.items() if kind in unchanged}
+        previous_cache = context.listener_candidate_cache
+        retained = {"table": ordered}
+        if previous_cache.get("table") is previous_index:
+            for key, hit in previous_cache.items():
+                if isinstance(key, tuple) and key[0] in unchanged:
+                    # 未使用的候选无需重造；首次命中时再复制并刷新版本。
+                    retained[key] = hit
+        context.listener_candidate_cache = retained
         context.listener_index_dirty = False
         return context.listener_index
+
+    def _event_listener_buckets(self, context, event_name):
+        cached = context.listener_buckets.get(event_name)
+        if cached is not None:
+            return cached
+        entries = context.listener_index.get(event_name)
+        if not entries:
+            context.listener_buckets[event_name] = ()
+            return ()
+        sides = tuple(dict.fromkeys(fighter.side for fighter in context.fighters))
+        grouped: dict[tuple[str, str], dict[Any, list[tuple[int, Any]]]] = {}
+        # 「自身」那一组的取法键是持有者编号，编号要到条目上才知道，所以它那份
+        # 「全给」先寄在这儿，收完再挂到最后一位（与原先 `{**by_owner, None: …}` 同序）。
+        self_full: dict[tuple[str, str], list[tuple[int, Any]]] = {}
+        for position, entry in enumerate(entries):
+            node = entry[6]
+            role = str(node.get("观察角色") or "来源")
+            relation = str(node.get("阵营关系") or "自身")
+            key = (role, relation)
+            slot = grouped.get(key)
+            if slot is None:
+                if relation == "自身":
+                    slot = {}
+                    self_full[key] = []
+                elif relation in {"任意己方", "其他己方", "任意敌方"}:
+                    slot = {None: []}
+                    for side in sides:
+                        slot[side] = []
+                else:  # 任意（或不认识的关系）：全收，交给动态判定
+                    slot = {None: []}
+                grouped[key] = slot
+            pair = (position, entry)
+            owner = entry[1]
+            if relation == "自身":
+                self_full[key].append(pair)
+                slot.setdefault(owner.id, []).append(pair)
+            elif relation in {"任意己方", "其他己方"}:
+                slot[None].append(pair)
+                hits = slot.get(owner.side)
+                if hits is not None:
+                    hits.append(pair)
+            elif relation == "任意敌方":
+                slot[None].append(pair)
+                for side in sides:
+                    if side != owner.side:
+                        hits = slot.get(side)
+                        if hits is not None:
+                            hits.append(pair)
+            else:
+                slot[None].append(pair)
+        for key, full in self_full.items():
+            grouped[key][None] = full
+        result = [
+            (role, relation, slot) for (role, relation), slot in grouped.items()
+        ]
+        context.listener_roles[event_name] = {
+            role: any(r == role and relation in {'自身', '其他己方'} for r, relation in grouped)
+            for role, _ in grouped
+        }
+        context.listener_buckets[event_name] = result
+        return result
 
     def _event_parties(self, context, frame) -> dict[str, Any]:
         """事件里的「当事人」：观察角色 → 那个人。
@@ -694,12 +907,33 @@ class AbilityRuntime:
         原先每次自己造一份（百万次量级），而造它还要按行动者编号查一次人。
         """
 
-        return {
-            "来源": frame.source,
-            "承受者": frame.target,
-            "行动者": context.fighter_by_id(str(frame.facts.get("行动者") or ""))
-            or frame.source,
-        }
+        actor_id = str(frame.facts.get("行动者") or "")
+        actor = (
+            frame.source
+            if not actor_id or actor_id == frame.source.id
+            else context.fighter_by_id(actor_id) or frame.source
+        )
+        return {"来源": frame.source, "承受者": frame.target, "行动者": actor}
+
+    def _listener_conditions_deterministic(self, conditions) -> bool:
+        """Whether skipping an already-capped listener's conditions preserves RNG state."""
+
+        def visit(value) -> bool:
+            if isinstance(value, Mapping):
+                ability = value.get("能力")
+                if ability is not None:
+                    definition = self.catalog.abilities.get(str(ability))
+                    if definition is None:
+                        return False
+                    executor = str(definition.get("执行器") or "")
+                    if executor in {"概率条件", "随机数值"}:
+                        return False
+                return all(visit(item) for item in value.values())
+            if isinstance(value, (list, tuple)):
+                return all(visit(item) for item in value)
+            return True
+
+        return visit(conditions)
 
     def _listeners_for(self, context, kind: str, frame, parties=None) -> list[tuple[int, Any]]:
         """这一条事件**真正需要问**的监听，带位次、顺序与整张排序表逐条一致。
@@ -728,11 +962,9 @@ class AbilityRuntime:
         版本号一定是这一趟的当前版本；没带这个戳的普通 `list` 一律按「未筛」处理。
         """
 
-        self._compiled_listeners(context)
+        if context.listener_index_dirty:
+            self._compiled_listeners(context)
         version = context.listener_table_version
-        buckets = context.listener_buckets.get(kind)
-        if not buckets:
-            return _CandidateList((), filtered_version=version)
         if parties is None:
             parties = self._event_parties(context, frame)
         table = context.listener_index
@@ -740,10 +972,18 @@ class AbilityRuntime:
         if cache.get("table") is not table:
             cache.clear()
             cache["table"] = table
-        source_ref = parties.get("来源")
-        target_ref = parties.get("承受者")
-        actor_ref = parties.get("行动者")
-        key = (kind, id(source_ref), id(target_ref), id(actor_ref))
+        roles = context.listener_roles.get(kind)
+        source_ref = parties.get("来源") if roles is None or "来源" in roles else None
+        target_ref = parties.get("承受者") if roles is None or "承受者" in roles else None
+        actor_ref = parties.get("行动者") if roles is None or "行动者" in roles else None
+        if roles is not None:
+            if source_ref is not None and not roles.get('来源'):
+                source_ref = source_ref.side
+            if target_ref is not None and not roles.get('承受者'):
+                target_ref = target_ref.side
+            if actor_ref is not None and not roles.get('行动者'):
+                actor_ref = actor_ref.side
+        key = (kind, id(source_ref), id(target_ref), id(actor_ref), context.chain_level)
         hit = cache.get(key)
         if (
             hit is not None
@@ -751,8 +991,20 @@ class AbilityRuntime:
             and hit[1] is target_ref
             and hit[2] is actor_ref
         ):
-            return hit[3]
+            pairs = hit[3]
+            if isinstance(pairs, _CandidateList) and pairs.filtered_version != version:
+                refreshed = _CandidateList(pairs, filtered_version=version)
+                # 剩余候选只读共享；available 仍核对根链、行动和计数字典身份。
+                refreshed.uncapped = pairs.uncapped
+                refreshed.count_stamp = pairs.count_stamp
+                cache[key] = (source_ref, target_ref, actor_ref, refreshed)
+                pairs = refreshed
+            return pairs
+        buckets = self._event_listener_buckets(context, kind)
+        if not buckets:
+            return _CandidateList((), filtered_version=version)
         groups: list[list[tuple[int, Any]]] = []
+        relations_known = True
         for role, relation, by_key in buckets:
             who = parties.get(role)
             if who is None:
@@ -767,6 +1019,12 @@ class AbilityRuntime:
             else:  # 任意（或不认识的关系）：全收
                 hits = by_key.get(None)
             if hits:
+                if who is None or relation not in {"自身", "任意己方", "其他己方", "任意敌方", "任意"}:
+                    relations_known = False
+                elif relation == "自身":
+                    hits = [pair for pair in hits if pair[1][1] is who]
+                elif relation == "其他己方":
+                    hits = [pair for pair in hits if pair[1][1] is not who]
                 groups.append(hits)
         if not groups:
             filtered = _CandidateList((), filtered_version=version)
@@ -788,17 +1046,20 @@ class AbilityRuntime:
         # 而抛错在原先发生在**派发循环轮到它那一条时**（前面几条的效果已经跑过了）。筛在这里
         # 会把抛错提到循环之前，那就不是「等价改慢」而是改了行为——所以这里一旦抛错，整表退回
         # 未筛（普通 `list`），让循环照原样逐条问、照原样在原来的位置抛。
-        try:
-            kept = [
-                pair
-                for pair in pairs
-                if self._listener_relation_matches(pair[1][1], pair[1][6], parties)
-            ]
-        except ValueError:
+        # 阵营关系已经由桶选择完成；只需在桶内处理身份排除。未知关系仍交还
+        # 派发循环，在原来的监听位置报错，不能提前执行或漏执行前面的监听。
+        if not relations_known:
             fallback = list(pairs)
             cache[key] = (source_ref, target_ref, actor_ref, fallback)
             return fallback
-        filtered = _CandidateList(kept, filtered_version=version)
+        # 响应等级由声明决定，同一派发中执行子链后总会恢复原等级。
+        # 在缓存建立时按等级收窄，省去每次派发扫描永久不具资格的条目。
+        level = context.chain_level
+        if level > 1:
+            pairs = [pair for pair in pairs if (
+                pair[1][14] if len(pair[1]) > 14 else response_level(pair[1][6])
+            ) >= level]
+        filtered = _CandidateList(pairs, filtered_version=version)
         cache[key] = (source_ref, target_ref, actor_ref, filtered)
         return filtered
 
@@ -813,10 +1074,35 @@ class AbilityRuntime:
         状态在后」的先后、连同键值相同的那些的先后，都与原先逐条现收一致。
         """
 
-        for owner in context.fighters:
-            for event_name, values in self._passive_listener_entries(context, owner).items():
+        passive_signature = tuple(
+            (owner.id, owner, tuple(owner.passives), context.listener_fighter_order.get(owner.id, (2, 0)))
+            for owner in context.fighters
+        )
+        cached_passives = context.listener_passive_index
+        if (
+            cached_passives is None
+            or len(cached_passives) != len(passive_signature)
+            or any(
+                cached_passives[index][0] != owner.id
+                or context.fighter_by_id(cached_passives[index][0]) is not owner
+                or len(cached_passives[index][2]) != len(passives)
+                or any(a is not b for a, b in zip(cached_passives[index][2], passives))
+                or cached_passives[index][3] != order
+                for index, (owner_id, owner, passives, order) in enumerate(passive_signature)
+            )
+        ):
+            cached_passives = tuple(
+                (owner.id, self._passive_listener_entries(context, owner), tuple(owner.passives), context.listener_fighter_order.get(owner.id, (2, 0)))
+                for owner in context.fighters
+            )
+            context.listener_passive_index = cached_passives
+        for owner_id, passive_entries, _passives, _order in cached_passives:
+            owner = context.fighter_by_id(owner_id)
+            for event_name, values in passive_entries.items():
                 sink.grouped.setdefault(event_name, []).extend(values)
             for status in owner.statuses:
+                if not status.listeners:
+                    continue
                 item_id = str(status.values.get("战丹编号") or status.name)
                 for index, node in enumerate(status.listeners):
                     sink.add(
@@ -837,7 +1123,7 @@ class AbilityRuntime:
         ①`owner.passives` 里那份**装配期**写死的被动表（`_assemble_passive_skill` 生成，
         条目字段 `监听键` / `结算顺序` / `装配位序` / `物品编号` / `能力序号` / `效果序号` /
         `来源类别` / `构筑实例` / `属性构成` / `节点` 全在里面）；②`owner` 在
-        `context.fighter_order` 里的位次。派生量（排序键、名额键、条目元组）只额外依赖
+        `context.listener_fighter_order` 里的队伍/队内位次。派生量（排序键、名额键、条目元组）只额外依赖
         `engine._source_layers` 与 `catalog.timing`（第 2 步起的装配期常量）。
         这一段在一场里被现收 30~60 遍，每遍 2,800 条上下（实测 99.8% 的
         `_ListenerSink.add` 调用出自它），而内容一遍都没变。
@@ -847,7 +1133,8 @@ class AbilityRuntime:
         照旧命中）。位次**不算失效**：位次只是排序键的第四项，而条目里其余的键与值全是被动表与
         装配期常量的纯函数，所以位次一变只需按位次重拼一遍键（见下面那段）。实测九成的不命中
         都是「只有位次变了」——`add_fighter`（战斗对象入场）与 `_restore_transaction`（回滚）
-        都会 `rebuild_indexes()` 重排位次，一次就能让同侧后面那位的位次整体挪一格。
+        都会 `rebuild_indexes()` 重排位次。如今使用与全局位次同序的队伍/队内位次，
+        己方追加召唤物不再改变敌方键；队内插入、移除或重排仍会使受影响的键失效。
 
         回放：调用方按事件把条目**按原顺序**并进同一张 sink 的同一位置，所以稳定排序的
         先后与逐条现收完全一致。本段之外的动态段（状态监听、战场环境、战斗对象、战场
@@ -856,7 +1143,7 @@ class AbilityRuntime:
         """
 
         cached = context.listener_passive_cache.get(owner.id)
-        order = context.fighter_order.get(owner.id, len(context.fighter_order))
+        order = context.listener_fighter_order.get(owner.id, (2, 0))
         passives = owner.passives
         stamp = tuple(passives)
         # 命中要的是**同一批对象**：持有者身份 + 被动表逐项同一（长度不等即不命中）。
@@ -888,7 +1175,8 @@ class AbilityRuntime:
         sink = _ListenerSink(
             engine=self,
             order=tuple(self.catalog.timing["事件监听"]["排序"]),
-            participant_order=context.fighter_order,
+            participant_order=context.listener_fighter_order,
+            participant_order_fallback=(2, 0),
         )
         for passive in passives:
             for mechanism_id, node in self._passive_listener_nodes(passive):
@@ -950,16 +1238,21 @@ class AbilityRuntime:
         """战场规则声明的监听，归属写明的来源修士。"""
 
         for index, rule in enumerate(context.battle_rules):
+            if "运行编号" not in rule:
+                context.battle_rule_serial += 1
+                rule["运行编号"] = context.battle_rule_serial
+            identity = rule["运行编号"]
             owner = context.fighter_by_id(str(rule.get("来源") or "")) or context.left
             for listener_index, node in enumerate(rule.get("监听") or ()):
                 sink.add(
                     owner,
-                    f"战场:{index}:{listener_index}",
+                    f"战场:{identity}:{listener_index}",
                     node,
                     source_ability=str(rule.get("名称") or "战场规则"),
-                    item_id=f"战场:{index}",
+                    item_id=f"战场:{identity}",
                     ability_order=listener_index,
                     source_category="战场规则",
+                    build_instance=str(rule.get("构筑实例") or ""),
                 )
 
     def _source_layer(self, source: str) -> int:
@@ -979,116 +1272,266 @@ class AbilityRuntime:
             raise ValueError(f"战斗时序未登记来源层级：{source}")
         return layer_order
 
-    def _dispatch_event(self, context, *, kind, source, target, amount=0.0, values=None, tags=(), record=True):
-        depth_limit = int(self.catalog.action_rules.get("事件链深度上限", self.MAX_EVENT_DEPTH))
+    def _dispatch_event(self, context, *, kind, source, target, amount=0.0, values=None, tags=(), record=True, capture=True):
+        if context.chain_active:
+            return self._dispatch_event_body(context, kind=kind, source=source, target=target,
+                                             amount=amount, values=values, tags=tags, record=record, capture=capture)
+        with self.root_chain(context):
+            return self._dispatch_event_body(context, kind=kind, source=source, target=target,
+                                             amount=amount, values=values, tags=tags, record=record, capture=capture)
+
+    def _dispatch_event_body(self, context, *, kind, source, target, amount=0.0, values=None, tags=(), record=True, capture=True, chain_entry=None):
+        depth_limit = self._event_depth_limit
         # 到顶之后**这次事件照旧发生、照旧进战报，只是不再往下触发监听**——见
         # `data/战斗/规则/说明.md` 的「两条链的上限」。留痕：事实里记 `链深度跳过`。
         over_depth = context.event_depth >= depth_limit
-        self.catalog.require_event(kind)
+        if str(kind) not in self._event_names:
+            raise ValueError(f"战斗核心未登记事件：{kind}")
         facts = dict(values or {})
-        facts.setdefault("事件", kind)
-        facts.setdefault("来源", source.id)
-        facts.setdefault("承受者", target.id)
-        facts.setdefault("行动者", source.id)
-        facts.setdefault("原始数值", float(amount))
-        facts.setdefault("当前数值", float(amount))
+        facts.setdefault('事件', kind)
+        facts.setdefault('来源', source.id)
+        facts.setdefault('承受者', target.id)
+        facts.setdefault('行动者', source.id)
+        facts.setdefault('原始数值', float(amount))
+        facts.setdefault('当前数值', float(amount))
+        facts['根链'] = context.chain_serial
+        facts['响应来源等级'] = context.chain_level
         if over_depth:
-            facts["链深度跳过"] = True
+            facts['链深度跳过'] = True
         frame = EventFrame(kind, source, target, facts, set(tags))
+        if context.listener_index_dirty:
+            self._compiled_listeners(context)
+        event_listeners = context.listener_index.get(kind)
+        # 当前等级高于全部监听时没有任何回调能运行，故可使用原有空事件路径。
+        # 显式链尾条目与深度越界仍走原路径；未编译的测试表保守按最高等级处理。
+        if not over_depth and chain_entry is None and (
+            not event_listeners or context.listener_max_levels.get(kind, 3) < context.chain_level
+        ):
+            if record:
+                context.event_count += 1
+                if capture and (context.event_capture_filter is None or kind not in context.event_capture_filter) and not (
+                    kind in context.event_capture_zero_change_kinds
+                    and frame.amount == 0
+                    and "变化前数值" in frame.facts
+                    and frame.facts["变化前数值"] == frame.facts.get("变化后数值")
+                ):
+                    context.events.append(BattleEvent(
+                        turn=context.action_number, kind=kind, source=source.name,
+                        target=target.name, text=kind, amount=round(frame.amount, 3),
+                        values=record_values(self.recorded_facts, frame.facts),
+                        tags=tuple(sorted(frame.tags)), ability=context.current_ability,
+                        source_id=source.id, target_id=target.id,
+                    ))
+            return frame
+        # 候选完全为空时，这条事件只需保留事实与战报。此时没有任何监听能改写
+        # 目标、标签或数值，也没有子事件；先筛候选再压入事件栈，省掉空派发的栈操作。
+        parties = self._event_parties(context, frame)
+        if over_depth:
+            pairs = []
+        else:
+            # 事件类型若没有任何监听，候选缓存、关系筛选和排序都没有意义；
+            # 仍创建并记录事件，只跳过空调度链。监听表本身由静态/动态索引统一提供，
+            # 因此不会漏掉运行时新增的状态监听。
+            pairs = (
+                self._listeners_for(context, kind, frame, parties)
+                if event_listeners
+                else []
+            )
+        # 候选表若已按关系筛过、且监听表版本没变，逐条 `_listener_relation_matches` 就白问
+        # （唯一会变的输入是 `owner.side`，换阵营必重建索引换表 → 版本自增）。
+        # 版本对不上（真的换过表）就退回逐条判定，语义与从前一致。
+        filtered_version = getattr(pairs, "filtered_version", None)
+        if filtered_version == context.listener_table_version:
+            pairs = pairs.available(context)
+        if chain_entry is not None:
+            pairs = [(0, chain_entry)]
+            filtered_version = None
+        if not pairs:
+            if record:
+                context.event_count += 1
+                if capture and (
+                    context.event_capture_filter is None
+                    or kind not in context.event_capture_filter
+                ) and not (
+                    kind in context.event_capture_zero_change_kinds
+                    and frame.amount == 0
+                    and "变化前数值" in frame.facts
+                    and frame.facts["变化前数值"] == frame.facts.get("变化后数值")
+                ):
+                    context.events.append(
+                        BattleEvent(
+                            turn=context.action_number,
+                            kind=kind,
+                            source=source.name,
+                            target=target.name,
+                            text=kind,
+                            amount=round(frame.amount, 3),
+                            values=record_values(self.recorded_facts, frame.facts),
+                            tags=tuple(sorted(frame.tags)),
+                            ability=context.current_ability,
+                            source_id=source.id,
+                            target_id=target.id,
+                        )
+                    )
+            return frame
         context.event_stack.append(frame)
         context.event_depth += 1
         try:
-            # 候选集按「事件当下的当事人」收窄（见 `_listeners_for`）。但监听效果里有一类
-            # **改写事件目标**的动作（`修改事件目标`）：目标一改，先前被收窄掉的那批监听
-            # 里就可能有人重新符合条件。所以目标一变就重算候选，**只补跑位次在后面的
-            # 那些**——位次在前面的，原实现（整张表逐条问一遍）已经问过一遍了，当时不合
-            # 就是不合。补跑仍按位次顺序，所以与「整张表逐条问一遍」逐事件一致。
-            parties = self._event_parties(context, frame)
-            pairs = [] if over_depth else self._listeners_for(context, kind, frame, parties)
-            # 候选表若已按关系筛过、且监听表版本没变，逐条 `_listener_relation_matches` 就白问
-            # （唯一会变的输入是 `owner.side`，换阵营必重建索引换表 → 版本自增）。
-            # 版本对不上（真的换过表）就退回逐条判定，语义与从前一致。
-            filtered_version = getattr(pairs, "filtered_version", None)
+            # 候选集按「事件当下的当事人」收窄。但监听效果里可能改写事件目标；目标一变
+            # 就重算候选，只补跑位次在后面的条目，维持原始排序与既有语义。
             narrowed_target = frame.target
-            index = 0
-            while index < len(pairs):
-                position, entry = pairs[index]
-                index += 1
-                (
-                    _,
-                    owner,
-                    activation_id,
-                    activation_budget,
-                    source_ability,
-                    build_instance,
-                    node,
-                    composition,
-                ) = entry
-                # 同一个节点在这条事件的**每个候补**、以及整场战斗的**多次派发**上都会被反复问
-                # 这三件事（`条件` / 两个触发上限），而它们只是节点的**纯函数**。按对象身份缓存
-                # （命中再核 `is`，`id` 被复用也不会误用）——与 `parse_node` 的 `_node_cache`
-                # 同一手法、同一前提：节点在装配期冻结、一场里不换。取值算法与原先**逐字相同**；
-                # 加新的「每候选都要读的节点字段」时一并加进 `fields` 末尾并在下面解包。
-                fields = context.node_field_cache.get(id(node))
-                if fields is None or fields[0] is not node:
-                    fields = (
-                        node,
-                        node.get("条件") or (),
-                        int(node.get("每次行动最多触发", 0) or 0),
-                        int(node.get("每场战斗最多触发", 0) or 0),
-                    )
-                    context.node_field_cache[id(node)] = fields
-                _, conditions, per_action, per_battle = fields
-                if (
-                    filtered_version is None
-                    or filtered_version != context.listener_table_version
-                ) and not self._listener_relation_matches(owner, node, parties):
-                    continue
-                if conditions and not self._conditions_allow(
-                    context, owner, frame.target, conditions, frame.amount, frame.facts, tuple(frame.tags)
-                ):
-                    continue
-                # 名额按（修士, 词条, 声明）算，不按卡的第几张算。
-                activation = (owner.id, activation_budget)
-                if activation in context.trigger_stack:
-                    continue
-                # 两个触发上限已随 `fields` 一起取好（见上方缓存），这里不再逐候选 `int(node.get(...))`。
-                if per_action and context.trigger_counts.get(activation, 0) >= per_action:
-                    continue
-                if per_battle and context.battle_trigger_counts.get(activation, 0) >= per_battle:
-                    continue
-                context.trigger_counts[activation] = context.trigger_counts.get(activation, 0) + 1
-                context.battle_trigger_counts[activation] = context.battle_trigger_counts.get(activation, 0) + 1
-                context.trigger_stack.add(activation)
-                previous = context.current_ability
-                previous_composition = context.current_element_composition
-                previous_instance = context.current_build_instance
-                context.current_ability = source_ability
-                context.current_build_instance = build_instance
-                context.current_element_composition = dict(composition)
-                try:
-                    self._run_effects(
-                        context,
-                        owner,
-                        frame.target,
-                        node.get("效果") or (),
-                        1.0,
-                        event_amount=frame.amount,
-                        event_values=frame.facts,
-                        tags=tuple(frame.tags),
-                    )
-                finally:
-                    context.current_ability = previous
-                    context.current_build_instance = previous_instance
-                    context.current_element_composition = previous_composition
-                    context.trigger_stack.discard(activation)
-                if frame.target is not narrowed_target:
-                    narrowed_target = frame.target
-                    parties = self._event_parties(context, frame)
-                    pairs = self._listeners_for(context, kind, frame, parties)
-                    # 补跑用的是新候选表：它的「已筛」戳也要跟着换（同一趟里版本可能已经变了）。
-                    filtered_version = getattr(pairs, "filtered_version", None)
-                    index = bisect.bisect_right(pairs, position, key=lambda pair: pair[0])
+            event_tags = tuple(frame.tags)
+            # 普通派发直接迭代候选；只有目标改写时才从新候选表的后续位次继续。
+            rescan = True
+            while rescan:
+                rescan = False
+                for position, entry in pairs:
+                    if len(entry) == _LISTENER_ENTRY_LEN:
+                        level = entry[14]
+                        if level < context.chain_level:
+                            continue
+                        chain_limit = entry[15]
+                        activation = entry[13]
+                        if chain_limit:
+                            if chain_limit == 1:
+                                if activation in context.chain_exhausted:
+                                    continue
+                            elif context.chain_counts.get(activation, 0) >= chain_limit:
+                                continue
+                        (_, owner, activation_id, _activation_budget, source_ability,
+                         build_instance, node, composition, conditions, per_action,
+                         per_battle, effects, deterministic_conditions, activation,
+                         level, chain_limit, settlement_phase, source_chain_limit) = entry
+                    else:
+                        (_, owner, activation_id, _activation_budget, source_ability,
+                         build_instance, node, composition, conditions, per_action,
+                         per_battle, effects, deterministic_conditions, activation) = entry
+                        level = response_level(node)
+                        chain_limit = int(node.get("每条根链最多触发", 1) or 0)
+                        settlement_phase = str(node.get("结算阶段") or "")
+                        source_chain_limit = int(node.get("同一事件来源每条根链最多触发", 0) or 0)
+                        if level < context.chain_level:
+                            continue
+                        if chain_limit:
+                            if chain_limit == 1:
+                                if activation in context.chain_exhausted:
+                                    continue
+                            elif context.chain_counts.get(activation, 0) >= chain_limit:
+                                continue
+                    source_budget_key = None
+                    if source_chain_limit:
+                        source_budget_key = (activation, frame.source.id)
+                        if context.chain_source_counts.get(source_budget_key, 0) >= source_chain_limit:
+                            continue
+                    support_limit = int(node.get("自身行动间隔最多触发", 0) or 0)
+                    if support_limit:
+                        support_key = activation
+                        if context.support_window.get(support_key, 0) >= support_limit:
+                            continue
+                    if (
+                        filtered_version is None
+                        or filtered_version != context.listener_table_version
+                    ) and not self._listener_relation_matches(owner, node, parties):
+                        continue
+                    if settlement_phase == "链尾" and chain_entry is None:
+                        if activation not in context.chain_queued:
+                            context.chain_queued.add(activation)
+                            context.chain_pending.append((entry, kind, source.id, frame.target.id,
+                                                          frame.amount, dict(frame.facts), event_tags))
+                        continue
+                    # 名额按（修士, 词条, 声明）算，不按卡的第几张算。
+                    if deterministic_conditions:
+                        if activation in context.trigger_stack:
+                            continue
+                        if per_action and context.trigger_counts.get(activation, 0) >= per_action:
+                            continue
+                        if per_battle and context.battle_trigger_counts.get(activation, 0) >= per_battle:
+                            continue
+                    if conditions:
+                        # 条件中的构筑计量属于这条监听，而非派发事件的上一条能力。
+                        # 与下方效果执行使用同一作用域；异常也必须还原外层作用域。
+                        previous_condition_instance = context.current_build_instance
+                        context.current_build_instance = build_instance
+                        try:
+                            allowed = self._conditions_allow(
+                                context, owner, frame.target, conditions, frame.amount, frame.facts, event_tags
+                            )
+                        finally:
+                            context.current_build_instance = previous_condition_instance
+                        if not allowed:
+                            continue
+                    if not deterministic_conditions:
+                        if activation in context.trigger_stack:
+                            continue
+                        if per_action and context.trigger_counts.get(activation, 0) >= per_action:
+                            continue
+                        if per_battle and context.battle_trigger_counts.get(activation, 0) >= per_battle:
+                            continue
+                    action_count = context.trigger_counts.get(activation, 0)
+                    battle_count = context.battle_trigger_counts.get(activation, 0)
+                    previous_chain_count = context.chain_counts.get(activation, 0)
+                    context.trigger_counts[activation] = action_count + 1
+                    context.battle_trigger_counts[activation] = battle_count + 1
+                    if support_limit:
+                        support_count = context.support_window.get(support_key, 0) + 1
+                        context.support_window[support_key] = support_count
+                        if support_count == support_limit:
+                            context.listener_budget_version += 1
+                    chain_count = previous_chain_count + 1
+                    context.chain_counts[activation] = chain_count
+                    # 候选表只需在某条监听刚刚耗尽名额时重筛。名额尚有剩余时，
+                    # 计数虽增加，但候选资格没有变化；逐次递增会让每个嵌套事件都重扫整张表。
+                    if (
+                        chain_limit and previous_chain_count < chain_limit <= chain_count
+                        or deterministic_conditions and (
+                            per_action and action_count < per_action <= action_count + 1
+                            or per_battle and battle_count < per_battle <= battle_count + 1
+                        )
+                    ):
+                        context.listener_budget_version += 1
+                    if chain_limit and chain_count >= chain_limit:
+                        context.chain_exhausted.add(activation)
+                    if source_chain_limit:
+                        context.chain_source_counts[source_budget_key] = (
+                            context.chain_source_counts.get(source_budget_key, 0) + 1
+                        )
+                    context.trigger_stack.add(activation)
+                    previous = context.current_ability
+                    previous_composition = context.current_element_composition
+                    previous_instance = context.current_build_instance
+                    previous_level = context.chain_level
+                    context.chain_level = level
+                    context.current_ability = source_ability
+                    context.current_build_instance = build_instance
+                    context.current_element_composition = dict(composition)
+                    try:
+                        self._run_effects(
+                            context,
+                            owner,
+                            frame.target,
+                            effects,
+                            1.0,
+                            event_amount=frame.amount,
+                            event_values=frame.facts,
+                            tags=event_tags,
+                        )
+                    finally:
+                        context.current_ability = previous
+                        context.chain_level = previous_level
+                        context.current_build_instance = previous_instance
+                        context.current_element_composition = previous_composition
+                        context.trigger_stack.discard(activation)
+                    if frame.target is not narrowed_target and chain_entry is None:
+                        narrowed_target = frame.target
+                        parties = self._event_parties(context, frame)
+                        pairs = self._listeners_for(context, kind, frame, parties)
+                        # 补跑用的是新候选表：它的「已筛」戳也要跟着换（同一趟里版本可能已经变了）。
+                        filtered_version = getattr(pairs, "filtered_version", None)
+                        if filtered_version == context.listener_table_version:
+                            pairs = pairs.available(context)
+                        pairs = pairs[bisect.bisect_right(pairs, position, key=_POSITION):]
+                        rescan = True
+                        break
             # 转化目标若已经在结算栈上，这次转化没有意义——那等于重入一个正在结算
             # 的事件。此时**放弃转化**，让原事件按自己的语义继续结算。
             #
@@ -1108,21 +1551,31 @@ class AbilityRuntime:
                 frame.facts["原事件"] = frame.kind
                 frame.facts["事件"] = frame.transformed_kind
             if record and not frame.transformed_kind:
-                context.events.append(
-                    BattleEvent(
-                        turn=context.action_number,
-                        kind=frame.transformed_kind or frame.kind,
-                        source=frame.source.name,
-                        target=frame.target.name,
-                        text=frame.transformed_kind or frame.kind,
-                        amount=round(frame.amount, 3),
-                        values=record_values(self.recorded_facts, frame.facts),
-                        tags=tuple(sorted(frame.tags)),
-                        ability=context.current_ability,
-                        source_id=frame.source.id,
-                        target_id=frame.target.id,
+                context.event_count += 1
+                if capture and (
+                    context.event_capture_filter is None
+                    or frame.kind not in context.event_capture_filter
+                ) and not (
+                    frame.kind in context.event_capture_zero_change_kinds
+                    and frame.amount == 0
+                    and "变化前数值" in frame.facts
+                    and frame.facts["变化前数值"] == frame.facts.get("变化后数值")
+                ):
+                    context.events.append(
+                        BattleEvent(
+                            turn=context.action_number,
+                            kind=frame.transformed_kind or frame.kind,
+                            source=frame.source.name,
+                            target=frame.target.name,
+                            text=frame.transformed_kind or frame.kind,
+                            amount=round(frame.amount, 3),
+                            values=record_values(self.recorded_facts, frame.facts),
+                            tags=tuple(sorted(frame.tags)),
+                            ability=context.current_ability,
+                            source_id=frame.source.id,
+                            target_id=frame.target.id,
+                        )
                     )
-                )
             if frame.transformed_kind:
                 converted = self._dispatch_event(
                     context,
@@ -1206,36 +1659,219 @@ class AbilityRuntime:
         # 第一次改时正是踩在这里：`AttributeError: 'NoneType' object has no attribute
         # 'condition_executor_cache'`，被 `tools/全量核对.py` 的「规则层行为」当场拦下）。
         # 没有 context 就没有地方存缓存，退回逐条现算——语义一字不差。
-        executors = None
+        plan = None
         if context is not None:
             cached = context.condition_executor_cache.get(id(conditions))
             if cached is None or cached[0] is not conditions or len(cached[1]) != len(conditions):
-                cached = (
-                    conditions,
-                    tuple(self.catalog.parse_node(raw).executor for raw in conditions or ()),
-                )
+                cached = (conditions, self._compile_condition_sequence(conditions))
                 context.condition_executor_cache[id(conditions)] = cached
-            executors = cached[1]
-        if executors is None:
-            executors = tuple(
-                self.catalog.parse_node(raw).executor for raw in conditions or ()
-            )
-        for raw, executor in zip(conditions or (), executors):
-            handler = self._condition_handlers.get(executor)
+            plan = cached[1]
+        if plan is None:
+            plan = self._compile_condition_sequence(conditions)
+        return self._evaluate_condition_plan(
+            context, source, target, plan, event_amount, event_values, tags
+        )
+
+    def _compile_condition_sequence(self, conditions):
+        return tuple(
+            self._compile_condition_plan_item(raw, self.catalog.parse_node(raw).executor)
+            for raw in conditions or ()
+        )
+
+    def _evaluate_condition_plan(self, context, source, target, plan, event_amount, event_values, tags):
+        for raw, handler, executor in plan:
+            if raw is None:
+                if not handler:
+                    return False
+                continue
             if handler is None:
                 raise ValueError(f"战斗核心未实现条件执行器：{executor or '<空>'}")
-            condition = dict(raw)
-            if not handler(context, source, target, condition, event_amount, event_values, tags):
+            # 条件处理器只读字段；节点来自装配期冻结的 JSON，直接复用映射可省掉
+            # 每个条件、每次监听触发的一次字典复制。
+            if not handler(context, source, target, raw, event_amount, event_values, tags):
                 return False
         return True
+
+    def _compile_condition_plan_item(self, raw, executor):
+        """编译一条条件；只折叠完全由字面量决定的数值条件。"""
+
+        handler = self._condition_handlers.get(executor)
+        if executor == "组合条件" and getattr(handler, '__func__', None) is AbilityRuntime._condition_combined:
+            children = self._compile_condition_sequence(raw.get("条件") or ())
+            relation = str(raw.get("关系") or "全部成立")
+
+            def evaluate_combined(context, source, target, condition, amount, values, tags):
+                results = [
+                    self._evaluate_condition_plan(
+                        context, source, target, (child,), amount, values, tags
+                    )
+                    for child in children
+                ]
+                relation_value = str(condition.get("关系") or relation)
+                if relation_value == "全部成立":
+                    return all(results)
+                if relation_value == "任一成立":
+                    return any(results)
+                if relation_value == "全部不成立":
+                    return not any(results)
+                raise ValueError(f"未知组合条件关系：{relation_value}")
+
+            return (raw, evaluate_combined, executor)
+        if executor == "数值条件" and getattr(handler, '__func__', None) is AbilityRuntime._condition_numeric:
+            left = raw.get("左值")
+            right = raw.get("右值")
+            if type(left) in (int, float) and type(right) in (int, float):
+                return (None, self._compare(float(left), float(right), str(raw.get("比较") or "等于")), executor)
+            left_plan = self._compile_condition_value(left)
+            right_plan = self._compile_condition_value(right)
+            if left_plan is not None or right_plan is not None:
+                relation = str(raw.get("比较") or "等于")
+                # 字面量无需在每次判定时经过通用数值分派。动态一侧仍实时求值。
+                if left_plan is not None and left_plan[0] == "常量":
+                    constant = left_plan[1]
+                    def evaluate_left(context, source, target, condition, amount, values, _tags):
+                        right_value = self._resolve_condition_value(
+                            context, right_plan, right, source, target, amount, values
+                        )
+                        return self._compare(constant, right_value, relation)
+                    return (raw, evaluate_left, executor)
+                if right_plan is not None and right_plan[0] == "常量":
+                    constant = right_plan[1]
+                    def evaluate_right(context, source, target, condition, amount, values, _tags):
+                        left_value = self._resolve_condition_value(
+                            context, left_plan, left, source, target, amount, values
+                        )
+                        return self._compare(left_value, constant, relation)
+                    return (raw, evaluate_right, executor)
+                def evaluate(context, source, target, condition, amount, values, _tags):
+                    left_value = self._resolve_condition_value(
+                        context, left_plan, condition.get("左值"), source, target, amount, values
+                    )
+                    right_value = self._resolve_condition_value(
+                        context, right_plan, condition.get("右值"), source, target, amount, values
+                    )
+                    return self._compare(
+                        left_value, right_value, str(condition.get("比较") or "等于")
+                    )
+
+                return (raw, evaluate, executor)
+        return (raw, handler, executor)
+
+    def _compile_condition_value(self, value):
+        if type(value) in (int, float):
+            return ("常量", float(value))
+        if not isinstance(value, Mapping) or "能力" not in value:
+            return None
+        node = self.catalog.parse_node(value)
+        if node.executor == "读取数值" and getattr(self._value_handlers.get(node.executor), '__func__', None) is AbilityRuntime._value_read:
+            return ("读取数值", (node.values, self._compile_read_value(node.values)))
+        return None
+
+    def _resolve_condition_value(
+        self, context, plan, raw, source, target, amount, values
+    ) -> float:
+        if plan is None:
+            return self._resolve_value(context, raw, source, target, amount, values)
+        kind, value = plan
+        if kind == "常量":
+            return value
+        node, reader = value
+        result = reader(context, source, target, node, amount, values)
+        if type(result) is float:
+            return result
+        if isinstance(result, bool) or not isinstance(result, (int, float)):
+            raise TypeError(f"战斗数值必须是数字：{result!r}")
+        return float(result)
+
+    def _compile_read_value(self, node):
+        """预绑定只读数值节点的字段；每次仍重新选目标、读取状态并求值。"""
+        origin = str(node.get("来源") or "固定值")
+        if origin not in {"固定值", "自身属性", "效果来源属性", "目标属性", "事件事实", "本次数值", "构筑计量", "状态层数", "行动条"}:
+            return self._value_read
+        selector = node.get("目标")
+        dependent = origin in {"目标属性", "构筑计量", "状态层数", "行动条"} or selector is not None
+        if origin == "固定值":
+            constant = node.get("固定值", 0)
+            read = lambda context, source, selected, amount, values: constant
+        elif origin in {"自身属性", "效果来源属性"}:
+            attribute = str(node.get("属性") or "")
+            read = lambda context, source, selected, amount, values: source.value(attribute)
+        elif origin == "目标属性":
+            attribute = str(node.get("属性") or "")
+            read = lambda context, source, selected, amount, values: selected.value(attribute)
+        elif origin == "事件事实":
+            fact = str(node.get("事实") or "")
+            read = lambda context, source, selected, amount, values: values.get(fact, 0)
+        elif origin == "本次数值":
+            read = lambda context, source, selected, amount, values: amount
+        elif origin == "构筑计量":
+            counter = str(node.get("计量") or "")
+            instance = node.get("构筑实例")
+            read = lambda context, source, selected, amount, values: context.ability_counters.get((selected.id, str(instance or context.current_build_instance or "").strip(), counter), 0)
+        elif origin == "状态层数":
+            name = str(node.get("状态") or "")
+            read = lambda context, source, selected, amount, values: sum(status.stacks for status in selected.statuses.named(name))
+        else:
+            read = lambda context, source, selected, amount, values: context.action_progress.get(selected.id, 0) * 100
+        percent = node.get("百分比", 100)
+        has_low, has_high = "最低值" in node, "最高值" in node
+        numeric_bounds = type(percent) in (int, float) and (not has_low or type(node['最低值']) in (int, float)) and (not has_high or type(node['最高值']) in (int, float))
+        if numeric_bounds:
+            percent = float(percent)
+            lower = float(node['最低值']) if has_low else None
+            upper = float(node['最高值']) if has_high else None
+
+        def evaluate(context, source, target, _node, amount, values):
+            selected = target
+            if dependent:
+                destinations = self._select_targets(context, source, target, selector)
+                if destinations:
+                    selected = destinations[0]
+            elif context is None or target is None:
+                self._select_targets(context, source, target, None)
+            else:
+                rules = (target.rules_cache if target.rules_cache_version == context.status_rules_version
+                         else self._container_rules(target, context))
+                if rules.get("被选为目标"):
+                    self._select_targets(context, source, target, None)
+            value = read(context, source, selected, amount, values)
+            if numeric_bounds and type(value) in (int, float):
+                value = float(value) * percent / 100.0
+                # 与 max(bound, value) / min(bound, value) 同序，包含 NaN 的边界语义。
+                if has_low:
+                    value = value if value > lower else lower
+                if has_high:
+                    value = value if value < upper else upper
+                return value
+            if type(value) in (int, float) or isinstance(value, (int, float)) and not isinstance(value, bool):
+                value = float(value) * float(percent) / 100.0
+                if has_low:
+                    value = max(float(node["最低值"]), value)
+                if has_high:
+                    value = min(float(node["最高值"]), value)
+            return value
+
+        return evaluate
 
     def _condition_probability(self, context, source, target, condition, *_):
         chance = self._resolve_value(context, condition.get("概率", 0), source, target, 0, {}) / 100.0
         return self._judgement(context, "概率", chance)
 
     def _condition_numeric(self, context, source, target, condition, event_amount, event_values, _tags):
-        left = self._resolve_value(context, condition.get("左值"), source, target, event_amount, event_values)
-        right = self._resolve_value(context, condition.get("右值"), source, target, event_amount, event_values)
+        raw_left = condition.get("左值")
+        raw_right = condition.get("右值")
+        # 语料中大量条件两侧是冻结的数字常量；这些值不需要经过能力节点解析。
+        # 动态读取、事件事实和组合数值仍完整走原解析链。
+        left = (
+            float(raw_left)
+            if type(raw_left) in (int, float)
+            else self._resolve_value(context, raw_left, source, target, event_amount, event_values)
+        )
+        right = (
+            float(raw_right)
+            if type(raw_right) in (int, float)
+            else self._resolve_value(context, raw_right, source, target, event_amount, event_values)
+        )
         return self._compare(left, right, str(condition.get("比较") or "等于"))
 
     def _condition_status(self, context, source, target, condition, *_):
@@ -1259,7 +1895,7 @@ class AbilityRuntime:
             return subject.form == expected
         if kind == "性别":
             return subject.gender == expected
-        aliases = {"资源类型": "资源", "行动类型": "行动类型", "技能类型": "技能类型"}
+        aliases = self._condition_type_aliases
         return str(event_values.get(aliases.get(kind, kind), "")) == expected
 
     def _condition_combined(self, context, source, target, condition, amount, values, tags):
@@ -1301,14 +1937,19 @@ class AbilityRuntime:
 
     @staticmethod
     def _compare(left: float, right: float, relation: str) -> bool:
-        return {
-            "等于": left == right,
-            "不等于": left != right,
-            "大于": left > right,
-            "大于等于": left >= right,
-            "小于": left < right,
-            "小于等于": left <= right,
-        }.get(relation, False)
+        if relation == "等于":
+            return left == right
+        if relation == "不等于":
+            return left != right
+        if relation == "大于":
+            return left > right
+        if relation == "大于等于":
+            return left >= right
+        if relation == "小于":
+            return left < right
+        if relation == "小于等于":
+            return left <= right
+        return False
 
     def _ability_damage(self, context, source, target, effect, multiplier, **kwargs):
         destinations = self._select_targets(context, source, target, effect.get("目标"))
@@ -1353,7 +1994,7 @@ class AbilityRuntime:
         """
 
         requested_resource = str(effect.get("资源") or "血气")
-        definition = self._resource_definition(requested_resource)
+        definition, _resource_field, _cap_attribute, _minimum = self._resource_runtime_entry(requested_resource)
         changed = False
         attempted = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
@@ -1399,7 +2040,7 @@ class AbilityRuntime:
     def _resource_definition(self, resource: str) -> Mapping[str, Any]:
         """`资源.json` 里这个资源的定义。未登记的资源直接报错，不静默走默认分支。"""
 
-        definition = self.catalog.resources.get(resource)
+        definition = self._resource_definitions.get(resource)
         if definition is None:
             raise ValueError(f"战斗核心未登记资源：{resource}")
         return definition
@@ -1412,55 +2053,74 @@ class AbilityRuntime:
         它们本来就是「加成口径、基准 100」，不该有两套读法。
         """
 
-        return attribute_ratio(fighter, attribute, self.catalog.attributes, default)
+        baseline = self._attribute_defaults.get(attribute, 0.0) if default is None else float(default) * 100.0
+        return fighter.value(attribute, baseline) / 100.0
 
     def _element_multiplier(self, context, source, target, effect):
         composition = effect.get("属性构成")
         if not composition:
             return 1.0
-        values = {str(key): float(value) for key, value in dict(composition).items()}
+        # 属性构成会随继承来源被复制到临时效果节点。按效果身份缓存会保留每次
+        # 临时节点及其整棵定义；按标量构成复用只需保留实际出现过的配比。
+        composition_key = tuple(composition.items()) if type(composition) is dict else None
+        standard = composition_key is not None and all(
+            type(key) is str and type(value) in (int, float)
+            for key, value in composition_key
+        )
+        cached = context.element_composition_cache.get(composition_key) if standard else None
+        if cached is None:
+            values = {str(key): float(value) for key, value in dict(composition).items()}
+            cached = (values, tuple(values.items()))
+            if standard:
+                context.element_composition_cache[composition_key] = cached
+        values, composition_signature = cached
         if not values or "无相" in values and len(values) == 1:
             return 1.0
         source_root = source.five_elements
         target_root = target.five_elements
         rules = self.catalog.five_elements
-        generating = {str(item["来源"]): str(item["目标"]) for item in rules.get("相生", ())}
-        overcoming = {str(item["来源"]): str(item["目标"]) for item in rules.get("相克", ())}
-        root_rules = rules.get("根性倍率", {})
-        root_score = sum(
-            source_root[element] * weight
-            for element, weight in values.items()
-            if element in source_root
-        ) / 100.0
-        root_multiplier = max(
-            float(root_rules.get("最低", 0.9)),
-            min(
-                float(root_rules.get("最高", 1.4)),
-                1.0
-                + (root_score - float(root_rules.get("基准", 20)))
-                * float(root_rules.get("每点修正", 0.005)),
-            ),
-        )
+        signature = (composition_signature, tuple(source_root.items()), tuple(target_root.items()))
+        result = context.element_multiplier_cache.get(signature)
         multipliers = rules.get("倍率", {})
-        relation = 0.0
-        total = 0.0
-        for element, weight in values.items():
-            if element == "无相":
-                continue
-            for target_element, target_weight in target_root.items():
-                if element == target_element:
-                    factor = 1.0
-                elif generating.get(element) == target_element:
-                    factor = float(multipliers.get("相生", 1.03))
-                elif overcoming.get(element) == target_element:
-                    factor = float(multipliers.get("相克", 1.15))
-                elif overcoming.get(target_element) == element:
-                    factor = float(multipliers.get("被克", 0.85))
-                else:
-                    factor = 1.0
-                relation += weight * target_weight * factor
-                total += weight * target_weight
-        result = root_multiplier * (relation / total if total else 1.0)
+        if result is None:
+            generating = self._element_generating
+            overcoming = self._element_overcoming
+            root_rules = rules.get("根性倍率", {})
+            root_score = sum(
+                source_root[element] * weight
+                for element, weight in values.items()
+                if element in source_root
+            ) / 100.0
+            root_multiplier = max(
+                float(root_rules.get("最低", 0.9)),
+                min(
+                    float(root_rules.get("最高", 1.4)),
+                    1.0
+                    + (root_score - float(root_rules.get("基准", 20)))
+                    * float(root_rules.get("每点修正", 0.005)),
+                ),
+            )
+            multipliers = rules.get("倍率", {})
+            relation = 0.0
+            total = 0.0
+            for element, weight in values.items():
+                if element == "无相":
+                    continue
+                for target_element, target_weight in target_root.items():
+                    if element == target_element:
+                        factor = 1.0
+                    elif generating.get(element) == target_element:
+                        factor = float(multipliers.get("相生", 1.03))
+                    elif overcoming.get(element) == target_element:
+                        factor = float(multipliers.get("相克", 1.15))
+                    elif overcoming.get(target_element) == element:
+                        factor = float(multipliers.get("被克", 0.85))
+                    else:
+                        factor = 1.0
+                    relation += weight * target_weight * factor
+                    total += weight * target_weight
+            result = root_multiplier * (relation / total if total else 1.0)
+            context.element_multiplier_cache[signature] = result
         for element in values:
             if source.team_synergy.pop(element, 0):
                 result *= float(multipliers.get("团队相生", 1.08))
@@ -1469,10 +2129,7 @@ class AbilityRuntime:
 
     def _mark_team_synergy(self, context, source, effect):
         composition = effect.get("属性构成") or {}
-        generating = {
-            str(item["来源"]): str(item["目标"])
-            for item in self.catalog.five_elements.get("相生", ())
-        }
+        generating = self._element_generating
         elements = [generating[element] for element in composition if element in generating]
         if not elements:
             return
@@ -1568,7 +2225,12 @@ class AbilityRuntime:
     def _ability_add_status(self, context, source, target, effect, multiplier, **_):
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
-            definition = copy.deepcopy(dict(effect.get("状态") or {}))
+            original = effect.get("状态")
+            cached = context.definition_copy_cache.get(id(original))
+            if cached is None or cached[0] is not original:
+                cached = (original, compile_definition_copy(dict(original or {})))
+                context.definition_copy_cache[id(original)] = cached
+            definition = cached[1]()
             frame = self._dispatch_event(context, kind="添加状态前", source=source, target=destination, values={"状态": definition.get("名称", ""), "状态定义": definition}, tags=tuple(definition.get("标签") or ()))
             destination = frame.target
             definition["标签"] = sorted(frame.tags)
@@ -1578,31 +2240,40 @@ class AbilityRuntime:
             # （状态名 / 类别 / 是不是控制 / 来源关系），所以「不受控制」「不吃负面状态」
             # 「只不受某一条」都能用现成的条件原子写，不必给引擎加词汇。
             # **拒绝时的说法由登记表给**（规则的 `原因`），所以写法迁移不改战报措辞。
-            refused = self._rules_denied_rule(
-                context,
-                destination,
-                "状态被添加",
-                owner=source,
-                tags=(
-                    f"状态:{str(definition.get('名称') or '')}",
-                    f"类别:{str(definition.get('类别') or '中性')}",
-                    f"控制:{'真' if is_control else '假'}",
-                    f"来源关系:{self._source_relation(context, source, destination)}",
-                ),
+            version = int(getattr(context, "status_rules_version", 0))
+            target_rules = (
+                destination.rules_cache.get("状态被添加")
+                if destination.rules_cache_version == version
+                else self._container_rules(destination, context).get("状态被添加")
             )
+            refused = None
+            if target_rules:
+                refused = self._rules_denied_rule(
+                    context,
+                    destination,
+                    "状态被添加",
+                    owner=source,
+                    tags=(
+                        f"状态:{str(definition.get('名称') or '')}",
+                        f"类别:{str(definition.get('类别') or '中性')}",
+                        f"控制:{'真' if is_control else '假'}",
+                        f"来源关系:{self._source_relation(context, source, destination)}",
+                    ),
+                )
             if frame.cancelled:
                 failure = "被取消"
             elif refused is not None:
                 failure = str(refused.get("原因") or "状态免疫")
             if not failure and is_control:
                 control_limit = int(destination.battle_profile.get("同时承受控制上限", 0))
-                active_controls = sum(
-                    1
-                    for status in destination.statuses
-                    if "控制" in status.tags or bool(status.action_limits)
-                )
-                if control_limit and active_controls >= control_limit:
-                    failure = "控制承载已满"
+                if control_limit:
+                    active_controls = sum(
+                        1
+                        for status in destination.statuses
+                        if "控制" in status.tags or bool(status.action_limits)
+                    )
+                    if active_controls >= control_limit:
+                        failure = "控制承载已满"
             if not failure and is_control:
                 base = float(definition.get("控制基础命中率", 100)) / 100.0
                 chance = self._clamp(base + self._percent(source, "控制命中率") - self._percent(destination, "控制抵抗率"), 0.0, 1.0)
@@ -1621,18 +2292,29 @@ class AbilityRuntime:
                 duration = max(1, math.ceil(duration * (1.0 - self._clamp(self._percent(destination, "韧性"), 0.0, 0.9))))
                 duration_limit = int(destination.battle_profile.get("控制持续上限", 0))
                 definition["剩余行动"] = min(duration, duration_limit) if duration_limit else duration
-            status = self._status_with_rules(definition, f"{context.current_ability}.状态")
+            template = context.status_definition_cache.get(id(original))
+            status = None
+            if template is not None and template[0] is original and template[1] == definition and same_definition(template[1], definition):
+                fields = template[2]
+            else:
+                status = self._status_with_rules(definition, f"{context.current_ability}.状态")
+                fields = status.__dict__ if type(status) is StatusState else {
+                    key: getattr(status, key) for key in ('name', 'build_instance', 'stacks', 'remaining_turns')
+                }
+                if type(status) is StatusState:
+                    context.status_definition_cache[id(original)] = (
+                        original, copy.deepcopy(definition), copy.deepcopy(status.__dict__)
+                    )
             allow_cross_build = bool(definition.get("允许跨构筑", False))
             existing = next(
                 (
                     item
-                    for item in destination.statuses
-                    if item.name == status.name
-                    and (
+                    for item in destination.statuses.named(fields['name'])
+                    if (
                         allow_cross_build
-                        or not status.build_instance
+                        or not fields['build_instance']
                         or not item.build_instance
-                        or status.build_instance == item.build_instance
+                        or fields['build_instance'] == item.build_instance
                     )
                     and (
                         definition.get("叠加范围", "同名共享") == "同名共享"
@@ -1642,20 +2324,29 @@ class AbilityRuntime:
                 None,
             )
             mode = str(definition.get("重复方式") or "刷新持续")
+            previous_status = None if existing is None else (existing.stacks, existing.remaining_turns)
             if existing is None:
+                if status is None:
+                    status = StatusState.__new__(StatusState)
+                    fields = fields.copy()
+                    fields['modifiers'] = ModifierMap(fields['modifiers'])
+                    fields['rules'] = ModifierMap(copy_value(dict(fields['rules'])))
+                    fields['values'] = copy_value(fields['values'])
+                    fields['listeners'] = tuple(copy_value(item) for item in fields['listeners'])
+                    status.__dict__.update(fields)
                 destination.statuses.append(status)
                 self._mark_listeners_dirty_for_status(context, status)
             elif mode == "不叠加":
                 continue
             elif mode == "增加层数":
-                existing.stacks = min(existing.max_stacks, existing.stacks + status.stacks)
+                existing.stacks = min(existing.max_stacks, existing.stacks + fields['stacks'])
             elif mode == "增加层数并刷新":
-                existing.stacks = min(existing.max_stacks, existing.stacks + status.stacks)
-                existing.remaining_turns = max(existing.remaining_turns, status.remaining_turns)
+                existing.stacks = min(existing.max_stacks, existing.stacks + fields['stacks'])
+                existing.remaining_turns = max(existing.remaining_turns, fields['remaining_turns'])
             elif mode == "延长持续":
-                existing.remaining_turns += status.remaining_turns
+                existing.remaining_turns += fields['remaining_turns']
             else:
-                existing.remaining_turns = max(existing.remaining_turns, status.remaining_turns)
+                existing.remaining_turns = max(existing.remaining_turns, fields['remaining_turns'])
             applied_status = status if existing is None else existing
             self._dispatch_event(
                 context,
@@ -1671,8 +2362,9 @@ class AbilityRuntime:
                     "来源名称": applied_status.source_name,
                 },
                 tags=applied_status.tags,
+                capture=(context.event_capture_filter is None or previous_status != (applied_status.stacks, applied_status.remaining_turns)),
             )
-            self._resolve_status_reactions(context, source, destination, status.name, multiplier)
+            self._resolve_status_reactions(context, source, destination, fields['name'], multiplier)
             changed = True
         return changed
 
@@ -1730,9 +2422,16 @@ class AbilityRuntime:
         tags = {str(value) for value in selector.get("标签") or ()}
         allow_cross_build = bool(selector.get("允许跨构筑", False))
         current_instance = self._build_instance(context, selector)
+        # 名称索引已就绪时只检查同名状态；索引失效时沿用扫描，
+        # 避免仅为一次状态选择重建属性、规则索引及订阅关系。
+        candidates = (
+            fighter.statuses.name_index.get(name, ())
+            if name and fighter.statuses.modifier_index is not None
+            else fighter.statuses
+        )
         values = [
             status
-            for status in fighter.statuses
+            for status in candidates
             if (not name or status.name == name)
             and (not category or status.category == category)
             and (not tags or tags <= set(status.tags))
@@ -1936,14 +2635,31 @@ class AbilityRuntime:
         return changed
 
     def _ability_modify_counter(self, context, source, target, effect, multiplier, **kwargs):
-        name = str(effect.get("计量") or "")
+        static = context.ability_static_cache.get(id(effect))
+        if static is None or static[0] is not effect:
+            static = (
+                effect,
+                str(effect.get("计量") or ""),
+                str(effect.get("方式") or "增加"),
+                float(effect.get("初始值", 0)),
+                bool(effect.get("不足时是否失败", True)),
+                float(effect.get("最低值", 0)),
+                float(effect.get("最高值", 100)),
+            )
+            context.ability_static_cache[id(effect)] = static
+        _, name, mode, initial, insufficient_fails, minimum, maximum = static
         instance = self._build_instance(context, effect)
-        mode = str(effect.get("方式") or "增加")
         amount = self._resolve_value(context, effect.get("数值", 0), source, target, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             # 锁定技：`计量被修改` 拦截点——问**计量记在谁身上**。
-            if self._rules_deny(
+            version = int(getattr(context, "status_rules_version", 0))
+            rules = (
+                fighter.rules_cache.get("计量被修改")
+                if fighter.rules_cache_version == version
+                else self._container_rules(fighter, context).get("计量被修改")
+            )
+            if rules and self._rules_deny(
                 context,
                 fighter,
                 "计量被修改",
@@ -1956,11 +2672,11 @@ class AbilityRuntime:
             ):
                 continue
             key = (fighter.id, instance, name)
-            before = context.ability_counters.get(key, float(effect.get("初始值", 0)))
-            if mode == "减少" and before < amount and effect.get("不足时是否失败", True):
+            before = context.ability_counters.get(key, initial)
+            if mode == "减少" and before < amount and insufficient_fails:
                 return False
             after = amount if mode == "设置" else 0 if mode == "清空" else before + amount if mode == "增加" else before - amount
-            after = self._clamp(after, float(effect.get("最低值", 0)), float(effect.get("最高值", 100)))
+            after = self._clamp(after, minimum, maximum)
             context.ability_counters[key] = after
             changed = changed or before != after
         return changed
@@ -2304,15 +3020,20 @@ class AbilityRuntime:
             existing = [
                 rule for rule in context.battle_rules
                 if str(rule.get("名称") or "") == name
+                and (duplicate_mode != "同源唯一" or
+                     (rule.get("来源") == source.id and rule.get("构筑实例", "") == context.current_build_instance))
             ]
-            if existing and duplicate_mode in {"拒绝", "已存在则拒绝"}:
+            if existing and duplicate_mode in {"拒绝", "已存在则拒绝", "同源唯一"}:
                 return False
             definition = copy.deepcopy(dict(effect.get("规则") or {}))
             unknown = set(definition) - {"监听"}
             if unknown:
                 raise ValueError("战场规则存在无执行语义字段：" + "、".join(sorted(unknown)))
+            context.battle_rule_serial += 1
             context.battle_rules.append({
                 **definition,
+                "运行编号": context.battle_rule_serial,
+                "构筑实例": context.current_build_instance,
                 "名称": name,
                 "来源": source.id,
                 "来源退场时移除": bool(effect.get("来源退场时移除", False)),
@@ -2603,6 +3324,8 @@ class AbilityRuntime:
         return [skill.key for skill in candidates[:count]]
 
     def _resolve_value(self, context, value, source, target, event_amount=0.0, event_values=None):
+        if type(value) in (int, float):
+            return float(value)
         result = self._resolve_any(context, value, source, target, event_amount, event_values or {})
         if isinstance(result, bool) or not isinstance(result, (int, float)):
             raise TypeError(f"战斗数值必须是数字：{result!r}")
@@ -2625,13 +3348,39 @@ class AbilityRuntime:
             handler = self._value_handlers.get(node.executor)
             if handler is None:
                 raise ValueError(f"战斗核心未实现数值执行器：{node.executor or '<空>'}")
-            return handler(context, source, target, dict(value), event_amount, event_values or {})
+            return handler(context, source, target, value, event_amount, event_values or {})
         return value if value is not None else 0
 
     def _value_read(self, context, source, target, node, event_amount, event_values):
         origin = str(node.get("来源") or "固定值")
-        destinations = self._select_targets(context, source, target, node.get("目标")) or [target]
-        selected = destinations[0]
+        target_value_origins = {
+            "目标属性",
+            "战斗记录",
+            "构筑计量",
+            "状态层数",
+            "行动条",
+            "技能冷却",
+        }
+        selected = target
+        target_dependent = (
+            origin in target_value_origins
+            or origin.startswith(("目标当前", "目标已损失"))
+        )
+        if target_dependent or node.get("目标") is not None:
+            destinations = self._select_targets(context, source, target, node.get("目标")) or [target]
+            selected = destinations[0]
+        elif context is None or target is None:
+            self._select_targets(context, source, target, None)
+        else:
+            version = context.status_rules_version
+            if target.rules_cache_version == version:
+                has_selection_rule = bool(target.rules_cache.get("被选为目标"))
+            else:
+                has_selection_rule = bool(
+                    self._container_rules(target, context).get("被选为目标")
+                )
+            if has_selection_rule:
+                self._select_targets(context, source, target, None)
         if origin == "固定值":
             value: Any = node.get("固定值", 0)
         elif origin in {"自身属性", "效果来源属性"}:
@@ -2660,7 +3409,8 @@ class AbilityRuntime:
                 0,
             )
         elif origin == "状态层数":
-            value = sum(status.stacks for status in selected.statuses if status.name == str(node.get("状态") or ""))
+            status_name = str(node.get("状态") or "")
+            value = sum(status.stacks for status in selected.statuses.named(status_name))
         elif origin == "行动条":
             value = context.action_progress.get(selected.id, 0) * 100
         elif origin == "技能冷却":
@@ -2797,7 +3547,8 @@ class AbilityRuntime:
         built: dict[str, list] = {}
         for rule in (getattr(container, "rules", None) or {}).values():
             built.setdefault(str(rule.get("拦截点") or ""), []).append(rule)
-        for status in getattr(container, "statuses", None) or ():
+        statuses = getattr(container, "statuses", None)
+        for status in statuses.with_rules() if statuses else ():
             for rule in (getattr(status, "rules", None) or {}).values():
                 built.setdefault(str(rule.get("拦截点") or ""), []).append(rule)
         cache = {
@@ -2850,8 +3601,8 @@ class AbilityRuntime:
                 subject,
                 rule_conditions,
                 amount,
-                dict(values or {}),
-                tuple(tags),
+                values or {},
+                tags,
             ):
                 continue
             verdict = rule
@@ -2871,69 +3622,62 @@ class AbilityRuntime:
         传进来的 `target` 语义不同，把缺省改成「自身」会让 19 张功法改变行为
         （1967 场语料对照实测）。所以省略保持原语义，「自身」必须显式写出。
         """
+        if context is None:
+            return self._select_targets_uncached(context, source, target, value)
+        cached = context.target_selector_cache.get(id(value))
+        if cached is None or cached[0] is not value:
+            if value is None:
+                selector = _SCOPE_SELECTORS[DEFAULT_TARGET_SCOPE]
+            elif isinstance(value, str):
+                scope = value.strip()
+                if scope not in TARGET_SCOPES:
+                    raise ValueError('未知目标范围：' + (scope or '<空>') + '；可用：' + '、'.join(TARGET_SCOPES))
+                selector = _SCOPE_SELECTORS[scope]
+            elif isinstance(value, Mapping):
+                selector = value
+            else:
+                raise TypeError('目标字段必须是范围名或选择目标对象')
+            if self.catalog.parse_node(selector).executor != '选择目标':
+                raise ValueError('目标字段必须使用选择目标')
+            scope = str(selector.get('范围') or '当前目标')
+            simple = scope if selector.keys() <= _TARGET_SELECTOR_BARE_KEYS and scope in {'自身', '当前目标'} else None
+            cached = (value, selector, simple)
+            context.target_selector_cache[id(value)] = cached
+        if cached[2] is not None:
+            chosen = source if cached[2] == '自身' else target
+            return self._single_target(context, source, chosen)
+        return self._target_select(context, source, target, cached[1])
+
+    def _select_targets_uncached(self, context, source, target, value):
         if value is None:
-            # 同一个范围永远给同一个 selector 对象：`parse_node` 按对象身份记忆化，
-            # 每次新造一个字典就等于每次都缓存不中（这一条在语料上是百万次量级）。
             selector = _SCOPE_SELECTORS[DEFAULT_TARGET_SCOPE]
         elif isinstance(value, str):
             scope = value.strip()
             if scope not in TARGET_SCOPES:
-                raise ValueError(
-                    "未知目标范围："
-                    f"{scope or '<空>'}；可用：" + "、".join(TARGET_SCOPES)
-                )
+                raise ValueError('未知目标范围：' + (scope or '<空>') + '；可用：' + '、'.join(TARGET_SCOPES))
             selector = _SCOPE_SELECTORS[scope]
         elif isinstance(value, Mapping):
-            # 与 `_execute_mechanism` 同一手法：先按对象身份查一次缓存，省掉 `parse_node` 的**调用
-            # 开销**（这一处实测 13,211 次调用里 11,008 次命中）。**`context` 可能为 `None`**
-            # （规则层有「没有战斗现场也要解析目标」的用法，第 29 步正是在这类地方踩空过），
-            # 所以先判空，没有现场就退回 `parse_node`——语义一字不差。
-            node = context.ability_node_cache.get(id(value)) if context is not None else None
-            if node is None or node.values is not value:
-                node = self.catalog.parse_node(value)
-                if context is not None:
-                    context.ability_node_cache[id(value)] = node
-            if node.executor != "选择目标":
-                raise ValueError("目标字段必须使用选择目标")
-            return self._target_select(context, source, target, dict(value), 0, {}, ())
+            selector = value
         else:
-            raise TypeError("目标字段必须是范围名或选择目标对象")
-        # 同一手法（同一次调用里上面已经判过 `context`，这里再判一次只为把「没有现场」这条
-        # 路走全，代价是一次 `is not None`）。`selector` 来自 `_SCOPE_SELECTORS`，是**模块级
-        # 稳定对象**，所以这条缓存必然命中（见上面 2866 行那条注释）。
-        node = context.ability_node_cache.get(id(selector)) if context is not None else None
-        if node is None or node.values is not selector:
-            node = self.catalog.parse_node(selector)
-            if context is not None:
-                context.ability_node_cache[id(selector)] = node
-        if node.executor != "选择目标":
-            raise ValueError("目标字段必须使用选择目标")
-        return self._target_select(context, source, target, selector, 0, {}, ())
+            raise TypeError('目标字段必须是范围名或选择目标对象')
+        if self.catalog.parse_node(selector).executor != '选择目标':
+            raise ValueError('目标字段必须使用选择目标')
+        return self._target_select(context, source, target, selector)
+
+    def _single_target(self, context, source, chosen):
+        if chosen is None or not chosen.alive or chosen.combatant_type == '构造物':
+            return []
+        version = getattr(context, 'status_rules_version', 0)
+        rules = chosen.rules_cache if chosen.rules_cache_version == version else self._container_rules(chosen, context)
+        if rules.get('被选为目标') and self._rules_deny(context, chosen, '被选为目标', owner=source, tags=(f'来源关系:{self._source_relation(context, source, chosen)}',)):
+            return []
+        return [chosen]
 
     def _target_select(self, context, source, target, selector, *_):
-        # **快路**：`selector` 只有 `范围`（外加可选的 `能力`）时，后面六个字段全是缺省值，
-        # 而缺省只做两件事——「存活」与「非构造物」——再加规则层那一问。于是这里直接算完，
-        # 省掉六趟 `selector.get`、五次 `str()`、四次列表重建与 `排序 / 数量` 的取值切片。
-        # 结果与慢路逐字相同（慢路在缺省下做的正是这三件事）；实测覆盖 94.3% 的调用。
-        # **加新的默认筛选时这里要跟着改**，判据见 `_TARGET_SELECTOR_BARE_KEYS` 的说明。
         if selector.keys() <= _TARGET_SELECTOR_BARE_KEYS:
-            bare_scope = str(selector.get("范围") or "当前目标")
-            if bare_scope == "自身" or bare_scope == "当前目标":
-                chosen = source if bare_scope == "自身" else target
-                if (
-                    chosen is not None
-                    and chosen.alive
-                    and chosen.combatant_type != "构造物"
-                    and not self._rules_deny(
-                        context,
-                        chosen,
-                        "被选为目标",
-                        owner=source,
-                        tags=(f"来源关系:{self._source_relation(context, source, chosen)}",),
-                    )
-                ):
-                    return [chosen]
-                return []
+            scope = str(selector.get('范围') or '当前目标')
+            if scope in {'自身', '当前目标'}:
+                return self._single_target(context, source, source if scope == '自身' else target)
         scope = str(selector.get("范围") or "当前目标")
         frame = context.event_stack[-1] if context.event_stack else None
         if scope == "自身":
@@ -3010,17 +3754,18 @@ class AbilityRuntime:
             candidates = [value for value in candidates if any(status.name == status_name for status in value.statuses)]
         # 规则层：`被选为目标` 拦截点。规则是常驻事实，所以这里只判合法性，
         # 不产生事件、也不进战报的事件明细（它不是「发生了什么」，是「本来就不能选他」）。
-        candidates = [
-            value
-            for value in candidates
-            if not self._rules_deny(
-                context,
-                value,
-                "被选为目标",
-                owner=source,
+        eligible = []
+        for value in candidates:
+            version = context.status_rules_version
+            rules = value.rules_cache if value.rules_cache_version == version else self._container_rules(value, context)
+            # 与单目标路径相同：没有目标拦截规则时，无须构造关系标签或调用条件解释器。
+            # 只跳过空规则集；动态状态、阵营变化仍按规则版本重新读取。
+            if not rules.get("被选为目标") or not self._rules_deny(
+                context, value, "被选为目标", owner=source,
                 tags=(f"来源关系:{self._source_relation(context, source, value)}",),
-            )
-        ]
+            ):
+                eligible.append(value)
+        candidates = eligible
         order = str(selector.get("排序") or "默认")
         if order == "随机":
             candidates = list(candidates)
@@ -3048,16 +3793,22 @@ class AbilityRuntime:
     def _resource_values(self, target, resource):
         """`(当前值, 上限)`。上限取资源声明的 `上限属性`。"""
 
-        definition = self._resource_definition(resource)
-        field = self._resource_field(resource)
-        cap_attribute = str(definition.get("上限属性") or "")
+        definition, field, cap_attribute, _minimum = self._resource_runtime_entry(resource)
         maximum = target.value(cap_attribute, 0.0) if cap_attribute else 0.0
         return float(getattr(target, field)), max(0.0, float(maximum))
 
     def _set_resource(self, target, resource, value):
-        definition = self._resource_definition(resource)
-        floor = float(definition.get("最低值", 0.0) or 0.0)
-        setattr(target, self._resource_field(resource), max(floor, float(value)))
+        _definition, field, _cap_attribute, minimum = self._resource_runtime_entry(resource)
+        setattr(target, field, max(float(minimum), float(value)))
+
+    def _resource_runtime_entry(self, resource):
+        entry = self._resource_runtime.get(resource)
+        if entry is None:
+            self._resource_definition(resource)
+            raise AssertionError("unreachable")
+        if entry[1] is None:
+            raise ValueError(f"战斗核心未登记资源的承载字段：{resource}")
+        return entry
 
     def _resource_field(self, resource: str) -> str:
         field = self._RESOURCE_FIELDS.get(resource)

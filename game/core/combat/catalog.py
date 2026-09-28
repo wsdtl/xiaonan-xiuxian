@@ -359,6 +359,42 @@ class BattleReportCatalog:
         mapping = _mapping(self.normalization, "类型分类")
         return str(mapping.get(kind) or self.normalization["默认分类"])
 
+    def event_metadata(self, kind: str) -> tuple[str, Mapping[str, Any], bool, str]:
+        """返回事件转写所需的静态元数据。
+
+        一场大型战斗会把同一种事件转写数千次；这些字段只由战报目录决定，
+        每次从标准化配置重新查找会把纯配置开销放大到事件数量级。
+        """
+
+        def build() -> dict[str, tuple[str, Mapping[str, Any], bool, str]]:
+            return {
+                str(event_kind): (
+                    category,
+                    next(
+                        definition
+                        for definition in self.category_definitions
+                        if definition["id"] == category
+                    ),
+                    str(event_kind) in self.system_kinds,
+                    str(_mapping(self.normalization, "类型名称").get(event_kind) or event_kind),
+                )
+                for event_kind, category in _mapping(
+                    self.normalization, "类型分类"
+                ).items()
+            }
+
+        metadata = self._derived("event_metadata", build)
+        try:
+            return metadata[str(kind)]
+        except KeyError:
+            category = self.normalized_category(kind)
+            return (
+                category,
+                self.normalized_category_definition(category),
+                kind in self.system_kinds,
+                self.kind_label(kind),
+            )
+
     def normalized_category_definition(self, category_id: str) -> Mapping[str, Any]:
         for value in self.category_definitions:
             if value["id"] == category_id:

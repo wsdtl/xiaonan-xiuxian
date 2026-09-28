@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import random
+import weakref
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -75,12 +76,14 @@ def copy_definition(value: Any) -> Any:
     kind = type(value)
     if kind is dict:
         return {
-            copy_definition(key): copy_definition(item) for key, item in value.items()
+            (key if type(key) in ATOMIC_TYPES else copy_definition(key)):
+            (item if type(item) in ATOMIC_TYPES else copy_definition(item))
+            for key, item in value.items()
         }
     if kind is list:
-        return [copy_definition(item) for item in value]
+        return [item if type(item) in ATOMIC_TYPES else copy_definition(item) for item in value]
     if kind is tuple:
-        rebuilt = [copy_definition(item) for item in value]
+        rebuilt = [item if type(item) in ATOMIC_TYPES else copy_definition(item) for item in value]
         for original, copied in zip(value, rebuilt):
             if original is not copied:
                 return tuple(rebuilt)
@@ -88,6 +91,47 @@ def copy_definition(value: Any) -> Any:
     if kind in ATOMIC_TYPES:
         return value
     return copy.deepcopy(value)
+
+
+def compile_definition_copy(value):
+    """冻结 JSON 定义的复制计划；每次只重建可变容器。"""
+    if type(value) is dict and all(type(key) is str for key in value):
+        nested = [(key, compile_definition_copy(item)) for key, item in value.items() if type(item) not in ATOMIC_TYPES]
+        base = dict(value)
+        if not nested:
+            return base.copy
+        def clone_dict():
+            result = base.copy()
+            for key, clone in nested:
+                result[key] = clone()
+            return result
+        return clone_dict
+    if type(value) in (list, tuple):
+        if all(type(item) in ATOMIC_TYPES for item in value):
+            return value.copy if type(value) is list else lambda: value
+        children = tuple(compile_definition_copy(item) for item in value)
+        if type(value) is list:
+            return lambda: [clone() for clone in children]
+        def clone_tuple():
+            result = tuple(clone() for clone in children)
+            return value if all(a is b for a, b in zip(result, value)) else result
+        return clone_tuple
+    if type(value) in ATOMIC_TYPES:
+        return lambda: value
+    return lambda: copy.deepcopy(value)
+
+
+def same_definition(left, right):
+    """缓存命中要保留类型：1、1.0 和 True 的普通相等不足以证明定义相同。"""
+    if left is right:
+        return True
+    if type(left) is not type(right):
+        return False
+    if type(left) is dict:
+        return left.keys() == right.keys() and all(same_definition(value, right[key]) for key, value in left.items())
+    if type(left) in (list, tuple):
+        return len(left) == len(right) and all(same_definition(a, b) for a, b in zip(left, right))
+    return type(left) in ATOMIC_TYPES and left == right
 
 
 def record_values(recorded: frozenset[str] | None, facts: Mapping[str, Any]) -> dict[str, Any]:
@@ -102,7 +146,12 @@ def record_values(recorded: frozenset[str] | None, facts: Mapping[str, Any]) -> 
     if recorded is None:
         return copy_value(facts)
     kept = {key: value for key, value in facts.items() if key in recorded}
-    return copy_value(kept)
+    # kept 已经是新字典，标量事实不必再分配一次；嵌套值仍整体深拷，
+    # 保留别名与环的隔离语义。
+    for key, value in kept.items():
+        if type(key) is not str or type(value) not in ATOMIC_TYPES:
+            return copy.deepcopy(kept)
+    return kept
 
 
 @dataclass(frozen=True)
@@ -211,6 +260,10 @@ class CombatCatalog:
             category=str(definition.get("类别") or ""),
             values=value,
         )
+        # 目录比单场战斗长寿；节点来自每场装配，不能永久强引用历次所有卡面。
+        # 战斗上下文已有自己的执行缓存，这里只保留有界的解析缓存。
+        if len(self._node_cache) >= 8192:
+            self._node_cache.clear()
         self._node_cache[id(value)] = node
         return node
 
@@ -240,8 +293,216 @@ def _shallow_clone(value: Any) -> Any:
     return clone
 
 
+class ModifierMap(dict):
+    """属性修正表；公开的字典写法仍可用，写入自动作废订阅者索引。"""
+
+    def __init__(self, values=()):
+        super().__init__(values)
+        self.subscribers = {}
+
+    def invalidate(self):
+        for reference in tuple(self.subscribers.values()):
+            collection = reference()
+            if collection is not None:
+                collection.modifier_index = None
+
+    def __setitem__(self, key, value):
+        self.invalidate()
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key):
+        self.invalidate()
+        super().__delitem__(key)
+
+    def clear(self):
+        self.invalidate()
+        super().clear()
+
+    def update(self, *args, **kwargs):
+        self.invalidate()
+        super().update(*args, **kwargs)
+
+    def pop(self, *args):
+        self.invalidate()
+        return super().pop(*args)
+
+    def popitem(self):
+        self.invalidate()
+        return super().popitem()
+
+    def setdefault(self, key, default=None):
+        self.invalidate()
+        return super().setdefault(key, default)
+
+    def __ior__(self, value):
+        self.update(value)
+        return self
+
+    def __deepcopy__(self, memo):
+        result = ModifierMap()
+        memo[id(self)] = result
+        result.update(copy.deepcopy(dict(self), memo))
+        return result
+
+
+class StatusList(list):
+    """状态列表的属性倒排索引，保留顺序及列表增删接口。"""
+
+    def __init__(self, values=()):
+        super().__init__(values)
+        self.modifier_index = None
+
+    def modifiers_for(self, key):
+        if self.modifier_index is None:
+            self.build_indexes()
+        return self.modifier_index.get(key, ())
+
+    def named(self, name):
+        if self.modifier_index is None:
+            self.build_indexes()
+        return self.name_index.get(name, ())
+
+    def with_rules(self):
+        if self.modifier_index is None:
+            self.build_indexes()
+        return self.rule_states
+
+    def build_indexes(self):
+        index = self.modifier_index
+        if index is None:
+            index = {}
+            names = {}
+            rules = []
+            reference = weakref.ref(self)
+            for status in self:
+                status.subscribe_modifiers(id(self), reference)
+                names.setdefault(status.name, []).append(status)
+                if status.rules:
+                    rules.append(status)
+                for attribute in status.modifiers:
+                    index.setdefault(attribute, []).append(status)
+            self.name_index = names
+            self.rule_states = rules
+            self.modifier_index = index
+
+    def __setitem__(self, key, value):
+        self.modifier_index = None
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key):
+        self.modifier_index = None
+        super().__delitem__(key)
+
+    def append(self, value):
+        super().append(value)
+        if self.modifier_index is not None:
+            value.subscribe_modifiers(id(self), weakref.ref(self))
+            self.name_index.setdefault(value.name, []).append(value)
+            if value.rules:
+                self.rule_states.append(value)
+            for attribute in value.modifiers:
+                self.modifier_index.setdefault(attribute, []).append(value)
+
+    def extend(self, values):
+        self.modifier_index = None
+        super().extend(values)
+
+    def insert(self, index, value):
+        self.modifier_index = None
+        super().insert(index, value)
+
+    def pop(self, index=-1):
+        self.modifier_index = None
+        return super().pop(index)
+
+    def remove(self, value):
+        self.modifier_index = None
+        super().remove(value)
+
+    def clear(self):
+        self.modifier_index = None
+        super().clear()
+
+    def reverse(self):
+        self.modifier_index = None
+        super().reverse()
+
+    def sort(self, *args, **kwargs):
+        self.modifier_index = None
+        super().sort(*args, **kwargs)
+
+    def __iadd__(self, values):
+        self.extend(values)
+        return self
+
+    def __imul__(self, count):
+        self.modifier_index = None
+        super().__imul__(count)
+        return self
+
+    def __deepcopy__(self, memo):
+        result = StatusList()
+        memo[id(self)] = result
+        result.extend(copy.deepcopy(value, memo) for value in self)
+        return result
+
+
+class SnapshotState:
+    """为事务保存浅层字段状态；赋值自动失效，不要求执行器额外打脏标记。"""
+
+    __slots__ = ("_snapshot_cache",)
+
+    def __setattr__(self, name, value):
+        object.__setattr__(self, "_snapshot_cache", None)
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        object.__setattr__(self, "_snapshot_cache", None)
+        object.__delattr__(self, name)
+
+    def __deepcopy__(self, memo):
+        # 快照与索引订阅只属于原实例；不能经由 deepcopy 串到另一个战场。
+        result = type(self).__new__(type(self))
+        memo[id(self)] = result
+        result.__dict__.update(copy.deepcopy(self.__dict__, memo))
+        for base in type(self).__mro__:
+            slots = base.__dict__.get("__slots__", ())
+            for name in (slots,) if isinstance(slots, str) else slots:
+                if name not in {"__dict__", "__weakref__", "_snapshot_cache", "_modifier_subscribers"} and hasattr(self, name):
+                    object.__setattr__(result, name, copy.deepcopy(getattr(self, name), memo))
+        return result
+
+    def snapshot_state(self):
+        cached = getattr(self, "_snapshot_cache", None)
+        if cached is None:
+            cached = (type(self), dict(self.__dict__))
+            object.__setattr__(self, "_snapshot_cache", cached)
+        return cached
+
+
 @dataclass
-class StatusState:
+class StatusState(SnapshotState):
+    __slots__ = ("_modifier_subscribers", "__dict__", "__weakref__")
+
+    def __setattr__(self, name, value):
+        if name in {"modifiers", "rules", "name"}:
+            for reference in tuple(getattr(self, "_modifier_subscribers", {}).values()):
+                collection = reference()
+                if collection is not None:
+                    collection.modifier_index = None
+            if name != "name" and not isinstance(value, ModifierMap):
+                value = ModifierMap(value)
+        super().__setattr__(name, value)
+
+    def subscribe_modifiers(self, key, reference):
+        subscribers = getattr(self, "_modifier_subscribers", None)
+        if subscribers is None:
+            subscribers = {}
+            object.__setattr__(self, "_modifier_subscribers", subscribers)
+        subscribers[key] = reference
+        self.modifiers.subscribers[key] = reference
+        self.rules.subscribers[key] = reference
+
     name: str
     category: str = "中性"
     remaining_turns: int = 1
@@ -275,7 +536,7 @@ class StatusState:
         unknown = set(value) - allowed
         if unknown:
             raise ValueError("状态存在未知字段：" + "、".join(sorted(str(item) for item in unknown)))
-        return cls(
+        fields = dict(
             name=str(value.get("名称") or "").strip(),
             category=str(value.get("类别") or "中性").strip(),
             remaining_turns=max(0, int(value.get("剩余行动", 1) or 0)),
@@ -293,6 +554,14 @@ class StatusState:
             values=copy_value(dict(value.get("记录") or {})),
             expire_with_source=bool(value.get("来源退场时移除", False)),
         )
+
+        if cls is not StatusState:
+            return cls(**fields)
+        fields['modifiers'] = ModifierMap(fields['modifiers'])
+        fields['rules'] = ModifierMap()
+        status = cls.__new__(cls)
+        status.__dict__.update(fields)
+        return status
 
     def to_dict(self) -> dict[str, Any]:
         result = {
@@ -324,7 +593,7 @@ class StatusState:
 
 
 @dataclass
-class Skill:
+class Skill(SnapshotState):
     key: str
     name: str
     born_order: int = 0
@@ -386,8 +655,12 @@ def copy_skills(skills: list[Skill]) -> list[Skill]:
     return [copy_skill(skill) for skill in skills]
 
 
-@dataclass
-class Fighter:
+class RuntimeExtensions:
+    """为有固定热字段的运行模型保留扩展属性字典。"""
+
+
+@dataclass(slots=True)
+class Fighter(RuntimeExtensions):
     id: str
     name: str
     attributes: dict[str, float]
@@ -433,11 +706,20 @@ class Fighter:
     rules_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     rules_cache_version: int = dataclass_field(default=-1, init=False, repr=False)
 
+    def __setattr__(self, name, value):
+        if name == "statuses" and not isinstance(value, StatusList):
+            value = StatusList(value)
+        object.__setattr__(self, name, value)
+
     def value(self, key: str, default: float = 0.0) -> float:
         # 这一条是全战斗最热的读法（每次算血气上限都走它）：循环里不放 `max()` 与
         # `float()`，没有这个键的状态直接跳过——语义与原来逐字一致。
         result = self.attributes.get(key, default)
-        for status in self.statuses:
+        # 无状态修正时属性读取是纯字典查找；这是战斗中最常见的读取形态。
+        # 保持与下面带状态路径相同的数值类型归一化。
+        if not self.statuses:
+            return result if type(result) is float else float(result)
+        for status in self.statuses.modifiers_for(key):
             modifier = status.modifiers.get(key)
             if modifier:
                 stacks = status.stacks
@@ -492,7 +774,9 @@ def attribute_ratio(
     基础命中率）。
     """
 
-    definition = dict(dict(definitions or {}).get(attribute) or {})
+    # 属性定义来自启动期加载的只读目录；此函数只读取“默认值”，无需在每次
+    # 百分比属性结算时复制整份定义字典。
+    definition = (definitions or {}).get(attribute) or {}
     baseline = float(definition.get("默认值", 0.0))
     if default is not None:
         baseline = float(default) * 100.0
@@ -530,8 +814,8 @@ class CombatObject:
     active: bool = True
 
 
-@dataclass
-class EventFrame:
+@dataclass(slots=True)
+class EventFrame(RuntimeExtensions):
     kind: str
     source: Fighter
     target: Fighter
@@ -689,8 +973,8 @@ class RuntimeCombatField:
         return self.accumulated_damage / self.health_basis
 
 
-@dataclass
-class BattleContext:
+@dataclass(slots=True)
+class BattleContext(RuntimeExtensions):
     rng: random.Random
     left: Fighter
     right: Fighter
@@ -701,12 +985,31 @@ class BattleContext:
     left_team: list[Fighter] = dataclass_field(default_factory=list)
     right_team: list[Fighter] = dataclass_field(default_factory=list)
     events: list[BattleEvent] = dataclass_field(default_factory=list)
+    #: 结算实际派发并记录的事件总数；可大于 ``len(events)``，因为战报模式会
+    #: 按数据目录跳过仅供内部流程使用的事件对象构建。
+    event_count: int = 0
+    #: None 表示保留全部；否则是战报模式要从事件轨迹中省略的展示隐藏类型。
+    event_capture_filter: frozenset[str] | None = None
+    event_capture_zero_change_kinds: frozenset[str] = frozenset()
     action_number: int = 0
     engine: BattleEngine | None = None
     #: 键是（修士 id, 词条, 监听声明）；键长不固定，所以用变长元组。
     #: 追加攻击也往这里记账，它用的是（来源 id, "追加攻击"）。
     trigger_counts: dict[tuple[str, ...], int] = dataclass_field(default_factory=dict)
+    # 高频辅助监听的“持有者行动间隔”预算；按持有者下一次主行动前清理。
+    support_window: dict[tuple[str, ...], int] = dataclass_field(default_factory=dict)
     battle_trigger_counts: dict[tuple[str, ...], int] = dataclass_field(default_factory=dict)
+    #: 监听刚耗尽触发名额时递增；供候选表复用“仍可触发”的筛选结果。
+    listener_budget_version: int = 0
+    chain_serial: int = 0
+    chain_active: bool = False
+    chain_level: int = 1
+    chain_counts: dict[tuple[str, ...], int] = dataclass_field(default_factory=dict)
+    chain_exhausted: set[tuple[str, ...]] = dataclass_field(default_factory=set)
+    chain_source_counts: dict[tuple[tuple[str, ...], str], int] = dataclass_field(default_factory=dict)
+    chain_pending: list = dataclass_field(default_factory=list)
+    chain_queued: set = dataclass_field(default_factory=set)
+    battle_rule_serial: int = 0
     event_depth: int = 0
     ability_depth: int = 0
     triggered_skill_depth: int = 0
@@ -733,6 +1036,7 @@ class BattleContext:
     # restores team membership or a summon enters the battle.
     fighters_by_id: dict[str, Fighter] = dataclass_field(default_factory=dict, init=False)
     fighter_order: dict[str, int] = dataclass_field(default_factory=dict, init=False)
+    listener_fighter_order: dict[str, tuple[int, int]] = dataclass_field(default_factory=dict, init=False, repr=False)
     _fighters_cache: tuple[Fighter, ...] = dataclass_field(default_factory=tuple, init=False, repr=False)
     listener_index: dict[str, tuple[ListenerEntry, ...]] = dataclass_field(
         default_factory=dict, init=False, repr=False
@@ -740,17 +1044,22 @@ class BattleContext:
     #: 监听分桶：`事件 → (观察角色, 阵营关系) → 持有者 → [(位次, 监听条目)]`。
     #: 派发时按「阵营关系」把候选收到当事人身上，再按位次合并——顺序与 `listener_index` 逐条一致。
     listener_buckets: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    listener_roles: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     #: 监听表里**纯静态段**（修士被动）的编译结果：`持有者编号 → (被动表, 参与者位次, 事件 → 条目)`。
     #: 内容只由装配期的被动表与参与者位次决定，所以一场里重编 30~60 遍的那部分可以直接回放
     #: （见 `AbilityRuntime._passive_listener_entries`）。
     listener_passive_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    listener_passive_index: tuple[tuple[str, Mapping[str, tuple], tuple, tuple[int, int]], ...] | None = dataclass_field(default=None, init=False, repr=False)
     listener_index_dirty: bool = dataclass_field(default=True, init=False, repr=False)
     #: `_listeners_for` 的**候选表缓存**：`"table"` 存当时那份监听表对象，其余键是
-    #: `(事件种类, 来源 id, 承受者 id, 行动者 id)`，值是 `(三个当事人, 候选表)`（命中时逐个核身份）。
-    #: 表一重建（`rebuild_indexes` 清空、下一次 `_compiled_listeners` 换成新对象）就整表作废。
+    #: `(事件种类, 来源 id, 承受者 id, 行动者 id, 响应等级)`，值是 `(三个当事人, 候选表)`（命中时逐个核身份）。
+    #: 重编后只保留成员关系与监听顺序均未变的事件候选，首次命中再刷新版本。
     listener_candidate_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    listener_membership: tuple = dataclass_field(default_factory=tuple, init=False, repr=False)
+    #: 随监听表重建的最高响应等级；空调度仍记录事件，不抑制原子行为。
+    listener_max_levels: dict[str, int] = dataclass_field(default_factory=dict, init=False, repr=False)
     #: `_dispatch_event` 的**节点字段缓存**：键是 `id(节点)`，值是
-    #: `(节点, 条件, 每次行动最多触发, 每场战斗最多触发)`——命中时再核 `节点 is 原节点`，
+    #: `(节点, 条件, 每次行动最多触发, 每场战斗最多触发, 效果)`——命中时再核 `节点 is 原节点`，
     #: 所以 `id` 被复用也不会误用。这三样只是节点的**纯函数**，而同一个节点在这条事件的每个
     #: 候补、以及整场战斗的多次派发上会被反复问；与 `CombatCatalog._node_cache` 同一手法、
     #: 同一前提（节点在装配期冻结、一场里不换）。**加新的「每候选都要读的节点字段」时，
@@ -767,6 +1076,16 @@ class BattleContext:
     #: 缓存），这里省掉的是**纯调用开销**（实测 13,259 次调用里 11,001 次命中、现场 10.9 ms）。
     #: 节点来自装配期冻结的内容；交给处理器的仍是 `dict(effect)` 副本，缓存不碰那份副本。
     ability_node_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: 效果节点对应的执行器函数缓存；与节点缓存使用同一对象身份护栏。
+    ability_handler_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: 高频效果执行器的静态字段缓存，按节点对象身份核验。
+    ability_static_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    #: 按标量属性配比复用规范化构成，不强引用临时效果节点。
+    element_composition_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    element_multiplier_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    target_selector_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    definition_copy_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    status_definition_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     #: 监听表的**版本号**：每次真重建（`_compiled_listeners` 换掉 `listener_index` 对象）就 +1。
     #: 候选表缓存里那份「按关系判定筛过」的候选表带的就是这个号；派发循环逐候选比一次，
     #: 号一变就退回逐条判定——因为**判定要读 `owner.side`**，而换阵营会重排位次、换表。
@@ -793,8 +1112,15 @@ class BattleContext:
         self.fighter_order = {
             fighter.id: index for index, fighter in enumerate(self._fighters_cache)
         }
-        self.listener_index.clear()
-        self.listener_buckets.clear()
+        # 与全局位次同序；己方追加召唤物时，敌方的键保持不变。
+        self.listener_fighter_order = {
+            fighter.id: (side, index)
+            for side, team in enumerate((self.left_team, self.right_team))
+            for index, fighter in enumerate(team)
+        }
+        # 立即使当前派发的关系判定失效，但保留旧表供惰性重编逐项比对。
+        # 回滚后的成员和监听若完全没变，可以复用对应事件的候选；入场、
+        # 换阵营或监听变化仍由 _compiled_listeners 的成员/条目核对淘汰。
         self.mark_listener_index_dirty()
 
     def mark_listener_index_dirty(self) -> None:
@@ -882,19 +1208,21 @@ class BattleContext:
         # 第二处记录口（战场形成 / 阵法 / 地势这些由引擎直接派发的事件）：与
         # `mechanics._dispatch_event` 走同一份筛选，不然这些事件会带着整本账进日志。
         recorded = self.engine.recorded_facts if self.engine is not None else None
-        self.events.append(
-            BattleEvent(
-                self.action_number,
-                kind,
-                source.name,
-                target.name,
-                text,
-                round(float(event_values.get("实际数值", event_values.get("当前数值", amount)) or 0), 3),
-                record_values(recorded, event_values),
-                tuple(tags),
-                ability,
-                source.id,
-                target.id,
+        self.event_count += 1
+        if self.event_capture_filter is None or kind not in self.event_capture_filter:
+            self.events.append(
+                BattleEvent(
+                    self.action_number,
+                    kind,
+                    source.name,
+                    target.name,
+                    text,
+                    round(float(event_values.get("实际数值", event_values.get("当前数值", amount)) or 0), 3),
+                    record_values(recorded, event_values),
+                    tuple(tags),
+                    ability,
+                    source.id,
+                    target.id,
+                )
             )
-        )
         return frame

@@ -329,7 +329,6 @@ def test_groups_report_and_snapshots(services) -> None:
         ),
     )
     assert result.report is not None
-
     _fight(
         services,
         limit=20,
@@ -359,3 +358,43 @@ def test_groups_report_and_snapshots(services) -> None:
         ),
         right_team=(_spec("R", gender="女", shield=100),),
     )
+
+
+def test_report_capture_preserves_settlement(services) -> None:
+    """战报省略隐藏节点、无变化记录，全部结算字段仍与完整轨迹一致。"""
+
+    request = CombatRequest(
+        left_team=(_spec("L", (CARD, "400004")),),
+        right_team=(_spec("R", ("400005",)),),
+        seed=20260911,
+        action_limit=60,
+    )
+    full = asyncio.run(services.combat.execute(request))
+    reported = asyncio.run(
+        services.combat.execute(
+            replace(
+                request,
+                report=CombatReportSpec(
+                    participants=(
+                        CombatantReportSpec("L"),
+                        CombatantReportSpec("R"),
+                    )
+                ),
+            )
+        )
+    )
+
+    assert reported.total_event_count == len(full.events)
+    assert len(reported.events) < len(full.events)
+    assert reported.actions == full.actions
+    assert reported.trigger_activations == full.trigger_activations
+    assert reported.winner_side == full.winner_side
+    assert reported.left_results == full.left_results
+    assert reported.right_results == full.right_results
+    assert replace(reported, events=(), report=None, presentation=None) == replace(full, events=())
+    assert '命中后' not in {event.kind for event in reported.events}
+    captured_kinds = {event.kind for event in reported.events}
+    assert {"战斗开始", "行动开始", "造成伤害后", "战斗结束"} <= captured_kinds
+    assert reported.report is not None
+    assert reported.report["result"]["total_event_count"] == len(full.events)
+    assert reported.report["result"]["event_count"] == len(reported.events)

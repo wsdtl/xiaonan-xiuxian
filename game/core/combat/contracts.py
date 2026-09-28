@@ -251,7 +251,7 @@ class StatusResult:
         }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BattleEvent:
     turn: int
     kind: str
@@ -323,6 +323,7 @@ class CombatResult:
     presentation: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None
     field: CombatFieldResult | None = None
     formations: tuple[CombatFormationResult, ...] = ()
+    total_event_count: int = 0
 
     @property
     def left_results(self) -> tuple[CombatantResult, ...]:

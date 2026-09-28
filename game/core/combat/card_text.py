@@ -629,19 +629,37 @@ class CardText:
         """触发上限：按模版单独成行、放在效果之前。"""
 
         caps: list[str] = []
+        from .chains import response_level
+        caps.append("裁断（三速）" if response_level(node) == 3 else "应式（二速）")
+        chain_limit = int(node.get("每条根链最多触发", 1))
+        caps.append(f"此支路每条根链最多发动{chain_limit}次" if chain_limit else "此支路不设根链次数上限")
+        same_source_limit = int(node.get("同一事件来源每条根链最多触发", 0) or 0)
+        if same_source_limit:
+            caps.append(f"同一事件来源每条根链最多发动{same_source_limit}次")
+        if node.get("结算阶段") == "链尾":
+            caps.append("链尾检查条件并兑现，同链多次通知合并一次")
         if node.get("每场战斗最多触发") is not None:
-            caps.append(f"每场战斗最多触发{_number(node['每场战斗最多触发'])}次")
+            caps.append(f"此支路整场最多发动{_number(node['每场战斗最多触发'])}次")
         if node.get("每次行动最多触发") is not None:
-            caps.append(f"每行动最多结算{_number(node['每次行动最多触发'])}次")
+            caps.append(f"此支路每次全场主行动最多发动{_number(node['每次行动最多触发'])}次")
+        if node.get("自身行动间隔最多触发"):
+            caps.append(f"此支路开战时有{_number(node['自身行动间隔最多触发'])}次发动名额，每次自身主行动开始时重置")
+        if caps and any(
+            isinstance(effect, Mapping) and effect.get("能力") == "创建战斗对象"
+            for effect in node.get("效果") or ()
+        ):
+            caps.append("发动次数按触发计算，召唤未成功也消耗次数")
         return caps
 
     def _listener_detail(self, node: Mapping, *, caps: bool = False) -> list[str]:
         detail: list[str] = []
         if not caps:
             if node.get("每次行动最多触发") is not None:
-                detail.append(f"每行动只能使用{_number(node['每次行动最多触发'])}次")
+                detail.append(f"此支路每次全场主行动最多发动{_number(node['每次行动最多触发'])}次")
             if node.get("每场战斗最多触发") is not None:
-                detail.append(f"每场战斗只能使用{_number(node['每场战斗最多触发'])}次")
+                detail.append(f"此支路整场最多发动{_number(node['每场战斗最多触发'])}次")
+            if node.get("自身行动间隔最多触发"):
+                detail.append(f"此支路开战时有{_number(node['自身行动间隔最多触发'])}次发动名额，每次自身主行动开始时重置")
         if node.get("优先级") is not None:
             detail.append(f"优先级{_number(node['优先级'])}")
         return detail
@@ -1831,7 +1849,7 @@ class CardText:
             listeners = body.get("监听")
             if isinstance(listeners, Sequence) and not isinstance(listeners, (str, bytes)):
                 clauses = [
-                    self._effects(item.get("效果"))
+                    "；".join(self._listener(item))
                     for item in listeners
                     if isinstance(item, Mapping)
                 ]
@@ -1839,6 +1857,8 @@ class CardText:
                     inner = "（" + "；".join(clauses) + "）"
         if node.get("来源退场时移除"):
             self._defer("来源退场时移除")
+        if node.get("重复处理") == "同源唯一":
+            self._defer("同一持有者同一构筑的同名规则只保留一份")
         return f"添加战场规则‹{name}›" + (f"：{inner}" if inner else "")
 
     def _ability_save_result(self, node: Mapping) -> str:

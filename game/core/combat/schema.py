@@ -249,6 +249,26 @@ class RuleSchemaValidator(DefinitionSchemaValidator):
         fields = self._fields_for(ability_name, definition, path)
         self.validate_object(node, fields, path)
         self.validate_constraints(node, definition.get("约束", []), path)
+        if ability_name == "监听事件" and node.get("结算阶段") == "链尾":
+            from .chains import response_level
+            if node.get("同一事件来源每条根链最多触发", 0):
+                raise RuleSchemaError(f"{path}：链尾已按声明合并通知，不可再设置同源根链次数")
+            if response_level(node) == 3 or str(node.get("事件", "")).endswith("前") or node.get("事件") in {"受到致命伤害", "行动决策后"}:
+                raise RuleSchemaError(f"{path}：裁断与前置监听不可延迟到链尾")
+            if node.get("每条根链最多触发", 1) != 1:
+                raise RuleSchemaError(f"{path}：链尾兑现每条根链必须限一次")
+            def check_delayed(value):
+                if isinstance(value, Mapping):
+                    if value.get("能力") == "监听事件":
+                        return
+                    if value.get("能力") in {"修改事件数值", "修改事件目标", "修改事件标签", "取消事件", "转化事件", "转移伤害", "分摊伤害"}:
+                        raise RuleSchemaError(f"{path}：事件改写不可延迟到链尾")
+                    for child in value.values():
+                        check_delayed(child)
+                elif isinstance(value, (list, tuple)):
+                    for child in value:
+                        check_delayed(child)
+            check_delayed(node.get("效果"))
 
     def _fields_for(
         self,

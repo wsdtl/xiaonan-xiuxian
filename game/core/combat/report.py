@@ -18,6 +18,9 @@ from .contracts import (
 )
 
 
+_DETAIL_SCALAR_TYPES = frozenset((str, int, float, bool, type(None)))
+
+
 @dataclass(frozen=True)
 class RuntimeBattleReportParticipant:
     id: str
@@ -100,6 +103,7 @@ def build_battle_report(
             winner_id=winner_id,
             winner_ids=winner_ids,
             event_count=len(event_reports),
+            total_event_count=outcome.total_event_count or len(outcome.events),
             seed=seed,
         ),
         "view_modes": catalog.view_modes,
@@ -149,7 +153,18 @@ def _event_reports(
     formations_by_id: Mapping[str, Any],
     catalog: BattleReportCatalog,
 ) -> list[dict[str, Any]]:
-    """逐个事件转写；序号从 1 起。"""
+    """逐个事件转写；序号从 1 起。
+
+    战报是只读展示快照。与 source/target 共用人物描述一样，同一份战报内的
+    相同标量详情共用描述对象，避免为每次通知复制一份字典。缓存只活到本次
+    构建结束，不跨战报共享；列表、字典等可变原始值不进入该缓存。
+    """
+
+    actor_cache: dict[str, dict[str, Any]] = {}
+    detail_cache: dict = {}
+    metadata_cache = {}
+    hidden_kinds = catalog.compact_hidden_kinds
+    actor_numbers = {value.id: index + 1 for index, value in enumerate(participants_by_id.values())}
 
     return [
         _event_report(
@@ -159,6 +174,11 @@ def _event_reports(
             participant_colors,
             formations_by_id,
             catalog,
+            actor_cache,
+            actor_numbers,
+            detail_cache,
+            metadata_cache,
+            hidden_kinds,
         )
         for index, event in enumerate(outcome.events)
     ]
@@ -225,6 +245,11 @@ def _participant_reports(
     展示层拿不到阵营就只能猜（第 86 轮修的就是这个）。
     """
 
+    # 按来源一次分桶，避免每位参战者重复扫描整场事件；桶内维持原顺序，
+    # 伤害/恢复的浮点累加及能力收集语义不变。
+    events_by_source: dict[str, list[BattleEvent]] = {}
+    for event in outcome.events:
+        events_by_source.setdefault(event.source_id, []).append(event)
     return [
         _participant_report(
             value,
@@ -232,7 +257,7 @@ def _participant_reports(
             color=participant_colors[value.id],
             outcome_label="平" if outcome.draw else "胜" if value.id in winner_ids else "负",
             side=side_by_id[value.id],
-            events=outcome.events,
+            events=events_by_source.get(value.id, ()),
             catalog=catalog,
         )
         for index, value in enumerate(participants)
@@ -257,6 +282,7 @@ def _result_section(
     winner_id: str,
     winner_ids: set[str],
     event_count: int,
+    total_event_count: int,
     seed: int | None,
 ) -> dict[str, Any]:
     """战报的结论块：前端只看这里判胜负。"""
@@ -273,6 +299,7 @@ def _result_section(
         "description": f"历经 {outcome.actions} 次行动，{title}。",
         "actions": outcome.actions,
         "event_count": event_count,
+        "total_event_count": total_event_count,
         "trigger_count": outcome.trigger_activations,
         "winner_id": winner_id or None,
         "winner_ids": [
@@ -429,10 +456,20 @@ def _event_report(
     colors: Mapping[str, str],
     formations: Mapping[str, CombatFormationResult],
     catalog: BattleReportCatalog,
+    actor_cache: dict[str, dict[str, Any]],
+    actor_numbers: Mapping[str, int],
+    detail_cache: dict | None = None,
+    metadata_cache: dict | None = None,
+    hidden_kinds: frozenset[str] | None = None,
 ) -> dict[str, Any]:
-    category = catalog.normalized_category(event.kind)
-    category_definition = catalog.normalized_category_definition(category)
-    is_system = event.kind in catalog.system_kinds
+    metadata = metadata_cache.get(event.kind) if metadata_cache is not None else None
+    if metadata is None:
+        metadata = catalog.event_metadata(event.kind)
+        if metadata_cache is not None:
+            metadata_cache[event.kind] = metadata
+    category, category_definition, is_system, kind_label = metadata
+    if hidden_kinds is None:
+        hidden_kinds = catalog.compact_hidden_kinds
     formation_id = str(event.values.get("阵法编号") or "")
     formation = formations.get(formation_id)
     source = _actor_report(
@@ -449,6 +486,8 @@ def _event_report(
         participants,
         colors,
         catalog,
+        actor_cache,
+        actor_numbers,
     )
     target_formation_id = (
         str(event.values.get("冲击目标") or "")
@@ -462,16 +501,23 @@ def _event_report(
         participants,
         colors,
         catalog,
+        actor_cache,
+        actor_numbers,
     )
-    details = [
-        {
-            "label": str(key),
-            "value": _json_value(value),
-            "display": _detail_text(str(key), value, catalog),
-        }
-        for key, value in event.values.items()
-        if key != "技能键"
-    ]
+    details = []
+    for key, value in event.values.items():
+        if key == "技能键":
+            continue
+        signature = (key, type(value), value) if type(value) in _DETAIL_SCALAR_TYPES else None
+        detail = detail_cache.get(signature) if detail_cache is not None and signature is not None else None
+        if detail is None:
+            detail = {
+                "label": str(key), "value": _json_value(value),
+                "display": _detail_text(str(key), value, catalog),
+            }
+            if detail_cache is not None and signature is not None:
+                detail_cache[signature] = detail
+        details.append(detail)
     amount_text = ""
     if event.amount > 0 and category == "damage":
         amount_text = f"{_number_text(event.amount)} 伤害"
@@ -483,11 +529,11 @@ def _event_report(
         "turn": event.turn,
         "turn_label": "开战" if event.turn == 0 else f"第 {event.turn} 次行动",
         "kind": event.kind,
-        "kind_label": catalog.kind_label(event.kind),
+        "kind_label": kind_label,
         "category": category,
         "category_label": category_definition["label"],
         "category_color": category_definition["color"],
-        "compact_visible": event.kind not in catalog.compact_hidden_kinds,
+        "compact_visible": event.kind not in hidden_kinds,
         "source": source,
         "target": target,
         "text": event.text,
@@ -532,22 +578,30 @@ def _actor_report(
     participants: Mapping[str, RuntimeBattleReportParticipant],
     colors: Mapping[str, str],
     catalog: BattleReportCatalog,
+    cache: dict[str, dict[str, Any]],
+    actor_numbers: Mapping[str, int],
 ) -> dict[str, Any]:
+    cached = cache.get(actor_id)
+    if cached is not None:
+        return cached
     participant = participants.get(actor_id)
     if participant is None:
-        return {
+        result = {
             "id": actor_id or "system",
             "name": fallback_name or str(catalog.system["name"]),
             "number": None,
             "color": str(catalog.system["color"]),
         }
-    ids = list(participants)
-    return {
+        cache[actor_id] = result
+        return result
+    result = {
         "id": participant.id,
         "name": participant.name,
-        "number": ids.index(participant.id) + 1,
+        "number": actor_numbers[participant.id],
         "color": colors[participant.id],
     }
+    cache[actor_id] = result
+    return result
 
 
 def _resource(

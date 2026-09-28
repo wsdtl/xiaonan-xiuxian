@@ -425,7 +425,7 @@ def _scene_targeted(engine, entry: dict, rule: dict) -> tuple[str, float, float,
 
 
 def _scene_action_bar(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """行动条被改写：推条之后，目标自己的行动次数。方向决定谁来推。"""
+    """行动条被改写：检查实际推条量，避免最终行动次数相同掩盖规则效果。"""
 
     direction = _direction(rule)
     pusher = _card(
@@ -446,9 +446,11 @@ def _scene_action_bar(engine, entry: dict, rule: dict) -> tuple[str, float, floa
         }
     )
     plain, guarded = _pair_runs(engine, direction, pusher, entry)
-    count_plain = _count(plain, kind="行动开始", actor="R1")
-    count_guarded = _count(guarded, kind="行动开始", actor="R1")
-    return ("目标行动次数", count_plain, count_guarded, count_guarded < count_plain)
+    def pushed(result):
+        return sum(max(0, event.amount) for event in result.events
+                   if event.kind == "行动条变化后" and event.target_id == "R1")
+    plain_amount, guarded_amount = pushed(plain), pushed(guarded)
+    return ("目标实际获得的行动条", plain_amount, guarded_amount, guarded_amount < plain_amount)
 
 
 def _scene_event_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
@@ -727,8 +729,9 @@ def _scene_status_removed(engine, entry: dict, rule: dict) -> tuple[str, float, 
     探针状态 = {
         "名称": "探针封",
         "类别": "负面",
-        "持续单位": "状态承受者行动",
-        "剩余行动": 1 if 到期 else 5,
+        "持续单位": "状态承受者行动" if 到期 or 消耗 else "整场战斗",
+        # 非到期探针不应把稍后的自然到期算成清除或消耗成功。
+        "剩余行动": 1 if 到期 else ACTION_LIMIT + 1,
         "层数": 5 if 消耗 else 1,
         "层数上限": 5 if 消耗 else 1,
     }

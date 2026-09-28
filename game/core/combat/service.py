@@ -245,6 +245,12 @@ class CombatService:
                 for value in (left_formation, right_formation)
                 if value is not None
             ),
+            event_capture_filter=(
+                self._require_report_catalog().compact_hidden_kinds
+                - {"行动开始", "行动结束"}
+                if request.report is not None
+                else None
+            ),
         )
         if request.report is None:
             return result
@@ -261,6 +267,7 @@ class CombatService:
         action_limit: int,
         field: PreparedCombatField | None = None,
         formations: tuple[PreparedFormation, ...] = (),
+        event_capture_filter: frozenset[str] | None = None,
     ) -> CombatResult:
         """供战斗服务自身测试和基准使用的内部同步入口。"""
 
@@ -273,6 +280,7 @@ class CombatService:
             action_limit=action_limit,
             field=field,
             formations=formations,
+            event_capture_filter=event_capture_filter,
         )
 
     def _prepared_formation(
