@@ -11,6 +11,8 @@ from game.features.xinglu import (
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -27,13 +29,7 @@ from . import reply
         },
     },
 )
-async def travel(
-    *,
-    user_id: str,
-    message: str,
-    message_context,
-    manager,
-) -> None:
+async def travel(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     destination = str(message or "").strip()
     if not destination:
         await manager.send(reply.missing_destination())

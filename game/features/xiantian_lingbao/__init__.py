@@ -16,6 +16,7 @@ from .contracts import (
     InnateTreasureView as InnateTreasureView,
 )
 from .service import InnateTreasureFeature as InnateTreasureFeature
+from .contracts import InnateTreasure
 
 __all__ = [
     "InnateTreasureEquipRequest",
@@ -24,4 +25,5 @@ __all__ = [
     "InnateTreasureFeatureConflictError",
     "InnateTreasureFeatureError",
     "InnateTreasureView",
+    "InnateTreasure",
 ]

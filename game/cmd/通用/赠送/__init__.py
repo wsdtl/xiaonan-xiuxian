@@ -7,6 +7,8 @@ from game.features.zengsong import GiftError, GiftSendCommand
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -23,7 +25,7 @@ from . import reply
         },
     },
 )
-async def send(*, user_id: str, message: str, message_context, manager, **_) -> None:
+async def send(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zengsong
     try:
         parts = str(message or "").split()

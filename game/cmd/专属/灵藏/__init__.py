@@ -7,6 +7,8 @@ from game.features.zongmen_lingcang import LingcangFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 _CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
 
@@ -25,7 +27,7 @@ _CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
         },
     },
 )
-async def show_lingcang(*, user_id: str, message: str, manager, **_) -> None:
+async def show_lingcang(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.zongmen_lingcang
     parts = str(message or "").split()
     try:
@@ -58,9 +60,7 @@ async def show_lingcang(*, user_id: str, message: str, manager, **_) -> None:
         },
     },
 )
-async def donate_lingcang(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def donate_lingcang(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_lingcang
     parts = str(message or "").split()
     try:

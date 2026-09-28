@@ -443,7 +443,7 @@ class RaidService:
 __all__ = ["RaidService"]
 
 
-def _pool_names(value, path: str) -> tuple[str, ...]:
+def _pool_names(value: object, path: str) -> tuple[str, ...]:
     if not isinstance(value, (list, tuple)) or not value:
         raise JsonDataError(f"{path}必须是非空文件名列表")
     result = tuple(str(item).strip() for item in value)
@@ -452,7 +452,7 @@ def _pool_names(value, path: str) -> tuple[str, ...]:
     return result
 
 
-def _unit_range(value, path: str, default: tuple[int, int]) -> tuple[int, int]:
+def _unit_range(value: object, path: str, default: tuple[int, int]) -> tuple[int, int]:
     if value is None:
         return default
     if not isinstance(value, (list, tuple)) or len(value) != 2:

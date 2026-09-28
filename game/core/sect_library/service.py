@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from game.core.sect import SectMember, SectService
+
 from collections.abc import Mapping, Sequence
 
 from game.core.asset import AssetService
@@ -22,7 +24,6 @@ from game.core.database import (
     TransactionCommand,
 )
 from game.core.growth import GrowthService
-from game.core.sect import SectService
 
 from .contracts import (
     SectBorrowResult,
@@ -279,7 +280,7 @@ class SectLibraryService:
             raise SectLibraryError("藏经阁中没有找到唯一功法")
         return matches[0]
 
-    async def _member(self, user_id: str):
+    async def _member(self, user_id: str) -> SectMember:
         self._require_initialized()
         member = await self._sect.membership(user_id)
         if member is None:

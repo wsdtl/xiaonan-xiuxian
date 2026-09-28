@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.features.zongmen_shanmen import GateCopy, GateResult
-from message import M
+from message import DocumentMessage, M
 
 _ERROR_KEYS = {
     "not_member": "未加入宗门",
@@ -18,7 +18,7 @@ _ERROR_KEYS = {
 }
 
 
-def result(copy: GateCopy, value: GateResult):
+def result(copy: GateCopy, value: GateResult) -> DocumentMessage:
     key = "进入" if value.action == "进入" else "离开"
     return (
         M.document()
@@ -34,7 +34,7 @@ def result(copy: GateCopy, value: GateResult):
     )
 
 
-def error(copy: GateCopy, code: str):
+def error(copy: GateCopy, code: str) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "结果", "标题"), icon=_text(copy, "图标", "结果"))

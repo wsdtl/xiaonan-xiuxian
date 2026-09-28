@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from message import M
+from message import DocumentMessage, M
 
 
-def page(copy: Mapping[str, Mapping[str, str]], value: Any):
+def page(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessage:
     common = copy["通用"]
     text = copy[value.facility.name]
     builder = (
@@ -58,7 +58,7 @@ def page(copy: Mapping[str, Mapping[str, str]], value: Any):
     return builder.build()
 
 
-def preview(copy: Mapping[str, Mapping[str, str]], value: Any):
+def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessage:
     common = copy["通用"]
     if value.facility.facility_type == "炼器":
         facility_text = copy["百炼堂"]
@@ -134,7 +134,7 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any):
     return builder.build()
 
 
-def completed(copy: Mapping[str, Mapping[str, str]], value: Any):
+def completed(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessage:
     common = copy["通用"]
     text = copy[value.facility.name]
     return (
@@ -159,7 +159,7 @@ def completed(copy: Mapping[str, Mapping[str, str]], value: Any):
     )
 
 
-def error(copy: Mapping[str, Mapping[str, str]], message: str):
+def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
     return (
         M.document()
         .section(copy["错误"].get("标题", "宗门洞天"), icon="notice")

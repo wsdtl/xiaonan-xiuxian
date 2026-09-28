@@ -7,6 +7,8 @@ from game.features.duiwu import TeamFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -32,13 +34,7 @@ from . import reply
         },
     },
 )
-async def team_command(
-    *,
-    user_id: str,
-    message: str,
-    message_context,
-    manager,
-) -> None:
+async def team_command(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.duiwu
     parts = str(message or "").strip().split(maxsplit=1)
     try:

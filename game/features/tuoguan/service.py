@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from game.core.hosting import HostingSession, HostingExecution, HostingError, HostingService
+
 from game.core.data import JsonDataService
-from game.core.hosting import HostingError, HostingService
 
 from .contracts import HostingCopy, HostingFeatureError, HostingResult
 from .presentation import load_presentation
@@ -60,18 +61,18 @@ class HostingFeature:
             raise HostingFeatureError(exc.code) from exc
         return HostingResult("取消", session, active=False)
 
-    async def active_plans(self):
+    async def active_plans(self) -> tuple[HostingSession, ...]:
         return await self._hosting.active_plans()
 
-    async def claim_execution(self, session_id: str):
+    async def claim_execution(self, session_id: str) -> HostingExecution | None:
         return await self._hosting.claim_execution(session_id)
 
-    async def verify_execution(self, execution) -> bool:
+    async def verify_execution(self, execution: HostingExecution) -> bool:
         return await self._hosting.verify_execution(execution)
 
     async def complete_execution(
-        self, execution, *, success: bool, error: str = ""
-    ):
+        self, execution: HostingExecution, *, success: bool, error: str = ""
+    ) -> HostingSession | None:
         return await self._hosting.complete_execution(
             execution, success=success, error=error
         )

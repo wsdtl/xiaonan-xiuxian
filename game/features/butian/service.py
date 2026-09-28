@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from game.core.asset import (
+    InventoryStack,
+    AssetService,
+    InventoryAdjustment,
+    InventoryChangeError,
+)
+
 from collections.abc import Mapping
 
-from game.core.asset import AssetService, InventoryAdjustment, InventoryChangeError
 from game.core.character import CharacterCultivationError, CharacterService
 from game.core.companion import CompanionCultivationError, CompanionService
 from game.core.data import JsonDataError, JsonDataService, nonempty_text as _text
@@ -114,7 +120,7 @@ class ButianFeature:
         if self._location_function not in place.available_functions:
             raise ButianError("只有身在裂天原才能使用补天丹")
 
-    async def _lowest_stack(self, user_id: str, item_id: str):
+    async def _lowest_stack(self, user_id: str, item_id: str) -> InventoryStack | None:
         stacks = await self._asset.inventory_stacks(user_id, item_id)
         return min(stacks, key=lambda value: value.grade.order) if stacks else None
 

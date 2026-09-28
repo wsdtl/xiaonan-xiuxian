@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from game.core.data import JsonDataService
+from .contracts import (
+    SectAction,
+    SectCopy,
+    SectFeatureError,
+    SectMemberView,
+    SectOperationResult,
+    SectPage,
+)
+
 import math
 from datetime import datetime, timezone
 
@@ -17,20 +27,13 @@ from game.core.sect_progress import SectProgressService
 from game.core.sect_library import SectLibraryError, SectLibraryService
 from game.core.world import LocationQuery, WorldService
 
-from .contracts import (
-    SectCopy,
-    SectFeatureError,
-    SectMemberView,
-    SectOperationResult,
-    SectPage,
-)
 from .presentation import actions, load_presentation
 
 
 class SectFeature:
     def __init__(
         self,
-        data,
+        data: JsonDataService,
         sect: SectService,
         character: CharacterService,
         location: LocationService,
@@ -62,7 +65,7 @@ class SectFeature:
             raise RuntimeError("宗门玩法微服务尚未初始化")
         return self._copy
 
-    def page_actions(self, page: str):
+    def page_actions(self, page: str) -> tuple[SectAction, ...]:
         return actions(self._buttons, page)
 
     async def page(self, user_id: str, *, now: datetime | None = None) -> SectPage:
@@ -298,13 +301,13 @@ class SectFeature:
             raise SectFeatureError("target_ambiguous")
         return matches[0]
 
-    async def _profiles(self, user_ids: tuple[str, ...]):
+    async def _profiles(self, user_ids: tuple[str, ...]) -> tuple[CharacterPublicProfile, ...]:
         profiles = await self._character.public_profiles(user_ids)
         if len(profiles) != len(user_ids):
             raise SectFeatureError("sect_changed")
         return profiles
 
-    async def _profile(self, user_id: str):
+    async def _profile(self, user_id: str) -> CharacterPublicProfile:
         profiles = await self._profiles((user_id,))
         return profiles[0]
 

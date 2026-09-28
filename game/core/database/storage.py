@@ -1336,7 +1336,7 @@ def _snapshot(
 
 def _receipt_from_row(
     command: TransactionCommand,
-    row: sqlite3.Row,
+    row: sqlite3.Row | tuple[object, ...],
     *,
     replayed: bool,
 ) -> TransactionReceipt:

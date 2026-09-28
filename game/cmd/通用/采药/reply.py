@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from game.features.caiyao import GatheredItem
+
+from message import DocumentBuilder, DocumentMessage, M
+
 from collections.abc import Mapping
 
 from game.features.caiyao import (
@@ -13,7 +17,6 @@ from game.features.caiyao import (
     HerbGatheringCopy,
     HerbGatheringFeature,
 )
-from message import M
 
 from ...actions import message_actions
 from ...presentation import duration, natural_deadline
@@ -23,7 +26,7 @@ def text(copy: HerbGatheringCopy, section: str, key: str, values: Mapping[str, o
     return copy.text[section][key].format_map(values or {})
 
 
-def error(copy: HerbGatheringCopy, message: str):
+def error(copy: HerbGatheringCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
@@ -36,7 +39,7 @@ def started(
     copy: HerbGatheringCopy,
     value: GatheringStarted,
     actions: tuple[HerbGatheringAction, ...],
-):
+) -> DocumentMessage:
     return (
         M.document()
         .header(text(copy, "开始", "标题"))
@@ -62,7 +65,7 @@ def progress(
     feature: HerbGatheringFeature,
     value: GatheringProgress,
     actions: tuple[HerbGatheringAction, ...],
-):
+) -> DocumentMessage:
     builder = (
         M.document()
         .header(text(copy, "进度", "标题"))
@@ -120,7 +123,7 @@ def settlement_page(
     value: GatheringSettlement,
     page: int,
     actions: tuple[HerbGatheringAction, ...],
-):
+) -> DocumentMessage:
     total_pages = 1 + len(value.users)
     if page == 1:
         builder = (
@@ -160,7 +163,7 @@ def _user_page(
     value: GatheringUserSummary,
     page: int,
     total_pages: int,
-):
+) -> DocumentBuilder:
     builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
     if value.treasure_activation is not None:
         activation = value.treasure_activation
@@ -181,7 +184,7 @@ def _user_page(
     return builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
 
 
-def _item_parts(feature: HerbGatheringFeature, item) -> tuple[object, ...]:
+def _item_parts(feature: HerbGatheringFeature, item: GatheredItem) -> tuple[object, ...]:
     return (
         M.command(
             M.text(feature.item_label(item.item_id, item.grade_id), tone="wood"),

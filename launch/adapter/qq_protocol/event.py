@@ -359,9 +359,3 @@ def _is_you_mention(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes"}
 
 
-def _is_explicit_other_mention(value: Any) -> bool:
-    """只把明确 false 当成其它用户；缺省值保留给 QQ 兼容分支。"""
-
-    if value is False:
-        return True
-    return str(value).strip().lower() in {"0", "false", "no"}

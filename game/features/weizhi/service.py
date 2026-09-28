@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from game.core.location import LocationService
+
 import asyncio
 import math
 from collections.abc import Mapping, Sequence
@@ -10,11 +12,10 @@ from dataclasses import replace
 from game.core.character import CharacterService
 from game.core.companion import CompanionService, LocalCultivator
 from game.core.data import JsonDataService, positive_int as _positive_int
-from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.team import TeamService
-from game.core.world import LocationQuery, WorldService
+from game.core.world import LocationQuery, LocationView, WorldService
 from game.features.presentation import require_mapping
 
 from .contracts import (
@@ -428,7 +429,7 @@ class PositionFeature:
         )
         return f"约{rounded}里"
 
-    def _visible_location(self, location):
+    def _visible_location(self, location: LocationView) -> LocationView:
         return replace(
             location,
             available_functions=self._visible_functions(location.available_functions),

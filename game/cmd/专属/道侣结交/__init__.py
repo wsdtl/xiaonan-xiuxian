@@ -11,8 +11,9 @@ from game.features.daolv_jiejiao import (
 )
 
 from ...command import GameCommand
-from . import input as command_input
-from . import reply
+from . import input as command_input, reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -29,7 +30,7 @@ from . import reply
         },
     },
 )
-async def inspect_companion(*, user_id: str, message: str, manager, **_) -> None:
+async def inspect_companion(user_id: str, message: str, manager: Any) -> None:
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
@@ -59,7 +60,7 @@ async def inspect_companion(*, user_id: str, message: str, manager, **_) -> None
         },
     },
 )
-async def converse_companion(*, user_id: str, message: str, manager, **_) -> None:
+async def converse_companion(user_id: str, message: str, manager: Any) -> None:
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
@@ -93,9 +94,7 @@ async def converse_companion(*, user_id: str, message: str, manager, **_) -> Non
         },
     },
 )
-async def gift_companion(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def gift_companion(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
@@ -126,9 +125,7 @@ async def gift_companion(
         },
     },
 )
-async def invite_companion(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def invite_companion(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
@@ -160,9 +157,7 @@ async def invite_companion(
         },
     },
 )
-async def farewell_companion(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def farewell_companion(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()

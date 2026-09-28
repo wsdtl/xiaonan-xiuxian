@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from game.features.qiecuo import DuelChallenge, DuelFeature, DuelResult
-from message import M
+from message import DocumentMessage, M
 
 from ...presentation import natural_deadline, sentence
 
 
-def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str):
+def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> DocumentMessage:
     return (
         M.document()
         .header(feature.text("发起", "标题"))
@@ -30,7 +30,7 @@ def result(
     value: DuelResult,
     challenger_name: str,
     target_name: str,
-):
+) -> DocumentMessage:
     winner = feature.winner_label(value.winner, challenger_name, target_name)
     return (
         M.document()
@@ -51,7 +51,7 @@ def result(
     )
 
 
-def rejected():
+def rejected() -> DocumentMessage:
     return (
         M.document()
         .header("切磋邀约")
@@ -60,7 +60,7 @@ def rejected():
     )
 
 
-def error(feature: DuelFeature, message: str):
+def error(feature: DuelFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.text("错误", "标题"), icon="notice")

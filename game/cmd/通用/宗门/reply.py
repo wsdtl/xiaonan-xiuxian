@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.features.zongmen import SectAction, SectCopy, SectOperationResult, SectPage
-from message import M
+from message import DocumentMessage, M
 
 from ...actions import message_actions
 
@@ -44,7 +44,7 @@ def page(
     actions: tuple[SectAction, ...],
     *,
     notice: str = "",
-):
+) -> DocumentMessage:
     title = (
         value.name
         if value.page not in {"未加入", "待处理邀请"}
@@ -121,12 +121,12 @@ def page(
 
 def operation(
     copy: SectCopy, value: SectOperationResult, actions: tuple[SectAction, ...]
-):
+) -> DocumentMessage:
     notice = _text(copy, "结果", value.action).format_map({"姓名": value.target_name})
     return page(copy, value.page, actions, notice=notice)
 
 
-def error(copy: SectCopy, code: str):
+def error(copy: SectCopy, code: str) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
@@ -139,7 +139,7 @@ def error(copy: SectCopy, code: str):
     )
 
 
-def format_error(copy: SectCopy):
+def format_error(copy: SectCopy) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))

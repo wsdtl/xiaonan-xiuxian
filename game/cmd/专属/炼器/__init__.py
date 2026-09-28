@@ -7,6 +7,8 @@ from game.features.lianqi import ForgingFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 _STAGES = frozenset({"灵器", "法器", "法宝", "后天灵宝"})
 
@@ -25,7 +27,7 @@ _STAGES = frozenset({"灵器", "法器", "法宝", "后天灵宝"})
         },
     },
 )
-async def inspect_forging(*, user_id: str, message: str, manager, **_) -> None:
+async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.lianqi
     query = str(message or "").strip()
     try:
@@ -60,9 +62,7 @@ async def inspect_forging(*, user_id: str, message: str, manager, **_) -> None:
         },
     },
 )
-async def commit_forging(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def commit_forging(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.lianqi
     query = str(message or "").strip()
     if not query:

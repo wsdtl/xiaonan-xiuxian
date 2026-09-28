@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from message import DocumentBuilder, DocumentMessage, M
+
 from game.features.zengsong import GiftFeature, GiftResult
-from message import M
 
 from ...presentation import sentence
 
 
-def stones(feature: GiftFeature, target_name: str, value: GiftResult):
+def stones(feature: GiftFeature, target_name: str, value: GiftResult) -> DocumentMessage:
     return (
         _result(feature, target_name)
         .field("灵石", M.text(value.quantity, tone="cultivation"))
@@ -23,7 +24,7 @@ def item(
     *,
     grade_name: str,
     item_name: str,
-):
+) -> DocumentMessage:
     return (
         _result(feature, target_name)
         .field(
@@ -38,7 +39,7 @@ def item(
     )
 
 
-def error(feature: GiftFeature, message: str):
+def error(feature: GiftFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.text("错误", "标题"), icon="notice")
@@ -47,7 +48,7 @@ def error(feature: GiftFeature, message: str):
     )
 
 
-def _result(feature: GiftFeature, target_name: str):
+def _result(feature: GiftFeature, target_name: str) -> DocumentBuilder:
     return (
         M.document()
         .header(feature.text("", "标题"))

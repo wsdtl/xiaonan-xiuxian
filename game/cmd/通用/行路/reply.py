@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from game.features.xinglu import LocationView
+
 from game.features.xinglu import TravelResult
-from message import M
+from message import DocumentMessage, M
 
 from ...actions import CommandAction, message_actions
 
 
-def missing_destination():
+def missing_destination() -> DocumentMessage:
     return (
         M.document()
         .section("行路", icon="navigation")
@@ -18,7 +20,7 @@ def missing_destination():
     )
 
 
-def query_error(message: str):
+def query_error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("行路", icon="navigation")
@@ -27,7 +29,7 @@ def query_error(message: str):
     )
 
 
-def conflict():
+def conflict() -> DocumentMessage:
     return (
         M.document()
         .section("行路", icon="notice")
@@ -40,7 +42,7 @@ def conflict():
 def success(
     result: TravelResult,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     plan = result.plan
     destination = plan.destination
     reply = (
@@ -61,7 +63,7 @@ def success(
     return reply.actions(message_actions(actions)).build()
 
 
-def _location_name(location) -> str:
+def _location_name(location: LocationView) -> str:
     if location.location_name:
         return location.location_name
     return f"{location.region}·{location.terrain}（{location.xy[0]}, {location.xy[1]}）"

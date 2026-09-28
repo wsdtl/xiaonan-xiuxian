@@ -12,6 +12,8 @@ from game.features.daolv_peiyang import (
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -28,7 +30,7 @@ from . import reply
         },
     },
 )
-async def show_companion_cultivation(*, user_id: str, manager, **_) -> None:
+async def show_companion_cultivation(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.daolv_peiyang
     try:
         result = await feature.inspect(user_id)
@@ -51,9 +53,7 @@ async def show_companion_cultivation(*, user_id: str, manager, **_) -> None:
         },
     },
 )
-async def breakthrough_companion(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def breakthrough_companion(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.daolv_peiyang
     try:
         result = await feature.breakthrough(
@@ -80,9 +80,7 @@ async def breakthrough_companion(
         },
     },
 )
-async def forge_companion_law(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def forge_companion_law(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.daolv_peiyang
     parts = message.rsplit(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdecimal():

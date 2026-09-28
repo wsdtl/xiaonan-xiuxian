@@ -5,6 +5,8 @@ from game.features.butian import ButianConflictError, ButianError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -21,9 +23,7 @@ from . import reply
         },
     },
 )
-async def correct_breakthrough(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def correct_breakthrough(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.butian
     parts = str(message or "").split()
     try:

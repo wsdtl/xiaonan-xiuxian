@@ -1,8 +1,8 @@
 from game.features.guiyuan import GuiyuanFeature, GuiyuanPreview, GuiyuanResult
-from message import M
+from message import DocumentMessage, M
 
 
-def preview(feature: GuiyuanFeature, value: GuiyuanPreview):
+def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:
     builder = (
         M.document()
         .header(feature.copy("预览", "标题"))
@@ -23,7 +23,7 @@ def preview(feature: GuiyuanFeature, value: GuiyuanPreview):
     ).build()
 
 
-def result(feature: GuiyuanFeature, value: GuiyuanResult):
+def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
     return (
         M.document()
         .header(feature.copy("结算", "标题"))
@@ -37,7 +37,7 @@ def result(feature: GuiyuanFeature, value: GuiyuanResult):
     )
 
 
-def error(feature: GuiyuanFeature, message: str):
+def error(feature: GuiyuanFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.copy("错误", "标题"), icon="notice")

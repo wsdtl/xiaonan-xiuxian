@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+from game.core.sect_facilities import (
+    SectForgingPreview,
+    SectAlchemyPreview,
+    SectFormationPreview,
+    SectCraftResult,
+    SectFacilityPage,
+    SectFacilityError,
+    SectFacilityService,
+)
+
 from collections.abc import Mapping
 
 from game.core.data import JsonDataError, JsonDataService
-from game.core.sect_facilities import SectFacilityError, SectFacilityService
 
 
 class SectFacilityFeatureError(RuntimeError):
@@ -40,7 +49,7 @@ class SectFacilityFeature:
         source: str = "个人纳戒",
         section: str = "",
         page: int = 1,
-    ):
+    ) -> SectFacilityPage:
         source = _source(source)
         try:
             if facility == "炼器":
@@ -53,7 +62,7 @@ class SectFacilityFeature:
             raise SectFacilityFeatureError(str(exc)) from exc
         raise SectFacilityFeatureError("未知宗门设施")
 
-    async def preview(self, facility: str, user_id: str, source: str, identifier: str, grade: str = "", investments=None):
+    async def preview(self, facility: str, user_id: str, source: str, identifier: str, grade: str = "", investments: Mapping[str, int] | None=None) -> SectForgingPreview | SectAlchemyPreview | SectFormationPreview:
         source = _source(source)
         try:
             if facility == "炼器":
@@ -70,7 +79,7 @@ class SectFacilityFeature:
             raise SectFacilityFeatureError(str(exc)) from exc
         raise SectFacilityFeatureError("未知宗门设施")
 
-    async def craft(self, facility: str, user_id: str, request_id: str, source: str, identifier: str, grade: str = "", investments=None):
+    async def craft(self, facility: str, user_id: str, request_id: str, source: str, identifier: str, grade: str = "", investments: Mapping[str, int] | None=None) -> SectCraftResult:
         source = _source(source)
         try:
             if facility == "炼器":

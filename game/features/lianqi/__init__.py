@@ -10,6 +10,7 @@ from .contracts import (
     ForgingResult,
 )
 from .service import ForgingFeature
+from .contracts import ForgingMaterial
 
 __all__ = [
     "ForgingAction",
@@ -20,4 +21,5 @@ __all__ = [
     "ForgingOverview",
     "ForgingPreview",
     "ForgingResult",
+    "ForgingMaterial",
 ]

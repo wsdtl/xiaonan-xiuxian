@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from message import Action, M
+from message import DocumentMessage, Action, M
 
 
-def entry(url: str):
+def entry(url: str) -> DocumentMessage:
     return (
         M.document()
         .section("天道后台", icon="system")

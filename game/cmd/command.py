@@ -21,7 +21,7 @@ class GameCommand:
 
     @staticmethod
     def fullmatch(
-        cmd,
+        cmd: object,
         *,
         priority: int = 100,
         block: bool = True,
@@ -37,7 +37,7 @@ class GameCommand:
 
     @staticmethod
     def command(
-        cmd,
+        cmd: object,
         *,
         priority: int = 100,
         block: bool = True,
@@ -53,7 +53,7 @@ class GameCommand:
 
     @staticmethod
     def regex(
-        cmd,
+        cmd: object,
         *,
         priority: int = 100,
         block: bool = True,
@@ -66,16 +66,25 @@ class GameCommand:
 
 def _register(
     registrar: Callable[..., Callable],
-    cmd,
+    cmd: object,
     *,
     priority: int,
     block: bool,
     metadata: dict[str, Any] | None,
 ) -> Callable:
-    if registrar is MessageHandler.regex:
-        return _register_regex(registrar, cmd, priority, block, metadata)
-    routes = _command_routes(cmd)
-    command_key = routes[0]
+    is_regex = registrar is MessageHandler.regex
+    if is_regex:
+        routes = (
+            (cmd,) if isinstance(cmd, re.Pattern)
+            else tuple(cmd) if isinstance(cmd, Sequence)
+            else ()
+        )
+        if not routes or any(not isinstance(route, re.Pattern) for route in routes):
+            raise TypeError("正则命令 cmd 必须是正则表达式或正则表达式序列")
+        route_names = tuple(route.pattern for route in routes)
+    else:
+        routes = route_names = _command_routes(cmd)
+    command_key = route_names[0]
     command_metadata = dict(metadata or {})
     scope = _required_text(command_metadata, "scope")
     if scope not in COMMAND_SCOPES:
@@ -85,83 +94,33 @@ def _register(
     help_spec = _help_spec(command_metadata.get("help"))
     if scope == "后台" and (not hidden or help_spec is not None):
         raise ValueError("后台命令必须在 metadata 标记 hidden=True，且禁止登记玩家帮助")
-    if help_spec is not None and hidden:
+    if help_spec is not None and hidden and not is_regex:
         raise ValueError("游戏命令不能同时登记帮助并标记为隐藏")
     if help_spec is None and not hidden:
         raise ValueError("游戏命令必须在 metadata 提供 help，或标记 hidden=True")
 
     def decorate(func: Callable) -> Callable:
         source_module = func.__module__
-        _registered_commands[:] = [
-            entry
-            for entry in _registered_commands
-            if (entry[0], entry[2]) != (command_key, source_module)
-        ]
-        _registered_command_routes[:] = [
-            entry
-            for entry in _registered_command_routes
-            if not (entry[4] == command_key and entry[2] == source_module)
-        ]
+        if not is_regex:
+            _registered_commands[:] = [
+                entry
+                for entry in _registered_commands
+                if (entry[0], entry[2]) != (command_key, source_module)
+            ]
+            _registered_command_routes[:] = [
+                entry
+                for entry in _registered_command_routes
+                if not (entry[4] == command_key and entry[2] == source_module)
+            ]
         if help_spec is not None:
-            help_registry.register(routes, help_spec, source_module=source_module)
+            help_registry.register(route_names, help_spec, source_module=source_module)
         for route in routes:
             registrar(
                 cmd=route, priority=priority, block=block, metadata=command_metadata
             )(func)
         _registered_commands.append((command_key, scope, source_module, guard_rule))
         _registered_command_routes.extend(
-            (route, scope, source_module, guard_rule, command_key) for route in routes
-        )
-        return func
-
-    return decorate
-
-
-def _register_regex(
-    registrar: Callable[..., Callable],
-    cmd: object,
-    priority: int,
-    block: bool,
-    metadata: dict[str, Any] | None,
-) -> Callable:
-    patterns = (
-        (cmd,)
-        if isinstance(cmd, re.Pattern)
-        else tuple(cmd)
-        if isinstance(cmd, Sequence)
-        else ()
-    )
-    if not patterns or any(not isinstance(pattern, re.Pattern) for pattern in patterns):
-        raise TypeError("正则命令 cmd 必须是正则表达式或正则表达式序列")
-    command_metadata = dict(metadata or {})
-    scope = _required_text(command_metadata, "scope")
-    if scope not in COMMAND_SCOPES:
-        raise ValueError(f"游戏命令 scope 必须是：{'、'.join(sorted(COMMAND_SCOPES))}")
-    guard_rule = _required_text(command_metadata, "guard_rule")
-    hidden = bool(command_metadata.get("hidden", False))
-    help_spec = _help_spec(command_metadata.get("help"))
-    if scope == "后台" and (not hidden or help_spec is not None):
-        raise ValueError("后台命令必须在 metadata 标记 hidden=True，且禁止登记玩家帮助")
-    if help_spec is None and not hidden:
-        raise ValueError("游戏命令必须在 metadata 提供 help，或标记 hidden=True")
-
-    def decorate(func: Callable) -> Callable:
-        source_module = func.__module__
-        if help_spec is not None:
-            help_registry.register(
-                tuple(pattern.pattern for pattern in patterns),
-                help_spec,
-                source_module=source_module,
-            )
-        for pattern in patterns:
-            registrar(
-                cmd=pattern, priority=priority, block=block, metadata=command_metadata
-            )(func)
-        command_key = patterns[0].pattern
-        _registered_commands.append((command_key, scope, source_module, guard_rule))
-        _registered_command_routes.extend(
-            (pattern.pattern, scope, source_module, guard_rule, command_key)
-            for pattern in patterns
+            (route, scope, source_module, guard_rule, command_key) for route in route_names
         )
         return func
 

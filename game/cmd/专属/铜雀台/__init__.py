@@ -11,6 +11,8 @@ from game.features.tongquetai import (
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -27,9 +29,7 @@ from . import reply
         },
     },
 )
-async def transfer_cultivation(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def transfer_cultivation(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.tongquetai
     mode = str(message or "").strip()
     try:

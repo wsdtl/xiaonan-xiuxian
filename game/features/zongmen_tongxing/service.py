@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from .contracts import (
+    SectFollowAction,
+    SectFollowCopy,
+    SectFollowFeatureError,
+    SectFollowMemberView,
+    SectFollowPage,
+    SectFollowResult,
+)
+
 from game.core.character import CharacterPublicProfile, CharacterService
 from game.core.data import JsonDataService
 from game.core.location import LocationService
@@ -9,13 +18,6 @@ from game.core.player_state import PlayerStateService
 from game.core.sect import SectConflictError, SectService
 from game.core.team import TeamService
 
-from .contracts import (
-    SectFollowCopy,
-    SectFollowFeatureError,
-    SectFollowMemberView,
-    SectFollowPage,
-    SectFollowResult,
-)
 from .presentation import actions, load_presentation
 
 
@@ -50,7 +52,7 @@ class SectFollowFeature:
             raise RuntimeError("宗门同行玩法微服务尚未初始化")
         return self._copy
 
-    def page_actions(self, page: str):
+    def page_actions(self, page: str) -> tuple[SectFollowAction, ...]:
         return actions(self._buttons, page)
 
     async def page(self, user_id: str) -> SectFollowPage:

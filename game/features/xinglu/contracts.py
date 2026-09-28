@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from game.core.world import JourneyPlan
+from game.core.world import LocationView
 
 
 class TravelError(RuntimeError):
@@ -39,4 +40,5 @@ __all__ = [
     "TravelQueryError",
     "TravelRequest",
     "TravelResult",
+    "LocationView",
 ]

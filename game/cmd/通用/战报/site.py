@@ -53,7 +53,7 @@ def _data_headers() -> dict[str, str]:
 
 
 @router.get("/{report_id}", response_class=HTMLResponse, include_in_schema=False)
-async def battle_report_page(report_id: str) -> HTMLResponse:
+async def battle_report_page() -> HTMLResponse:
     return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"), headers=_page_headers())
 
 

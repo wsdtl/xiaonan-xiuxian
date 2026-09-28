@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from game.features.zongmen_lingcang import SectAssetTransfer
+
+from collections.abc import Sequence, Mapping
+from ...actions import CommandAction, message_actions
+
 
 from game.features.zongmen_lingcang import LingcangCopy, LingcangPage
-from message import M
+from message import DocumentMessage, M
 
-from ...actions import message_actions
 from ...presentation import sentence
 
 
-def page(copy: LingcangCopy, value: LingcangPage, actions):
+def page(copy: LingcangCopy, value: LingcangPage, actions: Sequence[CommandAction]) -> DocumentMessage:
     builder = (
         M.document()
         .header(_text(copy, "标题"))
@@ -37,7 +40,7 @@ def page(copy: LingcangCopy, value: LingcangPage, actions):
     return builder.actions(message_actions(actions)).build()
 
 
-def donated_material(copy: LingcangCopy, result):
+def donated_material(copy: LingcangCopy, result: SectAssetTransfer) -> DocumentMessage:
     entry = result.entry
     if entry is None:
         return error(copy, "灵藏捐献结果缺少材料条目")
@@ -63,7 +66,7 @@ def donated_material(copy: LingcangCopy, result):
     return builder.build()
 
 
-def donated_stones(copy: LingcangCopy, quantity: int, result):
+def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer) -> DocumentMessage:
     builder = (
         M.document()
         .header(_text(copy, "标题"))
@@ -81,7 +84,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result):
     return builder.build()
 
 
-def error(copy: LingcangCopy, message: str):
+def error(copy: LingcangCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "错误"), icon="notice")

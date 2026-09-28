@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Mapping
+from typing import TypeVar
+
 
 from game.core.data import JsonDataService
 from game.core.forging import (
@@ -16,6 +18,9 @@ from game.core.forging import (
 
 from .contracts import ForgingAction, ForgingCopy, ForgingFeatureError
 from .presentation import actions, load_presentation
+
+
+_Result = TypeVar("_Result")
 
 
 class ForgingFeature:
@@ -68,7 +73,7 @@ class ForgingFeature:
         return actions(self._buttons, "完成", set())
 
     @staticmethod
-    async def _call(awaitable):
+    async def _call(awaitable: Awaitable[_Result]) -> _Result:
         try:
             return await awaitable
         except ForgingError as exc:

@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
+from game.features.zongmen_zhan import SectWarView, SectWarFeature, SectWarError
+
+
 from game.app import current_game_services
-from game.features.zongmen_zhan import SectWarError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
-def _feature():
+def _feature() -> SectWarFeature:
     return current_game_services().features.zongmen_zhan
 
 
@@ -27,7 +32,7 @@ def _feature():
         },
     },
 )
-async def challenge(*, user_id, message, message_context, manager, **_) -> None:
+async def challenge(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     parts = str(message or "").split()
     try:
         if len(parts) != 2 or not parts[1].isdecimal() or int(parts[1]) < 1:
@@ -55,7 +60,7 @@ async def challenge(*, user_id, message, message_context, manager, **_) -> None:
         },
     },
 )
-async def accept(*, user_id, message_context, manager, **_) -> None:
+async def accept(user_id: str, message_context: MessageContext, manager: Any) -> None:
     await _run(manager, _feature().accept(user_id, message_context.request_id))
 
 
@@ -72,7 +77,7 @@ async def accept(*, user_id, message_context, manager, **_) -> None:
         },
     },
 )
-async def reject(*, user_id, message_context, manager, **_) -> None:
+async def reject(user_id: str, message_context: MessageContext, manager: Any) -> None:
     await _run(manager, _feature().reject(user_id, message_context.request_id))
 
 
@@ -89,7 +94,7 @@ async def reject(*, user_id, message_context, manager, **_) -> None:
         },
     },
 )
-async def withdraw(*, user_id, message_context, manager, **_) -> None:
+async def withdraw(user_id: str, message_context: MessageContext, manager: Any) -> None:
     await _run(manager, _feature().withdraw(user_id, message_context.request_id))
 
 
@@ -111,7 +116,7 @@ async def withdraw(*, user_id, message_context, manager, **_) -> None:
         },
     },
 )
-async def lock(*, user_id, message, message_context, manager, **_) -> None:
+async def lock(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _run(
         manager,
         _feature().lock(
@@ -133,7 +138,7 @@ async def lock(*, user_id, message, message_context, manager, **_) -> None:
         },
     },
 )
-async def unlock(*, user_id, message_context, manager, **_) -> None:
+async def unlock(user_id: str, message_context: MessageContext, manager: Any) -> None:
     await _run(manager, _feature().unlock(user_id, message_context.request_id))
 
 
@@ -151,7 +156,7 @@ async def unlock(*, user_id, message_context, manager, **_) -> None:
         },
     },
 )
-async def start(*, user_id, message_context, manager, **_) -> None:
+async def start(user_id: str, message_context: MessageContext, manager: Any) -> None:
     await _run(manager, _feature().start(user_id, message_context.request_id))
 
 
@@ -169,7 +174,7 @@ async def start(*, user_id, message_context, manager, **_) -> None:
         },
     },
 )
-async def cancel(*, user_id, message_context, manager, **_) -> None:
+async def cancel(user_id: str, message_context: MessageContext, manager: Any) -> None:
     await _run(manager, _feature().cancel(user_id, message_context.request_id))
 
 
@@ -186,7 +191,7 @@ async def cancel(*, user_id, message_context, manager, **_) -> None:
         },
     },
 )
-async def current(*, user_id, message, message_context, manager, **_) -> None:
+async def current(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     try:
         war_id = str(message or "").strip()
         value = (
@@ -212,7 +217,7 @@ async def current(*, user_id, message, message_context, manager, **_) -> None:
         },
     },
 )
-async def history(*, user_id, message, manager, **_) -> None:
+async def history(user_id: str, message: str, manager: Any) -> None:
     try:
         raw = str(message or "").strip()
         if raw and (not raw.isdecimal() or int(raw) < 1):
@@ -226,7 +231,7 @@ async def history(*, user_id, message, manager, **_) -> None:
         await manager.send(reply.error(_feature().error(exc)))
 
 
-async def _run(manager, operation) -> None:
+async def _run(manager: Any, operation: Awaitable[SectWarView]) -> None:
     try:
         await manager.send(reply.view(_feature(), await operation))
     except SectWarError as exc:

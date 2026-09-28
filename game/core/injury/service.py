@@ -313,7 +313,7 @@ class InjuryService:
         return self._apply_candidates(state, candidates)
 
     @staticmethod
-    def _matches_external(matcher: Mapping[str, object], status) -> bool:
+    def _matches_external(matcher: Mapping[str, object], status: str) -> bool:
         if matcher.get("兜底") is True:
             return True
         attributes = set(_texts(matcher.get("属性任一", ()), "外来伤势.匹配.属性任一"))

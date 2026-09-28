@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from game.features.liandan import AlchemyMaterial
+
+from message import DocumentBuilder, DocumentMessage, M
+
 from collections.abc import Mapping
 
 from game.features.liandan import (
@@ -12,7 +16,6 @@ from game.features.liandan import (
     AlchemyRecipeList,
     AlchemyResult,
 )
-from message import M
 
 from ...actions import message_actions
 from ...presentation import sentence
@@ -26,7 +29,7 @@ def overview(
     copy: AlchemyCopy,
     value: AlchemyOverview,
     actions: tuple[AlchemyAction, ...],
-):
+) -> DocumentMessage:
     alchemist = value.alchemist
     builder = (
         M.document()
@@ -53,7 +56,7 @@ def recipe_list(
     copy: AlchemyCopy,
     value: AlchemyRecipeList,
     actions: tuple[AlchemyAction, ...],
-):
+) -> DocumentMessage:
     builder = (
         M.document()
         .header(
@@ -86,7 +89,7 @@ def preview(
     copy: AlchemyCopy,
     value: AlchemyPreview,
     actions: tuple[AlchemyAction, ...],
-):
+) -> DocumentMessage:
     alchemist = value.alchemist
     builder = (
         M.document()
@@ -144,7 +147,7 @@ def completed(
     copy: AlchemyCopy,
     value: AlchemyResult,
     actions: tuple[AlchemyAction, ...],
-):
+) -> DocumentMessage:
     preview_value = value.preview
     alchemist = preview_value.alchemist
     builder = (
@@ -169,7 +172,7 @@ def completed(
     return builder.actions(message_actions(actions)).build()
 
 
-def error(copy: AlchemyCopy, message: str):
+def error(copy: AlchemyCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
@@ -178,7 +181,7 @@ def error(copy: AlchemyCopy, message: str):
     )
 
 
-def _material(builder, index: int, material) -> None:
+def _material(builder: DocumentBuilder, index: int, material: AlchemyMaterial) -> None:
     builder.item(
         index,
         M.command(

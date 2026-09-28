@@ -14,7 +14,7 @@ from game.features.daolv_jiejiao import (
     CompanionInvitationResult,
     CompanionView,
 )
-from message import M
+from message import DocumentMessage, M
 
 from ...actions import CommandAction, message_actions
 
@@ -23,7 +23,7 @@ def text(copy: CompanionCopy, section: str, key: str, values: Mapping[str, objec
     return copy.text[section][key].format_map(values or {})
 
 
-def error(copy: CompanionCopy, message: str):
+def error(copy: CompanionCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon=copy.icons["错误"])
@@ -32,7 +32,7 @@ def error(copy: CompanionCopy, message: str):
     )
 
 
-def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction, ...]):
+def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction, ...]) -> DocumentMessage:
     definition = value.definition
     relation_text = (
         text(copy, "查看", "尚未结交")
@@ -91,7 +91,7 @@ def conversation(
     copy: CompanionCopy,
     result: CompanionConversation,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     definition = result.view.definition
     return (
         M.document()
@@ -108,7 +108,7 @@ def gift(
     copy: CompanionCopy,
     result: CompanionGiftResult,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     definition = result.view.definition
     builder = M.document().header(text(copy, "赠礼", "标题", {"名称": definition.name}))
     if not result.accepted:
@@ -197,7 +197,7 @@ def invitation(
     copy: CompanionCopy,
     result: CompanionInvitationResult,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     definition = result.view.definition
     builder = (
         M.document()
@@ -228,7 +228,7 @@ def farewell(
     copy: CompanionCopy,
     result: CompanionFarewellResult,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     definition = result.definition
     return (
         M.document()

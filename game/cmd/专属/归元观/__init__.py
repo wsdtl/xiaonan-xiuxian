@@ -5,6 +5,8 @@ from game.features.guiyuan import GuiyuanConflictError, GuiyuanError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -21,9 +23,7 @@ from . import reply
         },
     },
 )
-async def reset_build(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def reset_build(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.guiyuan
     query = str(message or "").strip()
     try:

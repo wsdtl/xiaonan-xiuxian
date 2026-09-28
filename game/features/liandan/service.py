@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Mapping
+from typing import TypeVar
 
-from game.core.alchemy import AlchemyError, AlchemyService
+from game.core.alchemy import (
+    AlchemyOverview,
+    AlchemyRecipeList,
+    AlchemyPreview,
+    AlchemyResult,
+    AlchemyError,
+    AlchemyService,
+)
+
+
 from game.core.data import JsonDataService
 
 from .contracts import AlchemyAction, AlchemyCopy, AlchemyFeatureError
 from .presentation import actions, load_presentation
+
+
+_Result = TypeVar("_Result")
 
 
 class AlchemyFeature:
@@ -32,22 +45,22 @@ class AlchemyFeature:
             raise RuntimeError("炼丹玩法尚未初始化")
         return self._copy
 
-    async def overview(self, user_id: str):
+    async def overview(self, user_id: str) -> AlchemyOverview:
         return await self._call(self._alchemy.overview(user_id))
 
-    async def recipes(self, user_id: str, category: str, page: int = 1):
+    async def recipes(self, user_id: str, category: str, page: int = 1) -> AlchemyRecipeList:
         return await self._call(self._alchemy.list_recipes(user_id, category, page))
 
-    async def preview(self, user_id: str, identifier: str):
+    async def preview(self, user_id: str, identifier: str) -> AlchemyPreview:
         return await self._call(self._alchemy.preview(user_id, identifier))
 
-    async def refine(self, user_id: str, request_id: str, identifier: str):
+    async def refine(self, user_id: str, request_id: str, identifier: str) -> AlchemyResult:
         return await self._call(self._alchemy.refine(user_id, request_id, identifier))
 
     def overview_actions(self) -> tuple[AlchemyAction, ...]:
         return actions(self._buttons, "总览", set())
 
-    def list_actions(self, value) -> tuple[AlchemyAction, ...]:
+    def list_actions(self, value: AlchemyRecipeList) -> tuple[AlchemyAction, ...]:
         conditions = set()
         if value.page > 1:
             conditions.add("有上一页")
@@ -66,7 +79,7 @@ class AlchemyFeature:
                 )
         return tuple(result)
 
-    def preview_actions(self, value) -> tuple[AlchemyAction, ...]:
+    def preview_actions(self, value: AlchemyPreview) -> tuple[AlchemyAction, ...]:
         return actions(
             self._buttons,
             "预览",
@@ -78,7 +91,7 @@ class AlchemyFeature:
         return actions(self._buttons, "完成", set())
 
     @staticmethod
-    async def _call(awaitable):
+    async def _call(awaitable: Awaitable[_Result]) -> _Result:
         try:
             return await awaitable
         except AlchemyError as exc:

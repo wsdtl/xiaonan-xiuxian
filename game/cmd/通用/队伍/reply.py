@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.features.duiwu import TeamAction, TeamCopy, TeamOperationResult, TeamPage
-from message import M
+from message import DocumentMessage, M
 
 from ...actions import message_actions
 
@@ -42,7 +42,7 @@ def page(
     actions: tuple[TeamAction, ...],
     *,
     notice: str = "",
-):
+) -> DocumentMessage:
     builder = M.document().header(_text(copy, "查看", "标题"))
     if notice:
         builder.inline_section(
@@ -87,12 +87,12 @@ def operation(
     copy: TeamCopy,
     value: TeamOperationResult,
     actions: tuple[TeamAction, ...],
-):
+) -> DocumentMessage:
     notice = _text(copy, "结果", value.action).format_map({"姓名": value.target_name})
     return page(copy, value.page, actions, notice=notice)
 
 
-def error(copy: TeamCopy, code: str):
+def error(copy: TeamCopy, code: str) -> DocumentMessage:
     key = _ERROR_KEYS.get(code, "队伍变化")
     return (
         M.document()
@@ -102,7 +102,7 @@ def error(copy: TeamCopy, code: str):
     )
 
 
-def format_error(copy: TeamCopy):
+def format_error(copy: TeamCopy) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "邀请"))

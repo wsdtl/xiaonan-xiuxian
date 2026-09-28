@@ -12,10 +12,12 @@ from game.features.fudan import (
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 async def _use(
-    target: str, *, user_id: str, message: str, message_context, manager
+    target: str, *, user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
     parts = message.rsplit(maxsplit=1)
     if not parts or len(parts) > 2:
@@ -53,9 +55,7 @@ async def _use(
         },
     },
 )
-async def use_for_character(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def use_for_character(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _use(
         "人物",
         user_id=user_id,
@@ -79,9 +79,7 @@ async def use_for_character(
         },
     },
 )
-async def use_for_companion(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def use_for_companion(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _use(
         "道侣",
         user_id=user_id,
@@ -92,7 +90,7 @@ async def use_for_companion(
 
 
 async def _setting(
-    target: str, *, user_id: str, message: str, message_context, manager
+    target: str, *, user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
     value = message.strip()
     if value not in {"开", "关"}:
@@ -127,9 +125,7 @@ async def _setting(
         },
     },
 )
-async def set_character_automatic(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def set_character_automatic(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _setting(
         "人物",
         user_id=user_id,
@@ -153,9 +149,7 @@ async def set_character_automatic(
         },
     },
 )
-async def set_companion_automatic(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def set_companion_automatic(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _setting(
         "道侣",
         user_id=user_id,

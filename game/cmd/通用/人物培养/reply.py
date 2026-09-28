@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from game.features.renwu_peiyang import (
-    CharacterBreakthroughResult,
     CharacterCultivationFeature,
+    CharacterBreakthroughResult,
     CharacterCultivationView,
     CharacterEquipResult,
     CharacterLawResult,
 )
-from message import M
+
+from message import Status, Progress, DocumentMessage, M
 
 
-def view(feature: CharacterCultivationFeature, result: CharacterCultivationView):
+def view(feature: CharacterCultivationFeature, result: CharacterCultivationView) -> DocumentMessage:
     profile = result.profile
     builder = (
         M.document()
@@ -59,7 +60,7 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
     return builder.build()
 
 
-def equipped(feature: CharacterCultivationFeature, result: CharacterEquipResult):
+def equipped(feature: CharacterCultivationFeature, result: CharacterEquipResult) -> DocumentMessage:
     text = feature.copy("装配", "人物成功").format_map(
         {"名称": result.content_name, "类别": result.category, "槽位": result.slot}
     )
@@ -78,7 +79,7 @@ def equipped(feature: CharacterCultivationFeature, result: CharacterEquipResult)
 
 def breakthrough(
     feature: CharacterCultivationFeature, result: CharacterBreakthroughResult
-):
+) -> DocumentMessage:
     text = feature.copy("突破", "人物成功").format_map(
         {"丹药": result.medicine_name, "境界": result.realm_name}
     )
@@ -95,7 +96,7 @@ def breakthrough(
     return builder.build()
 
 
-def forged(feature: CharacterCultivationFeature, result: CharacterLawResult):
+def forged(feature: CharacterCultivationFeature, result: CharacterLawResult) -> DocumentMessage:
     text = feature.copy("覆炼", "人物成功").format_map(
         {"器律": result.law_name, "孔位": result.slot}
     )
@@ -107,7 +108,7 @@ def forged(feature: CharacterCultivationFeature, result: CharacterLawResult):
     )
 
 
-def error(message: str):
+def error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("人物培养", icon="notice")
@@ -116,7 +117,7 @@ def error(message: str):
     )
 
 
-def _progress(current: int, required: int, *, tone: str = "cultivation"):
+def _progress(current: int, required: int, *, tone: str = "cultivation") -> Status | Progress:
     if required <= 0:
         return M.status("圆满", tone="mystic")
     return M.progress(current, required, tone=tone, display="both")

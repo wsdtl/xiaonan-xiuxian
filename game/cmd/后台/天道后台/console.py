@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from .storage import MessageFlowRow, MessageFlowStore
+from launch.adapter.local import LocalDispatchResult
+
 import asyncio
 import json
 import time
@@ -25,7 +28,6 @@ from message import Action, M
 from .auth import ConsoleAuthService
 from .media import ConsoleMediaStore
 from .models import ConsoleFlowRecord
-from .storage import MessageFlowStore
 
 CONSOLE_USER_ID = "system.heavenly_dao"
 CONSOLE_SENDER_NAME = "天道"
@@ -43,10 +45,10 @@ class MessageFlowStorage(Protocol):
     """Web 组件需要的最小短期消息仓储能力。"""
 
     def initialize(self) -> None: ...
-    def insert(self, **values): ...
+    def insert(self, **values) -> MessageFlowRow: ...
     def recent(self, *, limit: int, before_id: int | None = None) -> list: ...
     def after(self, flow_id: int, *, limit: int) -> list: ...
-    def get(self, flow_id: int): ...
+    def get(self, flow_id: int) -> MessageFlowRow | None: ...
     def cleanup(self, *, now_timestamp: float, max_rows: int) -> None: ...
     def referenced_images(self) -> set[str]: ...
 
@@ -156,7 +158,7 @@ class MessageConsoleService:
 
         await self._event_queue.join()
 
-    async def dispatch(self, command: str):
+    async def dispatch(self, command: str) -> LocalDispatchResult:
         normalized = str(command or "").strip()
         if not normalized:
             raise ValueError("命令不能为空")
@@ -341,7 +343,7 @@ service = MessageConsoleService(
 )
 
 
-def _record_from_row(row) -> ConsoleFlowRecord:
+def _record_from_row(row: MessageFlowRow) -> ConsoleFlowRecord:
     interactions: list[MessageInteraction] = []
     try:
         values = json.loads(str(row.interactions_json or "[]"))

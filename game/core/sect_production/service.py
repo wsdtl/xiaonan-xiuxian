@@ -2,6 +2,17 @@
 
 from __future__ import annotations
 
+from game.core.sect import SectMember, SectService
+from game.core.database import (
+    SharedEntityRecord,
+    DatabaseService,
+    IdempotencyConflictError,
+    SharedConstraintError,
+    SharedEntityMutation,
+    StateConflictError,
+    TransactionCommand,
+)
+
 import hashlib
 import random
 from collections.abc import Mapping, Sequence
@@ -17,17 +28,8 @@ from game.core.data import (
     nonnegative_int,
     positive_int as _positive_int,
 )
-from game.core.database import (
-    DatabaseService,
-    IdempotencyConflictError,
-    SharedConstraintError,
-    SharedEntityMutation,
-    StateConflictError,
-    TransactionCommand,
-)
 from game.core.location import LocationService
 from game.core.pool import PoolService
-from game.core.sect import SectService
 from game.core.sect_assets import SectAssetError, SectAssetService, SectMaterialCost
 from game.core.sect_progress import SectProgressService
 
@@ -107,7 +109,7 @@ class SectProductionService:
                 self._terrain_options(kind, output),
             )
         self._facilities = MappingProxyType(loaded)
-        self._validate_outputs(raw, loaded)
+        self._validate_outputs(raw)
         self._initialized = True
         return self.status()
 
@@ -397,7 +399,7 @@ class SectProductionService:
         *,
         officer: bool,
         denied: str = _OFFICER_DENIED,
-    ):
+    ) -> tuple[SectMember, SectProductionFacility]:
         facility = self._facility(kind)
         member = await self._sect.membership(user_id)
         if member is None:
@@ -472,7 +474,7 @@ class SectProductionService:
             return self._pool.draw_pools((terrain,), count=1, seed=seed)[0]
         return self._pool.draw_item_category(category, seed=seed)[0]
 
-    def _view_from_record(self, facility, role, record, current):
+    def _view_from_record(self, facility: SectProductionFacility, role: str, record: SharedEntityRecord | None, current: datetime) -> SectProductionView:
         if record is None:
             return SectProductionView(
                 facility,
@@ -485,7 +487,7 @@ class SectProductionService:
             )
         return self._view_from_values(facility, role, record.value, current)
 
-    def _view_from_values(self, facility, role, value, current):
+    def _view_from_values(self, facility: SectProductionFacility, role: str, value: Mapping[str, object], current: datetime) -> SectProductionView:
         last = _time(value.get("上次结算时间"), f"{facility.kind}.上次结算时间")
         pending = min(
             facility.catch_up_limit,
@@ -504,7 +506,7 @@ class SectProductionService:
             _selected_terrain(value, facility),
         )
 
-    def _validate_outputs(self, raw, facilities) -> None:
+    def _validate_outputs(self, raw: Mapping[str, object]) -> None:
         outputs = _mapping(raw.get("产出"), "宗门生产.产出")
         for kind in _FACILITY_TYPES:
             value = _mapping(outputs.get(kind), f"宗门生产.产出.{kind}")
@@ -517,12 +519,12 @@ class SectProductionService:
             ) != ("灵植",):
                 raise JsonDataError("灵田产出必须是灵植")
 
-    def _require(self):
+    def _require(self) -> None:
         if not self._initialized:
             raise RuntimeError("宗门资源生产核心尚未初始化")
 
 
-def _state_value(sect_id, kind, settled_at, version, *, sequence=0, terrain=""):
+def _state_value(sect_id: str, kind: str, settled_at: datetime, version: int, *, sequence: int=0, terrain: str="") -> dict[str, object]:
     value = {
         "名称": kind,
         "宗门编号": sect_id,
@@ -536,14 +538,14 @@ def _state_value(sect_id, kind, settled_at, version, *, sequence=0, terrain=""):
     return value
 
 
-def _selected_terrain(value, facility) -> str:
+def _selected_terrain(value: Mapping[str, object], facility: SectProductionFacility) -> str:
     """读已保存的地形；不在当前可选清单里的（改名后的旧档）按未选处理。"""
 
     stored = str(value.get(_TERRAIN_KEY) or "").strip()
     return stored if stored in facility.terrain_options else ""
 
 
-def _terrain_choice(facility, value) -> str:
+def _terrain_choice(facility: SectProductionFacility, value: str) -> str:
     """把玩家给的地形收成池名，并核到该设施声明的可选地形上。"""
 
     if not facility.terrain_options:
@@ -557,19 +559,19 @@ def _terrain_choice(facility, value) -> str:
     return pool
 
 
-def _seed(version, sect_id, kind, sequence):
+def _seed(version: int, sect_id: str, kind: str, sequence: int) -> int:
     raw = f"{version}|{sect_id}|{kind}|{sequence}".encode()
     return int.from_bytes(hashlib.sha256(raw).digest()[:8], "big")
 
 
-def _utc(value):
+def _utc(value: object) -> datetime:
     result = value or datetime.now(timezone.utc)
     if result.tzinfo is None:
         return result.replace(tzinfo=timezone.utc)
     return result.astimezone(timezone.utc)
 
 
-def _time(value, label):
+def _time(value: object, label: str) -> datetime:
     try:
         result = datetime.fromisoformat(str(value))
     except (TypeError, ValueError) as exc:
@@ -577,17 +579,17 @@ def _time(value, label):
     return _utc(result)
 
 
-def _texts(value, label):
+def _texts(value: object, label: str) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是字符串数组")
     return tuple(_text(item, label) for item in value)
 
 
-def _nonnegative_int(value, label):
+def _nonnegative_int(value: object, label: str) -> int:
     return nonnegative_int(value, label, error=SectProductionError)
 
 
-def _positive_float(value, label):
+def _positive_float(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
         raise JsonDataError(f"{label}必须是正数")
     return float(value)
@@ -602,7 +604,7 @@ def _scaled_quantity(value: float, multiplier: float, source: random.Random) -> 
     return max(1, quantity)
 
 
-def _range(value, label):
+def _range(value: object, label: str) -> tuple[int, int]:
     if (
         not isinstance(value, Sequence)
         or isinstance(value, (str, bytes))
@@ -615,14 +617,14 @@ def _range(value, label):
     return int(value[0]), int(value[1])
 
 
-def _request(value):
+def _request(value: str) -> str:
     result = str(value or "").strip()
     if not result:
         raise SectProductionError("请求编号不能为空")
     return result
 
 
-def _entity_name(data, content_id):
+def _entity_name(data: JsonDataService, content_id: str) -> str:
     value = data.entity("基础物品", content_id)
     name = str(value.get("名称") or "").strip()
     if not name:

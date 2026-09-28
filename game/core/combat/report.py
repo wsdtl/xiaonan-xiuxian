@@ -626,7 +626,7 @@ def _resource(
 
 def _technique_report(
     value: Mapping[str, Any],
-    catalog: BattleReportCatalog,
+    _catalog: BattleReportCatalog,
     ability_definitions: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     active: Mapping[str, Any] = {}
@@ -699,7 +699,7 @@ def _detail_text(key: str, value: Any, catalog: BattleReportCatalog) -> str:
     return str(value)
 
 
-def _attribute_reported(key: str, participant, catalog: BattleReportCatalog) -> float:
+def _attribute_reported(key: str, participant: RuntimeBattleReportParticipant, catalog: BattleReportCatalog) -> float:
     """战报里这个属性报什么值。
 
     **加成口径报的是「相对基准的量」**：基准 100 是「不增不减」，战报要写的是

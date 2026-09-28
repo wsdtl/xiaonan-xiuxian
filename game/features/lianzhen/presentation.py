@@ -21,7 +21,7 @@ _REQUIRED = {
 }
 
 
-def load_presentation(data: JsonDataService):
+def load_presentation(data: JsonDataService) -> tuple[FormationCopy, tuple[Mapping[str, str], ...]]:
     raw_text = data.dataset("阵法展示").get("文本")
     if not isinstance(raw_text, Mapping):
         raise JsonDataError("阵法展示缺少文本.json")
@@ -49,7 +49,7 @@ def load_presentation(data: JsonDataService):
     return FormationCopy(text), buttons
 
 
-def actions(buttons, page: str, conditions: set[str], variables=None):
+def actions(buttons: tuple[Mapping[str, str], ...], page: str, conditions: set[str], variables: Mapping[str, object] | None=None) -> tuple[FormationAction, ...]:
     values = {str(key): str(value) for key, value in (variables or {}).items()}
     try:
         return tuple(
@@ -68,7 +68,7 @@ def actions(buttons, page: str, conditions: set[str], variables=None):
         raise RuntimeError(f"阵法按钮缺少模板变量：{exc.args[0]}") from exc
 
 
-def _validate_buttons(buttons) -> None:
+def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:
     if any(button["页面"] not in _PAGES | {"布阵"} for button in buttons):
         raise JsonDataError("阵法按钮使用了未知页面")
     identities = tuple((button["页面"], button["编号"]) for button in buttons)

@@ -7,6 +7,8 @@ from game.features.zongmen_shanmen import GateFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -23,7 +25,7 @@ from . import reply
         },
     },
 )
-async def enter_gate(*, user_id: str, message_context, manager) -> None:
+async def enter_gate(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_shanmen
     try:
         result = await feature.enter(user_id, message_context.request_id)
@@ -46,7 +48,7 @@ async def enter_gate(*, user_id: str, message_context, manager) -> None:
         },
     },
 )
-async def leave_gate(*, user_id: str, message_context, manager) -> None:
+async def leave_gate(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_shanmen
     try:
         result = await feature.leave(user_id, message_context.request_id)

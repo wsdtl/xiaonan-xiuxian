@@ -11,6 +11,7 @@ from game.core.alchemy import (
     AlchemyRecipeList,
     AlchemyResult,
 )
+from game.core.alchemy import AlchemyMaterial
 
 
 class AlchemyFeatureError(RuntimeError):
@@ -39,4 +40,5 @@ __all__ = [
     "AlchemyPreview",
     "AlchemyRecipeList",
     "AlchemyResult",
+    "AlchemyMaterial",
 ]

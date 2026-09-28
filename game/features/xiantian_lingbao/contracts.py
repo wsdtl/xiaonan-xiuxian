@@ -43,4 +43,5 @@ __all__ = [
     "InnateTreasureFeatureConflictError",
     "InnateTreasureFeatureError",
     "InnateTreasureView",
+    "InnateTreasure",
 ]

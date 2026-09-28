@@ -11,6 +11,7 @@ from game.core.forging import (
     ForgingPreview,
     ForgingResult,
 )
+from game.core.forging import ForgingMaterial
 
 
 class ForgingFeatureError(RuntimeError):
@@ -39,4 +40,5 @@ __all__ = [
     "ForgingOverview",
     "ForgingPreview",
     "ForgingResult",
+    "ForgingMaterial",
 ]

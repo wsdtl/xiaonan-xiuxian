@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from game.features.zongmen_zhan import SectWarFeature, SectWarHistoryPage, SectWarView
-from message import M
+from message import DocumentMessage, M
 
 from ...actions import message_actions
 
 
-def view(feature: SectWarFeature, value: SectWarView):
+def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
     status = feature.text("状态", value.status)
     builder = (
         M.document()
@@ -67,7 +67,7 @@ def view(feature: SectWarFeature, value: SectWarView):
     return builder.actions(message_actions(feature.actions(value.status))).build()
 
 
-def history(feature: SectWarFeature, value: SectWarHistoryPage):
+def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessage:
     builder = (
         M.document()
         .header(feature.text("查看", "记录标题"))
@@ -95,7 +95,7 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage):
     ).build()
 
 
-def error(message: str):
+def error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("宗门战", icon="notice")

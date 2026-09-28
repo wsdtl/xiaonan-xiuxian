@@ -2,10 +2,37 @@
 
 from __future__ import annotations
 
+from game.core.combat import (
+    CombatantResult,
+    CombatantSpec,
+    CombatFieldSpec,
+    CombatFormationSpec,
+    CombatGroupSpec,
+    CombatMedicineSpec,
+    CombatReportSpec,
+    CombatRequest,
+    CombatService,
+)
+
+from collections.abc import Sequence, Mapping
+from game.core.database import (
+    DatabaseMutation,
+    SharedEntityRecord,
+    DatabaseService,
+    SettlementTransactionPlan,
+    SharedEntityMutation,
+    StateConflictError,
+    StateMutation,
+    TransactionCommand,
+)
+
+from game.core.sect import SectMember, SectService
+
+from game.core.injury import InjuryState, PLAYER_KEY, InjuryService, companion_subject
+
 import hashlib
 import math
 from collections import Counter
-from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
@@ -18,16 +45,6 @@ from game.core.activity import (
 )
 from game.core.asset import AssetService, InventoryAdjustment
 from game.core.character import CharacterService
-from game.core.combat import (
-    CombatantSpec,
-    CombatFieldSpec,
-    CombatFormationSpec,
-    CombatGroupSpec,
-    CombatMedicineSpec,
-    CombatReportSpec,
-    CombatRequest,
-    CombatService,
-)
 from game.core.companion import CompanionService
 from game.core.data import (
     JsonDataError,
@@ -38,25 +55,15 @@ from game.core.data import (
     nonnegative_int as _stored_nonnegative,
     positive_int,
     positive_int as _positive,
+    strict_text as _text,
 )
-from game.core.database import (
-    DatabaseService,
-    SettlementTransactionPlan,
-    SharedEntityMutation,
-    StateConflictError,
-    StateMutation,
-    TransactionCommand,
-)
-from game.core.injury import PLAYER_KEY, InjuryService, companion_subject
 from game.core.location import LocationService
 from game.core.medicine import MedicineService, RecoveryMedicineStack
 from game.core.player_state import PlayerStateService, StateTransitionCommand
-from game.core.sect import SectService
 from game.core.sect_assets import SectAssetEntry, SectAssetService
 from game.core.world import LocationQuery, WorldService
 
 from .contracts import SectWarError, SectWarHistoryPage, SectWarStatus, SectWarView
-from game.core.data import strict_text as _text
 
 ENTITY_TYPE = "宗门战"
 STATE_TYPE = "sect_war"
@@ -612,7 +619,7 @@ class SectWarService:
             raise SectWarError("not_participant")
         return await self._view(record.value)
 
-    async def _settle(self, user_id: str, request_id: str, record) -> SectWarView:
+    async def _settle(self, user_id: str, request_id: str, record: SharedEntityRecord) -> SectWarView:
         value = dict(record.value)
         if value.get("状态") != "战斗中":
             return await self._view(value)
@@ -706,7 +713,7 @@ class SectWarService:
         return await self._view(value)
 
     async def _terminate(
-        self, user_id, request_id, record, status, business
+        self, user_id: str, request_id: str, record: SharedEntityRecord, status: str, business: str
     ) -> SectWarView:
         value = dict(record.value)
         operations: list[object] = []
@@ -770,7 +777,7 @@ class SectWarService:
             changed = True
         return changed
 
-    async def _current_record(self, sect_id: str, user_id: str):
+    async def _current_record(self, sect_id: str, user_id: str) -> SharedEntityRecord:
         # 战书列表是**共享实体**，一条记录里带着整份战报（15 对 15 实测 600 KB 上下）：
         # 读一次要三十几毫秒。原先「先结算过期战书、再挑当前战书」各读一遍，同一次命令里
         # 把同一份列表整份读了两遍——这里读一次，两边共用。
@@ -811,7 +818,7 @@ class SectWarService:
             raise SectWarError("formation_missing")
         return entry
 
-    async def _formation_spec(self, sect_id: str, entry_key: str, position: int):
+    async def _formation_spec(self, sect_id: str, entry_key: str, position: int) -> tuple[CombatFormationSpec | None, dict[str, float] | None]:
         if not entry_key:
             return None, None
         plan = await self._assets.plan_formation_consumption(sect_id, entry_key)
@@ -826,7 +833,7 @@ class SectWarService:
             plan.operation,
         )
 
-    async def _combatants(self, user_ids: tuple[str, ...]):
+    async def _combatants(self, user_ids: tuple[str, ...]) -> tuple[tuple[CombatantSpec, ...], dict[str, tuple[RecoveryMedicineStack, ...]], tuple[StateMutation, ...], dict[str, tuple[InjuryState, str]]]:
         combatants: list[CombatantSpec] = []
         medicines: dict[str, tuple[RecoveryMedicineStack, ...]] = {}
         battle_operations: list[StateMutation] = []
@@ -923,13 +930,13 @@ class SectWarService:
             operations.append(plan.mutation)
         return operations
 
-    async def _member(self, user_id: str):
+    async def _member(self, user_id: str) -> SectMember:
         member = await self._sect.membership(user_id)
         if member is None:
             raise SectWarError("not_member")
         return member
 
-    async def _member_officer(self, user_id: str):
+    async def _member_officer(self, user_id: str) -> SectMember:
         member = await self._member(user_id)
         if not self._sect.is_officer(member.role):
             raise SectWarError("officer_required")
@@ -953,7 +960,7 @@ class SectWarService:
             return None
         return value, int(record.version)
 
-    async def _record(self, war_id: str):
+    async def _record(self, war_id: str) -> SharedEntityRecord:
         record = await self._db.get_shared_entity(
             ENTITY_TYPE, str(war_id or "").strip()
         )
@@ -983,7 +990,7 @@ class SectWarService:
             str(raw.get("战报编号") or ""),
         )
 
-    async def _commit(self, user_id, request_id, business, operations, payload):
+    async def _commit(self, user_id: str, request_id: str, business: str, operations: Sequence[DatabaseMutation], payload: Mapping[str, object]) -> None:
         await self._db.commit(
             TransactionCommand(
                 user_id, request_id, business, tuple(operations), payload
@@ -991,7 +998,7 @@ class SectWarService:
         )
 
 
-def _attach_inventory(combatants, inventory, threshold):
+def _attach_inventory(combatants: Sequence[CombatantSpec], inventory: Mapping[str, Mapping[str, int]], threshold: float) -> tuple[CombatantSpec, ...]:
     seen: set[str] = set()
     result = []
     for combatant in combatants:
@@ -1012,7 +1019,7 @@ def _attach_inventory(combatants, inventory, threshold):
     return tuple(result)
 
 
-def _medicine_definitions(values):
+def _medicine_definitions(values: Mapping[str, Sequence[RecoveryMedicineStack]]) -> tuple[CombatMedicineSpec, ...]:
     definitions = {}
     for stacks in values.values():
         for stack in stacks:
@@ -1027,7 +1034,7 @@ def _medicine_definitions(values):
     return tuple(definitions.values())
 
 
-def _consumptions(results):
+def _consumptions(results: Sequence[CombatantResult]) -> dict[str, Counter[str]]:
     values: dict[str, Counter[str]] = {}
     for result in results:
         if result.inventory_owner_id:
@@ -1037,13 +1044,13 @@ def _consumptions(results):
     return values
 
 
-def _all_participants(value):
+def _all_participants(value: Mapping[str, object]) -> tuple[str, ...]:
     return _stored_texts(value.get("甲方成员", ()), "甲方成员") + _stored_texts(
         value.get("乙方成员", ()), "乙方成员"
     )
 
 
-def _combat_groups(user_ids, combatants):
+def _combat_groups(user_ids: tuple[str, ...], combatants: Sequence[CombatantSpec]) -> tuple[CombatGroupSpec, ...]:
     by_owner: dict[str, list[str]] = {str(user_id): [] for user_id in user_ids}
     for value in combatants:
         if value.owner_id in by_owner:
@@ -1059,7 +1066,7 @@ def _combat_groups(user_ids, combatants):
     )
 
 
-def _side(value, sect_id):
+def _side(value: Mapping[str, object], sect_id: str) -> str:
     if value.get("甲方") == sect_id:
         return "甲方"
     if value.get("乙方") == sect_id:
@@ -1067,7 +1074,7 @@ def _side(value, sect_id):
     return ""
 
 
-def _expired(value):
+def _expired(value: Mapping[str, object]) -> bool:
     return (
         value.get("状态") == "待应战"
         and bool(value.get("过期时间"))
@@ -1075,17 +1082,17 @@ def _expired(value):
     )
 
 
-def _request_positive(value, label):
+def _request_positive(value: int, label: str) -> int:
     return positive_int(value, label, error=SectWarError)
 
 
-def _stored_texts(value, label):
+def _stored_texts(value: int, label: str) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是数组")
     return tuple(_text(item, f"{label}[]") for item in value)
 
 
-def _stored_xy(value):
+def _stored_xy(value: int) -> tuple[int, int]:
     if (
         not isinstance(value, Sequence)
         or isinstance(value, (str, bytes))
@@ -1103,7 +1110,7 @@ def _stored_xy(value):
     return x, y
 
 
-def _ratio(value, label):
+def _ratio(value: int, label: str) -> Decimal:
     try:
         result = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
@@ -1117,11 +1124,11 @@ def _payout(amount: int, ratio: Decimal) -> int:
     return int((Decimal(amount) * ratio).to_integral_value(rounding=ROUND_FLOOR))
 
 
-def _now():
+def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _time(value):
+def _time(value: int) -> datetime:
     try:
         parsed = datetime.fromisoformat(str(value))
     except ValueError as exc:
@@ -1131,7 +1138,7 @@ def _time(value):
     return parsed.astimezone(timezone.utc)
 
 
-def _seed(value):
+def _seed(value: int) -> int:
     return int.from_bytes(hashlib.sha256(value.encode()).digest()[:8], "big")
 
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from game.features.fudan import AutoMedicineResult, MedicineFeature, MedicineUseResult
-from message import M
+from game.features.fudan import MedicineFeature, AutoMedicineResult, MedicineUseResult
+
+from message import DocumentMessage, M
 
 
-def used(feature: MedicineFeature, result: MedicineUseResult):
+def used(feature: MedicineFeature, result: MedicineUseResult) -> DocumentMessage:
     key = f"{result.target}{'恢复' if result.effect == '恢复' else '寄存'}"
     line = feature.copy(
         "服丹",
@@ -23,7 +24,7 @@ def used(feature: MedicineFeature, result: MedicineUseResult):
     return builder.build()
 
 
-def setting(feature: MedicineFeature, result: AutoMedicineResult):
+def setting(feature: MedicineFeature, result: AutoMedicineResult) -> DocumentMessage:
     line = feature.copy(
         "自动用药",
         result.target, {"道侣": result.target_name, "状态": "开启" if result.enabled else "关闭"},
@@ -42,7 +43,7 @@ def setting(feature: MedicineFeature, result: AutoMedicineResult):
     )
 
 
-def error(message: str):
+def error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("服丹", icon="notice")

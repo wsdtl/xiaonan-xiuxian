@@ -2,7 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence, Mapping
+from game.core.database import (
+    DatabaseMutation,
+    TransactionReceipt,
+    DatabaseService,
+    IdempotencyConflictError,
+    SharedConstraintError,
+    SharedEntityMutation,
+    StateConflictError,
+    StateMutation,
+    TransactionCommand,
+)
+
+from game.core.sect import SectMember, SectService
+
 from decimal import ROUND_FLOOR, Decimal
 from math import ceil
 
@@ -18,21 +32,12 @@ from game.core.data import (
     mapping as _mapping,
     positive_int,
     positive_int as _rule_positive_int,
-)
-from game.core.database import (
-    DatabaseService,
-    IdempotencyConflictError,
-    SharedConstraintError,
-    SharedEntityMutation,
-    StateConflictError,
-    StateMutation,
-    TransactionCommand,
+    nonempty_text as _rule_text,
 )
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
 )
-from game.core.sect import SectService
 
 from .contracts import (
     SectAssetConflictError,
@@ -47,7 +52,6 @@ from .contracts import (
     SectProductionAssetPlan,
     SectResourceGainPlan,
 )
-from game.core.data import nonempty_text as _rule_text
 
 LINGCANG_TYPE = "宗门灵藏"
 WANZHEN_TYPE = "宗门万珍殿"
@@ -841,14 +845,14 @@ class SectAssetService:
             materials,
         )
 
-    async def _member(self, user_id: str):
+    async def _member(self, user_id: str) -> SectMember:
         self._require_initialized()
         member = await self._sect.membership(user_id)
         if member is None:
             raise SectAssetError("尚未加入宗门")
         return member
 
-    async def _commit(self, user_id, request_id, business_type, operations, payload):
+    async def _commit(self, user_id: str, request_id: str, business_type: str, operations: Sequence[DatabaseMutation], payload: Mapping[str, object]) -> TransactionReceipt:
         try:
             return await self._database.commit(
                 TransactionCommand(

@@ -18,6 +18,8 @@ from game.core.data import (
     JsonDataService,
     mapping as _mapping,
     positive_int as _positive_int,
+    boolean as _bool,
+    nonempty_text as _text,
 )
 from game.core.database import (
     DatabaseService,
@@ -50,7 +52,6 @@ from .contracts import (
     SectForgingPreview,
     SectFormationPreview,
 )
-from game.core.data import boolean as _bool, nonempty_text as _text
 
 _FACILITY_TYPES = ("炼器", "炼丹", "炼阵")
 
@@ -619,7 +620,7 @@ class SectFacilityService:
             )
         return member, entries, vault.spirit_stones
 
-    async def _member_in_cave(self, user_id: str):
+    async def _member_in_cave(self, user_id: str) -> SectMember:
         self._require_runtime()
         member = await self._sect.membership(user_id)
         if member is None:
@@ -713,7 +714,7 @@ def _positive_map(value: object, label: str) -> dict[str, int]:
     return {str(key): _positive_int(item, f"{label}.{key}") for key, item in raw.items()}
 
 
-def _paginate(values: Sequence, page: int, page_size: int):
+def _paginate(values: Sequence, page: int, page_size: int) -> tuple[int, int, Sequence]:
     if isinstance(page, bool) or not isinstance(page, int) or page < 1:
         raise SectFacilityError("页码必须是正整数")
     page_count = max(1, (len(values) + page_size - 1) // page_size)

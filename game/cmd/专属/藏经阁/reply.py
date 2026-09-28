@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Sequence, Mapping
+from ...actions import CommandAction, message_actions
+
 
 from game.features.zongmen_cangjing import CangjingCopy, CangjingPage
-from message import M
+from message import DocumentMessage, M
 
-from ...actions import message_actions
 from ...presentation import sentence
 
 
-def page(copy: CangjingCopy, value: CangjingPage, actions):
+def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandAction]) -> DocumentMessage:
     builder = (
         M.document()
         .header(_text(copy, "标题"))
@@ -39,7 +40,7 @@ def page(copy: CangjingCopy, value: CangjingPage, actions):
     return builder.actions(message_actions(actions)).build()
 
 
-def borrowed(copy: CangjingCopy, value):
+def borrowed(copy: CangjingCopy, value: CangjingPage) -> DocumentMessage:
     return (
         M.document()
         .header(_text(copy, "标题"))
@@ -55,7 +56,7 @@ def borrowed(copy: CangjingCopy, value):
     )
 
 
-def error(copy: CangjingCopy, message: str):
+def error(copy: CangjingCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "错误"), icon="notice")

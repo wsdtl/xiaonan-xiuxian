@@ -378,7 +378,7 @@ def bind_parameters(
     template_id: str,
     provided: Any,
     body: Any,
-    template: Mapping[str, Any] | None = None,
+    _template: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """把引用的实参绑到模板主体声明的占位符上。
 

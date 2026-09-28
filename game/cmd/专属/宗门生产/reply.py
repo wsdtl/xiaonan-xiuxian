@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from message.schema import RichText
+
 from collections.abc import Mapping
 from typing import Any
 
 from game.features.zongmen_shengchan import SectProductionAction
-from message import M
+from message import DocumentMessage, M
 
 from ...actions import message_actions
 from ...presentation import duration, sentence
@@ -19,7 +21,7 @@ def viewed(
     copy: Mapping[str, Mapping[str, str]],
     value: Any,
     actions: tuple[SectProductionAction, ...],
-):
+) -> DocumentMessage:
     common = copy["通用"]
     text = copy[value.facility.kind]
     builder = (
@@ -56,7 +58,7 @@ def started(
     copy: Mapping[str, Mapping[str, str]],
     value: Any,
     actions: tuple[SectProductionAction, ...],
-):
+) -> DocumentMessage:
     common = copy["通用"]
     text = copy[value.view.facility.kind]
     return (
@@ -76,7 +78,7 @@ def collected(
     copy: Mapping[str, Mapping[str, str]],
     value: Any,
     actions: tuple[SectProductionAction, ...],
-):
+) -> DocumentMessage:
     common = copy["通用"]
     text = copy[value.view.facility.kind]
     builder = (
@@ -113,7 +115,7 @@ def placed(
     copy: Mapping[str, Mapping[str, str]],
     value: Any,
     actions: tuple[SectProductionAction, ...],
-):
+) -> DocumentMessage:
     """地形选定或清空后的回执。"""
 
     common = copy["通用"]
@@ -139,7 +141,7 @@ def terrains(
     copy: Mapping[str, Mapping[str, str]],
     value: Any,
     actions: tuple[SectProductionAction, ...],
-):
+) -> DocumentMessage:
     """列出可选地形，每条都是可以直接点的选地形命令。"""
 
     common = copy["通用"]
@@ -168,7 +170,7 @@ def terrains(
     )
 
 
-def error(copy: Mapping[str, Mapping[str, str]], message: str):
+def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
     return (
         M.document()
         .section(copy["通用"]["错误"], icon="notice")
@@ -181,7 +183,7 @@ def _terrain_name(pool: str) -> str:
     return str(pool).removeprefix(_TERRAIN_PREFIX)
 
 
-def _terrain(common: Mapping[str, str], pool: str):
+def _terrain(common: Mapping[str, str], pool: str) -> RichText:
     if not pool:
         return M.text(common["未选地形"], tone="muted")
     return M.text(

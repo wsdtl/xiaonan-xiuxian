@@ -2,5 +2,10 @@
 
 from .contracts import ItemInspectionResult
 from .service import ItemInspectionFeature
+from .contracts import ItemDetail
 
-__all__ = ["ItemInspectionFeature", "ItemInspectionResult"]
+__all__ = [
+    "ItemInspectionFeature",
+    "ItemInspectionResult",
+    "ItemDetail",
+]

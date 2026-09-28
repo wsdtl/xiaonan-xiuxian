@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from typing import Literal, Any
+
 from pathlib import Path
 from threading import Lock
 from types import MappingProxyType
-from typing import Any
 
 from .contracts import JsonDataError, JsonDataStatus, JsonEntity
 from .files import JsonDataReader
@@ -40,7 +41,7 @@ class JsonDataService:
             pool_count=loaded.pool_count if loaded is not None else 0,
         )
 
-    def initialize(self, expand=None) -> JsonDataStatus:
+    def initialize(self, expand: Callable[[str, Mapping[str, Any]], Any] | Literal[False] | None=None) -> JsonDataStatus:
         """构建本进程唯一快照；数据更新必须通过重启服务生效。
 
         装载期默认跑构筑模板展开（`game.core.combat.service.expand_build_section`）。

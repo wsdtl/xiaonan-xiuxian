@@ -7,6 +7,8 @@ from game.features.taofa import RaidFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -23,7 +25,7 @@ from . import reply
         },
     },
 )
-async def start_raid(*, user_id: str, message_context, manager, **_) -> None:
+async def start_raid(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.taofa
     try:
         value = await feature.start(user_id, message_context.request_id)
@@ -46,7 +48,7 @@ async def start_raid(*, user_id: str, message_context, manager, **_) -> None:
         },
     },
 )
-async def raid_progress(*, user_id: str, manager, **_) -> None:
+async def raid_progress(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.taofa
     try:
         value = await feature.progress(user_id)
@@ -70,7 +72,7 @@ async def raid_progress(*, user_id: str, manager, **_) -> None:
         },
     },
 )
-async def raid_settle(*, user_id: str, message_context, manager, **_) -> None:
+async def raid_settle(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.taofa
     try:
         value = await feature.settle(user_id, message_context.request_id)

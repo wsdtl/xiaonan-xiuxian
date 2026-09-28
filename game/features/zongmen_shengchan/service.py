@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from game.core.sect_production import (
+    SectProductionView,
+    SectProductionResult,
+    SectProductionError,
+    SectProductionService,
+)
+
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
-from game.core.sect_production import SectProductionError, SectProductionService
 from game.features.presentation import require_mapping
 
 from .contracts import SectProductionAction
@@ -60,7 +66,7 @@ class SectProductionFeature:
             raise RuntimeError("宗门资源生产玩法尚未初始化")
         return self._copy
 
-    def actions(self, view) -> tuple[SectProductionAction, ...]:
+    def actions(self, view: SectProductionView) -> tuple[SectProductionAction, ...]:
         if not view.can_collect or (view.started and view.pending_cycles == 0):
             return ()
         condition = "已经开始" if view.started else "尚未开始"
@@ -78,13 +84,13 @@ class SectProductionFeature:
             and button["条件"] == condition
         )
 
-    async def view(self, kind: str, user_id: str):
+    async def view(self, kind: str, user_id: str) -> SectProductionView:
         try:
             return await self._production.view(kind, user_id)
         except SectProductionError as exc:
             raise SectProductionFeatureError(str(exc)) from exc
 
-    async def collect(self, kind: str, user_id: str, request_id: str):
+    async def collect(self, kind: str, user_id: str, request_id: str) -> SectProductionResult:
         try:
             current = await self._production.view(kind, user_id)
             if not current.started:
@@ -95,7 +101,7 @@ class SectProductionFeature:
         except SectProductionError as exc:
             raise SectProductionFeatureError(str(exc)) from exc
 
-    async def start(self, kind: str, user_id: str, request_id: str):
+    async def start(self, kind: str, user_id: str, request_id: str) -> SectProductionResult:
         try:
             current = await self._production.view(kind, user_id)
             if current.started:
@@ -109,7 +115,7 @@ class SectProductionFeature:
 
     async def select_terrain(
         self, kind: str, user_id: str, request_id: str, terrain: str
-    ):
+    ) -> SectProductionView:
         try:
             return await self._production.select_terrain(
                 kind, user_id, request_id, terrain
@@ -117,7 +123,7 @@ class SectProductionFeature:
         except SectProductionError as exc:
             raise SectProductionFeatureError(str(exc)) from exc
 
-    async def clear_terrain(self, kind: str, user_id: str, request_id: str):
+    async def clear_terrain(self, kind: str, user_id: str, request_id: str) -> SectProductionView:
         try:
             return await self._production.clear_terrain(kind, user_id, request_id)
         except SectProductionError as exc:

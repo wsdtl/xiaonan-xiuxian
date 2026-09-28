@@ -11,24 +11,10 @@ import json
 from pathlib import Path
 
 from game.app import build_game_services
-from game.core.asset import AssetEntry
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 难度二丹 = "140029"  # 凝海丹：难度 2，药引要玄品以上（周天丹已按负责人定案降档，不再适合做样例）
 难度一丹 = "140001"  # 聚气丹：难度 1，黄品即可
-
-
-def _条目(编号: str, 小类: str, 品级: str = "02") -> AssetEntry:
-    return AssetEntry(
-        category="基础物品",
-        subcategory=小类,
-        content_id=编号,
-        instance_key=f"{编号}:{品级}",
-        name=编号,
-        grade_id=品级,
-        grade_name="玄品" if 品级 == "02" else "黄品",
-        quantity=1,
-    )
 
 
 def _炉法药脉(丹编号: str, services) -> list[str]:

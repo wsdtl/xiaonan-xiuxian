@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from message import DocumentBuilder, Action, DocumentMessage, M
+
 from game.cmd.help_registry import CommandHelpEntry, help_registry
-from message import Action, DocumentMessage, M
 
 GAME_NAME = "晓楠修仙"
 
@@ -98,7 +99,7 @@ def _not_found_message(query: str) -> DocumentMessage:
     return builder.actions((_home_action(),)).build()
 
 
-def _category_rows(builder, categories: tuple[str, ...]) -> None:
+def _category_rows(builder: DocumentBuilder, categories: tuple[str, ...]) -> None:
     for start in range(0, len(categories), 3):
         parts: list[object] = []
         for index, category in enumerate(categories[start : start + 3]):

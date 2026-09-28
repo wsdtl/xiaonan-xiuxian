@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Sequence, Mapping
+from game.features.lianqi import ForgingMaterial
+
+from message import DocumentBuilder, DocumentMessage, M
+
 
 from game.features.lianqi import (
     ForgingAction,
@@ -12,7 +16,6 @@ from game.features.lianqi import (
     ForgingPreview,
     ForgingResult,
 )
-from message import M
 
 from ...actions import message_actions
 from ...presentation import sentence
@@ -26,7 +29,7 @@ def overview(
     copy: ForgingCopy,
     value: ForgingOverview,
     actions: tuple[ForgingAction, ...],
-):
+) -> DocumentMessage:
     artisan = value.artisan
     builder = (
         M.document()
@@ -49,7 +52,7 @@ def overview(
     return builder.actions(message_actions(actions)).build()
 
 
-def law_list(copy: ForgingCopy, value: ForgingLawList):
+def law_list(copy: ForgingCopy, value: ForgingLawList) -> DocumentMessage:
     builder = (
         M.document()
         .header(text(copy, "列表", "标题", {"地点": value.location_name, "器阶": value.stage}))
@@ -76,7 +79,7 @@ def preview(
     copy: ForgingCopy,
     value: ForgingPreview,
     actions: tuple[ForgingAction, ...],
-):
+) -> DocumentMessage:
     artisan = value.artisan
     builder = (
         M.document()
@@ -122,7 +125,7 @@ def completed(
     copy: ForgingCopy,
     value: ForgingResult,
     actions: tuple[ForgingAction, ...],
-):
+) -> DocumentMessage:
     preview_value = value.preview
     artisan = preview_value.artisan
     builder = (
@@ -144,7 +147,7 @@ def completed(
     return builder.actions(message_actions(actions)).build()
 
 
-def error(copy: ForgingCopy, message: str):
+def error(copy: ForgingCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
@@ -153,7 +156,7 @@ def error(copy: ForgingCopy, message: str):
     )
 
 
-def _materials(builder, materials, *, show_relation: bool) -> None:
+def _materials(builder: DocumentBuilder, materials: Sequence[ForgingMaterial], *, show_relation: bool) -> None:
     if not materials:
         builder.line(M.status("无", tone="muted"))
         return

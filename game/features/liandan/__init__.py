@@ -10,6 +10,7 @@ from .contracts import (
     AlchemyResult,
 )
 from .service import AlchemyFeature
+from .contracts import AlchemyMaterial
 
 __all__ = [
     "AlchemyAction",
@@ -20,4 +21,5 @@ __all__ = [
     "AlchemyPreview",
     "AlchemyRecipeList",
     "AlchemyResult",
+    "AlchemyMaterial",
 ]

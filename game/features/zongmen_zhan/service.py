@@ -71,37 +71,37 @@ class SectWarFeature:
         self._text = text
         self._buttons = buttons
 
-    async def challenge(self, user_id, target, wager, request_id):
+    async def challenge(self, user_id: str, target: str, wager: int, request_id: str) -> SectWarView:
         return await self._war.challenge(user_id, target, wager, request_id)
 
-    async def accept(self, user_id, request_id):
+    async def accept(self, user_id: str, request_id: str) -> SectWarView:
         return await self._war.accept(user_id, request_id)
 
-    async def reject(self, user_id, request_id):
+    async def reject(self, user_id: str, request_id: str) -> SectWarView:
         return await self._war.reject(user_id, request_id)
 
-    async def withdraw(self, user_id, request_id):
+    async def withdraw(self, user_id: str, request_id: str) -> SectWarView:
         return await self._war.withdraw(user_id, request_id)
 
-    async def cancel(self, user_id, request_id):
+    async def cancel(self, user_id: str, request_id: str) -> SectWarView:
         return await self._war.cancel(user_id, request_id)
 
-    async def lock(self, user_id, request_id, formation_entry=""):
+    async def lock(self, user_id: str, request_id: str, formation_entry: str="") -> SectWarView:
         return await self._war.lock(user_id, request_id, formation_entry)
 
-    async def unlock(self, user_id, request_id):
+    async def unlock(self, user_id: str, request_id: str) -> SectWarView:
         return await self._war.unlock(user_id, request_id)
 
-    async def start(self, user_id, request_id):
+    async def start(self, user_id: str, request_id: str) -> SectWarView:
         return await self._war.start(user_id, request_id)
 
-    async def current(self, user_id, request_id=""):
+    async def current(self, user_id: str, request_id: str="") -> SectWarView:
         return await self._war.current(user_id, request_id)
 
-    async def history(self, user_id, page=1):
+    async def history(self, user_id: str, page: int=1) -> SectWarHistoryPage:
         return await self._war.history(user_id, page)
 
-    async def view(self, user_id, war_id):
+    async def view(self, user_id: str, war_id: str) -> SectWarView:
         return await self._war.view(user_id, war_id)
 
     def text(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
@@ -118,7 +118,7 @@ class SectWarFeature:
             return self._text["错误"][error.code]
         return str(error)
 
-    def actions(self, status: str):
+    def actions(self, status: str) -> tuple[SectWarAction, ...]:
         return tuple(
             SectWarAction(
                 button["编号"],

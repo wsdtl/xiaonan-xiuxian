@@ -7,11 +7,13 @@ from game.features.lianzhen import FormationCraftFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 _GRADES = frozenset({"黄", "玄", "地", "天", "圣"})
 
 
-def _request(message: str):
+def _request(message: str) -> tuple[str, str, dict[str, int] | None]:
     parts = str(message or "").strip().split()
     if len(parts) not in {2, 5} or parts[1] not in _GRADES:
         raise ValueError("格式：阵法/炼阵 阵法编号或名称 品级 [兽宝数 灵矿数 灵植数]")
@@ -43,7 +45,7 @@ def _request(message: str):
         },
     },
 )
-async def inspect_formation(*, user_id: str, message: str, manager, **_) -> None:
+async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.lianzhen
     query = str(message or "").strip()
     try:
@@ -77,9 +79,7 @@ async def inspect_formation(*, user_id: str, message: str, manager, **_) -> None
         },
     },
 )
-async def commit_formation(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def commit_formation(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.lianzhen
     try:
         identifier, grade, investments = _request(message)

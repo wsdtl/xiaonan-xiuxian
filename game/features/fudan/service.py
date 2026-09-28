@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from game.core.asset import InventoryStack, AssetService, AssetStateError, InventoryAdjustment
+
 from collections.abc import Mapping
 
-from game.core.asset import AssetService, AssetStateError, InventoryAdjustment
 from game.core.character import CharacterCultivationError, CharacterService
 from game.core.companion import CompanionCultivationError, CompanionService
 from game.core.data import JsonDataError, JsonDataService, nonempty_text, number
@@ -274,7 +275,7 @@ class MedicineFeature:
 
     async def _inventory_stack(
         self, user_id: str, medicine_id: str, grade: str
-    ):
+    ) -> InventoryStack:
         stacks = await self._asset.inventory_stacks(user_id, medicine_id)
         if grade:
             try:

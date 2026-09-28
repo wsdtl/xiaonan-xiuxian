@@ -8,6 +8,7 @@ from launch.paths import public_url
 from ...command import GameCommand
 from . import reply
 from .site import router
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -24,7 +25,7 @@ from .site import router
         },
     },
 )
-async def show_world_map(*, manager, **_) -> None:
+async def show_world_map(manager: Any) -> None:
     overview = current_game_services().features.ditu.overview()
     await manager.send(reply.entry(overview, public_url("world-map")))
 

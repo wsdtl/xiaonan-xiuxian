@@ -6,8 +6,9 @@ from game.app import current_game_services
 from game.features.tuoguan import HostingFeatureError
 
 from ...command import GameCommand
-from . import reply
-from . import runtime as runtime
+from . import reply, runtime as runtime
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -24,9 +25,7 @@ from . import runtime as runtime
         },
     },
 )
-async def hosting_command(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def hosting_command(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.tuoguan
     try:
         activities = tuple(str(message or "").split())
@@ -56,7 +55,7 @@ async def hosting_command(
         },
     },
 )
-async def resume_hosting(*, user_id: str, message_context, manager) -> None:
+async def resume_hosting(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.tuoguan
     try:
         value = await feature.resume(user_id, message_context.request_id)
@@ -81,7 +80,7 @@ async def resume_hosting(*, user_id: str, message_context, manager) -> None:
         },
     },
 )
-async def cancel_hosting(*, user_id: str, message_context, manager) -> None:
+async def cancel_hosting(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.tuoguan
     try:
         value = await feature.cancel(user_id, message_context.request_id)

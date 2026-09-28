@@ -36,6 +36,7 @@ from game.core.data import (
     materialize,
     nonnegative_int,
     positive_int,
+    strict_text,
 )
 from game.core.database import (
     DatabaseService,
@@ -73,7 +74,6 @@ from .contracts import (
     ExplorationStatus,
     ExplorationUserSummary,
 )
-from game.core.data import strict_text
 
 SESSION_STATE = "exploration_session"
 BATTLE_STATE = "exploration_battle"
@@ -1296,7 +1296,7 @@ def _consumption_adjustments(
     return result
 
 
-def _stack_rows(values: Counter[str]) -> list[dict[str, object]]:
+def _stack_rows(values: Mapping[str, int]) -> list[dict[str, object]]:
     normalized: Counter[str] = Counter()
     for stack_key, quantity in values.items():
         normalized[_base_stack_key(stack_key)] += quantity
@@ -1315,7 +1315,7 @@ def _base_stack_key(stack_key: str) -> str:
     return stack_key.split("|", 1)[0]
 
 
-def _drop_rows(values: Counter[tuple[str, str]]) -> list[dict[str, object]]:
+def _drop_rows(values: Mapping[tuple[str, str], int]) -> list[dict[str, object]]:
     return [
         {"编号": item_id, "品级": grade_id, "数量": quantity}
         for (item_id, grade_id), quantity in sorted(values.items())

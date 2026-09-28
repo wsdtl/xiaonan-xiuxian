@@ -7,6 +7,8 @@ from game.features.zongmen_wanzhen import WanzhenFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
 
@@ -25,7 +27,7 @@ _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
         },
     },
 )
-async def show_wanzhen(*, user_id: str, message: str, manager, **_) -> None:
+async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.zongmen_wanzhen
     parts = str(message or "").split()
     try:
@@ -59,9 +61,7 @@ async def show_wanzhen(*, user_id: str, message: str, manager, **_) -> None:
         },
     },
 )
-async def donate_wanzhen(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def donate_wanzhen(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_wanzhen
     parts = str(message or "").split()
     try:
@@ -114,9 +114,7 @@ async def donate_wanzhen(
         },
     },
 )
-async def grant_wanzhen(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def grant_wanzhen(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_wanzhen
     parts = str(message or "").split()
     try:

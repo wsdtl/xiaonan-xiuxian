@@ -20,7 +20,7 @@ import inspect
 import pathlib
 import re
 
-from game.cmd.command import registered_command_routes, registered_commands
+from game.cmd.command import registered_command_routes
 from game.core.sect_assets import SectAssetService
 from game.features.zongmen_lingcang import LingcangFeature
 
@@ -29,12 +29,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 #: 说明里按历史口径点名「已删掉的取灵藏」是允许的（要交代删了什么），但要写成
 #: 反引号包住的命令名，且整份说明里不得出现「照抄就能用」的用法行。
 历史点名 = re.compile(r"`(取灵藏|取出灵藏)`")
-
-
-def _命令名() -> list[str]:
-    """主命令名（每条注册一项，别名与主名同组件）。"""
-
-    return [str(项[0]) for 项 in registered_commands()]
 
 
 def _全部路由() -> list[str]:

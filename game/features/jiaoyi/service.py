@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Mapping
+from typing import TypeVar
+
 
 from game.core.data import JsonDataError, JsonDataService
 from game.core.trade import (
@@ -15,6 +17,9 @@ from game.core.trade import (
 )
 
 from .contracts import TradeFeatureError
+
+
+_Result = TypeVar("_Result")
 
 
 class TradeFeature:
@@ -59,7 +64,7 @@ class TradeFeature:
         return await self._call(self._trade.purchase(command))
 
     @staticmethod
-    async def _call(awaitable):
+    async def _call(awaitable: Awaitable[_Result]) -> _Result:
         try:
             return await awaitable
         except TradeError as exc:

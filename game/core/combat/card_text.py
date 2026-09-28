@@ -13,8 +13,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from collections.abc import Iterator, Mapping, Sequence
+
 import json
-from collections.abc import Mapping, Sequence
 
 from .mechanics import DEFAULT_TARGET_SCOPE
 from .rules import RULE_FIELD, RULE_TEXT_ABILITY
@@ -302,7 +305,7 @@ CONDITION_RENDERERS: dict[str, str] = {
 class CardText:
     """一张卡（或一枚战丹、一条伤势）的规则正文渲染器。"""
 
-    def __init__(self, entity: Mapping[str, object], rule_layer: Mapping[str, object] | None = None):
+    def __init__(self, entity: Mapping[str, object], rule_layer: Mapping[str, object] | None = None) -> None:
         self.entity = entity
         #: 规则层登记表（`data/战斗/定义/规则层.json`）。规则段必须由它渲染，
         #: 拿不到就报「缺少登记表」，不悄悄少印一段。
@@ -335,7 +338,7 @@ class CardText:
                     self.statuses.setdefault(str(holder["名称"]), holder)
 
     @staticmethod
-    def _walk(node: object):
+    def _walk(node: object) -> Iterator[Mapping]:
         if isinstance(node, Mapping):
             yield node
             for value in node.values():
@@ -931,15 +934,6 @@ class CardText:
         if lines:
             lines.append("清零后必须重新积累")
         return lines
-
-    def _read_counters(self, node: object) -> set[str]:
-        names: set[str] = set()
-        for child in self._walk(node):
-            if child.get("能力") == "读取数值" and child.get("来源") == "构筑计量":
-                name = child.get("计量")
-                if isinstance(name, str) and name in self.counters:
-                    names.add(name)
-        return names
 
     # —— 组合 ——————————————————————————————————————————————
 
@@ -1718,7 +1712,7 @@ class CardText:
         rendered = _join([f"[{item}]" for item in labels]) if isinstance(labels, Sequence) else ""
         return f"为本次事件{way}标签：{rendered}"
 
-    def _ability_cancel_event(self, node: Mapping) -> str:
+    def _ability_cancel_event(self, _node: Mapping) -> str:
         return "无效本次事件"
 
     def _ability_pay_cost(self, node: Mapping) -> str:
@@ -2027,7 +2021,7 @@ class CardText:
             text += f"；若不成立则{self._block(node['失败效果'])}"
         return text
 
-    def _ability_listen_event(self, node: Mapping) -> str:
+    def _ability_listen_event(self, _node: Mapping) -> str:
         """被动槽位里的监听应当由 `_passive` 处理；走到这里说明嵌套位置不对。"""
 
         return self._flag("监听事件", "出现在非被动槽位")

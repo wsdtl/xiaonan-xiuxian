@@ -126,12 +126,6 @@ def _first_card(data: JsonDataService, section: str) -> dict:
     return dict(_plain(entities[content_id]))  # type: ignore[arg-type]
 
 
-def _first_card_entry(data: JsonDataService, section: str) -> tuple[str, dict]:
-    entities = data.entities(section)
-    content_id = str(next(iter(entities)))
-    return content_id, _first_card(data, section)
-
-
 def _first_ability_node(card: dict) -> dict | None:
     """挑一个真实的、带 `能力` 的深层节点作为破坏样本。"""
 

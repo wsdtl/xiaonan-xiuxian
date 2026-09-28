@@ -134,24 +134,6 @@ def _listener_passive(event: str, effects: list[dict], name: str = "探针被动
     }
 
 
-def _push_skill() -> dict:
-    return {
-        "能力": "主动技能",
-        "名称": "探针推",
-        "释放顺序": 1,
-        "精神消耗": 0,
-        "冷却行动": 0,
-        "效果": [
-            {
-                "能力": "修改行动条",
-                "目标": {"能力": "选择目标", "范围": "敌方"},
-                "方式": "增加",
-                "数值": 60,
-            }
-        ],
-    }
-
-
 def _ban_passive(skill_name: str, field: str = "禁用", value: object = True, mode: str = "设置") -> dict:
     return {
         "能力": "被动技能",
@@ -325,15 +307,6 @@ def _scope(direction: str) -> dict:
 
 #: 己方／自身方向的探针里，被护着的那一位先掉半管血（选目标与治疗观测量都要它）。
 GUARDED_HEALTH = 500.0
-
-
-def _self_card(abilities: list[dict], guarded: dict | None) -> dict:
-    """自身的探针：探针能力与规则写在**同一张脸上**（自己动自己）。"""
-
-    nodes = list(abilities)
-    if guarded is not None:
-        nodes = [*nodes, *(guarded.get("能力") or [])]
-    return _card(*nodes)
 
 
 def _sides(direction: str, probe: dict, guarded: dict | None, guarded_extra: list | None = None):

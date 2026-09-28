@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+from typing import Any
+
+from game.core.asset import (
+    InventoryStack,
+    AssetService,
+    InventoryAdjustment,
+    InventoryChangeError,
+)
+
 from collections.abc import Mapping
 
-from game.core.asset import AssetService, InventoryAdjustment, InventoryChangeError
 from game.core.companion import CompanionCultivationError, CompanionService
 from game.core.data import JsonDataError, JsonDataService, nonempty_text as _text
 from game.core.database import (
@@ -100,11 +108,11 @@ class GuiyuanFeature:
         if not result.allowed:
             raise GuiyuanError(result.reason)
 
-    async def _medicine_stack(self, user_id: str):
+    async def _medicine_stack(self, user_id: str) -> InventoryStack | None:
         stacks = await self._asset.inventory_stacks(user_id, self._medicine_id)
         return min(stacks, key=lambda value: value.grade.order) if stacks else None
 
-    def _medicine_raw(self):
+    def _medicine_raw(self) -> Mapping[str, Any]:
         return self._data.entity("丹药", self._medicine_id)
 
 

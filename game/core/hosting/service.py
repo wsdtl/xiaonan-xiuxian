@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+from game.core.database import (
+    SharedEntityRecord,
+    DatabaseService,
+    SharedEntityMutation,
+    StateAddress,
+    StateConflictError,
+    StateMutation,
+    TransactionCommand,
+)
+
 import asyncio
 import hashlib
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
 
-from game.core.action_group import ActionGroupError, ActionGroupService
+from game.core.action_group import ActionGroup, ActionGroupError, ActionGroupService
 from game.core.data import (
     JsonDataError,
     JsonDataService,
@@ -17,14 +27,6 @@ from game.core.data import (
     nonempty_text as _text,
     nonnegative_int as _nonnegative_int,
     positive_int as _positive_int,
-)
-from game.core.database import (
-    DatabaseService,
-    SharedEntityMutation,
-    StateAddress,
-    StateConflictError,
-    StateMutation,
-    TransactionCommand,
 )
 from game.core.player_state import PlayerStateService, StateTransitionCommand
 
@@ -653,7 +655,7 @@ class HostingService:
         return result
 
     def _control_context(
-        self, group, user_id: str, session_id: str
+        self, group: ActionGroup, user_id: str, session_id: str
     ) -> dict[str, object]:
         role = (
             self._role_names["personal"]
@@ -733,7 +735,7 @@ class HostingService:
 
     async def _pause_record(
         self,
-        record,
+        record: SharedEntityRecord,
         session: HostingSession,
         error: str,
     ) -> HostingSession:
@@ -780,7 +782,7 @@ class HostingService:
 
     async def _finish_plan(
         self,
-        record,
+        record: SharedEntityRecord,
         session: HostingSession,
         message: str,
         *,

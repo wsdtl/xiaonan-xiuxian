@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from launch.adapter.local import LocalReply
+
+from game.features.tuoguan import HostingSession
+
 import asyncio
 from datetime import datetime, timedelta, timezone
 
@@ -20,7 +25,7 @@ async def restore_hosting_jobs() -> None:
         schedule_plan(session)
 
 
-def schedule_plan(session) -> None:
+def schedule_plan(session: HostingSession) -> None:
     if (
         session.status != "运行中"
         or session.next_trigger_at is None
@@ -88,7 +93,7 @@ async def run_hosting_plan(session_id: str) -> None:
         return
 
 
-def _reply_error(replies) -> str:
+def _reply_error(replies: Sequence[LocalReply]) -> str:
     if not replies:
         return ""
     message = replies[-1].message

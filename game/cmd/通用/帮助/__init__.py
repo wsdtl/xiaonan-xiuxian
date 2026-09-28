@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ...command import GameCommand
 from . import reply
+from typing import Any
 
 
 @GameCommand.command(
@@ -19,7 +20,7 @@ from . import reply
         },
     },
 )
-async def help_command(*, message: str, manager) -> None:
+async def help_command(message: str, manager: Any) -> None:
     await manager.send(reply.help_message(message))
 
 

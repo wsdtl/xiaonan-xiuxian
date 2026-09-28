@@ -7,6 +7,8 @@ from game.features.tanxian import ExplorationFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -24,7 +26,7 @@ from . import reply
         },
     },
 )
-async def start_exploration(*, user_id: str, message_context, manager, **_) -> None:
+async def start_exploration(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.tanxian
     try:
         result = await feature.start(user_id, message_context.request_id)
@@ -49,7 +51,7 @@ async def start_exploration(*, user_id: str, message_context, manager, **_) -> N
         },
     },
 )
-async def exploration_progress(*, user_id: str, manager, **_) -> None:
+async def exploration_progress(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.tanxian
     try:
         result = await feature.progress(user_id)
@@ -85,9 +87,7 @@ async def exploration_progress(*, user_id: str, manager, **_) -> None:
         },
     },
 )
-async def settle_exploration(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def settle_exploration(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.tanxian
     page_text = str(message or "").strip()
     try:

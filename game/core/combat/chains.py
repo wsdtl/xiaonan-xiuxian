@@ -1,8 +1,14 @@
 """根链生命周期；调度规则不包含具体功法名称。"""
+from __future__ import annotations
+
 from contextlib import contextmanager
+from collections.abc import Iterator, Mapping
+from typing import Any
+
+from .models import BattleContext
 
 
-def response_level(node):
+def response_level(node: Mapping[str, Any]) -> int:
     value = node.get("响应等级", "随时点")
     if value == "随时点":
         event = str(node.get("事件", ""))
@@ -12,7 +18,7 @@ def response_level(node):
 
 class ChainRuntime:
     @contextmanager
-    def root_chain(self, context):
+    def root_chain(self, context: BattleContext) -> Iterator[None]:
         if context.chain_active:
             yield
             return

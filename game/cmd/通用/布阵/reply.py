@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from message import M
+from game.features.buzhen import FormationArmCopy, FormationArmResult
+
+from message import DocumentMessage, M
 
 
-def completed(copy, value):
+def completed(copy: FormationArmCopy, value: FormationArmResult) -> DocumentMessage:
     text = copy.text["布阵"]
     prepared = value.prepared
     return (
@@ -21,7 +23,7 @@ def completed(copy, value):
     )
 
 
-def error(copy, message: str):
+def error(copy: FormationArmCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(copy.text["错误"]["标题"], icon="notice")

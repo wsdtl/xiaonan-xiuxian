@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from game.core.sect_assets import SectAssetTransfer, SectAssetError, SectAssetService
+
 from collections.abc import Mapping, Sequence
 from math import ceil
 from types import MappingProxyType
@@ -16,7 +18,6 @@ from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
-from game.core.sect_assets import SectAssetError, SectAssetService
 from game.features.presentation import require_mapping
 
 from .contracts import LingcangAction, LingcangCopy, LingcangFeatureError, LingcangPage
@@ -126,7 +127,7 @@ class LingcangFeature:
         identifier: str,
         grade: str,
         quantity: int,
-    ):
+    ) -> SectAssetTransfer:
         await self._require_write(user_id)
         try:
             item = self._items.inspect(identifier)
@@ -140,7 +141,7 @@ class LingcangFeature:
         except SectAssetError as exc:
             raise LingcangFeatureError(str(exc)) from exc
 
-    async def donate_stones(self, user_id: str, request_id: str, quantity: int):
+    async def donate_stones(self, user_id: str, request_id: str, quantity: int) -> SectAssetTransfer:
         await self._require_write(user_id)
         try:
             return await self._assets.donate_stones(user_id, request_id, quantity)

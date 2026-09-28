@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from game.core.action_group import ActionGroup, ActionGroupError, ActionGroupService
+from game.core.sect import SectSnapshot, SectService
+
 from collections.abc import Mapping
 
-from game.core.action_group import ActionGroupError, ActionGroupService
 from game.core.data import JsonDataService, nonempty_text as _text
 from game.core.location import (
     LocationConflictError,
@@ -12,7 +14,6 @@ from game.core.location import (
     SpaceChangeCommand,
 )
 from game.core.player_state import PlayerStateService
-from game.core.sect import SectService
 from game.features.presentation import require_mapping
 
 from .contracts import GateAction, GateCopy, GateFeatureError, GateResult
@@ -120,7 +121,7 @@ class GateFeature:
             raise GateFeatureError("space_conflict") from exc
         return GateResult("离开", len(group.participant_user_ids))
 
-    async def _resolve_group(self, user_id: str):
+    async def _resolve_group(self, user_id: str) -> ActionGroup:
         try:
             return await self._action_group.resolve(user_id)
         except ActionGroupError as exc:
@@ -128,7 +129,7 @@ class GateFeature:
                 raise GateFeatureError("not_leader") from exc
             raise GateFeatureError("fellowship_conflict") from exc
 
-    async def _member_sect(self, user_id: str):
+    async def _member_sect(self, user_id: str) -> SectSnapshot:
         member = await self._sect.membership(user_id)
         if member is None:
             raise GateFeatureError("not_member")

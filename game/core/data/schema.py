@@ -109,15 +109,15 @@ class SchemaValidator:
 
     def collect_unknown_field_type(
         self,
-        value: Any,
-        spec: Mapping[str, Any],
-        path: str,
+        _value: Any,
+        _spec: Mapping[str, Any],
+        _path: str,
     ) -> bool:
         """领域字段类型的校验入口；返回 True 表示已处理该类型。"""
 
         return False
 
-    def validate_domain_field_links(self, spec: Mapping[str, Any], path: str) -> None:
+    def validate_domain_field_links(self, _spec: Mapping[str, Any], _path: str) -> None:
         """校验领域字段规格里对领域编号的引用是否成立。"""
 
     # ------------------------------------------------------------------ 字段与对象
@@ -479,7 +479,7 @@ class DefinitionSchemaValidator(SchemaValidator):
                     raw_spec, f"{path}.{name}.字段.{field_name}"
                 )
 
-    def validate_definition(self, definition: Mapping[str, Any], path: str) -> None:
+    def validate_definition(self, _definition: Mapping[str, Any], _path: str) -> None:
         """领域可覆盖：校验定义的顶层语义。"""
 
     def validate_field_links(self, raw_spec: Any, path: str) -> None:

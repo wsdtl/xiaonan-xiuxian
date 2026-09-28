@@ -2,17 +2,8 @@
 
 from __future__ import annotations
 
-import random
-from datetime import datetime
-from decimal import ROUND_HALF_UP, Decimal
-
-from game.core.asset import (
-    AssetService,
-    InventoryAdjustment,
-    InventoryChangeError,
-)
-from game.core.character import CharacterService
 from game.core.companion import (
+    CompanionDefinition,
     CompanionFarewellError,
     CompanionGiftError,
     CompanionInvitationError,
@@ -20,6 +11,20 @@ from game.core.companion import (
     CompanionService,
     CompanionStateError,
 )
+from game.core.item_catalog import (
+    ItemDetail,
+    ItemCatalogService,
+    ItemNameAmbiguousError,
+    ItemNotFoundError,
+)
+
+from game.core.asset import AssetGrade, AssetService, InventoryAdjustment, InventoryChangeError
+
+import random
+from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
+
+from game.core.character import CharacterService
 from game.core.data import JsonDataService
 from game.core.database import (
     DatabaseService,
@@ -30,11 +35,6 @@ from game.core.database import (
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
-)
-from game.core.item_catalog import (
-    ItemCatalogService,
-    ItemNameAmbiguousError,
-    ItemNotFoundError,
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
@@ -314,7 +314,7 @@ class CompanionInteractionFeature:
             activation,
         )
 
-    def _gift_dialogue(self, definition, preference: str) -> str:
+    def _gift_dialogue(self, definition: CompanionDefinition, preference: str) -> str:
         if preference == "偏爱":
             return self._choice(definition.dialogue.accept_gift)
         return self.copy().text["赠礼"]["合意话语"].format_map(
@@ -482,7 +482,7 @@ class CompanionInteractionFeature:
                 f"{definition.name}如今不在此处；可前往{definition.location_name}寻访"
             )
 
-    async def _gift_grade(self, user_id: str, item_id: str, query: str):
+    async def _gift_grade(self, user_id: str, item_id: str, query: str) -> AssetGrade:
         if str(query or "").strip():
             try:
                 return self._asset.grade(query)
@@ -496,13 +496,13 @@ class CompanionInteractionFeature:
             raise CompanionQueryError(f"这株灵植有多个品级，请明确指定：{choices}")
         return stacks[0].grade
 
-    def _resolve_companion(self, value: str):
+    def _resolve_companion(self, value: str) -> CompanionDefinition:
         try:
             return self._companion.definition(value)
         except CompanionNotFoundError as exc:
             raise CompanionQueryError(str(exc)) from exc
 
-    def _resolve_item(self, value: str):
+    def _resolve_item(self, value: str) -> ItemDetail:
         try:
             return self._item_catalog.inspect(value)
         except ItemNameAmbiguousError as exc:

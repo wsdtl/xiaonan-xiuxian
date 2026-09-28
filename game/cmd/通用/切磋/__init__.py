@@ -7,6 +7,8 @@ from game.features.qiecuo import DuelError, DuelStartCommand
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -23,7 +25,7 @@ from . import reply
         },
     },
 )
-async def start(*, user_id: str, message: str, message_context, manager, **_) -> None:
+async def start(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.qiecuo
     try:
         target = await feature.resolve_target(user_id, message)
@@ -50,7 +52,7 @@ async def start(*, user_id: str, message: str, message_context, manager, **_) ->
         },
     },
 )
-async def accept(*, user_id: str, message_context, manager, **_) -> None:
+async def accept(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.qiecuo
     try:
         value = await feature.accept(user_id, message_context.request_id)
@@ -75,7 +77,7 @@ async def accept(*, user_id: str, message_context, manager, **_) -> None:
         },
     },
 )
-async def reject(*, user_id: str, message_context, manager, **_) -> None:
+async def reject(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.qiecuo
     try:
         await feature.reject(user_id, message_context.request_id)

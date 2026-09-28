@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Sequence, Mapping
+from ...actions import CommandAction, message_actions
+
 
 from game.features.zongmen_wanzhen import (
     WanzhenCopy,
     WanzhenPage,
     WanzhenTransferResult,
 )
-from message import M
+from message import DocumentMessage, M
 
-from ...actions import message_actions
 from ...presentation import sentence
 
 
-def page(copy: WanzhenCopy, value: WanzhenPage, actions):
+def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]) -> DocumentMessage:
     builder = (
         M.document()
         .header(_text(copy, "标题"))
@@ -43,7 +44,7 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions):
     return builder.actions(message_actions(actions)).build()
 
 
-def transferred(copy: WanzhenCopy, value: WanzhenTransferResult):
+def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMessage:
     key = "捐入" if value.action == "存入" else "发放"
     values = {"名称": value.entry.name, "目标": value.target_name}
     return (
@@ -56,7 +57,7 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult):
     )
 
 
-def error(copy: WanzhenCopy, message: str):
+def error(copy: WanzhenCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "错误"), icon="notice")

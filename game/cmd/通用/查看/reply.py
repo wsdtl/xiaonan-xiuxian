@@ -4,17 +4,18 @@ from __future__ import annotations
 
 
 from game.features.chakan_wupin import ItemInspectionResult
-from message import M
+from message import DocumentMessage, M
 
 from .items import (
     _build_description_lines,
     _definition_lines,
+    SectionInput,
     _normalize_brackets,
     _player_description,
 )
 
 
-def missing_query():
+def missing_query() -> DocumentMessage:
     return (
         M.document()
         .section("查看", icon="item")
@@ -24,7 +25,7 @@ def missing_query():
     )
 
 
-def inspection(result: ItemInspectionResult):
+def inspection(result: ItemInspectionResult) -> DocumentMessage:
     if result.detail is None and result.candidates:
         reply = (
             M.document()
@@ -69,7 +70,10 @@ def inspection(result: ItemInspectionResult):
     lines = (
         _build_description_lines(detail, result.rendered)
         if detail.section in {"功法", "真意", "气机", "器律"}
-        else _definition_lines(detail.section, detail.fields, related, result.rendered)
+        else _definition_lines(
+            detail.section,
+            SectionInput(detail.fields, related, result.rendered),
+        )
     )
     reply = M.document().header(detail.name)
     # 构筑正文统一从说明字段进入详情区；其他实体仍使用短引言加结构化详情。

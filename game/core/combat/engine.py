@@ -2,6 +2,22 @@
 
 from __future__ import annotations
 
+from .models import (
+    EventFrame,
+    ActionIntent,
+    BattleContext,
+    CombatCatalog,
+    Fighter,
+    copy_definition,
+    PreparedCombatField,
+    PreparedFormation,
+    RuntimeCombatantSnapshot,
+    RuntimeCombatField,
+    RuntimeFormation,
+    Skill,
+    StatusState,
+)
+
 
 import copy
 import math
@@ -17,22 +33,8 @@ from .contracts import (
     CombatResult,
     StatusResult,
 )
-from .damage import DamageEngine, DamageRequest
+from .damage import DamageEngine, DamageRequest, DamageResolution
 from .mechanics import AbilityRuntime
-from .models import (
-    ActionIntent,
-    BattleContext,
-    CombatCatalog,
-    Fighter,
-    copy_definition,
-    PreparedCombatField,
-    PreparedFormation,
-    RuntimeCombatantSnapshot,
-    RuntimeCombatField,
-    RuntimeFormation,
-    Skill,
-    StatusState,
-)
 
 
 #: 递归派发用的进程递归下限：两层链的上限写在数据里，帧数要跟得上（见 `__init__`）。
@@ -200,12 +202,12 @@ class BattleEngine(AbilityRuntime):
     def simulate(
         self,
         *,
-        left,
-        right,
-        medicine_definitions,
-        medicine_selection_strategy,
-        seed,
-        action_limit,
+        left: tuple[RuntimeCombatantSnapshot, ...],
+        right: tuple[RuntimeCombatantSnapshot, ...],
+        medicine_definitions: dict[str, Any],
+        medicine_selection_strategy: str,
+        seed: int,
+        action_limit: int,
     ) -> CombatResult:
         return self.simulate_teams(
             left=(left,),
@@ -249,10 +251,7 @@ class BattleEngine(AbilityRuntime):
         self._share_inventories(left_fighters)
         self._share_inventories(right_fighters)
         runtime_field = self._build_field(field, (*left_fighters, *right_fighters))
-        # 这一场的伤害引擎：输出倍率 = 基准 × 地形节奏（有名地势按特色、无名之地随进度）。
-        self.damage = self._battle_damage(
-            runtime_field, (*left_fighters, *right_fighters), pace_percent=pace_percent
-        )
+        self.damage = self._battle_damage(pace_percent=pace_percent)
         runtime_formations = [self._build_formation(value) for value in formations]
         context = BattleContext(
             rng=random.Random(int(seed)),
@@ -423,17 +422,8 @@ class BattleEngine(AbilityRuntime):
             collapsed=value.collapsed,
         )
 
-    def _battle_damage(self, runtime_field, fighters, *, pace_percent: float | None = None) -> DamageEngine:
-        """这一场的伤害引擎：**输出倍率 = 基准 × 地形节奏**。
-
-        - 场地登记过地形：按那个地形的特色倍率（火山比平原凶得多）；
-        - 没有特殊地势（无名之地 / 场地没登记）：走**无相地势**，随参战者的进度加——
-          等级越高出手越决，仗打得越快；
-        - `pace_percent` 传了就压过上面两条（判据固定节奏用，见 `simulate_teams`）。
-
-        倍率只乘在伤害流水线的第一段（`输出倍率`），命中的是**双方**，所以它是节奏旋钮、
-        不是强弱旋钮：谁打谁都更疼，仗更快结束。
-        """
+    def _battle_damage(self, pace_percent: float | None = None) -> DamageEngine:
+        """使用固定伤害规则；可选倍率仅供测试工具控制场景。"""
 
         rules = dict(self.catalog.damage_rules)
         # **输出倍率 = `伤害.json` 里那一个数，直接、固定，不乘任何东西。**
@@ -999,7 +989,7 @@ class BattleEngine(AbilityRuntime):
                 },
             )
 
-    def _decide_action(self, context, actor, default_target) -> ActionIntent:
+    def _decide_action(self, context: BattleContext, actor: Fighter, default_target: Fighter) -> ActionIntent:
         for rule in sorted(
             actor.tactic, key=lambda value: int(value.get("优先级", 0)), reverse=True
         ):
@@ -1138,7 +1128,7 @@ class BattleEngine(AbilityRuntime):
         )
 
     @staticmethod
-    def _normalize_five_elements(value):
+    def _normalize_five_elements(value: RuntimeFormation) -> dict[str, float]:
         allowed = {"木", "火", "土", "金", "水"}
         result = {str(key): float(amount) for key, amount in dict(value or {}).items()}
         if set(result) != allowed:
@@ -1150,7 +1140,7 @@ class BattleEngine(AbilityRuntime):
         return result
 
     @staticmethod
-    def _status_result(status: StatusState) -> StatusResult:
+    def _status_result(status: str) -> StatusResult:
         return StatusResult(
             name=status.name,
             category=status.category,
@@ -1170,13 +1160,13 @@ class BattleEngine(AbilityRuntime):
             expire_with_source=status.expire_with_source,
         )
 
-    def _next_action_order(self, context):
+    def _next_action_order(self, context: BattleContext) -> tuple[Fighter, ...]:
         while True:
             values = self._action_window(context)
             if values:
                 return values
 
-    def _action_window(self, context):
+    def _action_window(self, context: BattleContext) -> tuple[Fighter, ...]:
         ready = []
         for fighter in context.fighters:
             if not fighter.alive or not fighter.can_act:
@@ -1200,7 +1190,7 @@ class BattleEngine(AbilityRuntime):
         ready.sort(key=lambda value: value[:-1])
         return tuple(value[-1] for value in ready)
 
-    def _action_efficiency(self, context, fighter):
+    def _action_efficiency(self, context: BattleContext, fighter: Fighter) -> float:
         rules = self.catalog.action_rules
         baseline = max(0.0001, float(rules.get("标准速度", 100)))
         minimum = max(0.0001, float(rules.get("最低有效速度", 25)))
@@ -1219,7 +1209,7 @@ class BattleEngine(AbilityRuntime):
         return min(limit, efficiency + response_bonus)
 
     @staticmethod
-    def _normalize_battle_profile(value):
+    def _normalize_battle_profile(value: Mapping[str, object] | None) -> dict[str, object]:
         profile = copy.deepcopy(dict(value or {}))
         allowed = {"行动效率上限", "寡敌应变", "同时承受控制上限", "控制持续上限"}
         unknown = set(profile) - allowed
@@ -1264,7 +1254,7 @@ class BattleEngine(AbilityRuntime):
             profile["寡敌应变"] = response
         return profile
 
-    def _technique_rules(self, techniques, attributes):
+    def _technique_rules(self, techniques: tuple[Mapping[str, Any], ...], attributes: dict[str, float]) -> tuple[tuple[Skill, ...], tuple[Skill, ...], dict[str, dict]]:
         skills, passives = [], []
         rules: dict[str, dict] = {}
         for instance in sorted(
@@ -1298,7 +1288,7 @@ class BattleEngine(AbilityRuntime):
         return tuple(skills), tuple(passives), rules
 
     @staticmethod
-    def _assemble_attributes(instance, index, node, attributes, skills, passives, rules):
+    def _assemble_attributes(instance: Mapping[str, Any], index: int, node: Mapping[str, Any], attributes: dict[str, float], skills: list[Skill], passives: list[dict[str, Any]], rules: dict) -> None:
         del index, skills, passives, rules
         multiplier = float(instance.get("威力倍率", 1))
         for key, value in dict(node.get("属性") or {}).items():
@@ -1306,7 +1296,7 @@ class BattleEngine(AbilityRuntime):
                 attributes.get(str(key), 0) + float(value) * multiplier
             )
 
-    def _assemble_rules(self, instance, index, node, attributes, skills, passives, rules):
+    def _assemble_rules(self, instance: Mapping[str, Any], index: int, node: Mapping[str, Any], attributes: dict[str, float], skills: list[Skill], passives: list[dict[str, Any]], rules: dict) -> None:
         """装配卡面的规则文本：`规则[]` 里的每条都要是登记过的单位级规则。
 
         参数与条件在装配期就校验完（对着登记表展开），所以重复声明、未登记规则、
@@ -1325,7 +1315,7 @@ class BattleEngine(AbilityRuntime):
         )
         rules.update(parsed)
 
-    def _assemble_active_skill(self, instance, index, node, attributes, skills, passives, rules):
+    def _assemble_active_skill(self, instance: Mapping[str, Any], index: int, node: Mapping[str, Any], attributes: dict[str, float], skills: list[Skill], passives: list[dict[str, Any]], rules: dict) -> None:
         del attributes, passives, rules
         source_name = str(instance.get("功法") or instance.get("名称") or "能力")
         source_id = str(instance.get("编号") or source_name)
@@ -1355,7 +1345,7 @@ class BattleEngine(AbilityRuntime):
             )
         )
 
-    def _assemble_passive_skill(self, instance, index, node, attributes, skills, passives, rules):
+    def _assemble_passive_skill(self, instance: Mapping[str, Any], index: int, node: Mapping[str, Any], attributes: dict[str, float], skills: list[Skill], passives: list[dict[str, Any]], rules: dict) -> None:
         """装配一条被动；被动行上还能挂**单位级规则**（锁定技的第二种写法）。
 
         被动行是锁定技最自然的落脚处之一：规则跟着这条被动一起进战斗，效果管线里的
@@ -1397,7 +1387,7 @@ class BattleEngine(AbilityRuntime):
                 }
             )
 
-    def _inherent_rules(self, snapshot, rules: dict) -> dict:
+    def _inherent_rules(self, snapshot: RuntimeCombatantSnapshot, rules: dict) -> dict:
         """把**参战者固有规则**并进规则表（种族一类「天生如此」的锁定技走这里）。
 
         与卡面根能力、被动行、状态定义同一张登记表、同一个合并口径；同一张卡或同一个
@@ -1419,7 +1409,7 @@ class BattleEngine(AbilityRuntime):
             rules[rule_name] = rule
         return rules
 
-    def _normalize_attributes(self, values):
+    def _normalize_attributes(self, values: Mapping[str, float]) -> dict[str, float]:
         result = {}
         for key, definition in self.catalog.attributes.items():
             value = float(values.get(key, definition.get("默认值", 0)))
@@ -1432,7 +1422,7 @@ class BattleEngine(AbilityRuntime):
             result[str(key)] = value
         return result
 
-    def _recover_at_action_start(self, context, actor):
+    def _recover_at_action_start(self, context: BattleContext, actor: Fighter) -> None:
         for resource, attribute in dict(
             self.catalog.action_rules.get("行动开始恢复") or {}
         ).items():
@@ -1451,7 +1441,7 @@ class BattleEngine(AbilityRuntime):
                     1,
                 )
 
-    def _tick_cooldowns(self, context, fighter):
+    def _tick_cooldowns(self, context: BattleContext, fighter: Fighter) -> None:
         decrement = int(self.catalog.action_rules["技能冷却"]["推进"]["每次减少"])
         for key in tuple(fighter.cooldowns):
             before = fighter.cooldowns[key]
@@ -1480,23 +1470,23 @@ class BattleEngine(AbilityRuntime):
                     values={"技能": skill.name if skill else key, "技能键": key},
                 )
 
-    def _skill_spirit_cost(self, actor, skill):
+    def _skill_spirit_cost(self, actor: Fighter, skill: Skill) -> float:
         return max(
             0.0, skill.spirit_cost * max(0.0, 1 - self._percent(actor, "精神消耗修正"))
         )
 
     def _cast_skill(
         self,
-        context,
-        actor,
-        target,
-        skill,
+        context: BattleContext,
+        actor: Fighter,
+        target: Fighter,
+        skill: Skill,
         *,
-        triggered=False,
-        ignore_cost=False,
-        ignore_cooldown=False,
-        multiplier=1.0,
-    ):
+        triggered: bool=False,
+        ignore_cost: bool=False,
+        ignore_cooldown: bool=False,
+        multiplier: float=1.0,
+    ) -> bool:
         """施放一门技能：过闸、付代价、跑效果、落冷却；任一步失败都按原因播报。"""
 
         if (
@@ -1572,14 +1562,14 @@ class BattleEngine(AbilityRuntime):
 
     def _skill_cast_refused(
         self,
-        context,
-        actor,
-        target,
-        skill,
-        spirit_cost,
+        context: BattleContext,
+        actor: Fighter,
+        target: Fighter,
+        skill: Skill,
+        spirit_cost: float,
         *,
-        ignore_cost,
-        ignore_cooldown,
+        ignore_cost: bool,
+        ignore_cooldown: bool,
     ) -> bool:
         """过不了闸返回 `True` 并播报原因；冷却未好是**静默**拒绝，不播报。"""
 
@@ -1594,7 +1584,7 @@ class BattleEngine(AbilityRuntime):
         return False
 
     def _skill_cast_failed(
-        self, context, actor, target, skill, reason: str, *, tags=()
+        self, context: BattleContext, actor: Fighter, target: Fighter, skill: Skill, reason: str, *, tags: tuple[str, ...]=()
     ) -> None:
         """播报一次施放失败。原因写在 values 里，前端按它取文案。"""
 
@@ -1608,8 +1598,8 @@ class BattleEngine(AbilityRuntime):
         )
 
     def _announce_skill_cast(
-        self, context, actor, target, skill, spirit_cost, *, triggered, kind
-    ):
+        self, context: BattleContext, actor: Fighter, target: Fighter, skill: Skill, spirit_cost: float, *, triggered: bool, kind: str
+    ) -> EventFrame:
         """播报一次施放事件，返回事件帧。「施放前」与「施放后」同构，只有 kind 不同，
         所以载荷只写一份——两处各写一份时，改了一个必忘另一个。
         """
@@ -1629,7 +1619,7 @@ class BattleEngine(AbilityRuntime):
         )
 
     def _pay_skill_costs(
-        self, context, actor, target, skill, spirit_cost, snapshot, *, ignore_cost
+        self, context: BattleContext, actor: Fighter, target: Fighter, skill: Skill, spirit_cost: float, snapshot: RuntimeCombatantSnapshot, *, ignore_cost: bool
     ) -> bool:
         """先付精神、再付额外代价；任一项不足就回滚本次事务并播报。"""
 
@@ -1660,7 +1650,7 @@ class BattleEngine(AbilityRuntime):
                 return False
         return True
 
-    def _run_skill_effects(self, context, actor, target, skill, multiplier) -> bool:
+    def _run_skill_effects(self, context: BattleContext, actor: Fighter, target: Fighter, skill: Skill, multiplier: float) -> bool:
         """跑完技能的全部效果，返回是否全部成功。
 
         期间把「当前能力 / 构筑实例 / 五行构成」换成这门技能的，好让效果里的取值
@@ -1694,7 +1684,7 @@ class BattleEngine(AbilityRuntime):
             context.current_element_composition = previous_composition
         return success
 
-    def _skill_cooldown(self, actor, skill) -> int:
+    def _skill_cooldown(self, actor: Fighter, skill: Skill) -> int:
         """这门技能本次要落的冷却行动数（已按冷却缩减与余数处理折算）。"""
 
         reduction = self._clamp(self._percent(actor, "冷却缩减"), -5, 0.8)
@@ -1705,7 +1695,7 @@ class BattleEngine(AbilityRuntime):
             math.ceil(raw_cooldown) if rounding == "向上取整" else int(raw_cooldown),
         )
 
-    def _apply_skill_cooldown(self, actor, skill, cooldown: int) -> None:
+    def _apply_skill_cooldown(self, actor: Fighter, skill: Skill, cooldown: int) -> None:
         """落冷却；带冷却组的技能会把同组技能一起压到不低于本次冷却。"""
 
         if not cooldown:
@@ -1718,7 +1708,7 @@ class BattleEngine(AbilityRuntime):
                         actor.cooldowns.get(other.key, 0), cooldown
                     )
 
-    def _basic_attack(self, context, source, target):
+    def _basic_attack(self, context: BattleContext, source: Fighter, target: Fighter) -> bool:
         if self._action_restricted(context, source, "普通攻击"):
             return False
         frame = self._dispatch_event(
@@ -1747,7 +1737,7 @@ class BattleEngine(AbilityRuntime):
         )
         return True
 
-    def _action_restricted(self, context, fighter, action):
+    def _action_restricted(self, context: BattleContext, fighter: Fighter, action: str) -> bool:
         """这条状态限制得住这次行动吗；**限制也要先过锁定技那一关**。
 
         `行动被限制` 拦截点问被限制的那个单位：锁定技拒绝时，这条限制对这一位不成立。
@@ -1775,22 +1765,22 @@ class BattleEngine(AbilityRuntime):
 
     def _deal_attack(
         self,
-        context,
-        source,
-        target,
-        power,
-        label,
+        context: BattleContext,
+        source: Fighter,
+        target: Fighter,
+        power: float,
+        label: str,
         *,
-        damage_form="直接",
-        defense_rule="普通",
-        tags=(),
-        can_miss=True,
-        can_critical=True,
-        can_block=True,
-        allow_followups=True,
-        raw_amount=None,
-        can_lifesteal=True,
-    ):
+        damage_form: str="直接",
+        defense_rule: str="普通",
+        tags: tuple[str, ...]=(),
+        can_miss: bool=True,
+        can_critical: bool=True,
+        can_block: bool=True,
+        allow_followups: bool=True,
+        raw_amount: float | None=None,
+        can_lifesteal: bool=True,
+    ) -> float:
         raw = max(
             0.0,
             float(raw_amount)
@@ -1843,21 +1833,21 @@ class BattleEngine(AbilityRuntime):
 
     def _apply_damage(
         self,
-        context,
-        source,
-        target,
-        amount,
+        context: BattleContext,
+        source: Fighter,
+        target: Fighter,
+        amount: float,
         *,
-        ignore_defense=False,
-        label="伤害",
-        damage_form="直接",
-        defense_rule="普通",
-        can_miss=False,
-        can_critical=True,
-        can_block=True,
-        tags=(),
-        allow_reactions=True,
-    ):
+        ignore_defense: bool=False,
+        label: str="伤害",
+        damage_form: str="直接",
+        defense_rule: str="普通",
+        can_miss: bool=False,
+        can_critical: bool=True,
+        can_block: bool=True,
+        tags: tuple[str, ...]=(),
+        allow_reactions: bool=True,
+    ) -> DamageResolution:
         effective_rule = (
             "无视防御" if ignore_defense and defense_rule == "普通" else defense_rule
         )
@@ -2108,7 +2098,7 @@ class BattleEngine(AbilityRuntime):
                 )
         return resolution
 
-    def _advance_lifecycles(self, context, actor):
+    def _advance_lifecycles(self, context: BattleContext, actor: Fighter) -> None:
         kept = []
         dropped_with_listeners = False
         dropped_with_rules = False
@@ -2161,7 +2151,7 @@ class BattleEngine(AbilityRuntime):
                         values={"对象ID": obj.id, "对象类型": obj.object_type},
                     )
 
-    def _use_medicine(self, context, fighter):
+    def _use_medicine(self, context: BattleContext, fighter: Fighter) -> None:
         if not fighter.auto_medicine:
             return
         for resource in ("血气", "精神"):

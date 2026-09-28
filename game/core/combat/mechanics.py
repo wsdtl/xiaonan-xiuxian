@@ -2,10 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable, Sequence, Mapping
+from .models import (
+    BattleContext,
+    CombatObject,
+    EventFrame,
+    Fighter,
+    Skill,
+    StatusState,
+    ModifierMap,
+    compile_definition_copy,
+    copy_skills,
+    copy_value,
+    record_values,
+    same_definition,
+)
+
 import bisect
 import copy
 import math
-from collections.abc import Mapping
 from itertools import chain, filterfalse
 from operator import attrgetter, itemgetter
 from typing import Any
@@ -13,20 +28,6 @@ from typing import Any
 from .contracts import BattleEvent
 from .chains import ChainRuntime, response_level
 from .foundation import EVENT_LISTENER_SORT_ORDER
-from .models import (
-    CombatObject,
-    EventFrame,
-    Fighter,
-    Skill,
-    StatusState,
-    ModifierMap,
-    copy_definition,
-    compile_definition_copy,
-    copy_skills,
-    copy_value,
-    record_values,
-    same_definition,
-)
 
 #: 目标范围名 -> `_target_select` 里的分支名。
 #: 这张表是**唯一出处**：`TARGET_SCOPES` 与作用域校验都从它派生，不许另抄一份。
@@ -139,13 +140,13 @@ class _CandidateList(list):
 
     __slots__ = ("filtered_version", "uncapped", "count_stamp")
 
-    def __init__(self, values=(), *, filtered_version: int) -> None:
+    def __init__(self, values: Iterable[tuple[int, Any]]=(), *, filtered_version: int) -> None:
         super().__init__(values)
         self.filtered_version = filtered_version
         self.uncapped = None
         self.count_stamp = None
 
-    def available(self, context):
+    def available(self, context: BattleContext) -> list[tuple[int, Any]]:
         # 短表也可能在名额耗尽后被重复派发数千次；同样缓存耗尽结果，
         # 让空候选直接返回，不再反复进事件栈和逐条检查名额。
         if not self:
@@ -316,7 +317,7 @@ class AbilityRuntime(ChainRuntime):
 
     def _execute_mechanism(
         self,
-        context,
+        context: BattleContext,
         source: Fighter,
         target: Fighter,
         effect: Mapping[str, Any],
@@ -409,8 +410,8 @@ class AbilityRuntime(ChainRuntime):
             del context.effect_history[:-100]
         return success
 
-    def _run_effects(self, context, source, target, effects, multiplier, *,
-                     event_amount=0.0, event_values=None, tags=()) -> bool:
+    def _run_effects(self, context: BattleContext, source: Fighter, target: Fighter, effects: Sequence[Mapping[str, Any]], multiplier: float, *,
+                     event_amount: float=0.0, event_values: Mapping[str, Any] | None=None, tags: Iterable[str]=()) -> bool:
         # 传**原节点**而不是 `dict(child)`：`_execute_mechanism` 自己会造一份 `effective`
         # 再改，节点本身不动；而 `parse_node` 按对象身份记忆化，每次现造一个字典就等于
         # 每次都缓存不中。
@@ -426,12 +427,12 @@ class AbilityRuntime(ChainRuntime):
                 return False
         return True
 
-    def _ability_sequence(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_sequence(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         return self._run_effects(
             context, source, target, effect.get("效果"), multiplier, **kwargs
         )
 
-    def _ability_conditional(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_conditional(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         conditions = effect.get("条件") or ()
         # 空条件恒成立，先看有没有条件再来问：这一层省掉的是**一次调用与三个实参的求值**，
         # 不是循环体里那点活（见 `_conditions_allow` 的说明）。
@@ -447,14 +448,14 @@ class AbilityRuntime(ChainRuntime):
         branch = effect.get("成立效果" if allowed else "不成立效果") or ()
         return self._run_effects(context, source, target, branch, multiplier, **kwargs)
 
-    def _compile_conditional(self, effect):
+    def _compile_conditional(self, effect: Mapping[str, Any]) -> Callable[..., bool]:
         conditions = effect.get("条件") or ()
         plan = self._compile_condition_sequence(conditions)
         yes, no = effect.get("成立效果") or (), effect.get("不成立效果") or ()
         if all(raw is None for raw, _, _ in plan):
             branch = yes if all(handler for _, handler, _ in plan) else no
-            def execute_constant(context, source, target, _effect, multiplier, *,
-                                 event_amount=0.0, event_values=None, tags=()):
+            def execute_constant(context: BattleContext, source: Fighter, target: Fighter, _effect: Mapping[str, Any], multiplier: float, *,
+                                 event_amount: float=0.0, event_values: Mapping[str, Any] | None=None, tags: Iterable[str]=()) -> bool:
                 if not branch:
                     return True
                 return self._run_effects(
@@ -463,8 +464,8 @@ class AbilityRuntime(ChainRuntime):
                 )
             return execute_constant
 
-        def execute(context, source, target, _effect, multiplier, *,
-                    event_amount=0.0, event_values=None, tags=()):
+        def execute(context: BattleContext, source: Fighter, target: Fighter, _effect: Mapping[str, Any], multiplier: float, *,
+                    event_amount: float=0.0, event_values: Mapping[str, Any] | None=None, tags: Iterable[str]=()) -> bool:
             allowed = not conditions or self._evaluate_condition_plan(
                 context, source, target, plan, event_amount, event_values or {}, tags
             )
@@ -478,7 +479,7 @@ class AbilityRuntime(ChainRuntime):
 
         return execute
 
-    def _ability_random(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_random(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         options = list(effect.get("选项") or ())
         count = min(len(options) if not effect.get("是否放回") else self.MAX_REPEAT, max(0, int(effect.get("抽取数量", 1))))
         if not options or count <= 0:
@@ -490,7 +491,7 @@ class AbilityRuntime(ChainRuntime):
         )
         return self._run_effects(context, source, target, chosen, multiplier, **kwargs)
 
-    def _ability_iterate(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_iterate(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
             return False
@@ -501,7 +502,7 @@ class AbilityRuntime(ChainRuntime):
             ) and ok
         return ok
 
-    def _ability_repeat(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_repeat(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         count = int(
             self._resolve_value(
                 context,
@@ -523,7 +524,7 @@ class AbilityRuntime(ChainRuntime):
                 return False
         return True
 
-    def _ability_attempt(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_attempt(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         success = self._run_effects(
             context, source, target, effect.get("尝试效果"), multiplier, **kwargs
         )
@@ -531,7 +532,7 @@ class AbilityRuntime(ChainRuntime):
         self._run_effects(context, source, target, branch, multiplier, **kwargs)
         return success
 
-    def _ability_transaction(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transaction(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         snapshot = self._transaction_snapshot(context)
         if self._run_effects(
             context, source, target, effect.get("效果"), multiplier, **kwargs
@@ -544,7 +545,7 @@ class AbilityRuntime(ChainRuntime):
         return False
 
     @staticmethod
-    def _transaction_snapshot(context) -> dict[str, Any]:
+    def _transaction_snapshot(context: BattleContext) -> dict[str, Any]:
         """给「尝试执行」存一份回滚点。
 
         **别整份 `deepcopy`**：一次尝试要把整场状态拷一遍的话，37 个单位的一场仗光深拷贝就吃掉
@@ -635,13 +636,13 @@ class AbilityRuntime(ChainRuntime):
     _SNAPSHOT_SCALAR_GETTER = attrgetter(*_SNAPSHOT_SCALAR_FIELDS)
 
     @staticmethod
-    def _snapshot_instances(values):
+    def _snapshot_instances(values: Iterable[Skill | StatusState]) -> list[tuple[type, dict[str, Any]]]:
         # 快照只需要字段状态，无须先制造几千个临时 Skill/StatusState 对象。
         # 保留类型与独立字段表，真正回滚时才重建对象；字段的浅拷语义不变。
         return [value.snapshot_state() for value in values]
 
     @staticmethod
-    def _restore_instances(values):
+    def _restore_instances(values: Iterable[tuple[type, dict[str, Any]]]) -> list[Any]:
         restored = []
         for kind, state in values:
             value = kind.__new__(kind)
@@ -650,7 +651,7 @@ class AbilityRuntime(ChainRuntime):
         return restored
 
     @staticmethod
-    def _snapshot_fighter(fighter) -> dict[str, Any]:
+    def _snapshot_fighter(fighter: Fighter) -> dict[str, Any]:
         if type(fighter) is Fighter:
             # 固定字段批量读取；大多数尝试成功，不必在每份快照上逐字段筛类型。
             # 恢复时仍跳过原来的可变值。规则缓存通常是字典，不额外保留它。
@@ -690,7 +691,7 @@ class AbilityRuntime(ChainRuntime):
         }
 
     @staticmethod
-    def _restore_fighter(fighter, snapshot: Mapping[str, Any]) -> None:
+    def _restore_fighter(fighter: Fighter, snapshot: Mapping[str, Any]) -> None:
         for key, value in snapshot["scalars"].items():
             if not isinstance(value, (dict, list, set)):
                 setattr(fighter, key, value)
@@ -708,7 +709,7 @@ class AbilityRuntime(ChainRuntime):
         )
 
     @staticmethod
-    def _restore_transaction(context, snapshot: Mapping[str, Any]) -> None:
+    def _restore_transaction(context: BattleContext, snapshot: Mapping[str, Any]) -> None:
         current = {fighter.id: fighter for fighter in context.fighters}
         for fighter_id, values in snapshot["fighters"].items():
             fighter = current.get(fighter_id)
@@ -754,10 +755,10 @@ class AbilityRuntime(ChainRuntime):
             frame.tags = set(saved["tags"])
 
     @staticmethod
-    def _ability_listener(*_args, **_kwargs):
+    def _ability_listener(*_args, **_kwargs) -> bool:
         return True
 
-    def _mark_listeners_dirty_for_status(self, context, status) -> None:
+    def _mark_listeners_dirty_for_status(self, context: BattleContext, status: StatusState) -> None:
         """状态上的监听与锁定技都跟着状态生灭：在这里统一把版本号推一格。
 
         - 监听：只有真挂了 `监听` 的状态才需要重编监听表（没有监听的状态对表没有贡献）；
@@ -770,7 +771,7 @@ class AbilityRuntime(ChainRuntime):
         if status.listeners:
             context.mark_listener_index_dirty()
 
-    def _compiled_listeners(self, context):
+    def _compiled_listeners(self, context: BattleContext) -> dict[str, tuple]:
         """Compile listeners by event for the current structural battle state.
 
         除了「事件 → 监听列表」那张排好序的表，还建一张**分桶表**：按
@@ -839,7 +840,7 @@ class AbilityRuntime(ChainRuntime):
         context.listener_index_dirty = False
         return context.listener_index
 
-    def _event_listener_buckets(self, context, event_name):
+    def _event_listener_buckets(self, context: BattleContext, event_name: str) -> tuple:
         cached = context.listener_buckets.get(event_name)
         if cached is not None:
             return cached
@@ -900,7 +901,7 @@ class AbilityRuntime(ChainRuntime):
         context.listener_buckets[event_name] = result
         return result
 
-    def _event_parties(self, context, frame) -> dict[str, Any]:
+    def _event_parties(self, context: BattleContext, frame: EventFrame) -> dict[str, Any]:
         """事件里的「当事人」：观察角色 → 那个人。
 
         收窄候选与动态判定问的是同三个角色，所以**一次算好、两处共用**：动态判定
@@ -915,10 +916,10 @@ class AbilityRuntime(ChainRuntime):
         )
         return {"来源": frame.source, "承受者": frame.target, "行动者": actor}
 
-    def _listener_conditions_deterministic(self, conditions) -> bool:
+    def _listener_conditions_deterministic(self, conditions: Sequence[Mapping[str, Any]]) -> bool:
         """Whether skipping an already-capped listener's conditions preserves RNG state."""
 
-        def visit(value) -> bool:
+        def visit(value: object) -> bool:
             if isinstance(value, Mapping):
                 ability = value.get("能力")
                 if ability is not None:
@@ -935,7 +936,7 @@ class AbilityRuntime(ChainRuntime):
 
         return visit(conditions)
 
-    def _listeners_for(self, context, kind: str, frame, parties=None) -> list[tuple[int, Any]]:
+    def _listeners_for(self, context: BattleContext, kind: str, frame: EventFrame, parties: Mapping[str, Fighter] | None=None) -> list[tuple[int, Any]]:
         """这一条事件**真正需要问**的监听，带位次、顺序与整张排序表逐条一致。
 
         候选只按「阵营关系」收：自身 → 当事人一个；任意己方 / 其他己方 → 同侧那几位；
@@ -1063,7 +1064,7 @@ class AbilityRuntime(ChainRuntime):
         cache[key] = (source_ref, target_ref, actor_ref, filtered)
         return filtered
 
-    def _collect_fighter_listeners(self, context, sink: _ListenerSink) -> None:
+    def _collect_fighter_listeners(self, context: BattleContext, sink: _ListenerSink) -> None:
         """修士自带的监听：被动槽位在前，状态（战丹、长期伤势）在后。
 
         两者留在同一个循环里是有意的：键值完全相同的那两条，最终靠稳定排序保持这个
@@ -1116,7 +1117,7 @@ class AbilityRuntime(ChainRuntime):
                         build_instance=str(status.build_instance or ""),
                     )
 
-    def _passive_listener_entries(self, context, owner) -> Mapping[str, tuple]:
+    def _passive_listener_entries(self, context: BattleContext, owner: Fighter) -> Mapping[str, tuple]:
         """修士**被动**那一段编译好的监听条目（纯静态段，按持有者缓存在场上）。
 
         为什么这一段是纯静态的：每一条只由两样东西决定，而这两样在一场战斗里都不再变——
@@ -1198,7 +1199,7 @@ class AbilityRuntime(ChainRuntime):
         context.listener_passive_cache[owner.id] = (owner, stamp, order, entries)
         return entries
 
-    def _collect_field_listeners(self, context, sink: _ListenerSink) -> None:
+    def _collect_field_listeners(self, context: BattleContext, sink: _ListenerSink) -> None:
         """战场环境本阶的常驻监听。"""
 
         if context.field is None:
@@ -1216,7 +1217,7 @@ class AbilityRuntime(ChainRuntime):
                 source_category="战场环境",
             )
 
-    def _collect_object_listeners(self, context, sink: _ListenerSink) -> None:
+    def _collect_object_listeners(self, context: BattleContext, sink: _ListenerSink) -> None:
         """战斗对象（召唤物一类）自己的监听；已失效的不收。"""
 
         for obj in context.combat_objects.values():
@@ -1234,7 +1235,7 @@ class AbilityRuntime(ChainRuntime):
                     source_category="战斗对象",
                 )
 
-    def _collect_rule_listeners(self, context, sink: _ListenerSink) -> None:
+    def _collect_rule_listeners(self, context: BattleContext, sink: _ListenerSink) -> None:
         """战场规则声明的监听，归属写明的来源修士。"""
 
         for index, rule in enumerate(context.battle_rules):
@@ -1272,7 +1273,7 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError(f"战斗时序未登记来源层级：{source}")
         return layer_order
 
-    def _dispatch_event(self, context, *, kind, source, target, amount=0.0, values=None, tags=(), record=True, capture=True):
+    def _dispatch_event(self, context: BattleContext, *, kind: str, source: Fighter, target: Fighter, amount: float=0.0, values: Mapping[str, Any] | None=None, tags: Iterable[str]=(), record: bool=True, capture: bool=True) -> EventFrame:
         if context.chain_active:
             return self._dispatch_event_body(context, kind=kind, source=source, target=target,
                                              amount=amount, values=values, tags=tags, record=record, capture=capture)
@@ -1280,7 +1281,7 @@ class AbilityRuntime(ChainRuntime):
             return self._dispatch_event_body(context, kind=kind, source=source, target=target,
                                              amount=amount, values=values, tags=tags, record=record, capture=capture)
 
-    def _dispatch_event_body(self, context, *, kind, source, target, amount=0.0, values=None, tags=(), record=True, capture=True, chain_entry=None):
+    def _dispatch_event_body(self, context: BattleContext, *, kind: str, source: Fighter, target: Fighter, amount: float=0.0, values: Mapping[str, Any] | None=None, tags: Iterable[str]=(), record: bool=True, capture: bool=True, chain_entry: tuple | None=None) -> EventFrame:
         depth_limit = self._event_depth_limit
         # 到顶之后**这次事件照旧发生、照旧进战报，只是不再往下触发监听**——见
         # `data/战斗/规则/说明.md` 的「两条链的上限」。留痕：事实里记 `链深度跳过`。
@@ -1610,7 +1611,7 @@ class AbilityRuntime(ChainRuntime):
             return ()
         return ((str(passive.get("监听键") or "内联被动"), dict(raw)),)
 
-    def _listener_relation_matches(self, owner, node, parties: Mapping[str, Any]) -> bool:
+    def _listener_relation_matches(self, owner: Fighter, node: Mapping[str, Any], parties: Mapping[str, Any]) -> bool:
         """这条监听此刻该不该问：看它观察的角色与持有者的阵营关系。
 
         `parties` 由调用方一次算好（见 `_event_parties`）——事件目标中途被改时，
@@ -1639,7 +1640,7 @@ class AbilityRuntime(ChainRuntime):
             return True
         raise ValueError(f"未知阵营关系：{relation}")
 
-    def _conditions_allow(self, context, source, target, conditions, event_amount, event_values, tags):
+    def _conditions_allow(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, conditions: Sequence[Mapping[str, Any]], event_amount: float, event_values: Mapping[str, Any], tags: Iterable[str]) -> bool:
         """这一串条件是否**全部成立**；**空条件恒成立**。
 
         调用方**先看有没有条件再来问**（`_ability_conditional` / `_dispatch_event` /
@@ -1672,13 +1673,13 @@ class AbilityRuntime(ChainRuntime):
             context, source, target, plan, event_amount, event_values, tags
         )
 
-    def _compile_condition_sequence(self, conditions):
+    def _compile_condition_sequence(self, conditions: Sequence[Mapping[str, Any]]) -> tuple:
         return tuple(
             self._compile_condition_plan_item(raw, self.catalog.parse_node(raw).executor)
             for raw in conditions or ()
         )
 
-    def _evaluate_condition_plan(self, context, source, target, plan, event_amount, event_values, tags):
+    def _evaluate_condition_plan(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, plan: tuple, event_amount: float, event_values: Mapping[str, Any], tags: Iterable[str]) -> bool:
         for raw, handler, executor in plan:
             if raw is None:
                 if not handler:
@@ -1692,7 +1693,7 @@ class AbilityRuntime(ChainRuntime):
                 return False
         return True
 
-    def _compile_condition_plan_item(self, raw, executor):
+    def _compile_condition_plan_item(self, raw: Mapping[str, Any], executor: str) -> tuple:
         """编译一条条件；只折叠完全由字面量决定的数值条件。"""
 
         handler = self._condition_handlers.get(executor)
@@ -1700,7 +1701,7 @@ class AbilityRuntime(ChainRuntime):
             children = self._compile_condition_sequence(raw.get("条件") or ())
             relation = str(raw.get("关系") or "全部成立")
 
-            def evaluate_combined(context, source, target, condition, amount, values, tags):
+            def evaluate_combined(context: BattleContext, source: Fighter, target: Fighter, condition: Mapping[str, Any], amount: float, values: Mapping[str, Any], tags: Iterable[str]) -> bool:
                 results = [
                     self._evaluate_condition_plan(
                         context, source, target, (child,), amount, values, tags
@@ -1729,7 +1730,7 @@ class AbilityRuntime(ChainRuntime):
                 # 字面量无需在每次判定时经过通用数值分派。动态一侧仍实时求值。
                 if left_plan is not None and left_plan[0] == "常量":
                     constant = left_plan[1]
-                    def evaluate_left(context, source, target, condition, amount, values, _tags):
+                    def evaluate_left(context: BattleContext, source: Fighter, target: Fighter, condition: Mapping[str, Any], amount: float, values: Mapping[str, Any], _tags: Iterable[str]) -> bool:
                         right_value = self._resolve_condition_value(
                             context, right_plan, right, source, target, amount, values
                         )
@@ -1737,13 +1738,13 @@ class AbilityRuntime(ChainRuntime):
                     return (raw, evaluate_left, executor)
                 if right_plan is not None and right_plan[0] == "常量":
                     constant = right_plan[1]
-                    def evaluate_right(context, source, target, condition, amount, values, _tags):
+                    def evaluate_right(context: BattleContext, source: Fighter, target: Fighter, condition: Mapping[str, Any], amount: float, values: Mapping[str, Any], _tags: Iterable[str]) -> bool:
                         left_value = self._resolve_condition_value(
                             context, left_plan, left, source, target, amount, values
                         )
                         return self._compare(left_value, constant, relation)
                     return (raw, evaluate_right, executor)
-                def evaluate(context, source, target, condition, amount, values, _tags):
+                def evaluate(context: BattleContext, source: Fighter, target: Fighter, condition: Mapping[str, Any], amount: float, values: Mapping[str, Any], _tags: Iterable[str]) -> bool:
                     left_value = self._resolve_condition_value(
                         context, left_plan, condition.get("左值"), source, target, amount, values
                     )
@@ -1757,7 +1758,7 @@ class AbilityRuntime(ChainRuntime):
                 return (raw, evaluate, executor)
         return (raw, handler, executor)
 
-    def _compile_condition_value(self, value):
+    def _compile_condition_value(self, value: Any) -> tuple | None:
         if type(value) in (int, float):
             return ("常量", float(value))
         if not isinstance(value, Mapping) or "能力" not in value:
@@ -1768,7 +1769,7 @@ class AbilityRuntime(ChainRuntime):
         return None
 
     def _resolve_condition_value(
-        self, context, plan, raw, source, target, amount, values
+        self, context: BattleContext | None, plan: tuple | None, raw: Any, source: Fighter | None, target: Fighter, amount: float, values: Mapping[str, Any]
     ) -> float:
         if plan is None:
             return self._resolve_value(context, raw, source, target, amount, values)
@@ -1783,7 +1784,7 @@ class AbilityRuntime(ChainRuntime):
             raise TypeError(f"战斗数值必须是数字：{result!r}")
         return float(result)
 
-    def _compile_read_value(self, node):
+    def _compile_read_value(self, node: Mapping[str, Any]) -> Callable[..., Any]:
         """预绑定只读数值节点的字段；每次仍重新选目标、读取状态并求值。"""
         origin = str(node.get("来源") or "固定值")
         if origin not in {"固定值", "自身属性", "效果来源属性", "目标属性", "事件事实", "本次数值", "构筑计量", "状态层数", "行动条"}:
@@ -1821,7 +1822,7 @@ class AbilityRuntime(ChainRuntime):
             lower = float(node['最低值']) if has_low else None
             upper = float(node['最高值']) if has_high else None
 
-        def evaluate(context, source, target, _node, amount, values):
+        def evaluate(context: BattleContext, source: Fighter, target: Fighter, _node: Mapping[str, Any], amount: float, values: Mapping[str, Any]) -> Any:
             selected = target
             if dependent:
                 destinations = self._select_targets(context, source, target, selector)
@@ -1853,11 +1854,11 @@ class AbilityRuntime(ChainRuntime):
 
         return evaluate
 
-    def _condition_probability(self, context, source, target, condition, *_):
+    def _condition_probability(self, context: BattleContext, source: Fighter, target: Fighter, condition: Mapping[str, Any], *_) -> bool:
         chance = self._resolve_value(context, condition.get("概率", 0), source, target, 0, {}) / 100.0
         return self._judgement(context, "概率", chance)
 
-    def _condition_numeric(self, context, source, target, condition, event_amount, event_values, _tags):
+    def _condition_numeric(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, condition: Mapping[str, Any], event_amount: float, event_values: Mapping[str, Any], _tags: Iterable[str]) -> bool:
         raw_left = condition.get("左值")
         raw_right = condition.get("右值")
         # 语料中大量条件两侧是冻结的数字常量；这些值不需要经过能力节点解析。
@@ -1874,7 +1875,7 @@ class AbilityRuntime(ChainRuntime):
         )
         return self._compare(left, right, str(condition.get("比较") or "等于"))
 
-    def _condition_status(self, context, source, target, condition, *_):
+    def _condition_status(self, context: BattleContext, source: Fighter, target: Fighter, condition: Mapping[str, Any], *_) -> bool:
         destinations = self._select_targets(context, source, target, condition.get("目标"))
         name = str(condition.get("状态") or "")
         count = sum(status.stacks for fighter in destinations for status in fighter.statuses if not name or status.name == name)
@@ -1885,7 +1886,7 @@ class AbilityRuntime(ChainRuntime):
             return count == 0
         return self._compare(count, float(condition.get("层数", 1)), relation.removeprefix("层数"))
 
-    def _condition_type(self, context, source, target, condition, _amount, event_values, _tags):
+    def _condition_type(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, condition: Mapping[str, Any], _amount: float, event_values: Mapping[str, Any], _tags: Iterable[str]) -> bool:
         subject = source if str(condition.get("对象") or "目标") == "来源" else target
         kind = str(condition.get("类型") or "")
         expected = str(condition.get("值") or "")
@@ -1898,7 +1899,7 @@ class AbilityRuntime(ChainRuntime):
         aliases = self._condition_type_aliases
         return str(event_values.get(aliases.get(kind, kind), "")) == expected
 
-    def _condition_combined(self, context, source, target, condition, amount, values, tags):
+    def _condition_combined(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, condition: Mapping[str, Any], amount: float, values: Mapping[str, Any], tags: Iterable[str]) -> bool:
         results = [self._conditions_allow(context, source, target, (item,), amount, values, tags) for item in condition.get("条件") or ()]
         relation = str(condition.get("关系") or "全部成立")
         if relation == "全部成立":
@@ -1909,7 +1910,7 @@ class AbilityRuntime(ChainRuntime):
             return not any(results)
         raise ValueError(f"未知组合条件关系：{relation}")
 
-    def _condition_tags(self, context, source, target, condition, _amount, event_values, event_tags):
+    def _condition_tags(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, condition: Mapping[str, Any], _amount: float, event_values: Mapping[str, Any], event_tags: Iterable[str]) -> bool:
         obj = str(condition.get("对象") or "事件")
         actual = set(event_tags)
         if obj == "来源":
@@ -1951,7 +1952,7 @@ class AbilityRuntime(ChainRuntime):
             return left <= right
         return False
 
-    def _ability_damage(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_damage(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
             return False
@@ -1980,7 +1981,7 @@ class AbilityRuntime(ChainRuntime):
             context.last_result = {**context.last_result, **resolution.values()}
         return success
 
-    def _ability_recover_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_recover_resource(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         """恢复资源。**资源语义全部来自 `资源.json` 的表**，执行器不认资源名。
 
         曾经这里有五处 `if 资源 == "血气"` / `"护盾"`：加成属性、事件名、承受方加成
@@ -2045,7 +2046,7 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError(f"战斗核心未登记资源：{resource}")
         return definition
 
-    def _percent(self, fighter, attribute: str, default: float | None = None) -> float:
+    def _percent(self, fighter: Fighter, attribute: str, default: float | None = None) -> float:
         """读一个百分比属性的比值；基准与口径见 `models.attribute_ratio`。
 
         与旧实现的两点不同：基准从**属性自己的 `默认值`** 来（不再由调用点写 `1 + …`
@@ -2056,7 +2057,7 @@ class AbilityRuntime(ChainRuntime):
         baseline = self._attribute_defaults.get(attribute, 0.0) if default is None else float(default) * 100.0
         return fighter.value(attribute, baseline) / 100.0
 
-    def _element_multiplier(self, context, source, target, effect):
+    def _element_multiplier(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any]) -> float:
         composition = effect.get("属性构成")
         if not composition:
             return 1.0
@@ -2127,7 +2128,7 @@ class AbilityRuntime(ChainRuntime):
                 break
         return result
 
-    def _mark_team_synergy(self, context, source, effect):
+    def _mark_team_synergy(self, context: BattleContext, source: Fighter, effect: Mapping[str, Any]) -> None:
         composition = effect.get("属性构成") or {}
         generating = self._element_generating
         elements = [generating[element] for element in composition if element in generating]
@@ -2139,7 +2140,7 @@ class AbilityRuntime(ChainRuntime):
                 continue
             ally.team_synergy[element] = 1
 
-    def _ability_consume_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_consume_resource(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         resource = str(effect.get("资源") or "精神")
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
@@ -2171,7 +2172,7 @@ class AbilityRuntime(ChainRuntime):
             changed = changed or applied > 0
         return changed
 
-    def _ability_pay_cost(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_pay_cost(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         kind = str(effect.get("代价类型") or "资源")
         if kind == "资源":
             return self._ability_consume_resource(context, source, target, effect, multiplier, **kwargs)
@@ -2190,7 +2191,7 @@ class AbilityRuntime(ChainRuntime):
             return self._ability_remove_object(context, source, target, effect, multiplier)
         raise ValueError(f"未知代价类型：{kind}")
 
-    def _ability_set_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_set_resource(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         resource = str(effect.get("资源") or "血气")
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
@@ -2201,7 +2202,7 @@ class AbilityRuntime(ChainRuntime):
             changed = changed or before != after
         return changed
 
-    def _ability_transfer_resource(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transfer_resource(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         donors = self._select_targets(context, source, target, effect.get("来源目标"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not donors or not receivers:
@@ -2222,7 +2223,7 @@ class AbilityRuntime(ChainRuntime):
         self._set_resource(receiver, target_resource, receiver_before + applied)
         return applied > 0
 
-    def _ability_add_status(self, context, source, target, effect, multiplier, **_):
+    def _ability_add_status(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         changed = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
             original = effect.get("状态")
@@ -2368,7 +2369,7 @@ class AbilityRuntime(ChainRuntime):
             changed = True
         return changed
 
-    def _resolve_status_reactions(self, context, source, target, added_name, multiplier):
+    def _resolve_status_reactions(self, context: BattleContext, source: Fighter, target: Fighter, added_name: str, multiplier: float) -> None:
         for reaction in self.catalog.status_reactions:
             required = [str(value) for value in reaction.get("需要状态") or ()]
             if added_name not in required:
@@ -2416,7 +2417,7 @@ class AbilityRuntime(ChainRuntime):
                     },
                 )
 
-    def _matching_statuses(self, context, fighter, selector):
+    def _matching_statuses(self, context: BattleContext, fighter: Fighter, selector: Mapping[str, Any]) -> list[StatusState]:
         name = str(selector.get("名称") or "")
         category = str(selector.get("分类") or "")
         tags = {str(value) for value in selector.get("标签") or ()}
@@ -2451,7 +2452,7 @@ class AbilityRuntime(ChainRuntime):
             values = values[: max(1, int(selector.get("数量", 1)))]
         return values
 
-    def _select_statuses(self, context, source, target, value):
+    def _select_statuses(self, context: BattleContext, source: Fighter, target: Fighter, value: object) -> list[tuple[Fighter, StatusState]]:
         if not isinstance(value, Mapping):
             return []
         node = self.catalog.parse_node(value)
@@ -2463,7 +2464,7 @@ class AbilityRuntime(ChainRuntime):
         return result
 
     def _status_removal_denied(
-        self, context, owner, status, reason: str, source
+        self, context: BattleContext, owner: Fighter, status: str, reason: str, source: Fighter
     ) -> bool:
         """锁定技：`状态被移除` 拦截点——问**状态挂着的那个单位**。
 
@@ -2484,7 +2485,7 @@ class AbilityRuntime(ChainRuntime):
             ),
         )
 
-    def _ability_remove_status(self, context, source, target, effect, multiplier, **_):
+    def _ability_remove_status(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         removed = False
@@ -2502,7 +2503,7 @@ class AbilityRuntime(ChainRuntime):
                 removed = True
         return removed
 
-    def _ability_modify_status_stacks(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_status_stacks(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         """改状态层数。方向由 `方式` 决定（`增加` / `减少`），没有第二个开关。
 
         曾经这里还认一个 `consume=True` 位置参数和 `数值` 字段名兜底——那是
@@ -2531,7 +2532,7 @@ class AbilityRuntime(ChainRuntime):
             self._dispatch_event(context, kind="状态层数变化后", source=source, target=owner, values={"状态": status.name, "变化前数值": before, "变化后数值": status.stacks})
         return True
 
-    def _ability_modify_status_duration(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_status_duration(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         amount = max(0, int(float(effect.get("持续数值", 1)) * multiplier))
         mode = str(effect.get("方式") or "增加")
@@ -2539,7 +2540,7 @@ class AbilityRuntime(ChainRuntime):
             status.remaining_turns = max(0, status.remaining_turns + (amount if mode == "增加" else -amount))
         return bool(pairs)
 
-    def _ability_copy_status(self, context, source, target, effect, multiplier, **_):
+    def _ability_copy_status(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         sources = self._select_statuses(context, source, target, effect.get("状态"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not sources or not receivers:
@@ -2578,7 +2579,7 @@ class AbilityRuntime(ChainRuntime):
                 )
         return True
 
-    def _ability_transfer_status(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transfer_status(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not pairs or not receivers:
@@ -2589,7 +2590,7 @@ class AbilityRuntime(ChainRuntime):
             self._mark_listeners_dirty_for_status(context, status)
         return True
 
-    def _ability_modify_action_progress(self, context, source, target, effect, multiplier, cost=False, **_):
+    def _ability_modify_action_progress(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, cost: bool=False, **_) -> bool:
         amount = max(0.0, float(effect.get("数值", 0)) * multiplier) / 100.0
         mode = str(effect.get("方式") or "增加")
         changed = False
@@ -2618,7 +2619,7 @@ class AbilityRuntime(ChainRuntime):
             changed = changed or before != after
         return changed
 
-    def _ability_modify_cooldown(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_cooldown(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         mode = str(effect.get("方式") or "减少")
         amount = max(0, int(float(effect.get("数值", 0)) * multiplier))
         changed = False
@@ -2634,7 +2635,7 @@ class AbilityRuntime(ChainRuntime):
                 changed = changed or before != after
         return changed
 
-    def _ability_modify_counter(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_modify_counter(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         static = context.ability_static_cache.get(id(effect))
         if static is None or static[0] is not effect:
             static = (
@@ -2682,13 +2683,13 @@ class AbilityRuntime(ChainRuntime):
         return changed
 
     @staticmethod
-    def _build_instance(context, node: Mapping[str, Any] | None = None) -> str:
+    def _build_instance(context: BattleContext, node: Mapping[str, Any] | None = None) -> str:
         """解析当前能力所属构筑实例；公共能力保持空作用域。"""
 
         value = (node or {}).get("构筑实例") if isinstance(node, Mapping) else None
         return str(value or context.current_build_instance or "").strip()
 
-    def _ability_additional_attack(self, context, source, target, effect, multiplier, **_):
+    def _ability_additional_attack(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
             return False
@@ -2704,7 +2705,7 @@ class AbilityRuntime(ChainRuntime):
         self._dispatch_event(context, kind="追加攻击后", source=source, target=destination, amount=applied, values={"实际数值": applied, "行动类型": "追加攻击"}, tags=("追加攻击",))
         return True
 
-    def _ability_share_damage(self, context, source, target, effect, multiplier, **_):
+    def _ability_share_damage(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         frame = self._current_event(context, "造成伤害前")
         destinations = self._select_targets(context, source, target, effect.get("目标"))
         if not destinations:
@@ -2714,7 +2715,7 @@ class AbilityRuntime(ChainRuntime):
         self._apply_damage(context, frame.source, destinations[0], amount, label=str(effect.get("名称") or "分摊伤害"), damage_form="分摊", defense_rule="真实", can_critical=False, can_block=False, tags=("分摊",))
         return True
 
-    def _ability_transfer_damage(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_transfer_damage(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         frame = self._current_event(context)
         if frame.kind not in {"造成伤害前", "受到致命伤害"}:
             raise ValueError("转移伤害只能修改伤害前或致命伤害事件")
@@ -2735,14 +2736,14 @@ class AbilityRuntime(ChainRuntime):
         self._apply_damage(context, frame.source, destinations[0], amount, label=str(effect.get("名称") or "转移伤害"), damage_form="转移", defense_rule="真实", can_critical=False, can_block=False, tags=("转移",))
         return True
 
-    def _ability_fatal_guard(self, context, source, target, effect, multiplier, **_):
+    def _ability_fatal_guard(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         frame = self._current_event(context, "受到致命伤害")
         amount = max(1.0, float(effect.get("保留血气", 1)) * multiplier)
         frame.facts["保留血气"] = max(float(frame.facts.get("保留血气", 0)), amount)
         frame.cancelled = True
         return True
 
-    def _ability_revive(self, context, source, target, effect, multiplier, **_):
+    def _ability_revive(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             if fighter.alive:
@@ -2754,7 +2755,7 @@ class AbilityRuntime(ChainRuntime):
             changed = True
         return changed
 
-    def _event_rewrite_denied(self, context, frame, kind: str) -> bool:
+    def _event_rewrite_denied(self, context: BattleContext, frame: EventFrame, kind: str) -> bool:
         """规则层：`事件被改写` 拦截点——问**这件事的承受者**愿不愿意被改写。
 
         语义是「关于我的事件不能被取消/转化/改数值」，所以问的是 `frame.target`，
@@ -2773,7 +2774,7 @@ class AbilityRuntime(ChainRuntime):
             amount=float(frame.amount or 0.0),
         )
 
-    def _ability_modify_event_value(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_modify_event_value(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         frame = self._current_event(context)
         if not self._event_mutation_allowed(frame, "当前数值"):
             return False
@@ -2784,7 +2785,7 @@ class AbilityRuntime(ChainRuntime):
         frame.facts["当前数值"] = max(0.0, amount if mode == "设置" else frame.amount + amount if mode == "增加" else frame.amount - amount if mode == "减少" else frame.amount * amount / 100.0)
         return True
 
-    def _ability_modify_event_target(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_event_target(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         frame = self._current_event(context)
         if not self._event_mutation_allowed(frame, "目标"):
@@ -2798,7 +2799,7 @@ class AbilityRuntime(ChainRuntime):
         frame.facts["承受者"] = values[0].id
         return True
 
-    def _ability_modify_event_tags(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_event_tags(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del source, target, multiplier
         frame = self._current_event(context)
         if not self._event_mutation_allowed(frame, "标签"):
@@ -2811,7 +2812,7 @@ class AbilityRuntime(ChainRuntime):
         frame.facts["标签"] = sorted(frame.tags)
         return True
 
-    def _ability_cancel_event(self, context, source, target, effect, multiplier, **_):
+    def _ability_cancel_event(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del source, target, effect, multiplier
         frame = self._current_event(context)
         if not self._event_mutation_allowed(frame, "取消"):
@@ -2822,7 +2823,7 @@ class AbilityRuntime(ChainRuntime):
         frame.facts["已取消"] = True
         return True
 
-    def _ability_trigger_skill(self, context, source, target, effect, multiplier, **_):
+    def _ability_trigger_skill(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         limit = int(self.catalog.action_rules.get("触发技能嵌套上限", self.MAX_TRIGGERED_SKILLS))
         if context.triggered_skill_depth >= limit:
             return False
@@ -2845,7 +2846,7 @@ class AbilityRuntime(ChainRuntime):
         finally:
             context.triggered_skill_depth -= 1
 
-    def _ability_record_fact(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_record_fact(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         owners = (
             self._select_targets(context, source, target, effect.get("归属"))
             if effect.get("归属") is not None
@@ -2869,7 +2870,7 @@ class AbilityRuntime(ChainRuntime):
                 del values[:-limit]
         return True
 
-    def _ability_modify_relation(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_relation(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         left = self._select_targets(context, source, target, effect.get("一方")) or [source]
         right = self._select_targets(context, source, target, effect.get("另一方")) or [target]
@@ -2883,7 +2884,7 @@ class AbilityRuntime(ChainRuntime):
         self._dispatch_event(context, kind="关联变化后", source=source, target=right[0], values={"关联": name, "方式": mode})
         return before != len(context.relations)
 
-    def _ability_modify_skill(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_skill(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             for key in self._select_skills(context, fighter, effect.get("技能")):
@@ -2922,7 +2923,7 @@ class AbilityRuntime(ChainRuntime):
                 changed = True
         return changed
 
-    def _ability_copy_skill(self, context, source, target, effect, multiplier, **_):
+    def _ability_copy_skill(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         sources = self._select_targets(context, source, target, effect.get("来源目标"))
         receivers = self._select_targets(context, source, target, effect.get("接收目标"))
         if not sources or not receivers:
@@ -2937,7 +2938,7 @@ class AbilityRuntime(ChainRuntime):
         receiver.skills.append(copied)
         return True
 
-    def _ability_modify_intent(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_intent(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         intent = context.action_intent
         if intent is None:
@@ -2970,7 +2971,7 @@ class AbilityRuntime(ChainRuntime):
         self._dispatch_event(context, kind="行动意图变化后", source=source, target=target, values={"字段": field, "行动": intent.action, "技能键": intent.skill_key, "目标ID": intent.target_id})
         return True
 
-    def _ability_transform_event(self, context, source, target, effect, multiplier, **_):
+    def _ability_transform_event(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         frame = self._current_event(context)
         destination = str(effect.get("事件") or "")
@@ -2999,13 +3000,13 @@ class AbilityRuntime(ChainRuntime):
 
         return frozenset({"恢复前", "获得护盾前", "资源恢复前"})
 
-    def _ability_modify_judgement(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_judgement(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del source, target, multiplier
         kind = str(effect.get("判定") or "任意")
         context.judgement_overrides.setdefault(kind, []).append({"方式": str(effect.get("方式") or "必定成功"), "次数": max(1, int(effect.get("次数", 1)))})
         return True
 
-    def _ability_modify_battle_rule(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_battle_rule(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del target, multiplier
         name = str(effect.get("名称") or "")
         mode = str(effect.get("方式") or "添加")
@@ -3043,14 +3044,14 @@ class AbilityRuntime(ChainRuntime):
         self._dispatch_event(context, kind="战场规则变化后", source=source, target=source, values={"规则": name, "方式": mode})
         return changed
 
-    def _ability_save_result(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_save_result(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         name = str(effect.get("名称") or "")
         source_name = str(effect.get("来源") or "上个效果")
         value = context.last_result if source_name == "上个效果" else self._resolve_any(context, effect.get("值"), source, target, kwargs.get("event_amount", 0), kwargs.get("event_values") or {})
         context.saved_results[name] = copy.deepcopy(value)
         return True
 
-    def _ability_switch_form(self, context, source, target, effect, multiplier, **_):
+    def _ability_switch_form(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
             name = str(effect.get("形态") or "")
@@ -3091,7 +3092,7 @@ class AbilityRuntime(ChainRuntime):
             changed = True
         return changed
 
-    def _ability_create_object(self, context, source, target, effect, multiplier, **_):
+    def _ability_create_object(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         definition = copy.deepcopy(dict(effect.get("定义") or {}))
         kind = str(effect.get("类型") or "构造物")
         # 锁定技：`造物被召唤` 拦截点——问**要召唤的那个单位自己**（对象还没生出来）。
@@ -3161,7 +3162,7 @@ class AbilityRuntime(ChainRuntime):
         self._dispatch_event(context, kind="战斗对象入场后", source=source, target=event_target, values={"对象ID": object_id, "对象类型": kind, "名称": name})
         return True
 
-    def _ability_remove_object(self, context, source, target, effect, multiplier, **_):
+    def _ability_remove_object(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         object_id = str(effect.get("对象ID") or "")
         candidates = [fighter for fighter in context.fighters if fighter.active and fighter.summoned and (fighter.id == object_id or (not object_id and fighter.owner_id == source.id))]
@@ -3173,7 +3174,7 @@ class AbilityRuntime(ChainRuntime):
             self._retire_battle_object(context, source, shell or target, obj.object_type, object_id=obj.id)
         return bool(candidates or objects)
 
-    def _retire_battle_object(self, context, source, fighter, kind, *, object_id=""):
+    def _retire_battle_object(self, context: BattleContext, source: Fighter, fighter: Fighter, kind: str, *, object_id: str="") -> bool:
         combat_object_id = object_id or fighter.id
         obj = context.combat_objects.pop(combat_object_id, None)
         if obj is not None:
@@ -3193,7 +3194,7 @@ class AbilityRuntime(ChainRuntime):
         self._remove_source_lifetimes(context, fighter)
         return True
 
-    def _remove_source_lifetimes(self, context, source):
+    def _remove_source_lifetimes(self, context: BattleContext, source: Fighter) -> None:
         for fighter in context.fighters:
             expired = [status for status in fighter.statuses if status.expire_with_source and status.source == source.id]
             for status in expired:
@@ -3226,7 +3227,7 @@ class AbilityRuntime(ChainRuntime):
                     values={"规则": str(rule.get("名称") or ""), "方式": "来源退场移除"},
                 )
 
-    def _ability_modify_ownership(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_ownership(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         values = self._select_targets(context, source, target, effect.get("目标"))
         if not values:
@@ -3272,7 +3273,7 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError(f"未知归属字段：{field}")
         return True
 
-    def _ability_replay_effect(self, context, source, target, effect, multiplier, **kwargs):
+    def _ability_replay_effect(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         scope = str(effect.get("范围") or "上个效果")
         history = [item for item in context.effect_history if item.get("成功")]
         if scope == "自身上个效果":
@@ -3283,7 +3284,7 @@ class AbilityRuntime(ChainRuntime):
         destinations = self._select_targets(context, source, target, effect.get("目标")) or [target]
         return self._execute_mechanism(context, source, destinations[0], item["节点"], float(item.get("倍率", 1)) * float(effect.get("倍率", 1)) * multiplier, **kwargs)
 
-    def _ability_modify_tactic(self, context, source, target, effect, multiplier, **_):
+    def _ability_modify_tactic(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del multiplier
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
@@ -3293,7 +3294,7 @@ class AbilityRuntime(ChainRuntime):
             changed = True
         return changed
 
-    def _select_skills(self, context, fighter, value):
+    def _select_skills(self, context: BattleContext, fighter: Fighter, value: object) -> list[str]:
         if not isinstance(value, Mapping):
             return []
         node = self.catalog.parse_node(value)
@@ -3301,7 +3302,7 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError("技能字段必须使用选择技能")
         return self._skills_select(context, fighter, fighter, value, 0, {}, ())
 
-    def _skills_select(self, context, source, target, selector, *_):
+    def _skills_select(self, context: BattleContext, source: Fighter, target: Fighter, selector: Mapping[str, Any], *_) -> list[str]:
         del target
         scope = str(selector.get("范围") or "全部技能")
         candidates = [skill for skill in source.skills if (scope != "冷却中的技能" or source.cooldowns.get(skill.key, 0) > 0) and (scope != "可用技能" or self._skill_available(source, skill))]
@@ -3323,7 +3324,7 @@ class AbilityRuntime(ChainRuntime):
         count = len(candidates) if selector.get("选择全部", False) else max(1, int(selector.get("数量", 1)))
         return [skill.key for skill in candidates[:count]]
 
-    def _resolve_value(self, context, value, source, target, event_amount=0.0, event_values=None):
+    def _resolve_value(self, context: BattleContext | None, value: Any, source: Fighter | None, target: Fighter | None, event_amount: float=0.0, event_values: Mapping[str, Any] | None=None) -> float:
         if type(value) in (int, float):
             return float(value)
         result = self._resolve_any(context, value, source, target, event_amount, event_values or {})
@@ -3331,7 +3332,7 @@ class AbilityRuntime(ChainRuntime):
             raise TypeError(f"战斗数值必须是数字：{result!r}")
         return float(result)
 
-    def _resolve_any(self, context, value, source, target, event_amount=0.0, event_values=None):
+    def _resolve_any(self, context: BattleContext | None, value: Any, source: Fighter | None, target: Fighter | None, event_amount: float=0.0, event_values: Mapping[str, Any] | None=None) -> Any:
         if isinstance(value, Mapping):
             if "能力" not in value:
                 return copy_value(dict(value))
@@ -3351,7 +3352,7 @@ class AbilityRuntime(ChainRuntime):
             return handler(context, source, target, value, event_amount, event_values or {})
         return value if value is not None else 0
 
-    def _value_read(self, context, source, target, node, event_amount, event_values):
+    def _value_read(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, node: Mapping[str, Any], event_amount: float, event_values: Mapping[str, Any]) -> Any:
         origin = str(node.get("来源") or "固定值")
         target_value_origins = {
             "目标属性",
@@ -3437,7 +3438,7 @@ class AbilityRuntime(ChainRuntime):
                 value = min(float(node["最高值"]), value)
         return value
 
-    def _value_calculate(self, context, source, target, node, amount, values):
+    def _value_calculate(self, context: BattleContext, source: Fighter, target: Fighter, node: Mapping[str, Any], amount: float, values: Mapping[str, Any]) -> float:
         left = self._resolve_value(context, node.get("左值"), source, target, amount, values)
         right = self._resolve_value(context, node.get("右值"), source, target, amount, values)
         mode = str(node.get("方式") or "相加")
@@ -3453,13 +3454,13 @@ class AbilityRuntime(ChainRuntime):
         result = self._clamp(result, float(node.get("最低值", -math.inf)), float(node.get("最高值", math.inf)))
         return round(result, max(0, int(node.get("保留小数位", 4))))
 
-    def _value_random(self, context, source, target, node, *_):
+    def _value_random(self, context: BattleContext, source: Fighter, target: Fighter, node: Mapping[str, Any], *_) -> float:
         del source, target
         low, high = float(node.get("最低值", 0)), float(node.get("最高值", 0))
         value = context.rng.uniform(low, high)
         return round(value) if node.get("取整", False) else value
 
-    def _value_aggregate(self, context, source, target, node, amount, values):
+    def _value_aggregate(self, context: BattleContext, source: Fighter, target: Fighter, node: Mapping[str, Any], amount: float, values: Mapping[str, Any]) -> float:
         targets = self._select_targets(context, source, target, node.get("目标"))
         mode = str(node.get("方式") or "数量")
         if mode == "数量":
@@ -3469,7 +3470,7 @@ class AbilityRuntime(ChainRuntime):
             return 0.0
         return {"总和": sum(data), "最小": min(data), "最大": max(data), "平均": sum(data) / len(data), "不同值数量": float(len(set(data)))}.get(mode, 0.0)
 
-    def _status_with_rules(self, definition: Mapping[str, Any], path: str):
+    def _status_with_rules(self, definition: Mapping[str, Any], path: str) -> StatusState:
         """把状态定义里的 `规则[]` 一并解析，再建 `StatusState`。
 
         状态是**锁定技在内容里的第三种写法**：作者把单位级规则写在状态定义里，状态挂上就生效、
@@ -3496,7 +3497,7 @@ class AbilityRuntime(ChainRuntime):
             status.rules.update(rules)
         return status
 
-    def _source_relation(self, context, source, candidate) -> str:
+    def _source_relation(self, context: BattleContext | None, source: Fighter | None, candidate: Fighter) -> str:
         """规则里的 `来源关系` 看的是「谁在动手」，所以只分自身 / 己方 / 敌方。"""
 
         if source is None or candidate is None:
@@ -3507,13 +3508,13 @@ class AbilityRuntime(ChainRuntime):
 
     def _rules_deny(
         self,
-        context,
-        container,
+        context: BattleContext | None,
+        container: Fighter | Skill,
         point: str,
         *,
-        owner=None,
+        owner: Fighter | None=None,
         tags: tuple = (),
-        values=None,
+        values: Mapping[str, Any] | None=None,
         amount: float = 0.0,
     ) -> bool:
         """问一个载体的规则：这次改写/选定被拒绝了吗（只看结论）。"""
@@ -3531,7 +3532,7 @@ class AbilityRuntime(ChainRuntime):
             is not None
         )
 
-    def _container_rules(self, container, context) -> dict[str, tuple]:
+    def _container_rules(self, container: Fighter | Skill, context: BattleContext | None) -> dict[str, tuple]:
         """按拦截点分好的规则表，**带版本号记忆化**。
 
         规则来自两处：载体自己带的（装配期定死）、在场状态带的（跟状态生灭）。以前每次问都
@@ -3561,15 +3562,15 @@ class AbilityRuntime(ChainRuntime):
 
     def _rules_denied_rule(
         self,
-        context,
-        container,
+        context: BattleContext | None,
+        container: Fighter | Skill,
         point: str,
         *,
-        owner=None,
+        owner: Fighter | None=None,
         tags: tuple = (),
-        values=None,
+        values: Mapping[str, Any] | None=None,
         amount: float = 0.0,
-    ):
+    ) -> dict[str, Any] | None:
         """问一个载体的规则，返回**拍板拒绝的那一条**（没拒绝就返回 `None`）。
 
         需要结论的调用方用 `_rules_deny`；需要知道「是谁拦的」的调用方用这个——例如
@@ -3609,7 +3610,7 @@ class AbilityRuntime(ChainRuntime):
             decision = str(rule.get("处置") or "")
         return verdict if decision == "拒绝" else None
 
-    def _select_targets(self, context, source, target, value):
+    def _select_targets(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, value: object) -> list[Fighter]:
         """解析一个「目标/来源目标/归属」字段。
 
         三种写法都接受：
@@ -3648,7 +3649,7 @@ class AbilityRuntime(ChainRuntime):
             return self._single_target(context, source, chosen)
         return self._target_select(context, source, target, cached[1])
 
-    def _select_targets_uncached(self, context, source, target, value):
+    def _select_targets_uncached(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, value: object) -> list[Fighter]:
         if value is None:
             selector = _SCOPE_SELECTORS[DEFAULT_TARGET_SCOPE]
         elif isinstance(value, str):
@@ -3664,7 +3665,7 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError('目标字段必须使用选择目标')
         return self._target_select(context, source, target, selector)
 
-    def _single_target(self, context, source, chosen):
+    def _single_target(self, context: BattleContext | None, source: Fighter | None, chosen: Fighter | None) -> list[Fighter]:
         if chosen is None or not chosen.alive or chosen.combatant_type == '构造物':
             return []
         version = getattr(context, 'status_rules_version', 0)
@@ -3673,7 +3674,7 @@ class AbilityRuntime(ChainRuntime):
             return []
         return [chosen]
 
-    def _target_select(self, context, source, target, selector, *_):
+    def _target_select(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, selector: Mapping[str, Any], *_) -> list[Fighter]:
         if selector.keys() <= _TARGET_SELECTOR_BARE_KEYS:
             scope = str(selector.get('范围') or '当前目标')
             if scope in {'自身', '当前目标'}:
@@ -3790,18 +3791,18 @@ class AbilityRuntime(ChainRuntime):
         "护盾": "shield",
     }
 
-    def _resource_values(self, target, resource):
+    def _resource_values(self, target: Fighter, resource: str) -> tuple[float, float]:
         """`(当前值, 上限)`。上限取资源声明的 `上限属性`。"""
 
         definition, field, cap_attribute, _minimum = self._resource_runtime_entry(resource)
         maximum = target.value(cap_attribute, 0.0) if cap_attribute else 0.0
         return float(getattr(target, field)), max(0.0, float(maximum))
 
-    def _set_resource(self, target, resource, value):
+    def _set_resource(self, target: Fighter, resource: str, value: float) -> None:
         _definition, field, _cap_attribute, minimum = self._resource_runtime_entry(resource)
         setattr(target, field, max(float(minimum), float(value)))
 
-    def _resource_runtime_entry(self, resource):
+    def _resource_runtime_entry(self, resource: str) -> tuple[Mapping[str, Any], str, str, float]:
         entry = self._resource_runtime.get(resource)
         if entry is None:
             self._resource_definition(resource)
@@ -3816,7 +3817,7 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError(f"战斗核心未登记资源的承载字段：{resource}")
         return field
 
-    def _current_event(self, context, expected: str | None = None):
+    def _current_event(self, context: BattleContext, expected: str | None = None) -> EventFrame:
         if not context.event_stack:
             raise ValueError("当前没有可以修改的战斗事件")
         frame = context.event_stack[-1]
@@ -3824,7 +3825,7 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError(f"当前事件不是{expected}")
         return frame
 
-    def _event_mutation_allowed(self, frame, field) -> bool:
+    def _event_mutation_allowed(self, frame: EventFrame, field: str) -> bool:
         """这次改写事件在白名单里吗；不在就**拒绝并留痕**（见 `_refuse_event_mutation`）。
 
         白名单本身是数据（`定义/事件.json` 的 `可修改`），它拦的是「作者写错了挂钩的事件」；
@@ -3840,12 +3841,12 @@ class AbilityRuntime(ChainRuntime):
         return False
 
     @staticmethod
-    def _refuse_event_mutation(frame, reason: str) -> None:
+    def _refuse_event_mutation(frame: EventFrame, reason: str) -> None:
         """把「这次改写被拒」记进事件事实，战报与事后审都看得到。"""
 
         frame.facts["改写非法"] = reason
 
-    def _judgement(self, context, kind, chance, roll=None):
+    def _judgement(self, context: BattleContext, kind: str, chance: float, roll: float | None=None) -> bool:
         overrides = context.judgement_overrides.get(kind) or context.judgement_overrides.get("任意") or []
         if overrides:
             value = overrides[0]
@@ -3867,14 +3868,14 @@ class AbilityRuntime(ChainRuntime):
         return actual < self._clamp(chance, 0, 1)
 
     @staticmethod
-    def _skill_by_key(fighter, key):
+    def _skill_by_key(fighter: Fighter, key: str) -> Skill | None:
         return next((skill for skill in fighter.skills if skill.key == key), None)
 
     @staticmethod
-    def _skill_available(fighter, skill):
+    def _skill_available(fighter: Fighter, skill: Skill) -> bool:
         return not skill.disabled and (not skill.use_limit or skill.uses < skill.use_limit) and fighter.cooldowns.get(skill.key, 0) <= 0
 
-    def _skill_order_key(self, skill):
+    def _skill_order_key(self, skill: Skill) -> tuple:
         values = {
             "释放顺序": int(skill.release_order),
             "来源层级升序": self._source_layer(skill.source_category),
@@ -3886,7 +3887,7 @@ class AbilityRuntime(ChainRuntime):
         return tuple(values[field] for field in order) + (str(skill.key),)
 
     @staticmethod
-    def _skill_from_definition(owner, index, definition, prefix=""):
+    def _skill_from_definition(owner: Fighter, index: int, definition: Mapping[str, Any], prefix: str="") -> Skill:
         value = dict(definition)
         source_id = str(value.get("编号") or prefix or owner.id)
         return Skill(
@@ -3906,5 +3907,5 @@ class AbilityRuntime(ChainRuntime):
         )
 
     @staticmethod
-    def _clamp(value, minimum, maximum):
+    def _clamp(value: float, minimum: float, maximum: float) -> float:
         return min(float(maximum), max(float(minimum), float(value)))

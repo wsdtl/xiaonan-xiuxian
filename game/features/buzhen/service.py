@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from game.core.formation import FormationArmResult, FormationError, FormationService
+
 from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
-from game.core.formation import FormationError, FormationService
 
 from .contracts import FormationArmCopy, FormationArmFeatureError
 
@@ -47,7 +48,7 @@ class FormationArmFeature:
             raise RuntimeError("布阵玩法尚未初始化")
         return self._copy
 
-    async def arm(self, user_id: str, request_id: str, identifier: str):
+    async def arm(self, user_id: str, request_id: str, identifier: str) -> FormationArmResult:
         try:
             return await self._formation.arm(user_id, request_id, identifier)
         except FormationError as exc:

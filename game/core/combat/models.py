@@ -8,9 +8,8 @@ from __future__ import annotations
 import copy
 import random
 import weakref
-from collections.abc import Mapping
-from dataclasses import dataclass
-from dataclasses import field as dataclass_field
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field as dataclass_field
 from typing import TYPE_CHECKING, Any
 
 from game.core.formation import FormationNodeRules
@@ -93,14 +92,14 @@ def copy_definition(value: Any) -> Any:
     return copy.deepcopy(value)
 
 
-def compile_definition_copy(value):
+def compile_definition_copy(value: Any) -> Callable[[], object]:
     """冻结 JSON 定义的复制计划；每次只重建可变容器。"""
     if type(value) is dict and all(type(key) is str for key in value):
         nested = [(key, compile_definition_copy(item)) for key, item in value.items() if type(item) not in ATOMIC_TYPES]
         base = dict(value)
         if not nested:
             return base.copy
-        def clone_dict():
+        def clone_dict() -> object:
             result = base.copy()
             for key, clone in nested:
                 result[key] = clone()
@@ -112,7 +111,7 @@ def compile_definition_copy(value):
         children = tuple(compile_definition_copy(item) for item in value)
         if type(value) is list:
             return lambda: [clone() for clone in children]
-        def clone_tuple():
+        def clone_tuple() -> object:
             result = tuple(clone() for clone in children)
             return value if all(a is b for a, b in zip(result, value)) else result
         return clone_tuple
@@ -121,7 +120,7 @@ def compile_definition_copy(value):
     return lambda: copy.deepcopy(value)
 
 
-def same_definition(left, right):
+def same_definition(left: object, right: object) -> bool:
     """缓存命中要保留类型：1、1.0 和 True 的普通相等不足以证明定义相同。"""
     if left is right:
         return True
@@ -296,49 +295,49 @@ def _shallow_clone(value: Any) -> Any:
 class ModifierMap(dict):
     """属性修正表；公开的字典写法仍可用，写入自动作废订阅者索引。"""
 
-    def __init__(self, values=()):
+    def __init__(self, values: Mapping[str, Any] | None=()) -> None:
         super().__init__(values)
         self.subscribers = {}
 
-    def invalidate(self):
+    def invalidate(self) -> None:
         for reference in tuple(self.subscribers.values()):
             collection = reference()
             if collection is not None:
                 collection.modifier_index = None
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any) -> None:
         self.invalidate()
         super().__setitem__(key, value)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> None:
         self.invalidate()
         super().__delitem__(key)
 
-    def clear(self):
+    def clear(self) -> None:
         self.invalidate()
         super().clear()
 
-    def update(self, *args, **kwargs):
+    def update(self, *args: object, **kwargs: object) -> None:
         self.invalidate()
         super().update(*args, **kwargs)
 
-    def pop(self, *args):
+    def pop(self, *args: object) -> object:
         self.invalidate()
         return super().pop(*args)
 
-    def popitem(self):
+    def popitem(self) -> tuple[object, object]:
         self.invalidate()
         return super().popitem()
 
-    def setdefault(self, key, default=None):
+    def setdefault(self, key: str, default: Any=None) -> object:
         self.invalidate()
         return super().setdefault(key, default)
 
-    def __ior__(self, value):
+    def __ior__(self, value: Any) -> ModifierMap:
         self.update(value)
         return self
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: dict[int, Any]) -> ModifierMap:
         result = ModifierMap()
         memo[id(self)] = result
         result.update(copy.deepcopy(dict(self), memo))
@@ -348,26 +347,26 @@ class ModifierMap(dict):
 class StatusList(list):
     """状态列表的属性倒排索引，保留顺序及列表增删接口。"""
 
-    def __init__(self, values=()):
+    def __init__(self, values: Iterable[StatusState]=()) -> None:
         super().__init__(values)
         self.modifier_index = None
 
-    def modifiers_for(self, key):
+    def modifiers_for(self, key: str) -> Sequence[StatusState]:
         if self.modifier_index is None:
             self.build_indexes()
         return self.modifier_index.get(key, ())
 
-    def named(self, name):
+    def named(self, name: str | None) -> Sequence[StatusState]:
         if self.modifier_index is None:
             self.build_indexes()
         return self.name_index.get(name, ())
 
-    def with_rules(self):
+    def with_rules(self) -> list[StatusState]:
         if self.modifier_index is None:
             self.build_indexes()
         return self.rule_states
 
-    def build_indexes(self):
+    def build_indexes(self) -> None:
         index = self.modifier_index
         if index is None:
             index = {}
@@ -385,15 +384,15 @@ class StatusList(list):
             self.rule_states = rules
             self.modifier_index = index
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: int | slice, value: StatusState | Iterable[StatusState]) -> None:
         self.modifier_index = None
         super().__setitem__(key, value)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: int | slice) -> None:
         self.modifier_index = None
         super().__delitem__(key)
 
-    def append(self, value):
+    def append(self, value: StatusState) -> None:
         super().append(value)
         if self.modifier_index is not None:
             value.subscribe_modifiers(id(self), weakref.ref(self))
@@ -403,44 +402,44 @@ class StatusList(list):
             for attribute in value.modifiers:
                 self.modifier_index.setdefault(attribute, []).append(value)
 
-    def extend(self, values):
+    def extend(self, values: Iterable[StatusState]) -> None:
         self.modifier_index = None
         super().extend(values)
 
-    def insert(self, index, value):
+    def insert(self, index: int, value: StatusState) -> None:
         self.modifier_index = None
         super().insert(index, value)
 
-    def pop(self, index=-1):
+    def pop(self, index: int=-1) -> StatusState:
         self.modifier_index = None
         return super().pop(index)
 
-    def remove(self, value):
+    def remove(self, value: StatusState) -> None:
         self.modifier_index = None
         super().remove(value)
 
-    def clear(self):
+    def clear(self) -> None:
         self.modifier_index = None
         super().clear()
 
-    def reverse(self):
+    def reverse(self) -> None:
         self.modifier_index = None
         super().reverse()
 
-    def sort(self, *args, **kwargs):
+    def sort(self, *args: object, **kwargs: object) -> None:
         self.modifier_index = None
         super().sort(*args, **kwargs)
 
-    def __iadd__(self, values):
+    def __iadd__(self, values: Iterable[StatusState]) -> StatusList:
         self.extend(values)
         return self
 
-    def __imul__(self, count):
+    def __imul__(self, count: int) -> StatusList:
         self.modifier_index = None
         super().__imul__(count)
         return self
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: dict[int, Any]) -> StatusList:
         result = StatusList()
         memo[id(self)] = result
         result.extend(copy.deepcopy(value, memo) for value in self)
@@ -452,15 +451,15 @@ class SnapshotState:
 
     __slots__ = ("_snapshot_cache",)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: Any) -> None:
         object.__setattr__(self, "_snapshot_cache", None)
         object.__setattr__(self, name, value)
 
-    def __delattr__(self, name):
+    def __delattr__(self, name: str | None) -> None:
         object.__setattr__(self, "_snapshot_cache", None)
         object.__delattr__(self, name)
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: dict[int, Any]) -> SnapshotState:
         # 快照与索引订阅只属于原实例；不能经由 deepcopy 串到另一个战场。
         result = type(self).__new__(type(self))
         memo[id(self)] = result
@@ -472,7 +471,7 @@ class SnapshotState:
                     object.__setattr__(result, name, copy.deepcopy(getattr(self, name), memo))
         return result
 
-    def snapshot_state(self):
+    def snapshot_state(self) -> tuple[type[SnapshotState], dict[str, object]]:
         cached = getattr(self, "_snapshot_cache", None)
         if cached is None:
             cached = (type(self), dict(self.__dict__))
@@ -484,7 +483,7 @@ class SnapshotState:
 class StatusState(SnapshotState):
     __slots__ = ("_modifier_subscribers", "__dict__", "__weakref__")
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: Any) -> None:
         if name in {"modifiers", "rules", "name"}:
             for reference in tuple(getattr(self, "_modifier_subscribers", {}).values()):
                 collection = reference()
@@ -494,7 +493,7 @@ class StatusState(SnapshotState):
                 value = ModifierMap(value)
         super().__setattr__(name, value)
 
-    def subscribe_modifiers(self, key, reference):
+    def subscribe_modifiers(self, key: int, reference: weakref.ReferenceType[StatusList]) -> None:
         subscribers = getattr(self, "_modifier_subscribers", None)
         if subscribers is None:
             subscribers = {}
@@ -706,7 +705,7 @@ class Fighter(RuntimeExtensions):
     rules_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     rules_cache_version: int = dataclass_field(default=-1, init=False, repr=False)
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: Any) -> None:
         if name == "statuses" and not isinstance(value, StatusList):
             value = StatusList(value)
         object.__setattr__(self, name, value)
@@ -1082,7 +1081,7 @@ class BattleContext(RuntimeExtensions):
     ability_static_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     #: 按标量属性配比复用规范化构成，不强引用临时效果节点。
     element_composition_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
-    element_multiplier_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
+    element_multiplier_cache: dict[str, float] = dataclass_field(default_factory=dict, init=False, repr=False)
     target_selector_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     definition_copy_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     status_definition_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)

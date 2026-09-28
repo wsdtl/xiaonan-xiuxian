@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from game.features.daolv_peiyang import (
-    CompanionBreakthroughResult,
     CompanionCultivationFeature,
+    CompanionBreakthroughResult,
     CompanionCultivationView,
     CompanionLawResult,
 )
-from message import M
+
+from message import Status, Progress, DocumentMessage, M
 
 
-def view(feature: CompanionCultivationFeature, result: CompanionCultivationView):
+def view(feature: CompanionCultivationFeature, result: CompanionCultivationView) -> DocumentMessage:
     definition = result.definition
     instance = result.instance
     title = feature.copy("道侣", "标题").format_map({"名称": definition.name})
@@ -53,7 +54,7 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
 
 def breakthrough(
     feature: CompanionCultivationFeature, result: CompanionBreakthroughResult
-):
+) -> DocumentMessage:
     text = feature.copy("突破", "道侣成功").format_map(
         {"名称": result.view.definition.name, "丹药": result.medicine_name, "境界": result.view.realm_name},
     )
@@ -65,7 +66,7 @@ def breakthrough(
     )
 
 
-def forged(feature: CompanionCultivationFeature, result: CompanionLawResult):
+def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> DocumentMessage:
     text = feature.copy("覆炼", "道侣成功").format_map(
         {"名称": result.view.definition.name, "器律": result.law_name, "孔位": result.slot}
     )
@@ -77,7 +78,7 @@ def forged(feature: CompanionCultivationFeature, result: CompanionLawResult):
     )
 
 
-def error(message: str):
+def error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("道侣培养", icon="notice")
@@ -86,7 +87,7 @@ def error(message: str):
     )
 
 
-def _progress(current: int, required: int, *, tone: str = "cultivation"):
+def _progress(current: int, required: int, *, tone: str = "cultivation") -> Status | Progress:
     if required <= 0:
         return M.status("圆满", tone="mystic")
     return M.progress(current, required, tone=tone, display="both")

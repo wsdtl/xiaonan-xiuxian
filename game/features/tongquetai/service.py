@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from game.core.asset import (
+    InventoryStack,
+    AssetService,
+    InventoryAdjustment,
+    InventoryChangeError,
+)
+
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 
-from game.core.asset import AssetService, InventoryAdjustment, InventoryChangeError
 from game.core.character import CharacterCultivationError, CharacterService
 from game.core.companion import CompanionCultivationError, CompanionService
 from game.core.cultivation_transfer import (
@@ -266,7 +272,7 @@ class TongquetaiFeature:
             plan.experience_discarded,
         )
 
-    async def _medicine_stack(self, user_id: str):
+    async def _medicine_stack(self, user_id: str) -> InventoryStack | None:
         stacks = await self._asset.inventory_stacks(user_id, self._transfer.medicine_id)
         return min(stacks, key=lambda stack: stack.grade.order) if stacks else None
 

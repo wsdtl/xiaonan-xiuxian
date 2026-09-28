@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import asyncio
 import json
 from typing import Annotated
@@ -123,7 +125,6 @@ async def session_info(
 
 @router.post("/api/logout")
 async def logout(
-    request: Request,
     response: Response,
     session: Annotated[ConsoleSession, Depends(write_session)],
 ) -> dict[str, bool]:
@@ -156,7 +157,7 @@ async def message_stream(
         after_id = max(after_id, int(header_cursor))
     queue = await service.subscribe(after_id=max(0, after_id))
 
-    async def events():
+    async def events() -> AsyncIterator[str]:
         try:
             yield "retry: 2000\n\n"
             while not await request.is_disconnected():

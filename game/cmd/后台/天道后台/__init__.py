@@ -5,16 +5,16 @@ from __future__ import annotations
 from launch.paths import public_url
 
 from ...command import GameCommand
-from . import reply
-from . import runtime as runtime
+from . import reply, runtime as runtime
 from .site import router
+from typing import Any
 
 
 @GameCommand.fullmatch(
     cmd="天道后台",
     metadata={"scope": "后台", "guard_rule": "始终可用", "hidden": True},
 )
-async def heavenly_dao_console(*, manager) -> None:
+async def heavenly_dao_console(manager: Any) -> None:
     await manager.send(reply.entry(public_url("game-console")))
 
 

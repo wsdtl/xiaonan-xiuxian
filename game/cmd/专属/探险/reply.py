@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from message import DocumentBuilder, DocumentMessage, M
+
 from collections.abc import Mapping
 
 from game.features.tanxian import (
@@ -13,7 +15,6 @@ from game.features.tanxian import (
     ExplorationStarted,
     ExplorationUserSummary,
 )
-from message import M
 
 from ...actions import message_actions
 from ...presentation import duration, natural_deadline
@@ -23,7 +24,7 @@ def text(copy: ExplorationCopy, section: str, key: str, values: Mapping[str, obj
     return copy.text[section][key].format_map(values or {})
 
 
-def error(copy: ExplorationCopy, message: str):
+def error(copy: ExplorationCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
@@ -36,7 +37,7 @@ def started(
     copy: ExplorationCopy,
     value: ExplorationStarted,
     actions: tuple[ExplorationAction, ...],
-):
+) -> DocumentMessage:
     return (
         M.document()
         .header(text(copy, "开始", "标题"))
@@ -60,7 +61,7 @@ def progress(
     copy: ExplorationCopy,
     value: ExplorationProgress,
     actions: tuple[ExplorationAction, ...],
-):
+) -> DocumentMessage:
     builder = (
         M.document()
         .header(text(copy, "进度", "标题"))
@@ -115,7 +116,7 @@ def settlement_page(
     value: ExplorationSettlement,
     page: int,
     actions: tuple[ExplorationAction, ...],
-):
+) -> DocumentMessage:
     total_pages = 1 + len(value.users)
     if page == 1:
         survived = any(
@@ -167,7 +168,7 @@ def _user_page(
     value: ExplorationUserSummary,
     page: int,
     total_pages: int,
-):
+) -> DocumentBuilder:
     builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
     if value.treasure_activation is not None:
         activation = value.treasure_activation

@@ -8,6 +8,7 @@ from .contracts import (
     TravelResult,
 )
 from .service import TravelFeature
+from .contracts import LocationView
 
 __all__ = [
     "TravelConflictError",
@@ -16,4 +17,5 @@ __all__ = [
     "TravelQueryError",
     "TravelRequest",
     "TravelResult",
+    "LocationView",
 ]

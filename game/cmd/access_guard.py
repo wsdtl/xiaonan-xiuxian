@@ -9,7 +9,7 @@ from launch.adapter import (
     register_command_guard,
     unregister_command_guard,
 )
-from message import M
+from message import DocumentMessage, M
 
 from .presentation import sentence
 
@@ -73,7 +73,7 @@ def unregister_game_access_guard() -> None:
     unregister_command_guard(GAME_GUARD_NAME)
 
 
-def _blocked_message(reason: str):
+def _blocked_message(reason: str) -> DocumentMessage:
     if reason == "尚未创建人物":
         return (
             M.document()

@@ -9,7 +9,7 @@ from game.core.hosting import HostingSession
 
 
 class HostingFeatureError(RuntimeError):
-    def __init__(self, code: str):
+    def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
 
@@ -26,4 +26,9 @@ class HostingResult:
     active: bool = True
 
 
-__all__ = ["HostingCopy", "HostingFeatureError", "HostingResult"]
+__all__ = [
+    "HostingCopy",
+    "HostingFeatureError",
+    "HostingResult",
+    "HostingSession",
+]

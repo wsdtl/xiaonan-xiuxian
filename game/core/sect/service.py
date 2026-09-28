@@ -83,17 +83,17 @@ class SectService:
         roles = _mapping(rule.get("身份"), "宗门.身份")
         self._name_min = _positive_int(name.get("最短长度"), "宗门.名称.最短长度")
         self._name_max = _positive_int(name.get("最长长度"), "宗门.名称.最长长度")
-        self._name_pattern = _text(name.get("匹配"), "宗门.名称.匹配")
+        self._name_pattern = _text(name.get("匹配"))
         self._maximum_followers = _positive_int(
             follow.get("成员上限"), "宗门.同行.成员上限"
         )
         self._invitation_seconds = _positive_int(
             invitation.get("有效秒数"), "宗门.邀请.有效秒数"
         )
-        self._guard_rule = _text(creation.get("状态守卫"), "宗门.创建.状态守卫")
-        self._leader_role = _text(roles.get("宗主"), "宗门.身份.宗主")
-        self._elder_role = _text(roles.get("长老"), "宗门.身份.长老")
-        self._disciple_role = _text(roles.get("弟子"), "宗门.身份.弟子")
+        self._guard_rule = _text(creation.get("状态守卫"))
+        self._leader_role = _text(roles.get("宗主"))
+        self._elder_role = _text(roles.get("长老"))
+        self._disciple_role = _text(roles.get("弟子"))
         if roles.get("新入宗门") != self._disciple_role:
             raise JsonDataError("新入宗门成员必须是弟子")
         if roles.get("宗主转让后") != self._elder_role:
@@ -114,7 +114,7 @@ class SectService:
     async def membership(self, user_id: str) -> SectMember | None:
         self._require_initialized()
         record = await self._database.get_shared_member(
-            ENTITY_TYPE, _text(user_id, "user_id")
+            ENTITY_TYPE, _text(user_id)
         )
         if record is None:
             return None
@@ -137,7 +137,7 @@ class SectService:
     async def sect(self, sect_id: str) -> SectSnapshot | None:
         self._require_initialized()
         record = await self._database.get_shared_entity(
-            ENTITY_TYPE, _text(sect_id, "sect_id")
+            ENTITY_TYPE, _text(sect_id)
         )
         if record is None:
             return None
@@ -147,9 +147,9 @@ class SectService:
             raise SectError("sect_snapshot_invalid")
         return SectSnapshot(
             record.entity_id,
-            _text(value.get("名称"), "宗门.名称"),
-            _text(value.get("宗主"), "宗门.宗主"),
-            _text(value.get("洞天编号"), "宗门.洞天编号"),
+            _text(value.get("名称")),
+            _text(value.get("宗主")),
+            _text(value.get("洞天编号")),
             (int(entrance[0]), int(entrance[1])),
             record.version,
         )
@@ -164,7 +164,7 @@ class SectService:
         """
 
         self._require_initialized()
-        normalized = tuple(_text(value, "user_id") for value in user_ids)
+        normalized = tuple(_text(value) for value in user_ids)
         unique = tuple(dict.fromkeys(normalized))
         if not unique:
             return ()
@@ -179,7 +179,7 @@ class SectService:
 
     async def members(self, sect_id: str) -> tuple[SectMember, ...]:
         rows = await self._database.list_shared_members(
-            ENTITY_TYPE, _text(sect_id, "sect_id")
+            ENTITY_TYPE, _text(sect_id)
         )
         return tuple(
             SectMember(
@@ -191,7 +191,7 @@ class SectService:
     async def follow(self, sect_id: str) -> SectFollowSnapshot | None:
         self._require_initialized()
         record = await self._database.get_shared_entity(
-            FOLLOW_ENTITY_TYPE, _text(sect_id, "sect_id")
+            FOLLOW_ENTITY_TYPE, _text(sect_id)
         )
         if record is None:
             return None
@@ -205,15 +205,15 @@ class SectService:
             raise SectError("sect_follow_invalid")
         return SectFollowSnapshot(
             record.entity_id,
-            _text(value.get("宗主"), "宗门同行.宗主"),
-            tuple(_text(item, "宗门同行.成员") for item in members),
+            _text(value.get("宗主")),
+            tuple(_text(item) for item in members),
             record.version,
         )
 
     async def follow_membership(self, user_id: str) -> SectFollowMembership | None:
         self._require_initialized()
         record = await self._database.get_shared_member(
-            FOLLOW_ENTITY_TYPE, _text(user_id, "user_id")
+            FOLLOW_ENTITY_TYPE, _text(user_id)
         )
         if record is None:
             return None
@@ -272,7 +272,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     member.user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "召集宗门同行",
                     (
                         SharedEntityMutation(
@@ -319,7 +319,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "加入宗门同行",
                     (
                         SharedEntityMutation(
@@ -396,7 +396,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "解散宗门同行",
                     tuple(operations),
                     {"宗门编号": group.sect_id},
@@ -437,7 +437,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     actor_user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     business_type,
                     tuple(operations),
                     {"宗门编号": group.sect_id, "目标": target},
@@ -454,18 +454,18 @@ class SectService:
         self, user_id: str, *, now: datetime | None = None
     ) -> SectInvitation | None:
         snapshot = await self._database.get(
-            StateAddress(_text(user_id, "user_id"), INVITATION_STATE, MAIN_KEY)
+            StateAddress(_text(user_id), INVITATION_STATE, MAIN_KEY)
         )
         if snapshot is None:
             return None
         value = snapshot.value
-        expires_at = _time(value.get("到期时间"), "宗门邀请.到期时间")
+        expires_at = _time(value.get("到期时间"))
         current = _utc(now)
         return SectInvitation(
-            _text(value.get("宗门编号"), "宗门邀请.宗门编号"),
-            _text(value.get("宗门名称"), "宗门邀请.宗门名称"),
-            _text(value.get("邀请者"), "宗门邀请.邀请者"),
-            _text(value.get("目标"), "宗门邀请.目标"),
+            _text(value.get("宗门编号")),
+            _text(value.get("宗门名称")),
+            _text(value.get("邀请者")),
+            _text(value.get("目标")),
             expires_at,
             snapshot.version,
             current >= expires_at,
@@ -475,8 +475,8 @@ class SectService:
         self, user_id: str, request_id: str, name: str, entrance_xy: tuple[int, int]
     ) -> SectSnapshot:
         self._require_initialized()
-        user = _text(user_id, "user_id")
-        request = _text(request_id, "request_id")
+        user = _text(user_id)
+        request = _text(request_id)
         normalized_name = self._validate_name(name)
         guard = await self._player_state.authorize(user, self._guard_rule)
         if not guard.allowed:
@@ -530,8 +530,8 @@ class SectService:
         self, inviter: str, target: str, request_id: str, *, now: datetime | None = None
     ) -> SectInvitation:
         self._require_initialized()
-        inviter = _text(inviter, "inviter_user_id")
-        target = _text(target, "target_user_id")
+        inviter = _text(inviter)
+        target = _text(target)
         if inviter == target:
             raise SectConflictError("cannot_invite_self")
         own = await self.membership(inviter)
@@ -564,7 +564,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     inviter,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "宗门邀请",
                     (
                         StateMutation(
@@ -593,7 +593,7 @@ class SectService:
     async def accept(
         self, user_id: str, request_id: str, *, now: datetime | None = None
     ) -> SectSnapshot:
-        target = _text(user_id, "user_id")
+        target = _text(user_id)
         invitation = await self.pending_invitation(target, now=now)
         if invitation is None:
             raise SectConflictError("invitation_missing")
@@ -610,7 +610,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     target,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "接受宗门邀请",
                     (
                         SharedEntityMutation(
@@ -640,7 +640,7 @@ class SectService:
         return sect
 
     async def reject(self, user_id: str, request_id: str) -> None:
-        target = _text(user_id, "user_id")
+        target = _text(user_id)
         invitation = await self.pending_invitation(target)
         if invitation is None:
             raise SectConflictError("invitation_missing")
@@ -648,7 +648,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     target,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "拒绝宗门邀请",
                     (
                         StateMutation(
@@ -748,7 +748,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     actor.user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "转让宗主",
                     tuple(operations),
                     {"宗门编号": actor.sect_id, "新宗主": target},
@@ -762,9 +762,9 @@ class SectService:
             raise SectConflictError("sect_changed") from exc
         return SectSnapshot(
             sect_record.entity_id,
-            _text(value.get("名称"), "宗门.名称"),
+            _text(value.get("名称")),
             target,
-            _text(value.get("洞天编号"), "宗门.洞天编号"),
+            _text(value.get("洞天编号")),
             tuple(value["入口坐标"]),
             sect_record.version + 1,
         )
@@ -781,7 +781,7 @@ class SectService:
             receipt = await self._database.commit(
                 TransactionCommand(
                     actor.user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     business_type,
                     (
                         SharedMemberMutation(
@@ -854,7 +854,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     member.user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     "解散宗门",
                     tuple(operations),
                     {"宗门编号": member.sect_id},
@@ -919,7 +919,7 @@ class SectService:
             await self._database.commit(
                 TransactionCommand(
                     member.user_id,
-                    _text(request_id, "request_id"),
+                    _text(request_id),
                     business_type,
                     tuple(operations),
                     {"宗门编号": member.sect_id, "目标": member.user_id},
@@ -953,13 +953,13 @@ class SectService:
         return operations
 
     async def _require_member(self, user_id: str) -> SectMember:
-        member = await self.membership(_text(user_id, "user_id"))
+        member = await self.membership(_text(user_id))
         if member is None:
             raise SectConflictError("not_member")
         return member
 
     def _validate_name(self, name: str) -> str:
-        normalized = _text(name, "宗门名称")
+        normalized = _text(name)
         if not self._name_min <= len(normalized) <= self._name_max:
             raise SectConflictError("name_invalid")
         import re
@@ -973,7 +973,7 @@ class SectService:
             raise RuntimeError("宗门核心微服务尚未初始化")
 
 
-def _text(value: object, label: str) -> str:
+def _text(value: object) -> str:
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise SectError("invalid_text")
     return value
@@ -988,7 +988,7 @@ def _utc(value: datetime | None) -> datetime:
     )
 
 
-def _time(value: object, label: str) -> datetime:
+def _time(value: object) -> datetime:
     try:
         return _utc(datetime.fromisoformat(str(value)))
     except ValueError as exc:

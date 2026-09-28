@@ -1,8 +1,8 @@
 from game.features.yixing import YixingFeature, YixingResult
-from message import M
+from message import DocumentMessage, M
 
 
-def result(feature: YixingFeature, value: YixingResult):
+def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
     return (
         M.document()
         .header(feature.copy("结算", "标题"))
@@ -17,7 +17,7 @@ def result(feature: YixingFeature, value: YixingResult):
     )
 
 
-def error(feature: YixingFeature, message: str):
+def error(feature: YixingFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.copy("错误", "标题"), icon="notice")

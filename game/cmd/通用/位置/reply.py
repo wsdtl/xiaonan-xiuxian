@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from message import DocumentBuilder, DocumentMessage, M
+
 from game.features.weizhi import (
     CurrentPositionView,
     NearbyCultivatorPage,
@@ -10,7 +12,6 @@ from game.features.weizhi import (
     NearbyWorldLocations,
     PositionCopy,
 )
-from message import M
 
 from ...actions import CommandAction, message_actions
 
@@ -19,7 +20,7 @@ def current(
     copy: PositionCopy,
     result: CurrentPositionView,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     location = result.location
     builder = (
         M.document()
@@ -58,7 +59,7 @@ def current(
 
 def nearby_overview(
     copy: PositionCopy, result: NearbyOverview, actions: tuple[CommandAction, ...]
-):
+) -> DocumentMessage:
     location = result.current.location
     location_name = result.current.space_name or _location_name(copy, location)
     surface = result.current.space_type == "地表"
@@ -94,7 +95,7 @@ def nearby_cultivators(
     copy: PositionCopy,
     result: NearbyCultivatorPage,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     builder = M.document().header(copy.cultivators_title)
     if result.active_companion is not None:
         builder.section(
@@ -161,7 +162,7 @@ def nearby_locations(
     copy: PositionCopy,
     result: NearbyWorldLocations,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     builder = (
         M.document()
         .header(copy.locations_title)
@@ -179,7 +180,7 @@ def error(
     title: str,
     message: str,
     actions: tuple[CommandAction, ...],
-):
+) -> DocumentMessage:
     return (
         M.document()
         .section(title, icon=copy.error_icon)
@@ -190,7 +191,7 @@ def error(
 
 
 def _append_location(
-    builder, copy: PositionCopy, index: int, location: NearbyWorldLocation
+    builder: DocumentBuilder, copy: PositionCopy, index: int, location: NearbyWorldLocation
 ) -> None:
     functions = (
         copy.function_separator.join(location.functions) or copy.no_available_function
@@ -207,7 +208,7 @@ def _append_location(
     )
 
 
-def _location_name(copy: PositionCopy, location) -> str:
+def _location_name(copy: PositionCopy, location: NearbyWorldLocation) -> str:
     if location.location_name:
         return location.location_name
     return copy.unknown_location.format_map({"区域": location.region, "地形": location.terrain})

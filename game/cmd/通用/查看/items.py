@@ -2,8 +2,24 @@
 
 from __future__ import annotations
 
+from game.features.chakan_wupin import ItemDetail
+
 from collections.abc import Mapping, Sequence
 import re
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class SectionInput:
+    """领域详情行的输入：本领域字段 + 关联定义 + 玩法层现算好的规则正文。
+
+    三样只有一部分领域用得上；收成一个输入对象后，每个构造器只声明自己真正会读的
+    那一个，派发也只需传一个实参。
+    """
+
+    fields: Mapping[str, object]
+    related: Mapping[str, object]
+    rendered: tuple[str, ...]
 
 
 from .utils import (
@@ -15,13 +31,13 @@ from .utils import (
 )
 
 
-def _description(detail) -> str:
+def _description(detail: ItemDetail) -> str:
     """返回实体自己的公开说明；不从说明文本中截断或推断规则。"""
 
     return detail.description
 
 
-def _player_description(detail) -> str:
+def _player_description(detail: ItemDetail) -> str:
     """返回短引言；构筑的数值与处理顺序统一由下方节点说明。"""
 
     description = _normalize_brackets(_description(detail).strip())
@@ -48,7 +64,7 @@ def _player_description(detail) -> str:
     return description.strip("。 ") + ("。" if description.strip("。 ") else "")
 
 
-def _build_description_lines(detail, rendered: tuple[str, ...] = ()) -> tuple[str, ...]:
+def _build_description_lines(detail: ItemDetail, rendered: tuple[str, ...] = ()) -> tuple[str, ...]:
     """构筑查看正文 = 卡头（人工写）+ 规则正文（由能力树现算）。
 
     `说明` 只保存卡头风味简介。规则正文由玩法层从卡片自己的能力树渲染好传进来
@@ -118,9 +134,7 @@ def _effect_lines(value: object, prefix: str = "") -> tuple[str, ...]:
 
 def _definition_lines(
     section: str,
-    fields: Mapping[str, object],
-    related: Mapping[str, object] | None = None,
-    rendered: tuple[str, ...] = (),
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """把 JSON 结构压成玩家能读懂的定义摘要，禁止泄露 mappingproxy。
 
@@ -135,28 +149,26 @@ def _definition_lines(
 
     handler = _SECTION_LINES.get(section)
     if handler is not None:
-        lines = handler(fields, related or {}, rendered)
+        lines = handler(source)
         if lines is not None:
             return lines
-    return _generic_lines(fields)
+    return _generic_lines(source.fields)
 
 
 def _daolv_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """道侣：性别、身份、结交偏好与本命武器。"""
 
     lines = []
-    if "性别" in fields:
-        lines.append(f"性别：{fields['性别']}")
-    identity = fields.get("身份")
+    if "性别" in source.fields:
+        lines.append(f"性别：{source.fields['性别']}")
+    identity = source.fields.get("身份")
     if isinstance(identity, Mapping):
         title = identity.get("称号")
         if title:
             lines.append(f"身份：{title}")
-    relationship = fields.get("结交")
+    relationship = source.fields.get("结交")
     if isinstance(relationship, Mapping):
         pools = relationship.get("灵植池")
         if isinstance(pools, Sequence) and not isinstance(pools, (str, bytes)):
@@ -171,23 +183,21 @@ def _daolv_lines(
             lines.append(
                 f"圆满回礼：达成圆满后可得专属回礼 × {reward.get('数量', 1)}"
             )
-    weapon = fields.get("本命武器")
+    weapon = source.fields.get("本命武器")
     if isinstance(weapon, Mapping) and weapon.get("名称"):
         lines.append(f"本命武器：{weapon['名称']}")
     return tuple(lines)
 
 
 def _innate_treasure_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """先天灵宝：权柄与规则介入的节点。"""
 
     lines = []
-    if "权柄" in fields:
-        lines.append(f"权柄：{fields['权柄']}")
-    intervention = fields.get("规则介入")
+    if "权柄" in source.fields:
+        lines.append(f"权柄：{source.fields['权柄']}")
+    intervention = source.fields.get("规则介入")
     if isinstance(intervention, Mapping):
         node = intervention.get("节点", "触发时")
         ability = intervention.get("能力", "产生作用")
@@ -198,41 +208,35 @@ def _innate_treasure_lines(
 
 
 def _rendered_only(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """正文全部由能力树现算，这里只做转交（丹药、战场环境）。"""
 
-    return rendered
+    return source.rendered
 
 
 def _base_item_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...] | None:
     """基础物品：有 `使用效果` 就按用途展开；没有则返回 `None` 交回字段平铺。"""
 
-    effect = fields.get("使用效果")
+    effect = source.fields.get("使用效果")
     if isinstance(effect, Mapping):
-        return _item_effect_lines(effect, related)
+        return _item_effect_lines(effect, source.related)
     return None
 
 
 def _formation_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """阵法：监测项、核心与可炼品级。"""
 
     lines = []
-    if "宏观监测" in fields:
-        lines.append("监测：" + "、".join(map(str, fields["宏观监测"])))
-    if "阵法核心" in fields:
-        lines.append(f"核心：{fields['阵法核心']}")
-    grades = fields.get("品级")
+    if "宏观监测" in source.fields:
+        lines.append("监测：" + "、".join(map(str, source.fields["宏观监测"])))
+    if "阵法核心" in source.fields:
+        lines.append(f"核心：{source.fields['阵法核心']}")
+    grades = source.fields.get("品级")
     if isinstance(grades, Sequence) and not isinstance(grades, (str, bytes)):
         names = [
             str(grade.get("品级")) for grade in grades if isinstance(grade, Mapping)
@@ -243,16 +247,14 @@ def _formation_lines(
 
 
 def _injury_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """伤势：来源、影响、叠加与疗伤，接上 `战斗状态` 里的时序规则。"""
 
     lines = []
-    if "来源类别" in fields:
-        lines.append(f"来源：{fields['来源类别']}")
-    state = fields.get("战斗状态")
+    if "来源类别" in source.fields:
+        lines.append(f"来源：{source.fields['来源类别']}")
+    state = source.fields.get("战斗状态")
     if isinstance(state, Mapping):
         details = [str(state.get("类别") or "")]
         remaining = state.get("剩余行动")
@@ -266,84 +268,76 @@ def _injury_lines(
         ):
             details.append("禁用" + "、".join(map(str, limits)))
         lines.append("影响：" + " · ".join(item for item in details if item))
-    stacking = fields.get("叠加")
+    stacking = source.fields.get("叠加")
     if isinstance(stacking, Mapping) and "层数上限" in stacking:
         lines.append(f"叠加：最多{stacking['层数上限']}层")
-    treatment = fields.get("治疗")
+    treatment = source.fields.get("治疗")
     if isinstance(treatment, Mapping) and "每层所需轮数" in treatment:
         lines.append(f"疗伤：每层需要闭关{treatment['每层所需轮数']}轮")
     # 战斗状态里的 `监听` 是真正的时序规则，按同一套措辞写出来。
-    lines.extend(rendered)
+    lines.extend(source.rendered)
     return tuple(lines)
 
 
 def _medicine_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """丹药：既有炼出来是什么（渲染正文写的使用效果），也有怎么炼（炼制难度、炉法）。
 
     丹方并进丹药之后，一处就能读全——不再需要在「丹方」与「丹药」两份资料之间对着看。
     """
 
-    lines = list(rendered)
+    lines = list(source.rendered)
     for key in ("炼制难度", "炉法"):
-        if key in fields:
-            lines.append(f"{key}：{fields[key]}")
+        if key in source.fields:
+            lines.append(f"{key}：{source.fields[key]}")
     return tuple(lines)
 
 
 def _realm_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """境界：等级区间与下一境界。"""
 
     lines = []
-    if "等级下限" in fields and "等级上限" in fields:
-        lines.append(f"等级：{fields['等级下限']}至{fields['等级上限']}级")
-    next_realm = _related_name(fields.get("下一境界"), related)
+    if "等级下限" in source.fields and "等级上限" in source.fields:
+        lines.append(f"等级：{source.fields['等级下限']}至{source.fields['等级上限']}级")
+    next_realm = _related_name(source.fields.get("下一境界"), source.related)
     lines.append(f"下一境界：{next_realm}" if next_realm else "已至当前修行尽头")
     return tuple(lines)
 
 
 def _person_state_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """人物状态：可转入的相邻状态与附近可见。"""
 
-    transitions = fields.get("可转入")
+    transitions = source.fields.get("可转入")
     lines = []
     if isinstance(transitions, Sequence) and not isinstance(
         transitions, (str, bytes)
     ):
-        names = [_related_name(value, related) for value in transitions]
+        names = [_related_name(value, source.related) for value in transitions]
         lines.append("可转入：" + "、".join(name for name in names if name))
-    if "附近公开" in fields:
-        lines.append("附近可见：" + ("是" if fields["附近公开"] else "否"))
+    if "附近公开" in source.fields:
+        lines.append("附近可见：" + ("是" if source.fields["附近公开"] else "否"))
     return tuple(lines)
 
 
 def _artisan_lines(
-    fields: Mapping[str, object],
-    related: Mapping[str, object],
-    rendered: tuple[str, ...],
+    source: SectionInput,
 ) -> tuple[str, ...]:
     """炼丹师 / 炼器工匠 / 阵师：把开放清单解析成名称，其余字段平铺。"""
 
     lines = []
     reference_keys = {"开放器律", "开放阵法"}
-    for key, value in fields.items():
+    for key, value in source.fields.items():
         if (
             key in reference_keys
             and isinstance(value, Sequence)
             and not isinstance(value, (str, bytes))
         ):
-            names = [_related_name(item, related) for item in value]
+            names = [_related_name(item, source.related) for item in value]
             lines.append(f"{key}：" + "、".join(name for name in names if name))
         else:
             lines.append(f"{key}：{_plain_value(value)}")

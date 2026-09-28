@@ -7,6 +7,7 @@ from game.features.weizhi import NearbyPageError
 
 from ...command import GameCommand
 from . import reply
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -23,7 +24,7 @@ from . import reply
         },
     },
 )
-async def show_position(*, user_id: str, manager, **_) -> None:
+async def show_position(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.weizhi
     services = current_game_services()
     result = await feature.current(user_id)
@@ -56,7 +57,7 @@ async def show_position(*, user_id: str, manager, **_) -> None:
         },
     },
 )
-async def show_nearby(*, user_id: str, message: str, manager, **_) -> None:
+async def show_nearby(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.weizhi
     copy = feature.copy()
     parts = str(message or "").split()

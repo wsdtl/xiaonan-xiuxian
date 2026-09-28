@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from game.features.xiantian_lingbao import InnateTreasure
+
+from message import DocumentBuilder, DocumentMessage, M
+
 from game.features.xiantian_lingbao import (
-    InnateTreasureEquipResult,
     InnateTreasureFeature,
+    InnateTreasureEquipResult,
     InnateTreasureView,
 )
-from message import M
 
 
-def view(feature: InnateTreasureFeature, result: InnateTreasureView):
+def view(feature: InnateTreasureFeature, result: InnateTreasureView) -> DocumentMessage:
     builder = M.document().header(feature.copy("标题"))
     if result.active is None:
         builder.section(feature.copy("当前执掌"), icon="status").line(
@@ -42,7 +45,7 @@ def view(feature: InnateTreasureFeature, result: InnateTreasureView):
     return builder.build()
 
 
-def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult):
+def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult) -> DocumentMessage:
     treasure = result.treasure
     return (
         M.document()
@@ -57,7 +60,7 @@ def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult):
     )
 
 
-def error(message: str):
+def error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("先天灵宝", icon="notice")
@@ -66,7 +69,7 @@ def error(message: str):
     )
 
 
-def _append_treasure(builder, treasure) -> None:
+def _append_treasure(builder: DocumentBuilder, treasure: InnateTreasure) -> None:
     builder.field(
         "名称",
         M.command(
@@ -79,7 +82,7 @@ def _append_treasure(builder, treasure) -> None:
     builder.field("规则权柄", _effect(treasure))
 
 
-def _effect(treasure) -> str:
+def _effect(treasure: InnateTreasure) -> str:
     return f"{treasure.effect.node}：{treasure.effect.ability}"
 
 

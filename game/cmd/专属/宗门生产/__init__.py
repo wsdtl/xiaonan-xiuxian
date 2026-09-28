@@ -5,6 +5,8 @@ from game.features.zongmen_shengchan import SectProductionFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -21,7 +23,7 @@ from . import reply
         },
     },
 )
-async def lingmai(*, user_id: str, message: str, message_context, manager, **_) -> None:
+async def lingmai(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _dispatch(
         "灵脉", user_id, str(message or "").strip(), message_context.request_id, manager
     )
@@ -51,16 +53,14 @@ async def lingmai(*, user_id: str, message: str, message_context, manager, **_) 
         },
     },
 )
-async def lingtian(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def lingtian(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _dispatch(
         "灵田", user_id, str(message or "").strip(), message_context.request_id, manager
     )
 
 
 async def _dispatch(
-    kind: str, user_id: str, query: str, request_id: str, manager
+    kind: str, user_id: str, query: str, request_id: str, manager: Any
 ) -> None:
     feature = current_game_services().features.zongmen_shengchan
     try:

@@ -799,7 +799,7 @@ def _insights(value: object, completed_rounds: int) -> tuple[RetreatInsight, ...
     )
 
 
-def _injury_changes(values) -> list[dict[str, object]]:
+def _injury_changes(values: tuple[str, ...]) -> list[dict[str, object]]:
     return [
         {
             "编号": value.injury_id,

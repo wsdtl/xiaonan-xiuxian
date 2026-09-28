@@ -53,7 +53,6 @@ _STATE_TYPES = frozenset(
         "knowledge",
     }
 )
-_CULTIVATION_CATEGORIES = frozenset({"功法", "真意", "气机"})
 _CULTIVATION_RESERVE_CATEGORIES = frozenset({"真意", "气机"})
 
 

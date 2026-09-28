@@ -403,12 +403,6 @@ def _consume_listener_result(task: asyncio.Task) -> None:
         logger.opt(colors=True, exception=exc).warning(C.warn("消息事件异步订阅者异常"))
 
 
-def _markdown_content(message: object) -> str:
-    if isinstance(message, dict):
-        return _message_text(message.get("content"))
-    return _message_text(message)
-
-
 def _image_content(message: object) -> str:
     if isinstance(message, dict):
         for key in ("url", "src", "path", "image"):

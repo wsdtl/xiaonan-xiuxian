@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from game.features.lianzhen import FormationOverview, FormationPreview, FormationResult
+
+from message import DocumentMessage, M
+
 from collections.abc import Mapping
 
 from game.features.lianzhen import FormationAction, FormationCopy
-from message import M
 
 from ...actions import message_actions
 from ...presentation import sentence
@@ -15,7 +18,7 @@ def text(copy: FormationCopy, section: str, key: str, values: Mapping[str, objec
     return copy.text[section][key].format_map(values or {})
 
 
-def overview(copy, value, actions: tuple[FormationAction, ...]):
+def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[FormationAction, ...]) -> DocumentMessage:
     master = value.master
     builder = (
         M.document()
@@ -47,7 +50,7 @@ def overview(copy, value, actions: tuple[FormationAction, ...]):
     return builder.actions(message_actions(actions)).build()
 
 
-def preview(copy, value, actions: tuple[FormationAction, ...]):
+def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[FormationAction, ...]) -> DocumentMessage:
     master = value.master
     builder = (
         M.document()
@@ -100,7 +103,7 @@ def preview(copy, value, actions: tuple[FormationAction, ...]):
     return builder.actions(message_actions(actions)).build()
 
 
-def completed(copy, value, actions: tuple[FormationAction, ...]):
+def completed(copy: FormationCopy, value: FormationResult, actions: tuple[FormationAction, ...]) -> DocumentMessage:
     preview_value = value.preview
     master = preview_value.master
     builder = (
@@ -125,7 +128,7 @@ def completed(copy, value, actions: tuple[FormationAction, ...]):
     return builder.actions(message_actions(actions)).build()
 
 
-def error(copy, message: str):
+def error(copy: FormationCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")

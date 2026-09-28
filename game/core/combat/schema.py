@@ -257,7 +257,7 @@ class RuleSchemaValidator(DefinitionSchemaValidator):
                 raise RuleSchemaError(f"{path}：裁断与前置监听不可延迟到链尾")
             if node.get("每条根链最多触发", 1) != 1:
                 raise RuleSchemaError(f"{path}：链尾兑现每条根链必须限一次")
-            def check_delayed(value):
+            def check_delayed(value: Any) -> None:
                 if isinstance(value, Mapping):
                     if value.get("能力") == "监听事件":
                         return
@@ -292,11 +292,11 @@ class RuleSchemaValidator(DefinitionSchemaValidator):
         self._node_fields[ability_name] = fields
         return fields
 
-    def category_of(self, node: Mapping[str, Any], path: str) -> str:
+    def category_of(self, node: Mapping[str, Any], _path: str) -> str:
         ability_name = str(node.get("能力") or "")
         return str(dict(self.abilities.get(ability_name) or {}).get("类别") or "")
 
-    def executor_of(self, node: Mapping[str, Any], path: str) -> str:
+    def executor_of(self, node: Mapping[str, Any], _path: str) -> str:
         ability_name = str(node.get("能力") or "")
         return str(dict(self.abilities.get(ability_name) or {}).get("执行器") or "")
 

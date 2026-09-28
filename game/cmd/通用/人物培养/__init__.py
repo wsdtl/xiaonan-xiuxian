@@ -13,6 +13,8 @@ from game.features.renwu_peiyang import (
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -29,7 +31,7 @@ from . import reply
         },
     },
 )
-async def show_character_cultivation(*, user_id: str, manager, **_) -> None:
+async def show_character_cultivation(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.renwu_peiyang
     try:
         result = await feature.inspect(user_id)
@@ -52,9 +54,7 @@ async def show_character_cultivation(*, user_id: str, manager, **_) -> None:
         },
     },
 )
-async def equip_character(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def equip_character(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.renwu_peiyang
     parts = message.split()
     if len(parts) != 4 or not parts[3].isdecimal():
@@ -90,9 +90,7 @@ async def equip_character(
         },
     },
 )
-async def breakthrough_character(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def breakthrough_character(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.renwu_peiyang
     try:
         result = await feature.breakthrough(
@@ -119,9 +117,7 @@ async def breakthrough_character(
         },
     },
 )
-async def forge_character_law(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def forge_character_law(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.renwu_peiyang
     parts = message.rsplit(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdecimal():

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from game.core.item_catalog import ItemDetail, ItemCatalogError, ItemCatalogService
 
 from game.core.asset import (
+    InventoryStack,
     AssetService,
     AssetStateError,
     InventoryAdjustment,
     InventoryChangeError,
 )
+
+from collections.abc import Mapping
+
 from game.core.companion import (
     CompanionCultivationError,
     CompanionService,
@@ -24,7 +28,6 @@ from game.core.database import (
 )
 from game.core.forging import ForgingService
 from game.core.growth import GrowthService
-from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.features.presentation import require_mapping
 
 from .contracts import (
@@ -204,13 +207,13 @@ class CompanionCultivationFeature:
             raise CompanionCultivationFeatureError(str(exc)) from exc
         return CompanionLawResult(view, plan.law_name, plan.slot, receipt.replayed)
 
-    async def _lowest_inventory_stack(self, user_id: str, item_id: str):
+    async def _lowest_inventory_stack(self, user_id: str, item_id: str) -> InventoryStack:
         stacks = await self._assets.inventory_stacks(user_id, item_id)
         if not stacks:
             raise CompanionCultivationFeatureError("纳戒中没有该丹药")
         return stacks[0]
 
-    def _resolve_item(self, identifier: str, category: str):
+    def _resolve_item(self, identifier: str, category: str) -> ItemDetail:
         try:
             item = self._items.inspect(identifier)
         except ItemCatalogError as exc:

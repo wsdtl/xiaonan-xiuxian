@@ -7,6 +7,8 @@ from game.features.biguan import RetreatFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.fullmatch(
@@ -24,7 +26,7 @@ from . import reply
         },
     },
 )
-async def start_retreat(*, user_id: str, message_context, manager, **_) -> None:
+async def start_retreat(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.biguan
     try:
         result = await feature.start(user_id, message_context.request_id)
@@ -49,7 +51,7 @@ async def start_retreat(*, user_id: str, message_context, manager, **_) -> None:
         },
     },
 )
-async def retreat_progress(*, user_id: str, manager, **_) -> None:
+async def retreat_progress(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.biguan
     try:
         result = await feature.progress(user_id)
@@ -80,9 +82,7 @@ async def retreat_progress(*, user_id: str, manager, **_) -> None:
         },
     },
 )
-async def end_retreat(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def end_retreat(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.biguan
     page_text = str(message or "").strip()
     try:

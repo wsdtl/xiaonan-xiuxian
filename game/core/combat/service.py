@@ -37,7 +37,7 @@ from .report import RuntimeBattleReportParticipant, build_battle_report
 from .templates import expand_in_place
 
 
-def _template_library():
+def _template_library() -> dict[str, Any]:
     """本进程唯一的构筑模板库。
 
     `template_data.library()` 每次都现造一份 1299 份模板的嵌套常量（实测 ~4.5 ms），

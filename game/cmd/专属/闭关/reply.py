@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from message import DocumentBuilder, DocumentMessage, M
+
 from collections.abc import Mapping
 
 from game.features.biguan import (
@@ -13,7 +15,6 @@ from game.features.biguan import (
     RetreatStarted,
     RetreatUserSummary,
 )
-from message import M
 
 from ...actions import message_actions
 from ...presentation import duration, natural_deadline
@@ -23,7 +24,7 @@ def text(copy: RetreatCopy, section: str, key: str, values: Mapping[str, object]
     return copy.text[section][key].format_map(values or {})
 
 
-def error(copy: RetreatCopy, message: str):
+def error(copy: RetreatCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
@@ -36,7 +37,7 @@ def started(
     copy: RetreatCopy,
     value: RetreatStarted,
     actions: tuple[RetreatAction, ...],
-):
+) -> DocumentMessage:
     return (
         M.document()
         .header(text(copy, "开始", "标题"))
@@ -61,7 +62,7 @@ def progress(
     feature: RetreatFeature,
     value: RetreatProgress,
     actions: tuple[RetreatAction, ...],
-):
+) -> DocumentMessage:
     if value.completed_rounds >= value.maximum_rounds:
         progress_tail = (
             "状态",
@@ -129,7 +130,7 @@ def settlement_page(
     value: RetreatSettlement,
     page: int,
     actions: tuple[RetreatAction, ...],
-):
+) -> DocumentMessage:
     total_pages = 1 + len(value.users)
     if page == 1:
         insight_count = sum(len(user.insights) for user in value.users)
@@ -166,7 +167,7 @@ def _user_page(
     value: RetreatUserSummary,
     page: int,
     total_pages: int,
-):
+) -> DocumentBuilder:
     builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
     if value.treasure_activation is not None:
         activation = value.treasure_activation

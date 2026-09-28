@@ -7,6 +7,8 @@ from game.features.zongmen_sheshi import SectFacilityFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 _SOURCES = {"个人", "自备", "纳戒", "个人纳戒", "宗门", "灵藏", "宗门灵藏"}
 _FORGING_STAGES = {"灵器", "法器", "法宝", "后天灵宝"}
@@ -27,9 +29,7 @@ _ALCHEMY_CATEGORIES = {"恢复丹", "战丹", "突破丹", "特殊丹"}
         },
     },
 )
-async def bailiantang(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def bailiantang(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _dispatch(
         "炼器", user_id, str(message or "").strip(), message_context.request_id, manager
     )
@@ -49,9 +49,7 @@ async def bailiantang(
         },
     },
 )
-async def dandingge(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def dandingge(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _dispatch(
         "炼丹", user_id, str(message or "").strip(), message_context.request_id, manager
     )
@@ -71,16 +69,14 @@ async def dandingge(
         },
     },
 )
-async def yanzhantai(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def yanzhantai(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     await _dispatch(
         "炼阵", user_id, str(message or "").strip(), message_context.request_id, manager
     )
 
 
 async def _dispatch(
-    facility: str, user_id: str, query: str, request_id: str, manager
+    facility: str, user_id: str, query: str, request_id: str, manager: Any
 ) -> None:
     feature = current_game_services().features.zongmen_sheshi
     source, parts = _source(query)
@@ -168,7 +164,7 @@ def _source(query: str) -> tuple[str, list[str]]:
     return "个人", parts
 
 
-def _investments(values: list[str]):
+def _investments(values: list[str]) -> dict[str, int] | None:
     if not values:
         return None
     if len(values) != 3 or any(not value.isdigit() for value in values):

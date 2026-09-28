@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from game.features.tongquetai import (
-    TongquetaiFeature,
-    TongquetaiPreview,
-    TongquetaiSettlement,
-)
-from message import Action, M
+from game.features.tongquetai import TongquetaiFeature, TongquetaiPreview, TongquetaiSettlement
+
+from message import DocumentMessage, Action, M
 
 
-def preview(feature: TongquetaiFeature, value: TongquetaiPreview):
+def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMessage:
     builder = (
         M.document()
         .header(feature.copy("预览", "标题"))
@@ -75,7 +72,7 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview):
     return builder.actions(actions).build()
 
 
-def settled(feature: TongquetaiFeature, value: TongquetaiSettlement):
+def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> DocumentMessage:
     builder = (
         M.document()
         .header(feature.copy("结算", "标题"))
@@ -122,7 +119,7 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement):
     return builder.build()
 
 
-def error(feature: TongquetaiFeature, message: str):
+def error(feature: TongquetaiFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.copy("错误", "标题"), icon="notice")

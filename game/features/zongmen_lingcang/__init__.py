@@ -2,6 +2,7 @@
 
 from .contracts import LingcangAction, LingcangCopy, LingcangFeatureError, LingcangPage
 from .service import LingcangFeature
+from .contracts import SectAssetTransfer
 
 __all__ = [
     "LingcangAction",
@@ -9,4 +10,5 @@ __all__ = [
     "LingcangFeature",
     "LingcangFeatureError",
     "LingcangPage",
+    "SectAssetTransfer",
 ]

@@ -11,6 +11,8 @@ from game.features.xiantian_lingbao import (
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -27,7 +29,7 @@ from . import reply
         },
     },
 )
-async def show_innate_treasures(*, user_id: str, message: str, manager, **_) -> None:
+async def show_innate_treasures(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.xiantian_lingbao
     raw = message.strip()
     if raw and not raw.isdecimal():
@@ -55,9 +57,7 @@ async def show_innate_treasures(*, user_id: str, message: str, manager, **_) -> 
         },
     },
 )
-async def equip_innate_treasure(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def equip_innate_treasure(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.xiantian_lingbao
     try:
         result = await feature.equip(

@@ -6,6 +6,7 @@ from game.app import current_game_services
 
 from ...command import GameCommand
 from . import reply
+from typing import Any
 
 
 @GameCommand.command(
@@ -22,12 +23,7 @@ from . import reply
         },
     },
 )
-async def inspect_entity(
-    *,
-    message: str,
-    manager,
-    **_,
-) -> None:
+async def inspect_entity(message: str, manager: Any) -> None:
     query = " ".join(str(message or "").split())
     if not query:
         await manager.send(reply.missing_query())

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from game.features.najie import NajieCategoryView, NajieEntry, NajieHome, NajiePage
-from message import Action, M
+from message import DocumentMessage, Action, M
 
 
-def home(view: NajieHome):
+def home(view: NajieHome) -> DocumentMessage:
     builder = M.document().header("纳戒")
     for category in view.categories:
         builder.section(category.name, icon=category.icon)
@@ -27,7 +27,7 @@ def home(view: NajieHome):
     return builder.build()
 
 
-def category(view: NajieCategoryView):
+def category(view: NajieCategoryView) -> DocumentMessage:
     value = view.category
     builder = M.document().header(value.name).section("分项", icon=value.icon)
     for subcategory in value.subcategories:
@@ -38,7 +38,7 @@ def category(view: NajieCategoryView):
     return builder.action(_home_action()).build()
 
 
-def page(view: NajiePage):
+def page(view: NajiePage) -> DocumentMessage:
     current_range = f"{view.start_index}-{view.end_index}" if view.entries else "0"
     section = (
         "清单"
@@ -98,7 +98,7 @@ def page(view: NajiePage):
     return builder.actions(actions).build()
 
 
-def error(message: str):
+def error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("纳戒", icon="notice")

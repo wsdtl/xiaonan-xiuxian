@@ -7,6 +7,8 @@ from game.features.jiaoyi import TradeFeatureError, TradePurchaseCommand
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -23,7 +25,7 @@ from . import reply
         },
     },
 )
-async def inspect_trade(*, user_id: str, message: str, manager, **_) -> None:
+async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.jiaoyi
     parts = str(message or "").split()
     try:
@@ -58,9 +60,7 @@ async def inspect_trade(*, user_id: str, message: str, manager, **_) -> None:
         },
     },
 )
-async def purchase_trade(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def purchase_trade(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.jiaoyi
     parts = str(message or "").split()
     if len(parts) not in {2, 3} or (len(parts) == 3 and not parts[2].isdecimal()):

@@ -7,6 +7,7 @@ from game.features.najie import NajieQueryError, NajieStateError
 
 from ...command import GameCommand
 from . import reply
+from typing import Any
 
 
 @GameCommand.command(
@@ -23,7 +24,7 @@ from . import reply
         },
     },
 )
-async def show_najie(*, user_id: str, message: str, manager, **_) -> None:
+async def show_najie(user_id: str, message: str, manager: Any) -> None:
     query = tuple(str(message or "").split())
     feature = current_game_services().features.najie
     try:

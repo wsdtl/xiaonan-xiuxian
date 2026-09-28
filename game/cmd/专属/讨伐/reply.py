@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from game.features.taofa import RaidFeature, RaidProgress, RaidSettlement, RaidStarted
-from message import M
+from message import DocumentMessage, M
 
 from ...presentation import duration, natural_deadline, sentence
 
 
-def started(feature: RaidFeature, value: RaidStarted):
+def started(feature: RaidFeature, value: RaidStarted) -> DocumentMessage:
     return (
         M.document()
         .header(feature.text("开始", "标题"))
@@ -24,7 +24,7 @@ def started(feature: RaidFeature, value: RaidStarted):
     )
 
 
-def progress(feature: RaidFeature, value: RaidProgress):
+def progress(feature: RaidFeature, value: RaidProgress) -> DocumentMessage:
     return (
         M.document()
         .header(feature.text("进度", "标题"))
@@ -53,7 +53,7 @@ def progress(feature: RaidFeature, value: RaidProgress):
     )
 
 
-def settlement(feature: RaidFeature, value: RaidSettlement):
+def settlement(feature: RaidFeature, value: RaidSettlement) -> DocumentMessage:
     won = value.winner == "left"
     result = feature.result_label(value.winner)
     return (
@@ -71,7 +71,7 @@ def settlement(feature: RaidFeature, value: RaidSettlement):
     )
 
 
-def error(feature: RaidFeature, message: str):
+def error(feature: RaidFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.text("错误", "标题"), icon="notice")

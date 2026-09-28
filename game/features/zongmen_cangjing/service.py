@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from game.core.sect_library import SectBorrowResult, SectLibraryError, SectLibraryService
+
 from collections.abc import Mapping, Sequence
 from math import ceil
 from types import MappingProxyType
@@ -15,7 +17,6 @@ from game.core.data import (
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
-from game.core.sect_library import SectLibraryError, SectLibraryService
 from game.features.presentation import require_mapping
 
 from .contracts import CangjingAction, CangjingCopy, CangjingFeatureError, CangjingPage
@@ -100,7 +101,7 @@ class CangjingFeature:
             view.techniques[offset : offset + self._page_limit],
         )
 
-    async def borrow(self, user_id: str, request_id: str, identifier: str, slot: int):
+    async def borrow(self, user_id: str, request_id: str, identifier: str, slot: int) -> SectBorrowResult:
         await self._require_cave(user_id)
         result = await self._player_state.authorize(user_id, self._guard_rule)
         if not result.allowed:

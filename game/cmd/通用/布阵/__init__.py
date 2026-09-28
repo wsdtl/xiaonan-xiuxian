@@ -7,6 +7,8 @@ from game.features.buzhen import FormationArmFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -23,9 +25,7 @@ from . import reply
         },
     },
 )
-async def arm_formation(
-    *, user_id: str, message: str, message_context, manager, **_
-) -> None:
+async def arm_formation(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.buzhen
     query = str(message or "").strip()
     if not query:

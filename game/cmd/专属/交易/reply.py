@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-from game.features.jiaoyi import (
-    TradeFeature,
-    TradeOverview,
-    TradePage,
-    TradePurchaseResult,
-)
-from message import Action, M
+from game.features.jiaoyi import TradeFeature, TradeOverview, TradePage, TradePurchaseResult
+
+from message import DocumentMessage, Action, M
 
 from ...presentation import sentence
 
 
-def overview(feature: TradeFeature, value: TradeOverview):
+def overview(feature: TradeFeature, value: TradeOverview) -> DocumentMessage:
     builder = (
         M.document()
         .header(feature.copy("总览", "标题", {"地点": value.location_name}))
@@ -31,7 +27,7 @@ def overview(feature: TradeFeature, value: TradeOverview):
     return builder.small(feature.copy("总览", "说明")).build()
 
 
-def page(feature: TradeFeature, value: TradePage):
+def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
     builder = (
         M.document()
         .header(
@@ -86,7 +82,7 @@ def page(feature: TradeFeature, value: TradePage):
     return builder.actions(actions).build()
 
 
-def purchased(feature: TradeFeature, value: TradePurchaseResult):
+def purchased(feature: TradeFeature, value: TradePurchaseResult) -> DocumentMessage:
     return (
         M.document()
         .section(feature.copy("购买", "标题"), icon="inventory")
@@ -106,7 +102,7 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult):
     )
 
 
-def error(feature: TradeFeature, message: str):
+def error(feature: TradeFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.copy("错误", "标题"), icon="notice")

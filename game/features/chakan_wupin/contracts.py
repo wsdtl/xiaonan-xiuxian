@@ -18,4 +18,7 @@ class ItemInspectionResult:
     rendered: tuple[str, ...] = ()
 
 
-__all__ = ["ItemInspectionResult"]
+__all__ = [
+    "ItemInspectionResult",
+    "ItemDetail",
+]

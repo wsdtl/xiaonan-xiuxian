@@ -8,7 +8,7 @@ from game.features.zongmen_tongxing import (
     SectFollowPage,
     SectFollowResult,
 )
-from message import M
+from message import DocumentMessage, M
 
 from ...actions import message_actions
 
@@ -36,7 +36,7 @@ def page(
     actions: tuple[SectFollowAction, ...],
     *,
     notice: str = "",
-):
+) -> DocumentMessage:
     title = (
         f"{value.sect_name} · 同行" if value.sect_name else _text(copy, "查看", "标题")
     )
@@ -81,12 +81,12 @@ def operation(
     copy: SectFollowCopy,
     value: SectFollowResult,
     actions: tuple[SectFollowAction, ...],
-):
+) -> DocumentMessage:
     notice = _text(copy, "结果", value.action).format_map({"姓名": value.target_name})
     return page(copy, value.page, actions, notice=notice)
 
 
-def error(copy: SectFollowCopy, code: str):
+def error(copy: SectFollowCopy, code: str) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
@@ -99,7 +99,7 @@ def error(copy: SectFollowCopy, code: str):
     )
 
 
-def format_error(copy: SectFollowCopy):
+def format_error(copy: SectFollowCopy) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))

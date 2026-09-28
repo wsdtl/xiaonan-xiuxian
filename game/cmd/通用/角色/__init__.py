@@ -12,6 +12,8 @@ from game.features.chuangjian_renwu import (
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -28,9 +30,7 @@ from . import reply
         },
     },
 )
-async def create_character(
-    *, user_id: str, message: str, message_context, manager
-) -> None:
+async def create_character(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     parts = message.split()
     if len(parts) not in (2, 3):
         await manager.send(reply.invalid_create_format())
@@ -70,7 +70,7 @@ async def create_character(
         },
     },
 )
-async def show_character(*, user_id: str, manager, **_) -> None:
+async def show_character(user_id: str, manager: Any) -> None:
     try:
         result = await current_game_services().features.chakan_juese.inspect(user_id)
     except CharacterOverviewError:

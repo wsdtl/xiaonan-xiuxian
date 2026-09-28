@@ -210,7 +210,7 @@ class MessageFlowStore:
             connection.close()
 
 
-def _row(row: sqlite3.Row) -> MessageFlowRow:
+def _row(row: sqlite3.Row | tuple[object, ...]) -> MessageFlowRow:
     return MessageFlowRow(
         flow_id=int(row["flow_id"]),
         direction=str(row["direction"]),

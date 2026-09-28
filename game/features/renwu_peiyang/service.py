@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from game.core.asset import (
+    InventoryStack,
     AssetService,
     AssetStateError,
     InventoryAdjustment,
     InventoryChangeError,
 )
+
+from collections.abc import Mapping
+
 from game.core.character import (
     CharacterCultivationError,
     CharacterService,
@@ -273,7 +275,7 @@ class CharacterCultivationFeature:
             profile, character_plan.law_name, character_plan.slot, receipt.replayed
         )
 
-    async def _lowest_inventory_stack(self, user_id: str, item_id: str):
+    async def _lowest_inventory_stack(self, user_id: str, item_id: str) -> InventoryStack:
         stacks = await self._assets.inventory_stacks(user_id, item_id)
         if not stacks:
             raise CharacterCultivationFeatureError("纳戒中没有该丹药")

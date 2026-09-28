@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from game.core.database import (
+    StateSnapshot,
+    DatabaseService,
+    StateAddress,
+    StateConflictError,
+    StateMutation,
+    TransactionCommand,
+)
+from game.core.asset import AssetGrade, AssetService, AssetStateError
+
 import copy
 import math
 import random
@@ -10,7 +20,6 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from game.core.asset import AssetService, AssetStateError
 from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
 from game.core.data import (
     JsonDataError,
@@ -21,13 +30,11 @@ from game.core.data import (
     nonnegative_int,
     positive_int,
     positive_int as _positive_int,
-)
-from game.core.database import (
-    DatabaseService,
-    StateAddress,
-    StateConflictError,
-    StateMutation,
-    TransactionCommand,
+    boolean,
+    boolean as _bool,
+    sequence as _sequence,
+    strict_text,
+    strict_text as _text,
 )
 from game.core.forging import ForgingError, ForgingService
 from game.core.growth import GrowthError, GrowthService
@@ -68,7 +75,6 @@ from .contracts import (
     InventorySummary,
     WeaponProfile,
 )
-from game.core.data import boolean, boolean as _bool, sequence as _sequence, strict_text, strict_text as _text
 
 
 class CharacterService:
@@ -724,7 +730,7 @@ class CharacterService:
             StateMutation(user, "character", "main", character, snapshot.version),
         )
 
-    async def _medicine_state(self, user_id: str):
+    async def _medicine_state(self, user_id: str) -> tuple[str, StateSnapshot, dict[str, object]]:
         self._require_initialized()
         normalized_user_id = _required_user_id(user_id)
         snapshot = await self._database.get(
@@ -930,7 +936,7 @@ class CharacterService:
 
     def _equip_target(
         self, user_id: str, category: str, slot: int, content_id: str, grade_id: str
-    ):
+    ) -> tuple[str, str, str, AssetGrade]:
         """入参校验：编号、类别、槽位，并把实体记录与品级取出来。
 
         实体记录与品级放在同一个 `try` 里，报错统一转成修行错误——这一段别拆开。
@@ -956,7 +962,7 @@ class CharacterService:
             raise CharacterCultivationError(str(exc)) from exc
         return normalized_user_id, normalized_category, normalized_content_id, grade
 
-    async def _equip_slots(self, user_id: str, category: str, slot: int):
+    async def _equip_slots(self, user_id: str, category: str, slot: int) -> tuple[StateSnapshot, dict[str, object], list[object | None]]:
         """读修行快照并取出该类别的槽位；顺手校验槽位号在范围内。"""
 
         snapshot = await self._database.get(
@@ -972,7 +978,7 @@ class CharacterService:
 
     def _equip_replaced(
         self, category: str, content_id: str, grade_id: str, slots: list, slot: int
-    ):
+    ) -> object | None:
         """同一个内容不能占两个槽，也不能重复装进同一个槽；返回被替换的那个槽。"""
 
         for equipped_slot, raw in enumerate(slots, start=1):
@@ -1011,7 +1017,7 @@ class CharacterService:
 
     async def _equip_source(
         self, user_id: str, category: str, content_id: str, grade_id: str
-    ):
+    ) -> tuple[str, StateMutation | None]:
         """内容从哪来：功法查道藏所有权；真意与气机扣一份储备。"""
 
         try:
@@ -1393,7 +1399,7 @@ class CharacterService:
             ),
         )
 
-    async def _growth_snapshots(self, user_id: str):
+    async def _growth_snapshots(self, user_id: str) -> tuple[StateSnapshot, StateSnapshot]:
         snapshots = await self._database.get_many(
             (
                 StateAddress(user_id, "character", "main"),

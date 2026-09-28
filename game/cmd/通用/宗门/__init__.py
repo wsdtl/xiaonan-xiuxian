@@ -7,6 +7,8 @@ from game.features.zongmen import SectFeatureError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -35,7 +37,7 @@ from . import reply
         },
     },
 )
-async def sect_command(*, user_id: str, message: str, message_context, manager) -> None:
+async def sect_command(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen
     parts = str(message or "").strip().split(maxsplit=2)
     try:

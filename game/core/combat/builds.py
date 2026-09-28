@@ -162,7 +162,7 @@ def _validate_build(
 
 
 def _validate_weight(
-    section: str,
+    _section: str,
     contract: Mapping[str, Any],
     path: str,
     value: Mapping[str, Any],

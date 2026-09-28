@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from message import DocumentBuilder, DocumentMessage, M
+
 from game.features.chakan_juese import CharacterOverviewResult
 from game.features.chuangjian_renwu import CreateCharacterResult
-from message import M
 
 
-def invalid_create_format():
+def invalid_create_format() -> DocumentMessage:
     return (
         M.document()
         .section("创建人物")
@@ -20,7 +21,7 @@ def invalid_create_format():
     )
 
 
-def create_error(message: str):
+def create_error(message: str) -> DocumentMessage:
     return (
         M.document()
         .section("创建人物", icon="notice")
@@ -29,7 +30,7 @@ def create_error(message: str):
     )
 
 
-def character_exists():
+def character_exists() -> DocumentMessage:
     return (
         M.document()
         .section("创建人物")
@@ -38,7 +39,7 @@ def character_exists():
     )
 
 
-def created(result: CreateCharacterResult):
+def created(result: CreateCharacterResult) -> DocumentMessage:
     builder = (
         M.document()
         .header("人物创建完成")
@@ -64,7 +65,7 @@ def created(result: CreateCharacterResult):
     return builder.build()
 
 
-def overview_error():
+def overview_error() -> DocumentMessage:
     return (
         M.document()
         .section("人物", icon="notice")
@@ -75,7 +76,7 @@ def overview_error():
     )
 
 
-def overview(result: CharacterOverviewResult):
+def overview(result: CharacterOverviewResult) -> DocumentMessage:
     character = result.character
     resources = dict(character.resources)
     attributes = dict(character.attributes)
@@ -221,7 +222,7 @@ def overview(result: CharacterOverviewResult):
     return builder.build()
 
 
-def _append_pairs(builder, values: tuple[tuple[str, int | float], ...]) -> None:
+def _append_pairs(builder: DocumentBuilder, values: tuple[tuple[str, int | float], ...]) -> None:
     for index in range(0, len(values), 2):
         builder.row(
             *(

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from game.features.caikuang import GatheredItem
+
+from message import DocumentBuilder, DocumentMessage, M
+
 from collections.abc import Mapping
 
 from game.features.caikuang import (
@@ -13,7 +17,6 @@ from game.features.caikuang import (
     OreGatheringCopy,
     OreGatheringFeature,
 )
-from message import M
 
 from ...actions import message_actions
 from ...presentation import duration, natural_deadline
@@ -23,7 +26,7 @@ def text(copy: OreGatheringCopy, section: str, key: str, values: Mapping[str, ob
     return copy.text[section][key].format_map(values or {})
 
 
-def error(copy: OreGatheringCopy, message: str):
+def error(copy: OreGatheringCopy, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(text(copy, "错误", "标题"), icon="notice")
@@ -36,7 +39,7 @@ def started(
     copy: OreGatheringCopy,
     value: GatheringStarted,
     actions: tuple[OreGatheringAction, ...],
-):
+) -> DocumentMessage:
     return (
         M.document()
         .header(text(copy, "开始", "标题"))
@@ -62,7 +65,7 @@ def progress(
     feature: OreGatheringFeature,
     value: GatheringProgress,
     actions: tuple[OreGatheringAction, ...],
-):
+) -> DocumentMessage:
     builder = (
         M.document()
         .header(text(copy, "进度", "标题"))
@@ -120,7 +123,7 @@ def settlement_page(
     value: GatheringSettlement,
     page: int,
     actions: tuple[OreGatheringAction, ...],
-):
+) -> DocumentMessage:
     total_pages = 1 + len(value.users)
     if page == 1:
         builder = (
@@ -160,7 +163,7 @@ def _user_page(
     value: GatheringUserSummary,
     page: int,
     total_pages: int,
-):
+) -> DocumentBuilder:
     builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
     if value.treasure_activation is not None:
         activation = value.treasure_activation
@@ -181,7 +184,7 @@ def _user_page(
     return builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
 
 
-def _item_parts(feature: OreGatheringFeature, item) -> tuple[object, ...]:
+def _item_parts(feature: OreGatheringFeature, item: GatheredItem) -> tuple[object, ...]:
     return (
         M.command(
             M.text(feature.item_label(item.item_id, item.grade_id), tone="metal"),

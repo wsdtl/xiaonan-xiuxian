@@ -1,8 +1,8 @@
 from game.features.butian import ButianFeature, ButianResult
-from message import M
+from message import DocumentMessage, M
 
 
-def result(feature: ButianFeature, value: ButianResult):
+def result(feature: ButianFeature, value: ButianResult) -> DocumentMessage:
     return (
         M.document()
         .header(feature.copy("结算", "标题"))
@@ -15,7 +15,7 @@ def result(feature: ButianFeature, value: ButianResult):
     )
 
 
-def error(feature: ButianFeature, message: str):
+def error(feature: ButianFeature, message: str) -> DocumentMessage:
     return (
         M.document()
         .section(feature.copy("错误", "标题"), icon="notice")

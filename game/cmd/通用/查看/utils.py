@@ -27,11 +27,6 @@ def _display_number(value: float) -> str:
     return str(int(value)) if value.is_integer() else str(value)
 
 
-def _display_name(value: object) -> str:
-    text = str(value or "")
-    return text[6:] if len(text) > 6 and text[:6].isdigit() else text
-
-
 def _signed(method: object, value: object) -> str:
     sign = "+" if method == "增加" else "-" if method == "减少" else ""
     return f"{sign}{value if value is not None else ''}"

@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from game.core.player_state import (
+    StateTransitionPlan,
+    PlayerStateConflictError,
+    PlayerStateService,
+    StateContextUpdateCommand,
+    StateTransitionCommand,
+)
+
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
@@ -12,6 +20,7 @@ from game.core.data import (
     JsonDataService,
     mapping as _mapping,
     positive_int as _positive_int,
+    boolean as _boolean,
 )
 from game.core.database import (
     DatabaseService,
@@ -19,12 +28,6 @@ from game.core.database import (
     StateConflictError,
     StateMutation,
     TransactionCommand,
-)
-from game.core.player_state import (
-    PlayerStateConflictError,
-    PlayerStateService,
-    StateContextUpdateCommand,
-    StateTransitionCommand,
 )
 
 from .contracts import (
@@ -36,7 +39,6 @@ from .contracts import (
     TeamServiceStatus,
     TeamSnapshot,
 )
-from game.core.data import boolean as _boolean
 
 TEAM_STATE = "team"
 INVITATION_STATE = "team_invite"
@@ -98,14 +100,14 @@ class TeamService:
         self._disband_single = _boolean(
             capacity.get("只剩一人时解散"), "队伍.人数.只剩一人时解散"
         )
-        self._ungrouped_state_id = _text(states.get("未组队"), "队伍.玩家状态.未组队")
-        self._grouped_state_id = _text(states.get("组队中"), "队伍.玩家状态.组队中")
+        self._ungrouped_state_id = _text(states.get("未组队"))
+        self._grouped_state_id = _text(states.get("组队中"))
         self._team_id_field = _text(
-            states.get("队伍编号字段"), "队伍.玩家状态.队伍编号字段"
+            states.get("队伍编号字段")
         )
-        self._role_field = _text(states.get("身份字段"), "队伍.玩家状态.身份字段")
-        self._leader_role = _text(roles.get("队长"), "队伍.身份.队长")
-        self._member_role = _text(roles.get("队员"), "队伍.身份.队员")
+        self._role_field = _text(states.get("身份字段"))
+        self._leader_role = _text(roles.get("队长"))
+        self._member_role = _text(roles.get("队员"))
         self._public_grouped = _boolean(
             public.get("显示组队状态"), "队伍.附近公开.显示组队状态"
         )
@@ -126,7 +128,7 @@ class TeamService:
 
     async def membership(self, user_id: str) -> TeamMembership | None:
         self._require_initialized()
-        user = _text(user_id, "user_id")
+        user = _text(user_id)
         state = await self._player_state.current(user)
         if state is None:
             raise TeamRuleError("character_missing")
@@ -135,8 +137,8 @@ class TeamService:
             return None
         if slot.state_id != self._grouped_state_id:
             raise TeamRuleError("team_state_invalid")
-        team_id = _text(slot.context.get(self._team_id_field), "队伍状态.队伍编号")
-        role = _text(slot.context.get(self._role_field), "队伍状态.身份")
+        team_id = _text(slot.context.get(self._team_id_field))
+        role = _text(slot.context.get(self._role_field))
         team = await self._team(team_id)
         if team is None or user not in team.member_user_ids:
             raise TeamRuleError("team_state_incomplete")
@@ -151,7 +153,7 @@ class TeamService:
         self, user_id: str, *, now: datetime | None = None
     ) -> TeamInvitation | None:
         self._require_initialized()
-        target = _text(user_id, "user_id")
+        target = _text(user_id)
         snapshot = await self._database.get(
             StateAddress(target, INVITATION_STATE, MAIN_KEY)
         )
@@ -177,7 +179,7 @@ class TeamService:
         )
         counts = {
             snapshot.address.user_id: len(
-                _texts(snapshot.value.get("成员"), "队伍.成员")
+                _texts(snapshot.value.get("成员"))
             )
             for snapshot in teams
         }
@@ -199,7 +201,7 @@ class TeamService:
 
         membership = await self.membership(user_id)
         if membership is None:
-            return (_text(user_id, "user_id"),)
+            return (_text(user_id),)
         if membership.role != self._leader_role:
             raise TeamConflictError("member_cannot_start")
         return membership.team.member_user_ids
@@ -213,9 +215,9 @@ class TeamService:
         now: datetime | None = None,
     ) -> TeamInvitation:
         self._require_initialized()
-        inviter = _text(inviter_user_id, "inviter_user_id")
-        target = _text(target_user_id, "target_user_id")
-        request = _text(request_id, "request_id")
+        inviter = _text(inviter_user_id)
+        target = _text(target_user_id)
+        request = _text(request_id)
         if inviter == target:
             raise TeamConflictError("cannot_invite_self")
         inviter_membership = await self.membership(inviter)
@@ -286,8 +288,8 @@ class TeamService:
         self, user_id: str, request_id: str, *, now: datetime | None = None
     ) -> TeamSnapshot:
         self._require_initialized()
-        target = _text(user_id, "user_id")
-        request = _text(request_id, "request_id")
+        target = _text(user_id)
+        request = _text(request_id)
         snapshot = await self._database.get(
             StateAddress(target, INVITATION_STATE, MAIN_KEY)
         )
@@ -348,7 +350,7 @@ class TeamService:
 
     async def reject(self, user_id: str, request_id: str) -> str:
         self._require_initialized()
-        target = _text(user_id, "user_id")
+        target = _text(user_id)
         snapshot = await self._database.get(
             StateAddress(target, INVITATION_STATE, MAIN_KEY)
         )
@@ -357,7 +359,7 @@ class TeamService:
         invitation = _invitation(snapshot.value, snapshot.version, _utc(None))
         await self._commit(
             target,
-            _text(request_id, "request_id"),
+            _text(request_id),
             "拒绝队伍邀请",
             (StateMutation(target, INVITATION_STATE, MAIN_KEY, None, snapshot.version),),
             {"队伍编号": invitation.team_id},
@@ -369,13 +371,13 @@ class TeamService:
         await self._remove_member(
             membership,
             membership.user_id,
-            _text(request_id, "request_id"),
+            _text(request_id),
             "离开队伍",
         )
 
     async def kick(self, user_id: str, target_user_id: str, request_id: str) -> None:
         membership = await self._require_leader(user_id)
-        target = _text(target_user_id, "target_user_id")
+        target = _text(target_user_id)
         if target == membership.team.leader_user_id:
             raise TeamConflictError("cannot_remove_leader")
         if target not in membership.team.member_user_ids:
@@ -383,7 +385,7 @@ class TeamService:
         await self._remove_member(
             membership,
             target,
-            _text(request_id, "request_id"),
+            _text(request_id),
             "请离队伍成员",
         )
 
@@ -391,7 +393,7 @@ class TeamService:
         self, user_id: str, target_user_id: str, request_id: str
     ) -> TeamSnapshot:
         membership = await self._require_leader(user_id)
-        target = _text(target_user_id, "target_user_id")
+        target = _text(target_user_id)
         if target == membership.user_id:
             raise TeamConflictError("cannot_transfer_self")
         if target not in membership.team.member_user_ids:
@@ -424,7 +426,7 @@ class TeamService:
         )
         await self._commit(
             membership.user_id,
-            _text(request_id, "request_id"),
+            _text(request_id),
             "移交队长",
             (
                 StateMutation(
@@ -456,7 +458,7 @@ class TeamService:
             operations.append((await self._ungroup_plan(member, request_id)).mutation)
         await self._commit(
             membership.user_id,
-            _text(request_id, "request_id"),
+            _text(request_id),
             "解散队伍",
             operations,
             {"队伍编号": membership.team.team_id},
@@ -522,7 +524,7 @@ class TeamService:
             {"队伍编号": team.team_id, "目标": target},
         )
 
-    async def _ungroup_plan(self, user_id: str, request_id: str):
+    async def _ungroup_plan(self, user_id: str, request_id: str) -> StateTransitionPlan:
         return await self._player_state.plan_transition(
             StateTransitionCommand(
                 user_id,
@@ -549,8 +551,8 @@ class TeamService:
         snapshot = await self._database.get(StateAddress(team_id, TEAM_STATE, MAIN_KEY))
         if snapshot is None:
             return None
-        members = _texts(snapshot.value.get("成员"), "队伍.成员")
-        leader = _text(snapshot.value.get("队长"), "队伍.队长")
+        members = _texts(snapshot.value.get("成员"))
+        leader = _text(snapshot.value.get("队长"))
         if not members or members[0] != leader or len(members) != len(set(members)):
             raise TeamRuleError("team_snapshot_invalid")
         if len(members) > self._maximum_players:
@@ -607,24 +609,24 @@ def _team_value(team: TeamSnapshot) -> dict[str, object]:
 def _invitation(
     value: Mapping[str, object], version: int, now: datetime
 ) -> TeamInvitation:
-    expires_at = _time(value.get("到期时间"), "队伍邀请.到期时间")
+    expires_at = _time(value.get("到期时间"))
     return TeamInvitation(
-        _text(value.get("邀请者"), "队伍邀请.邀请者"),
-        _text(value.get("目标"), "队伍邀请.目标"),
-        _text(value.get("队伍编号"), "队伍邀请.队伍编号"),
+        _text(value.get("邀请者")),
+        _text(value.get("目标")),
+        _text(value.get("队伍编号")),
         expires_at,
         version,
         now >= expires_at,
     )
 
 
-def _texts(value: object, label: str) -> tuple[str, ...]:
+def _texts(value: object) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise TeamRuleError("team_snapshot_invalid")
-    return tuple(_text(item, label) for item in value)
+    return tuple(_text(item) for item in value)
 
 
-def _text(value: object, label: str) -> str:
+def _text(value: object) -> str:
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise TeamRuleError("invalid_text")
     return value
@@ -637,7 +639,7 @@ def _utc(value: datetime | None) -> datetime:
     return current.astimezone(timezone.utc)
 
 
-def _time(value: object, label: str) -> datetime:
+def _time(value: object) -> datetime:
     try:
         parsed = datetime.fromisoformat(str(value))
     except ValueError as exc:

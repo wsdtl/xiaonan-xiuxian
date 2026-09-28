@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from game.features.tuoguan import HostingCopy, HostingResult
-from message import M
+from message import DocumentMessage, M
 
 _MODE_KEYS = {"personal": "独行", "team": "队伍", "sect": "宗门"}
 _PHASE_KEYS = {
@@ -35,7 +35,7 @@ _ERROR_KEYS = {
 }
 
 
-def result(copy: HostingCopy, value: HostingResult):
+def result(copy: HostingCopy, value: HostingResult) -> DocumentMessage:
     session = value.session
     document = M.document().header(_text(copy, "结果", "标题"))
     if session is None:
@@ -101,7 +101,7 @@ def result(copy: HostingCopy, value: HostingResult):
     return document.build()
 
 
-def error(copy: HostingCopy, code: str):
+def error(copy: HostingCopy, code: str) -> DocumentMessage:
     return (
         M.document()
         .section(_text(copy, "结果", "标题"), icon=_text(copy, "图标", "结果"))
@@ -114,7 +114,7 @@ def error(copy: HostingCopy, code: str):
     )
 
 
-def format_error(copy: HostingCopy):
+def format_error(copy: HostingCopy) -> DocumentMessage:
     return error(copy, "format")
 
 

@@ -5,6 +5,8 @@ from game.features.yixing import YixingConflictError, YixingError
 
 from ...command import GameCommand
 from . import reply
+from launch.adapter import MessageContext
+from typing import Any
 
 
 @GameCommand.command(
@@ -21,7 +23,7 @@ from . import reply
         },
     },
 )
-async def change_gender(*, user_id: str, message_context, manager, **_) -> None:
+async def change_gender(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.yixing
     try:
         await manager.send(

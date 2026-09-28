@@ -1,28 +1,32 @@
 from __future__ import annotations
 
-import asyncio
-import hashlib
-from collections.abc import Mapping
-from dataclasses import replace
-from datetime import UTC, datetime, timedelta
-
-from game.core.action_group import ActionGroupError, ActionGroupService
-from game.core.character import CharacterService
-from game.core.combat import (
-    CombatGroupSpec,
-    CombatReportSpec,
-    CombatRequest,
-    CombatService,
-)
-from game.core.companion import CompanionService
-from game.core.data import JsonDataError, JsonDataService, materialize, nonempty_text, positive_int
+from collections.abc import Sequence, Mapping
 from game.core.database import (
+    DatabaseMutation,
     DatabaseService,
     StateAddress,
     StateConflictError,
     StateMutation,
     TransactionCommand,
 )
+
+from game.core.combat import (
+    CombatantSpec,
+    CombatGroupSpec,
+    CombatReportSpec,
+    CombatRequest,
+    CombatService,
+)
+
+import asyncio
+import hashlib
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+
+from game.core.action_group import ActionGroupError, ActionGroupService
+from game.core.character import CharacterService
+from game.core.companion import CompanionService
+from game.core.data import JsonDataError, JsonDataService, materialize, nonempty_text, positive_int
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 
@@ -221,7 +225,7 @@ class DuelService:
                     f"{profile.name if profile else '有同行修士'}当前不能切磋：{guard.reason}"
                 )
 
-    async def _combat_side(self, users: tuple[str, ...], challenge_id: str, side: str):
+    async def _combat_side(self, users: tuple[str, ...], challenge_id: str, side: str) -> tuple[tuple[CombatantSpec, ...], tuple[CombatGroupSpec, ...]]:
         combatants = []
         groups = []
         for index, user_id in enumerate(users, start=1):
@@ -237,7 +241,7 @@ class DuelService:
             groups.append(CombatGroupSpec(group_id, tuple(members), tuple(members)))
         return tuple(combatants), tuple(groups)
 
-    async def _commit(self, user_id: str, request_id: str, business_type: str, operations) -> None:
+    async def _commit(self, user_id: str, request_id: str, business_type: str, operations: Sequence[DatabaseMutation]) -> None:
         try:
             await self._database.commit(TransactionCommand(user_id, request_id, business_type, tuple(operations), {}))
         except StateConflictError as exc:
