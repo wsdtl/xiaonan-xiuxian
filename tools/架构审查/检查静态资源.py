@@ -39,8 +39,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = PROJECT_ROOT / "static"
 
-#: 三个前端应用，与 `static/` 下的目录一一对应。
-APPS = ("battle-report", "game-console", "world-map")
+#: 前端应用，与 `static/` 下的目录一一对应。
+APPS = ("battle-report", "game-console", "world-map", "zhuangpei")
 
 #: 类名「活没活」的语料范围：服务端任何可能吐出类名的地方。
 CORPUS_ROOTS = ("game", "launch", "data")

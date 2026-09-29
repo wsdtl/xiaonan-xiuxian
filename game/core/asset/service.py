@@ -139,6 +139,11 @@ class AssetService:
             raise InventoryChangeError(f"未知物品品级：{normalized or '<空>'}")
         return grade
 
+    def grades(self) -> tuple[AssetGrade, ...]:
+        """按品级次序提供公开候选，不泄露内部索引。"""
+        self._require_initialized()
+        return tuple(sorted(self._grades.values(), key=lambda value: value.order))
+
     def draw_drop_grade(self, *, seed: int) -> AssetGrade:
         """按物品规则的逆权重抽取一次掉落品级。"""
 
@@ -554,12 +559,15 @@ class AssetService:
         )
 
     async def plan_law_reserve_consumption(
-        self, user_id: str, law_id: str
+        self, user_id: str, law_id: str, *, quantity: int = 1
     ) -> LawReserveChangePlan:
         """为覆炼事务生成一份共享器藏扣除。"""
 
         stack = await self.law_reserve_stack(user_id, law_id)
-        after = stack.quantity - 1
+        quantity = _positive_int(quantity, "器律消耗数量")
+        if stack.quantity < quantity:
+            raise AssetStateError(f"{stack.name}不足：需要{quantity}份，现有{stack.quantity}份")
+        after = stack.quantity - quantity
         return LawReserveChangePlan(
             stack,
             after,

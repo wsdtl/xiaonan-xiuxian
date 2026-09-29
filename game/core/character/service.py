@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from game.core.sect_library import SectLibraryService
 
 from .contracts import (
+    CharacterAssemblyPlan,
     CharacterAbsorptionPlan,
     CharacterAlreadyExistsError,
     CharacterBattleMedicinePlan,
@@ -933,6 +934,25 @@ class CharacterService:
             ),
             reserve_operation,
         )
+
+    def assembly_limits(self) -> dict[str, int]:
+        """公开工具的槽位上限；人物和器律上限均来自现有规则。"""
+        self._require_initialized()
+        limits = dict(self._role_rule["修行槽位"])
+        maximum = self._forging.status().weapon_maximum_level
+        limits["器律"] = self._forging.weapon_stage(maximum).open_law_slots
+        return limits
+
+    async def plan_assembly(
+        self, user_id: str,
+        build: Mapping[str, Sequence[Mapping[str, str] | None]],
+        *, retain_replaced: bool = False,
+    ) -> CharacterAssemblyPlan:
+        """整套计划只校验最终构筑；保持槽位不重复消耗，所有写入一次提交。"""
+        from .assembly import plan_assembly
+
+        self._require_initialized()
+        return await plan_assembly(self, user_id, build, retain_replaced=retain_replaced)
 
     def _equip_target(
         self, user_id: str, category: str, slot: int, content_id: str, grade_id: str

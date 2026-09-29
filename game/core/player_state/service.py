@@ -281,6 +281,22 @@ class PlayerStateService:
             character, snapshot = None, None
         return self._decide(user_id, rule, character, snapshot)
 
+    async def plan_guard(self, user_id: str, rule_name: str) -> tuple[StateMutation, ...]:
+        """校验既有人物守卫，并让业务事务同时验证人物与状态版本。"""
+        self._require_initialized()
+        rule = self._guard_rule(rule_name)
+        if not _rule_needs_reading(rule):
+            return ()
+        addresses = tuple(StateAddress(user_id, kind, "main") for kind in (CHARACTER_STATE_TYPE, STATE_TYPE))
+        records = {row.address.state_type: row for row in await self._database.get_many(addresses)}
+        decision = self._decide(user_id, rule, records.get(CHARACTER_STATE_TYPE), records.get(STATE_TYPE))
+        if not decision.allowed:
+            raise PlayerStateConflictError(decision.reason)
+        if len(records) != 2:
+            raise PlayerStateCharacterMissingError("守卫事务计划只适用于已创建人物")
+        return tuple(StateMutation(user_id, row.address.state_type, row.address.state_key, row.value, row.version)
+                     for row in records.values())
+
     async def authorize_many(
         self, user_ids: tuple[str, ...], rule_name: str
     ) -> tuple[StateGuardResult, ...]:

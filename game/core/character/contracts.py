@@ -160,6 +160,12 @@ class CharacterRetreatPlan:
 
 
 @dataclass(frozen=True)
+class CharacterAssemblyPlan:
+    operations: tuple[StateMutation, ...]
+    changed_slots: int
+
+
+@dataclass(frozen=True)
 class CharacterEquipPlan:
     category: str
     slot: int

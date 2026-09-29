@@ -1,6 +1,7 @@
 """玩家角色核心微服务。"""
 
 from .contracts import (
+    CharacterAssemblyPlan,
     CharacterAbsorptionPlan,
     CharacterAlreadyExistsError,
     CharacterBattleMedicinePlan,
@@ -34,6 +35,7 @@ from .contracts import (
 from .service import CharacterService
 
 __all__ = [
+    "CharacterAssemblyPlan",
     "CharacterAbsorptionPlan",
     "CharacterAlreadyExistsError",
     "CharacterBattleMedicinePlan",

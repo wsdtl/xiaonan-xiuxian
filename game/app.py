@@ -85,6 +85,7 @@ from .features.zongmen_shengchan import SectProductionFeature
 from .features.zongmen_sheshi import SectFacilityFeature
 from .features.zongmen_tongxing import SectFollowFeature
 from .features.zongmen_wanzhen import WanzhenFeature
+from .features.zhuangpei import ZhuangpeiFeature
 from .features.zongmen_zhan import SectWarFeature
 from .startup import validate_startup_contracts
 
@@ -177,6 +178,7 @@ class FeatureServices:
     qiecuo: DuelFeature
     zengsong: GiftFeature
     zhanbao: BattleReportFeature
+    zhuangpei: ZhuangpeiFeature
 
 
 @dataclass(frozen=True)
@@ -823,6 +825,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     zengsong.initialize()
     zhanbao = BattleReportFeature(combat, sect_war, duel)
     zhanbao.initialize()
+    zhuangpei = ZhuangpeiFeature(data, asset, character, database, innate_treasure, player_state, combat)
     daolv_peiyang = CompanionCultivationFeature(
         data,
         companion,
@@ -894,6 +897,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         qiecuo=qiecuo,
         zengsong=zengsong,
         zhanbao=zhanbao,
+        zhuangpei=zhuangpei,
     )
     return GameServices(core=core, features=features)
 

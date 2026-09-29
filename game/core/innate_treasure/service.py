@@ -159,6 +159,15 @@ class InnateTreasureService:
             return None
         return active, active.effect
 
+    async def plan_effect(self, user_id: str, node: str) -> tuple[InnateTreasureEffect | None, StateMutation]:
+        """读取规则介入，并返回同笔业务提交所需的灵宝谱版本保护。"""
+        collection = await self.collection(user_id)
+        active = collection.active
+        effect = active.effect if active is not None and active.effect.node == node else None
+        value = {"已获得": [item.treasure_id for item in collection.owned],
+                 "当前执掌": active.treasure_id if active else ""}
+        return effect, StateMutation(user_id, STATE_TYPE, STATE_KEY, value, collection.version)
+
     async def plan_acquire(
         self, user_id: str, treasure_id: str
     ) -> InnateTreasureMutationPlan:

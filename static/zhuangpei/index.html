@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>装配台 · 晓楠修仙</title>
+<link rel="stylesheet" href="/static/zhuangpei/style.css">
+</head>
+<body>
+<main id="app">
+<header><p class="eyebrow">晓楠修仙 / 修行构筑</p><h1>装配台</h1><p id="intro">正在读取装配台…</p></header>
+<p id="status" role="status" aria-live="polite"></p>
+<section class="scope-bar" aria-label="清单范围">
+<label>候选清单<select id="scope" disabled><option value="all">全池</option></select></label>
+<button id="refresh" type="button">刷新清单</button>
+<button id="load-current" type="button" disabled>以此人当前装配填入方案</button>
+<p id="scope-info"></p><p id="public-help"></p>
+</section>
+<div class="workspace">
+<section class="catalog" aria-labelledby="catalog-title">
+<h2 id="catalog-title">候选内容</h2>
+<div class="filters">
+<label>类别<select id="section"></select></label>
+<label>品级<select id="grade"><option value="">全部品级</option></select></label>
+<label class="search">查找<input id="search" type="search" placeholder="名称、编号或说明"></label>
+</div>
+<p id="target-hint"></p>
+<div id="candidates"></div>
+<div class="pager"><button id="prev" type="button">上一页</button><span id="count"></span><button id="next" type="button">下一页</button></div>
+</section>
+<section class="scheme" aria-labelledby="scheme-title">
+<div class="section-head"><h2 id="scheme-title">整套方案</h2><button id="reset" type="button">清空方案</button></div>
+<p>先点选槽位，再从左侧填入。空槽在导入时会清除原装配。</p>
+<div id="slots"></div>
+<button id="generate" class="primary" type="button" disabled>生成装配码</button>
+<label class="code-label">装配码<textarea id="code-output" rows="3" readonly placeholder="生成后在这里显示"></textarea></label>
+<div class="actions"><button id="copy-code" type="button" disabled>复制装配码</button><button id="copy-command" type="button" disabled>复制聊天导入命令</button></div>
+<details><summary>载入已有装配码</summary><label class="code-label">粘贴装配码<textarea id="code-input" rows="3" placeholder="ZP1.…"></textarea></label><button id="open-code" type="button">载入到方案</button></details>
+<p id="import-help"></p><p id="cost-help"></p>
+</section>
+</div>
+<footer>方案只保留在当前页面；刷新或关闭页面前，请生成并复制装配码。</footer>
+</main>
+<script type="module" src="/static/zhuangpei/app.js"></script>
+</body>
+</html>
