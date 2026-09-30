@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from launch.battle_log import BATTLE_MAX_ROWS, BATTLE_RETENTION_SECONDS, BattleReportStore
 from .storage import MessageFlowRow, MessageFlowStore
 from launch.adapter.local import LocalDispatchResult
 
@@ -323,15 +324,11 @@ def _replace_queue_tail(queue: asyncio.Queue, value: Any) -> None:
 
 
 def _runtime_log_database_path() -> Path:
-    """解析消息流水库路径。
+    """解析消息流水库路径（与战报同库；解析规则单一来源在 `launch/battle_log.py`）。"""
 
-    维护者入口自己解释框架自定义项，不经过 `game/config.py`：游戏配置只登记
-    游戏自身拥有的事实库，消息观察库不进入游戏配置面。相对路径按项目根解析。
-    """
+    from launch.battle_log import runtime_log_database_path
 
-    raw = (config.custom.get("RUNTIME_LOG_DATABASE_PATH", "") or "").strip()
-    path = Path(raw or "database/runtime_log.db").expanduser()
-    return path if path.is_absolute() else config.base_dir / path
+    return runtime_log_database_path()
 
 
 service = MessageConsoleService(
@@ -340,6 +337,12 @@ service = MessageConsoleService(
         retention_seconds=RETENTION_SECONDS,
     ),
     media_dir=config.base_dir / ".runtime" / "runtime_log_media",
+)
+
+#: 战报是非资产数据：与消息流水同住这一个库，按战报编号对外分享，到期由定时任务清理。
+battle_reports = BattleReportStore(
+    _runtime_log_database_path(),
+    retention_seconds=BATTLE_RETENTION_SECONDS,
 )
 
 

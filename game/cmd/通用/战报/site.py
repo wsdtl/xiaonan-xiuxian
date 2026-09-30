@@ -1,7 +1,7 @@
 """战报页面与它的数据接口。
 
 页面按「分享地址」设计（见 `static/说明.md`）：页面住在 `/battle/<战报编号>`，数据从
-同前缀的 `/battle/<编号>/data` 取——**只有一个数据接口**，用 `view` 参数说明要哪一份：
+同前缀的 `/battle/<编号>/data` 取——**页面一条、数据一条**，用 `view` 参数说明要哪一份：
 
     /battle/<编号>                     页面（HTML）
     /battle/<编号>/data                首屏：概览、演员表、花名册、片段表
@@ -9,6 +9,10 @@
     /battle/<编号>/data?view=events&index=0
     /battle/<编号>/data?view=participants&index=0&snapshot=after
     /battle/<编号>/data?view=transition&index=0&sequence=3
+
+编号可以写成**两段纯 ASCII**（`/battle/<发起者>/<切磋编号>`）：`切磋:<发起者>:<编号>` 里的
+中文与冒号会被聊天客户端自行改写（实测纯 ASCII 的 `/game-console` 才随手能开），所以分享
+用两段式；`{report_id:path}` 让同一对路由同时吃两种写法，接口数量不变。
 
 画面**每次现算**（从存档战报），服务器不缓存：这类页面多半只看一次，战报记录本身也只留
 很短一段时间；缓存一旦与存档错开，玩家看到的就是上一版画面。**没有离线/预览模式**——
@@ -52,12 +56,20 @@ def _data_headers() -> dict[str, str]:
     }
 
 
-@router.get("/{report_id}", response_class=HTMLResponse, include_in_schema=False)
-async def battle_report_page() -> HTMLResponse:
-    return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"), headers=_page_headers())
+def identifier_of(raw: str) -> str:
+    """把分享地址里的路径还原成存档战报的编号。
+
+    两段式（`<发起者>/<切磋编号>`）拼回 `切磋:<发起者>:<编号>`；一段式原样使用（宗门战与
+    旧链接都走这条）。
+    """
+    owner, separator, challenge_id = raw.partition("/")
+    if separator and owner and challenge_id and "/" not in challenge_id:
+        return f"切磋:{owner}:{challenge_id}"
+    return raw
 
 
-@router.get("/{report_id}/data", response_class=JSONResponse)
+# 数据路由先注册：`{report_id:path}` 会吃掉任意段数，注册顺序决定它不会抢走页面路由。
+@router.get("/{report_id:path}/data", response_class=JSONResponse)
 async def battle_report_data(
     report_id: str,
     view: str = Query("header"),
@@ -67,7 +79,7 @@ async def battle_report_data(
 ) -> JSONResponse:
     try:
         payload = await current_game_services().features.zhanbao.view(
-            report_id, part=view, index=index, snapshot=snapshot, sequence=sequence
+            identifier_of(report_id), part=view, index=index, snapshot=snapshot, sequence=sequence
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -76,4 +88,9 @@ async def battle_report_data(
     return JSONResponse(payload, headers=_data_headers())
 
 
-__all__ = ["router"]
+@router.get("/{report_id:path}", response_class=HTMLResponse, include_in_schema=False)
+async def battle_report_page() -> HTMLResponse:
+    return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"), headers=_page_headers())
+
+
+__all__ = ["identifier_of", "router"]

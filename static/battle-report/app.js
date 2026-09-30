@@ -3,7 +3,7 @@ import {
   configureVisuals,
   renderCompactTimeline,
   renderDetailedTimeline,
-} from "./timeline.js";
+} from "/static/battle-report/timeline.js";
 import {
   activateMotion,
   controlButton,
@@ -13,7 +13,7 @@ import {
   renderParticipantRecord,
   renderStatusGroup,
   safeToken,
-} from "./ui.js";
+} from "/static/battle-report/ui.js";
 
 const root = document.querySelector("#reportRoot");
 const announcer = node("p", "visually-hidden", "");
@@ -42,6 +42,8 @@ root.addEventListener("change", (event) => {
 });
 
 main().catch((error) => {
+  // 堆栈要留给控制台：只显示 message 的话，"哪一步、哪个人"就查不出来了。
+  console.error(error instanceof Error ? (error.stack || error.message) : String(error));
   renderError(error instanceof Error ? error.message : String(error));
 });
 
@@ -523,7 +525,8 @@ function assertProtocol(value) {
 
 function reportBasePath() {
   const path = window.location.pathname.replace(/\/$/, "");
-  return /^\/battle\/[^/]+$/.test(path) ? path : "";
+  // 单段（存档战报编号）与两段（切磋：/<发起者>/<切磋编号>，纯 ASCII 更好分享）都认。
+  return /^\/battle\/[^/]+(\/[^/]+)?$/.test(path) ? path : "";
 }
 
 async function fetchJson(url) {

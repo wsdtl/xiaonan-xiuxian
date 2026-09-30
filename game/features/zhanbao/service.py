@@ -12,8 +12,9 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Protocol
 
 from game.core.combat import VIEW_PARTS, CombatService
 from game.core.duel import DuelService
@@ -23,15 +24,32 @@ from game.core.sect_war import SectWarService
 VIEWS = VIEW_PARTS
 
 
+class BattleReportLog(Protocol):
+    """非资产战报库的**读**契约（由天道后台的非资产仓储实现）。
+
+    战报是非资产数据：不归玩家所有、按编号对外分享、只留一段时间。`load` 只给未过期的，
+    `peek` 连过期的也给——页面要能把「已过期」和「从来没有过」分开说。
+    """
+
+    def load(self, report_id: str) -> Any | None: ...
+
+    def peek(self, report_id: str) -> Any | None: ...
+
+
 class BattleReportFeature:
     """按战报编号供应页面要的那一份画面。"""
 
     def __init__(
-        self, combat: CombatService, sect_war: SectWarService, duel: DuelService
+        self,
+        combat: CombatService,
+        sect_war: SectWarService,
+        duel: DuelService,
+        battle_log: BattleReportLog | None = None,
     ) -> None:
         self._combat = combat
         self._sect_war = sect_war
         self._duel = duel
+        self._battle_log = battle_log
         self._initialized = False
 
     def initialize(self) -> None:
@@ -83,19 +101,27 @@ class BattleReportFeature:
         return (parts.get("transitions") or {}).get(f"{index}:{sequence}")
 
     async def _stored(self, key: str) -> tuple[Mapping[str, object], int] | None:
-        """按分享地址里的编号取存档战报。
+        """按**战报编号**从非资产库取战报。
 
-        两种编号：**宗门战**直接用宗门战编号（它的存档是共享实体，按编号就能取）；
-        **切磋**的结果挂在发起者名下，所以地址写成 `切磋:<发起者>:<切磋编号>`
-        （第 121 轮：试玩时发现切磋打完了没有入口能看那份战报）。
+        战报是非资产数据：按编号存在非资产库（`log_battle_reports`），与谁发起、存在谁名下
+        都无关。过期与不存在分别说话——过期直接报错，不存在回 None（页面说 404）。
         """
 
-        if key.startswith("切磋:"):
-            parts = key.split(":", 2)
-            if len(parts) != 3 or not parts[1] or not parts[2]:
-                raise ValueError("切磋战报的编号要写成 切磋:<发起者>:<切磋编号>")
-            return await self._duel.report(parts[1], parts[2])
-        return await self._sect_war.report(key)
+        if self._battle_log is None:
+            raise RuntimeError("战报页面玩法微服务缺少非资产战报库")
+        identifier = str(key or "").strip()
+        if not identifier:
+            return None
+        row = self._battle_log.load(identifier)
+        if row is None:
+            if self._battle_log.peek(identifier) is not None:
+                raise ValueError("这份战报已经过期，战报只留最近一段时间")
+            return None
+        payload = json.loads(str(getattr(row, "report_json", "") or "{}"))
+        report = payload.get("战报") if isinstance(payload, Mapping) else None
+        if not isinstance(report, Mapping):
+            raise ValueError("这份战报的内容无法解读")
+        return report, 0
 
     def _require_initialized(self) -> None:
         if not self._initialized:

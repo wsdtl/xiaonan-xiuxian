@@ -127,11 +127,31 @@ export function hydrateParticipants(payload, roster) {
     if (!profile) {
       throw new Error(`战报缺少角色档案：${record.key}`);
     }
-    return { ...profile, ...record };
+    const merged = { ...profile, ...record };
+    // 快照记录只带「会变的那一半」，它**不许**把档案里的名字与颜色覆盖成空：
+    // 覆盖掉的话下游 applyVisual 就会抛「战报缺少后端角色颜色。」，而真实原因在档案里。
+    if (!isVisual(merged.visual)) {
+      merged.visual = profile.visual;
+    }
+    if (!isVisual(merged.visual)) {
+      throw new Error(`战报缺少后端角色颜色：${record.key}`);
+    }
+    if (!merged.label) {
+      merged.label = profile.label;
+    }
+    return merged;
   };
   if (Array.isArray(payload.participants)) {
     payload.participants = payload.participants.map(fill);
   }
+  // 片段载荷里的两份参战者名单（行动前 / 行动后）同样是「只带会变的那一半」。
+  // 漏掉它们，收起面板里的名录就会拿没有颜色的记录去渲染 —— `renderRoster` 直接抛
+  // 「战报缺少后端角色颜色。」（第 122 轮靠真浏览器堆栈定位到这一处）。
+  ["initial_participants", "final_participants"].forEach((field) => {
+    if (Array.isArray(payload[field])) {
+      payload[field] = payload[field].map(fill);
+    }
+  });
   if (payload.segment) {
     hydrateParticipants(payload.segment, roster);
   }
@@ -179,4 +199,9 @@ function groupText(group) {
   return items
     .map((item) => (item.display ? `${item.label} ${item.display}` : item.label))
     .join("、");
+}
+
+//: 一份能用的角色视觉：必须同时有颜色与字色——`applyVisual` 就按这两项判。
+function isVisual(value) {
+  return Boolean(value) && typeof value.color === "string" && typeof value.foreground === "string";
 }

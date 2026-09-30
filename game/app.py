@@ -499,6 +499,19 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("enemies", enemy_status.enemy_count),
         )
     )
+    # 战报是**非资产数据**：登记进非资产库（同一个 runtime_log 库与清理任务）。
+    from launch.battle_log import (
+        BATTLE_RETENTION_SECONDS,
+        BattleReportStore,
+        runtime_log_database_path,
+    )
+
+    battle_reports = BattleReportStore(
+        runtime_log_database_path(),
+        retention_seconds=BATTLE_RETENTION_SECONDS,
+    )
+    battle_reports.initialize()
+
     duel = DuelService(
         data,
         database,
@@ -508,6 +521,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         player_state,
         action_group,
         combat,
+        battle_reports=battle_reports,
     )
     duel.initialize()
     logger.opt(colors=True).success(C.ok("切磋核心微服务已启动"))
@@ -570,6 +584,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         combat,
         activity,
         injury,
+        battle_reports,
     )
     sect_war_status = sect_war.initialize()
     logger.opt(colors=True).success(
@@ -823,7 +838,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     qiecuo.initialize()
     zengsong = GiftFeature(data, gift, item_catalog, character)
     zengsong.initialize()
-    zhanbao = BattleReportFeature(combat, sect_war, duel)
+    zhanbao = BattleReportFeature(combat, sect_war, duel, battle_reports)
     zhanbao.initialize()
     zhuangpei = ZhuangpeiFeature(data, asset, character, database, innate_treasure, player_state, combat)
     daolv_peiyang = CompanionCultivationFeature(

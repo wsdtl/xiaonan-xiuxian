@@ -3,7 +3,7 @@ import {
   renderFacts,
   renderSnapshotParticipant,
   safeToken,
-} from "./ui.js";
+} from "/static/battle-report/ui.js";
 
 // 角色名字与颜色由载荷各发一份（`actors` / `palette`），事件与时间线条上只记「谁」（键）。
 // 键查不到就**当场抛错**：宁可在控制台看见一句「战报缺少角色颜色」，也不要页面安静地

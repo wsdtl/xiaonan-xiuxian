@@ -56,5 +56,8 @@ if __name__ == "__main__":
         port=config.server.port,
         reload=config.server.reload,
         log_config=LOGGING_CONFIG,
+        # 优雅关闭最多等 5 秒：天道后台挂着流式连接时，默认会一直等下去（日志里的
+        # "Waiting for connections to close"），到点由 uvicorn 直接收摊。
+        timeout_graceful_shutdown=5,
         **uvicorn_ssl_kwargs(),
     )

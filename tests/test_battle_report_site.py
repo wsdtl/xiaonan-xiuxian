@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from game.app import build_game_services
 from game.core.combat.contracts import (
@@ -49,24 +50,20 @@ def _battle(services) -> dict:
     return services.core.combat.build_report_presentation(result.report)
 
 
-class _StoredWar:
-    """替身：只实现页面要用的那两个读口（宗门战按编号、切磋按发起者+编号）。"""
+class _StoredReports:
+    """替身：非资产库的读口（按战报编号取；只实现页面要用的两个方法）。"""
 
-    def __init__(self, report: dict) -> None:
-        self._report = report
+    def __init__(self, reports: dict) -> None:
+        self._reports = reports
 
-    async def report(self, war_id: str):
-        return (self._report, 1) if war_id == "war-1" else None
+    def load(self, report_id: str):
+        report = self._reports.get(report_id)
+        if report is None:
+            return None
+        return type("Row", (), {"report_json": json.dumps({"战报": report}, ensure_ascii=False)})()
 
-
-class _StoredDuel:
-    """切磋的存档挂在发起者名下：地址写成 `切磋:<发起者>:<编号>`。"""
-
-    def __init__(self, report: dict) -> None:
-        self._report = report
-
-    async def report(self, owner: str, challenge_id: str):
-        return (self._report, 1) if (owner, challenge_id) == ("甲", "d-1") else None
+    def peek(self, report_id: str):
+        return self.load(report_id) if report_id in self._reports else None
 
 
 def test_views_match_the_whole_payload() -> None:
@@ -74,8 +71,7 @@ def test_views_match_the_whole_payload() -> None:
     try:
         header, parts = services.core.combat.build_report_view(_report(services))
         feature = services.features.zhanbao
-        feature._sect_war = _StoredWar({"占位": True})
-        feature._duel = _StoredDuel({"占位": True})
+        feature._battle_log = _StoredReports({"war-1": {"占位": True}})
         feature._combat.build_report_view = lambda report, **_kwargs: (header, parts)
 
         first = header["detail"]["segments"][0]["index"]
@@ -95,15 +91,6 @@ def test_views_match_the_whole_payload() -> None:
         ) == parts["transitions"][f"{first}:0"]
         assert asyncio.run(feature.view("war-404")) is None
         assert asyncio.run(feature.view("war-1", part="segment", index=99)) is None
-        # 切磋的战报：同样是这一条接口，按「切磋:<发起者>:<编号>」取（第 121 轮补）。
-        assert asyncio.run(feature.view("切磋:甲:d-1")) == header
-        assert asyncio.run(feature.view("切磋:甲:d-404")) is None
-        try:
-            asyncio.run(feature.view("切磋:甲"))
-        except ValueError as exc:
-            assert "切磋:<发起者>" in str(exc)
-        else:
-            raise AssertionError("编号写坏时要报错，不能当成宗门战去查")
     finally:
         services.core.database.close()
 
@@ -136,8 +123,9 @@ def test_the_page_has_one_data_interface() -> None:
     from game.cmd.通用.战报.site import router
 
     paths = {route.path for route in router.routes}
-    assert paths == {"/battle/{report_id}", "/battle/{report_id}/data"}, (
-        "页面与数据各一条路：数据只有一个接口，用 `view` 参数说明要哪一份"
+    assert paths == {"/battle/{report_id:path}", "/battle/{report_id:path}/data"}, (
+        "页面与数据各一条路：数据只有一个接口，用 `view` 参数说明要哪一份。"
+        "`{report_id:path}` 让同一对路由同时吃单段编号与 `/<发起者>/<切磋编号>` 两段分享地址"
     )
     data = next(route for route in router.routes if route.path.endswith("/data"))
     params = {param.name for param in data.dependant.query_params}

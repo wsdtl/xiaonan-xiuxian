@@ -20,8 +20,12 @@ from game.core.combat import (
 
 import asyncio
 import hashlib
+import json
+import time
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+
+from launch.battle_log import BattleReportSink
 
 from game.core.action_group import ActionGroupError, ActionGroupService
 from game.core.character import CharacterService
@@ -33,11 +37,10 @@ from game.core.player_state import PlayerStateService
 from .contracts import DuelChallenge, DuelError, DuelResult, DuelStartCommand
 
 CHALLENGE_STATE = "duel_challenge"
-RESULT_STATE = "duel_result"
 
 
 class DuelService:
-    state_types = frozenset({CHALLENGE_STATE, RESULT_STATE})
+    state_types = frozenset({CHALLENGE_STATE})
 
     def __init__(
         self,
@@ -49,6 +52,7 @@ class DuelService:
         player_state: PlayerStateService,
         action_group: ActionGroupService,
         combat: CombatService,
+        battle_reports: BattleReportSink | None = None,
     ) -> None:
         self._data = data
         self._database = database
@@ -58,6 +62,7 @@ class DuelService:
         self._player_state = player_state
         self._action_group = action_group
         self._combat = combat
+        self._battle_reports = battle_reports
         self._initialized = False
         self._rules: Mapping[str, object] = {}
 
@@ -135,9 +140,11 @@ class DuelService:
         value = pending.value
         challenge_id = _text(value.get("切磋编号"), "切磋编号")
         owner = _text(value.get("发起者"), "发起者")
-        stored_result = await self._database.get(StateAddress(owner, RESULT_STATE, challenge_id))
-        if stored_result is not None:
-            return _result(stored_result.value, replayed=True)
+        if self._battle_reports is None:
+            raise RuntimeError("切磋核心缺少非资产战报库")
+        replayed = self._battle_reports.load(challenge_id)
+        if replayed is not None:
+            return _result(json.loads(str(getattr(replayed, "report_json", "") or "{}")), replayed=True)
         users = tuple(_texts(value.get("发起方"), "发起方") + _texts(value.get("目标方"), "目标方"))
         current_left = await self._action_participants(owner)
         current_right = await self._action_participants(target)
@@ -173,10 +180,16 @@ class DuelService:
             target,
             request,
             "接受切磋",
-            (
-                StateMutation(owner, RESULT_STATE, challenge_id, stored, 0),
-                StateMutation(target, CHALLENGE_STATE, "main", None, pending.version),
-            ),
+            (StateMutation(target, CHALLENGE_STATE, "main", None, pending.version),),
+        )
+        # 战报是**非资产数据**：只登记进非资产库（按编号分享、到期即清理），不进玩家状态。
+        self._battle_reports.save(
+            report_id=challenge_id,
+            kind="切磋",
+            participants=(owner, target),
+            finished_at=_text(stored["完成时间"], "完成时间"),
+            finished_timestamp=time.time(),
+            report_json=json.dumps(stored, ensure_ascii=False),
         )
         return _result(stored, replayed=False)
 
@@ -246,24 +259,6 @@ class DuelService:
             await self._database.commit(TransactionCommand(user_id, request_id, business_type, tuple(operations), {}))
         except StateConflictError as exc:
             raise DuelError("切磋状态已经变化，请重试") from exc
-
-    async def report(self, owner: str, challenge_id: str) -> tuple[Mapping[str, object], int] | None:
-        """按「发起者 + 切磋编号」取存下来的战报与版本（战报页面用）。
-
-        切磋结果挂在**发起者名下**（`StateAddress(发起者, 结果类型, 切磋编号)`），所以
-        编号之外还要发起者；分享地址写成 `切磋:<发起者>:<切磋编号>`。没打完或编号不存在
-        时返回 `None`。
-        """
-
-        record = await self._database.get(
-            StateAddress(_text(owner, "发起者"), RESULT_STATE, _text(challenge_id, "切磋编号"))
-        )
-        if record is None:
-            return None
-        value = record.value.get("战报") if isinstance(record.value, Mapping) else None
-        if not isinstance(value, Mapping) or not value:
-            return None
-        return value, int(record.version)
 
     def _require_initialized(self) -> None:
         if not self._initialized:

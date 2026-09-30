@@ -894,10 +894,10 @@ body[data-mode="detail"] .mode-switch::before {
   height: 30px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--actor-color);
+  border: 1px solid var(--actor-color, var(--muted));
   border-radius: 2px;
-  background: var(--actor-color);
-  color: var(--actor-ink);
+  background: var(--actor-color, var(--muted));
+  color: var(--actor-ink, #fff);
   font-size: .7rem;
   font-weight: 800;
 }
@@ -1044,7 +1044,7 @@ body[data-mode="detail"] .compact-panel {
   height: 11px;
   border: 2px solid var(--paper);
   border-radius: 50%;
-  background: var(--actor-color);
+  background: var(--actor-color, var(--muted));
   content: "";
 }
 
@@ -1159,7 +1159,7 @@ details[open] > :not(summary) {
   height: 11px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--actor-color);
+  background: var(--actor-color, var(--muted));
 }
 
 .event-label {

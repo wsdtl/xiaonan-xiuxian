@@ -347,6 +347,14 @@ def build_battle_report_view(
         }
     if want_transition:
         parts["transitions"] = transitions
+    # 每一份明细载荷都要**自带**演员表与调色板：协议写明两张表在战报头与明细包里各有一份
+    # （各自的载荷自成一体）。少了它们，页面渲染参战者与时间线时查不到角色颜色，
+    # `applyVisual` 会当场抛「战报缺少后端角色颜色。」，整页被顶层兜成一句「内容暂时无法打开」。
+    for group in parts.values():
+        for payload in group.values():
+            payload.setdefault("actors", dict(actors))
+            payload.setdefault("palette", deepcopy(palette))
+            payload.setdefault("roster", deepcopy(roster))
     return main, parts
 
 

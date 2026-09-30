@@ -31,12 +31,16 @@ from game.core.sect import SectMember, SectService
 from game.core.injury import InjuryState, PLAYER_KEY, InjuryService, companion_subject
 
 import hashlib
+import json
 import math
+import time
 from collections import Counter
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from uuid import uuid4
+
+from launch.battle_log import BattleReportSink
 
 from game.core.activity import (
     ActivityFacts,
@@ -89,6 +93,7 @@ class SectWarService:
         combat: CombatService,
         activity: ActivityLifecycleService,
         injury: InjuryService,
+        battle_reports: BattleReportSink | None = None,
     ) -> None:
         self._data = data
         self._db = database
@@ -104,6 +109,7 @@ class SectWarService:
         self._combat = combat
         self._activity = activity
         self._injury = injury
+        self._battle_reports = battle_reports
         self._initialized = False
         self._seconds = 0
         self._maximum = 0
@@ -536,6 +542,23 @@ class SectWarService:
             tuple(operations),
             {"宗门战编号": record.entity_id, "战报编号": record.entity_id},
         )
+        # 战报是**非资产数据**：另登一份进非资产库（按编号分享、到期即清理）；
+        # 共享实体里那份留给宗门战自己的业务（战果、历史），不删。
+        if self._battle_reports is not None:
+            self._battle_reports.save(
+                report_id=record.entity_id,
+                kind="宗门战",
+                participants=(
+                    str(value.get("甲方") or ""),
+                    str(value.get("乙方") or ""),
+                ),
+                finished_at=str(value.get("结束时间") or value.get("开始时间") or ""),
+                finished_timestamp=time.time(),
+                report_json=json.dumps(
+                    {"战报编号": record.entity_id, "战报": value.get("战报") or {}},
+                    ensure_ascii=False,
+                ),
+            )
         return await self._view(value)
 
     async def current(self, user_id: str, request_id: str = "") -> SectWarView:

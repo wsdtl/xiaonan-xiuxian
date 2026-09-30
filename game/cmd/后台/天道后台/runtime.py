@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import time
+
 from launch import C, OnEvent, Scheduler, logger
+from launch.battle_log import BATTLE_MAX_ROWS
 from launch.message_events import subscribe_message_events, unsubscribe_message_events
 
-from .console import service
+from .console import battle_reports, service
 
 
 @Scheduler.job("interval", minutes=30, id="cleanup_runtime_logs")
 def cleanup_runtime_logs() -> None:
-    """统一清理所有带到期时间的运行消息日志。"""
+    """统一清理所有带到期时间的运行记录：消息流水与战报。"""
 
     service.cleanup()
+    battle_reports.initialize()
+    battle_reports.cleanup(now_timestamp=time.time(), max_rows=BATTLE_MAX_ROWS)
 
 
 @OnEvent.connect(priority=180)
