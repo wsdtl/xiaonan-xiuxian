@@ -45,6 +45,11 @@ export function renderCompactTimeline(segment, ui, loadComparison) {
     }
     timeline.append(renderCompactEntry(entry, ui, loadComparison));
   });
+  // 收束句：这一场怎么结束的（服务端按最后一击 + 结果合成）。
+  const 收束 = String(segment.ending_line || "").trim();
+  if (收束) {
+    timeline.append(node("p", "timeline-ending", 收束));
+  }
   section.append(timeline);
   return section;
 }
@@ -86,14 +91,97 @@ export function renderDetailedTimelineEntries(detail, filter, ui, loadComparison
   return timeline;
 }
 
+//: 引擎的**记账**事件（冷却推进、状态层数、事件转化、资源恢复、行动条）不进「战斗记录」。
+//: 它们是逐格结算的账，一场 16 次行动能撑出三百多行——玩家要的是战斗经过，不是流水账。
+//: 明细视图照旧全给，什么都不删。
+const 记账标签 = new Set(["冷却变化", "冷却完成", "状态层数", "事件转化", "资源恢复", "行动条"]);
+
+function 该上屏(event) {
+  if (记账标签.has(String(event.label || ""))) {
+    return false;
+  }
+  // 「普攻」单独一行等于没说：标题已经写了这一击用的是什么。
+  if (String(event.label || "") === "普攻") {
+    return false;
+  }
+  // 0 伤害不单独占一行：护盾全吸收、免疫这类结果，正文里自会说明。
+  // 取值在 `text` 里、且 `text` 自带标签（形如「伤害 · 0」），所以取最后一段数字判。
+  if (String(event.label || "") === "伤害") {
+    const 数值 = String(event.text || "").split("·").pop().trim();
+    if (/^0(?:\.0+)?$/.test(数值)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+//: 事实的取值：`text` 自带标签（形如「伤害 · 4.52」），取最后一段即数值本身。
+function 取值(文本) {
+  return String(文本 || "").split("·").pop().trim();
+}
+
+//: 把一次行动里的事实收成**读得懂的几行**：连续的同名状态合成一行、
+//: 伤害写明打谁、零信息行去掉（第 123 轮：玩家视角的可读性）。
+function 上屏分组(事件表) {
+  const 出 = [];
+  let 状态行 = null;
+  (事件表 || []).forEach((event) => {
+    if (!该上屏(event)) {
+      return;
+    }
+    const 标 = String(event.label || "");
+    if (标 === "获得状态") {
+      const 值 = 取值(event.text);
+      if (状态行) {
+        状态行.text = `${状态行.text} · ${值}`;
+        return;
+      }
+      状态行 = { ...event, text: 值 };
+      出.push(状态行);
+      return;
+    }
+    状态行 = null;
+    if (标 === "伤害") {
+      const 目标 = event.target && event.target !== event.source ? actorLabel(event.target) : "自身";
+      出.push({ ...event, text: `→ ${目标}  ${取值(event.text)}` });
+      return;
+    }
+    出.push(event);
+  });
+  return 出;
+}
+
+//: 「A 对 A」读起来像打自己：来源与目标同一个人时，目标写「自身」。
+function 行动标题(entry) {
+  const 名 = actorLabel(entry.actor);
+  const 原 = String(entry.title || "");
+  if (名 && 原.startsWith(`${名} 对 ${名} `)) {
+    return 原.replace(`${名} 对 ${名} `, `${名} 对 自身 `);
+  }
+  return 原;
+}
+
 function renderCompactEntry(entry, ui, loadComparison) {
   const article = node("article", `action-card tone-${safeToken(entry.tone)}`);
   applyVisual(article, visualOf(entry.actor));
-  article.append(node("div", "action-head", [node("div", "action-title", entry.title)]));
-  if (entry.summary_events.length) {
+  article.append(node("div", "action-head", [node("div", "action-title", 行动标题(entry))]));
+  // 给玩家的是**一句话**（服务端合成）：标题 + 结果 + 副作用。
+  const 叙述 = String(entry.narrative || "").trim();
+  if (叙述 && 叙述 !== 行动标题(entry)) {
+    article.append(node("p", "action-narrative", 叙述.slice(行动标题(entry).length).replace(/^；/, "")));
+  }
+  if (entry.health_line) {
+    article.append(node("p", "action-health", entry.health_line));
+  }
+  // 原始事件收进折叠：默认不占屏，要点开才看（明细视图「全部事件」照旧全给）。
+  const 可读 = 上屏分组(entry.summary_events);
+  if (可读.length) {
+    const details = node("details", "action-raw");
+    details.append(node("summary", "", `原始事件 ${可读.length} 条`));
     const events = node("ol", "event-list compact-event-list");
-    entry.summary_events.forEach((event) => events.append(renderEvent(event, false, ui)));
-    article.append(events);
+    可读.forEach((event) => events.append(renderEvent(event, false, ui)));
+    details.append(events);
+    article.append(details);
   }
   if (entry.comparison_available) {
     article.append(renderComparisonAccess(entry.sequence, ui, loadComparison));
@@ -106,7 +194,7 @@ function renderDetailedEntry(entry, filter, ui, loadComparison) {
   applyVisual(article, visualOf(entry.actor));
   article.append(
     node("div", "action-head", [
-      node("div", "action-title", entry.title),
+      node("div", "action-title", 行动标题(entry)),
       node("div", "action-sequence", entry.sequence_label),
     ]),
   );

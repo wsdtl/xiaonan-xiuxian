@@ -1791,3 +1791,15 @@ details[open] > :not(summary) {
     width: var(--fill);
   }
 }
+
+/* 叙述层：一次行动的一句话 + 血量行 + 页尾收束句（第 124 轮）。
+   这三样是给玩家看的正文，原料是事件清单；数值一律等宽对齐，读起来才不跳。 */
+.action-narrative { margin: .4rem 0 .2rem; color: var(--ink); font-weight: 600; line-height: 1.7; }
+.action-health { margin: .1rem 0 .4rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.action-raw { margin: .3rem 0 0; }
+.action-raw > summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
+.action-raw[open] > summary { margin-bottom: .3rem; }
+.timeline-ending { margin: 1rem 0 .2rem; padding: .6rem .85rem; border-left: 3px solid var(--jade); background: var(--soft); color: var(--ink); font-weight: 600; line-height: 1.7; }
+
+/* 名录里的在场标注（未入场 / 已退场）：没有它，构造物的 0/30 会被当成"开局就死"。 */
+.roster-tag { margin-left: .35rem; padding: .05rem .35rem; border: 1px solid var(--line); border-radius: 2px; color: var(--muted); font-size: .7rem; font-weight: 600; white-space: nowrap; }

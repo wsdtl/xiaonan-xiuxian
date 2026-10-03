@@ -451,6 +451,21 @@ function renderSummaryPanel(segment) {
   return node("aside", "summary-panel", disclosure);
 }
 
+//: 名录里的在场状态。构造物「第 11 次行动才入场」那种事，光看 0/30 会以为开局就死了。
+function 名录状态(participant, 开局集) {
+  const 血 = (条) => {
+    const g = ((条 || {}).gauges || []).find((项) => 项.label === "血气");
+    return g ? Number(g.current) : null;
+  };
+  const 此刻 = 血(participant);
+  if (此刻 === null || 此刻 > 0) {
+    return "";
+  }
+  const 开局条 = (开局集 || []).find((条) => 条.key === participant.key);
+  const 开局 = 血(开局条);
+  return 开局 !== null && 开局 > 0 ? "已退场" : "未入场";
+}
+
 function renderRoster(segment) {
   // 收起状态下的参战者名录：一栏徽章 + 名字 + 血气/精神条。
   // 面板收起来时只剩下一个标题，左边这一栏会空成一片——名录让它一直有用。
@@ -465,8 +480,13 @@ function renderRoster(segment) {
       String(participant.visual?.number || 0).padStart(2, "0"),
     );
     applyVisual(badge, participant.visual);
+    const 状态标 = 名录状态(participant, segment.initial_participants);
     const row = node("li", "roster-item", [
-      node("div", "roster-head", [badge, node("span", "roster-name", participant.label)]),
+      node("div", "roster-head", [
+        badge,
+        node("span", "roster-name", participant.label),
+        状态标 ? node("span", "roster-tag", 状态标) : null,
+      ]),
       node(
         "div",
         "roster-gauges",
