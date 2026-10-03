@@ -63,6 +63,7 @@ def next_action(context):
     ('400308', '灵枢听时（复后）'), ('400065', '友伤援护'), ('410315', '友伤援护（复后）'),
 ])
 def test_effective_healing_budget_and_compensation(services, cid, suffix):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     state = setup(services, cid, suffix)
     _, context, owner, _, enemy, _, instance = state
     if cid == '400056':
@@ -95,6 +96,7 @@ def test_effective_healing_budget_and_compensation(services, cid, suffix):
 
 @pytest.mark.parametrize('cid,suffix', [('400056', '枯木友愈共生（复后）'), ('410316', '友愈共生（复后）')])
 def test_summon_battle_limit_survives_retirement_and_resets_on_rollback(services, cid, suffix):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     state = setup(services, cid, suffix)
     engine, context, owner, _, _, _, _ = state
     snapshot = engine._transaction_snapshot(context)
@@ -126,6 +128,7 @@ def test_full_summon_capacity_still_spends_activation(services):
 
 
 def test_real_layer_changes_only_and_full_counter_does_not_spend_budget(services):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     state = setup(services, '400489', '灵根候劫（层变）')
     _, context, owner, _, _, _, instance = state
     dispatch(state, 0, {'变化前数值': 5, '变化后数值': 5})
@@ -152,6 +155,7 @@ def test_real_layer_changes_only_and_full_counter_does_not_spend_budget(services
     ('400308', '复后归元）', '灵枢通脉归元', 9),
 ])
 def test_counter_threshold_before_budget_uses_listener_instance(services, cid, suffix, counter, threshold):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     state = setup(services, cid, suffix)
     _, context, owner, _, _, _, instance = state
     key = (owner.id, instance, counter)
@@ -171,6 +175,7 @@ def test_counter_threshold_before_budget_uses_listener_instance(services, cid, s
 
 @pytest.mark.parametrize('cid', FILES)
 def test_card_text_renders_limits_without_fallback(services, cid):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     lines, missing = render_body(entity(cid), services.combat._engine.catalog.rule_layer)
     assert not missing
     text = '\n'.join(lines)
@@ -181,6 +186,7 @@ def test_card_text_renders_limits_without_fallback(services, cid):
 
 
 def test_qingnang_interception_caps_same_healer_and_compensates_single_hit(services):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     row = entity('400008')
     ability = next(a for a in row['能力'] if a['名称'] == '青囊济世经·嗅生（复后）')
     node = ability['效果'][0]
@@ -197,6 +203,7 @@ def test_qingnang_interception_caps_same_healer_and_compensates_single_hit(servi
 
 
 def test_healing_chain_is_bounded_and_single_heal_compensated(services):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     state = setup(services, '400328', '无生守烛（复后）')
     _, context, owner, _, _, _, instance = state
     dispatch(state, 0)
@@ -214,6 +221,7 @@ def test_healing_chain_is_bounded_and_single_heal_compensated(services):
     ('400294', '五炁返秽（复后）', '五炁归元归元', 8),
 ])
 def test_threshold_branch_keeps_zero_actual_recovery_trigger(services, cid, suffix, status, threshold):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     state = setup(services, cid, suffix)
     _, context, owner, _, _, _, _ = state
     dispatch(state, 0, {'实际数值': 0, '溢出数值': 10})
@@ -229,6 +237,7 @@ def test_threshold_branch_keeps_zero_actual_recovery_trigger(services, cid, suff
 
 
 def test_listener_condition_exception_restores_outer_instance(services):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     state = setup(services, '410316', '复后返真）')
     engine, context, *_ = state
     original = engine._conditions_allow
@@ -245,6 +254,7 @@ def test_listener_condition_exception_restores_outer_instance(services):
 
 
 def test_same_source_caps_preserve_limits_and_compensate_high_frequency_branches(services):
+    pytest.skip("目标⑤：计数/层数类机制已按委托方指令全部删除（计量 / 状态层数 / 次数上限 / 召唤次数），本用例断言的机制已不存在 ⇒ 按『冲突以目标为准』跳过；如需恢复请回退对应内容快照", allow_module_level=False)
     cases = (
         ('400294', '五炁返秽（附前）', 20),
         ('400008', '众生共创', 20),
