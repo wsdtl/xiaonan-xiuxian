@@ -159,52 +159,50 @@ def open_request_connections() -> Callable[[], None]:
 # { "类型/键": {"值": …, "版本": n, "时间": …} }；老形态（一个状态键一行）读写时现场合并。
 _BLOB_TYPE = "player"
 _BLOB_KEY = "main"
+_ENTRY_VALUE = "value"
+_ENTRY_VERSION = "version"
+_ENTRY_UPDATED = "updated_at"
 
 
-def _逻辑键(state_type: str, state_key: str) -> str:
+def _logical_key(state_type: str, state_key: str) -> str:
     return f"{state_type}/{state_key}"
 
 
-def _读逻辑状态(connection: sqlite3.Connection, user_id: str) -> dict[str, dict[str, object]]:
+def _load_logical_state(connection, user_id: str) -> dict[str, dict[str, object]]:
     """读出某玩家全部逻辑状态（自动合并老形态的行）。"""
-    条目: dict[str, dict[str, object]] = {}
-    for 行 in connection.execute(
+    entries: dict[str, dict[str, object]] = {}
+    for row in connection.execute(
         "SELECT state_type, state_key, state_json, version, updated_at "
         "FROM state_snapshot WHERE user_id = ?",
         (user_id,),
     ).fetchall():
-        state_type, state_key, state_json, version, updated_at = 行
+        state_type, state_key, state_json, version, updated_at = row
         if str(state_type) == _BLOB_TYPE and str(state_key) == _BLOB_KEY:
             continue
-        条目[_逻辑键(str(state_type), str(state_key))] = {
-            "值": json.loads(str(state_json)),
-            "版本": int(version),
-            "时间": str(updated_at),
+        entries[_logical_key(str(state_type), str(state_key))] = {
+            _ENTRY_VALUE: json.loads(str(state_json)),
+            _ENTRY_VERSION: int(version),
+            _ENTRY_UPDATED: str(updated_at),
         }
-    行 = connection.execute(
+    blob = connection.execute(
         "SELECT state_json FROM state_snapshot "
         "WHERE user_id = ? AND state_type = ? AND state_key = ?",
         (user_id, _BLOB_TYPE, _BLOB_KEY),
     ).fetchone()
-    if 行 is not None:
-        for 键, 项 in json.loads(str(行[0])).items():
-            条目[str(键)] = 项
-    return 条目
+    if blob is not None:
+        for key, entry in json.loads(str(blob[0])).items():
+            entries[str(key)] = entry
+    return entries
 
 
-def _写逻辑状态(
-    connection: sqlite3.Connection,
-    user_id: str,
-    payload: dict[str, dict[str, object]],
-    committed_at: str,
-) -> None:
+def _store_logical_state(connection, user_id: str, payload, committed_at: str) -> None:
     """整体写回单行，并清掉该玩家残留的老形态行。"""
-    现有 = connection.execute(
+    current = connection.execute(
         "SELECT version FROM state_snapshot "
         "WHERE user_id = ? AND state_type = ? AND state_key = ?",
         (user_id, _BLOB_TYPE, _BLOB_KEY),
     ).fetchone()
-    新版本 = (int(现有[0]) + 1) if 现有 is not None else 1
+    next_row_version = (int(current[0]) + 1) if current is not None else 1
     connection.execute(
         "DELETE FROM state_snapshot WHERE user_id = ? AND NOT (state_type = ? AND state_key = ?)",
         (user_id, _BLOB_TYPE, _BLOB_KEY),
@@ -217,7 +215,7 @@ def _写逻辑状态(
         "INSERT INTO state_snapshot (user_id, state_type, state_key, state_json, version, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?)",
         (user_id, _BLOB_TYPE, _BLOB_KEY,
-         json.dumps(payload, ensure_ascii=False, sort_keys=True), 新版本, committed_at),
+         json.dumps(payload, ensure_ascii=False, sort_keys=True), next_row_version, committed_at),
     )
 
 
@@ -585,11 +583,16 @@ class SQLiteStateStore:
         self._require_initialized()
         _validate_address(address)
         with self._connect(reusable=True) as connection:
-            条目 = _读逻辑状态(connection, address.user_id)
-        项 = 条目.get(_逻辑键(address.state_type, address.state_key))
-        if 项 is None:
+            entries = _load_logical_state(connection, address.user_id)
+        entry = entries.get(_logical_key(address.state_type, address.state_key))
+        if entry is None:
             return None
-        return StateSnapshot(address, _freeze_json(项["值"]), int(项["版本"]), str(项["时间"]))
+        return StateSnapshot(
+            address,
+            _freeze_json(entry[_ENTRY_VALUE]),
+            int(entry[_ENTRY_VERSION]),
+            str(entry[_ENTRY_UPDATED]),
+        )
 
     def list_for_user(
         self, user_id: str, state_type: str | None = None
@@ -599,15 +602,22 @@ class SQLiteStateStore:
         if state_type is not None:
             _validate_text(state_type, "state_type")
         with self._connect(reusable=True) as connection:
-            条目 = _读逻辑状态(connection, user_id)
-        出: list[StateSnapshot] = []
-        for 键 in sorted(条目, key=lambda 名: tuple(名.split("/", 1))):
-            类型, 键名 = 键.split("/", 1)
-            if state_type is not None and 类型 != state_type:
+            entries = _load_logical_state(connection, user_id)
+        snapshots: list[StateSnapshot] = []
+        for key in sorted(entries, key=lambda name: tuple(name.split("/", 1))):
+            key_type, key_name = key.split("/", 1)
+            if state_type is not None and key_type != state_type:
                 continue
-            项 = 条目[键]
-            出.append(StateSnapshot(StateAddress(user_id, 类型, 键名), _freeze_json(项["值"]), int(项["版本"]), str(项["时间"])))
-        return tuple(出)
+            entry = entries[key]
+            snapshots.append(
+                StateSnapshot(
+                    StateAddress(user_id, key_type, key_name),
+                    _freeze_json(entry[_ENTRY_VALUE]),
+                    int(entry[_ENTRY_VERSION]),
+                    str(entry[_ENTRY_UPDATED]),
+                )
+            )
+        return tuple(snapshots)
 
     def get_many(
         self, addresses: tuple[StateAddress, ...]
@@ -621,18 +631,21 @@ class SQLiteStateStore:
             {(item.user_id, item.state_type, item.state_key) for item in addresses}
         ):
             raise ValueError("批量状态地址不能重复")
-        快照: dict[tuple[str, str, str], StateSnapshot] = {}
+        found: dict[tuple[str, str, str], StateSnapshot] = {}
         with self._connect(reusable=True) as connection:
-            for 用户 in sorted({item.user_id for item in addresses}):
-                for 键, 项 in _读逻辑状态(connection, 用户).items():
-                    类型, 键名 = 键.split("/", 1)
-                    快照[(用户, 类型, 键名)] = StateSnapshot(
-                        StateAddress(用户, 类型, 键名), _freeze_json(项["值"]), int(项["版本"]), str(项["时间"])
+            for owner in sorted({item.user_id for item in addresses}):
+                for key, entry in _load_logical_state(connection, owner).items():
+                    key_type, key_name = key.split("/", 1)
+                    found[(owner, key_type, key_name)] = StateSnapshot(
+                        StateAddress(owner, key_type, key_name),
+                        _freeze_json(entry[_ENTRY_VALUE]),
+                        int(entry[_ENTRY_VERSION]),
+                        str(entry[_ENTRY_UPDATED]),
                     )
         return tuple(
-            快照[(address.user_id, address.state_type, address.state_key)]
+            found[(address.user_id, address.state_type, address.state_key)]
             for address in addresses
-            if (address.user_id, address.state_type, address.state_key) in 快照
+            if (address.user_id, address.state_type, address.state_key) in found
         )
 
     def get_location(self, user_id: str) -> LocationRecord | None:
@@ -943,30 +956,44 @@ def _apply_mutation(
     mutation: StateMutation,
     committed_at: str,
 ) -> MutationChange:
-    条目 = _读逻辑状态(connection, mutation.user_id)
-    键 = _逻辑键(mutation.state_type, mutation.state_key)
-    现有 = 条目.get(键)
-    current_version = int(现有["版本"]) if 现有 is not None else 0
+    entries = _load_logical_state(connection, mutation.user_id)
+    key = _logical_key(mutation.state_type, mutation.state_key)
+    entry = entries.get(key)
+    current_version = int(entry[_ENTRY_VERSION]) if entry is not None else 0
     if current_version != mutation.expected_version:
         raise StateConflictError(
             f"状态版本冲突：{mutation.state_type}/{mutation.state_key} "
             f"期望 {mutation.expected_version}，实际 {current_version}"
         )
     if mutation.value is None:
-        if 现有 is None:
+        if entry is None:
             raise StateConflictError("不能删除不存在的状态")
-        条目.pop(键)
-        _写逻辑状态(connection, mutation.user_id, 条目, committed_at)
+        entries.pop(key)
+        _store_logical_state(connection, mutation.user_id, entries, committed_at)
         return MutationChange(
-            "player_state", mutation.user_id, mutation.state_type, mutation.state_key,
-            "delete", current_version, None,
+            "player_state",
+            mutation.user_id,
+            mutation.state_type,
+            mutation.state_key,
+            "delete",
+            current_version,
+            None,
         )
     next_version = current_version + 1
-    条目[键] = {"值": json.loads(_encode(mutation.value)), "版本": next_version, "时间": committed_at}
-    _写逻辑状态(connection, mutation.user_id, 条目, committed_at)
+    entries[key] = {
+        _ENTRY_VALUE: json.loads(_encode(mutation.value)),
+        _ENTRY_VERSION: next_version,
+        _ENTRY_UPDATED: committed_at,
+    }
+    _store_logical_state(connection, mutation.user_id, entries, committed_at)
     return MutationChange(
-        "player_state", mutation.user_id, mutation.state_type, mutation.state_key,
-        "insert" if 现有 is None else "update", current_version or None, next_version,
+        "player_state",
+        mutation.user_id,
+        mutation.state_type,
+        mutation.state_key,
+        "insert" if entry is None else "update",
+        current_version or None,
+        next_version,
     )
 
 
