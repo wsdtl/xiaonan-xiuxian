@@ -409,7 +409,11 @@ class SQLiteStateStore:
 
     def _receipt_scope(self) -> str:
         """回执作用域：按存档库路径隔离。"""
-        return hashlib.sha1(str(self.path.resolve()).encode("utf-8")).hexdigest()[:16]
+        try:
+            stamp = int(self.path.stat().st_ctime)
+        except OSError:
+            stamp = 0
+        return hashlib.sha1(f"{self.path.resolve()}|{stamp}".encode("utf-8")).hexdigest()[:16]
 
     def counts(self) -> tuple[int, int, int, int, int, int]:
         self._require_initialized()
