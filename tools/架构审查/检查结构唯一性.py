@@ -15,39 +15,39 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-内容根 = ROOT / "data/战斗/内容"
-基线路径 = ROOT / "tools/基准/结构唯一性基线.json"
-段表 = ("功法", "真意", "气机")
+CONTENT_ROOT = ROOT / "data/战斗/内容"
+BASELINE = ROOT / "tools/基准/结构唯一性基线.json"
+SECTIONS = ("功法", "真意", "气机")
 
 
-def 量段(段: str) -> dict:
-    甲: collections.Counter = collections.Counter()
-    乙: collections.Counter = collections.Counter()
-    for p in sorted((内容根 / 段).rglob("*.json")):
+def measure_section(section: str) -> dict:
+    strict: collections.Counter = collections.Counter()
+    whole_card: collections.Counter = collections.Counter()
+    for p in sorted((CONTENT_ROOT / section).rglob("*.json")):
         doc = json.loads(p.read_text(encoding="utf-8"))
         for c in (doc if isinstance(doc, list) else [doc]):
             if not isinstance(c, dict):
                 continue
             效 = [e for a in (c.get("能力") or []) if isinstance(a, dict) and isinstance(a.get("效果"), list) for e in a["效果"]]
-            甲[json.dumps(效, sort_keys=True, ensure_ascii=False)] += 1
+            strict[json.dumps(效, sort_keys=True, ensure_ascii=False)] += 1
             纯 = {k: v for k, v in c.items() if k not in ("名称", "编号", "说明")}
-            乙[json.dumps(纯, sort_keys=True, ensure_ascii=False)] += 1
-    return {"卡数": sum(乙.values()), "严格唯一": len(甲), "构筑唯一": len(乙)}
+            whole_card[json.dumps(纯, sort_keys=True, ensure_ascii=False)] += 1
+    return {"卡数": sum(whole_card.values()), "严格唯一": len(strict), "构筑唯一": len(whole_card)}
 
 
 def main() -> int:
-    if not 基线路径.exists():
+    if not BASELINE.exists():
         print("结构唯一性审查：基线缺失")
         return 2
-    基线 = json.loads(基线路径.read_text(encoding="utf-8")).get("各段", {})
+    基线 = json.loads(BASELINE.read_text(encoding="utf-8")).get("各段", {})
     失败, 读数 = [], []
-    for 段 in 段表:
-        v = 量段(段)
-        基线段 = 基线.get(段, {})
-        读数.append(f"{段} 严格 {v['严格唯一']} / 构筑 {v['构筑唯一']} / 卡 {v['卡数']}")
+    for section in SECTIONS:
+        v = measure_section(section)
+        基线段 = 基线.get(section, {})
+        读数.append(f"{section} 严格 {v['严格唯一']} / 构筑 {v['构筑唯一']} / 卡 {v['卡数']}")
         for 键, 名 in (("严格唯一", "严格口径"), ("构筑唯一", "构筑口径")):
             if v[键] < 基线段.get(键, 0):
-                失败.append(f"{段}：{名}唯一 {v[键]} 低于基线 {基线段.get(键, 0)}")
+                失败.append(f"{section}：{名}唯一 {v[键]} 低于基线 {基线段.get(键, 0)}")
     print("结构唯一性：" + " ｜ ".join(读数))
     if 失败:
         for f in 失败:
