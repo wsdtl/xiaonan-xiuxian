@@ -84,7 +84,7 @@ def _targets() -> dict[tuple, tuple[str, Any, dict]]:
         出.setdefault(签名, []).append((编号, 库[编号]["主体"],
             {编号: {"主体": 库[编号]["主体"], "参数位置": 引擎模板.index_map(库[编号]["主体"])}}))
     for 签名 in 出:
-        出[签名].sort(key=lambda 项: (json.dumps(项[1], ensure_ascii=False).count("$参数"), 项[0]))
+        出[签名].sort(key=lambda 项: (-json.dumps(项[1], ensure_ascii=False).count("$参数"), 项[0]))
     return 出
 
 
