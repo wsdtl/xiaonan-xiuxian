@@ -63,8 +63,8 @@ def main() -> int:
         return 1
     connection = sqlite3.connect(f"file:{LOG_DB.as_posix()}?mode=ro", uri=True)
     columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(log_committed_transactions)")}
-    counts = {str(row[0]): int(row[1]) for row in connection.execute(
-        "SELECT user_id, COUNT(*) FROM log_committed_transactions GROUP BY user_id").fetchall()}
+    counts = {(str(row[0]), str(row[1])): int(row[2]) for row in connection.execute(
+        "SELECT scope, user_id, COUNT(*) FROM log_committed_transactions GROUP BY scope, user_id").fetchall()}
     connection.close()
     if "expires_at" not in columns:
         print("  [失败] 回执表没有 expires_at（无法按 TTL 过期）")
@@ -73,7 +73,7 @@ def main() -> int:
     if over:
         print(f"  [失败] 回执超上限（每人 {RECEIPT_LIMIT} 笔）：{over}")
         return 1
-    print(f"  每人一行、存档库无日志类表、旧结构已除、日志库回执 ≤ {RECEIPT_LIMIT} 笔：合规（{counts}）")
+    print(f"  每人一行、存档库无日志类表、旧结构已除、日志库回执（按作用域+玩家）≤ {RECEIPT_LIMIT} 笔：合规")
     return 0
 
 

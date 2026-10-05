@@ -78,14 +78,14 @@ def _targets() -> dict[tuple, tuple[str, Any, dict]]:
 
     数据 = _库()
     库 = 数据.library()
-    return {
-        (数据.TEMPLATE_FACES[编号], tuple(序列), tuple(路径)): (
-            编号,
-            库[编号]["主体"],
-            {编号: {"主体": 库[编号]["主体"], "参数位置": 引擎模板.index_map(库[编号]["主体"])}},
-        )
-        for 编号, (序列, 路径) in 数据.TEMPLATE_CLUSTERS.items()
-    }
+    出: dict[tuple, list] = {}
+    for 编号, (序列, 路径) in 数据.TEMPLATE_CLUSTERS.items():
+        签名 = (数据.TEMPLATE_FACES[编号], tuple(序列), tuple(路径))
+        出.setdefault(签名, []).append((编号, 库[编号]["主体"],
+            {编号: {"主体": 库[编号]["主体"], "参数位置": 引擎模板.index_map(库[编号]["主体"])}}))
+    for 签名 in 出:
+        出[签名].sort(key=lambda 项: (json.dumps(项[1], ensure_ascii=False).count("$参数"), 项[0]))
+    return 出
 
 
 def _signature(effect: dict, face: str) -> tuple:
@@ -117,10 +117,13 @@ def _migrate_array(array: list, targets, face: str) -> tuple[list, int, int]:
             continue
         # 折叠后的项**同时**用于找原型和拼引用：两处必须是同一份形状。
         # 曾经拿折叠后的去找原型、又拿未折叠的去拼引用，形状不同必然失配。
-        entry = targets.get(_signature(item, face))
-        reference = (
-            _try_reference(item, entry[0], entry[1], entry[2]) if entry else None
-        )
+        candidates = targets.get(_signature(item, face))
+        reference = None
+        if candidates:
+            for 编号, 主体, 单库 in candidates:
+                reference = _try_reference(item, 编号, 主体, 单库)
+                if reference is not None:
+                    break
         if reference is None:
             skipped += 1
             new_items.append(item)
