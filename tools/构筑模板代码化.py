@@ -210,12 +210,26 @@ def main() -> int:
     parser.add_argument("--输出", default="", help="输出路径；默认写临时目录")
     parser.add_argument("--展开", action="store_true",
                         help="先把 data/ 里的引用展开成原文再挖库（数据不是原文形态时必须加）")
+    parser.add_argument("--按实例", action="store_true",
+                        help="除按形状收簇外，再为每个效果实例各铸一条专属模板（一卡一条）")
     args = parser.parse_args()
 
     if args.展开:
         _展开成原文()
 
     单元 = 模板._ranked_units(模板._collect_units())
+    if args.按实例:
+        实例单元 = []
+        for key, bucket in 模板._collect_effects().items():
+            for inst in bucket["实例"]:
+                实例单元.append({
+                    "序列": key,
+                    "签名": 模板._shape(inst[1]),
+                    "面": inst[2],
+                    "实例": [inst],
+                })
+        print(f"按实例：额外 {len(实例单元)} 个单例单元")
+        单元 = 单元 + 实例单元
     print(f"结构簇 {len(单元)} 个")
 
     条目表: dict[str, tuple] = {}
