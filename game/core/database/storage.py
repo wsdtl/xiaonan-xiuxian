@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import zlib
 import sqlite3
 import threading
 from collections.abc import Callable, Iterator, Mapping
@@ -153,6 +155,24 @@ def open_request_connections() -> Callable[[], None]:
             _REQUEST_CONNECTIONS.reset(token)
 
     return close
+
+
+_PACK_PREFIX = "gz:"
+
+
+def _pack_json(text: str) -> str:
+    """把大载荷压成 gz:base64 存库；读时由 _unpack_json 透明还原。"""
+    if not text or text.startswith(_PACK_PREFIX):
+        return text
+    return _PACK_PREFIX + base64.b64encode(zlib.compress(text.encode("utf-8"), 6)).decode("ascii")
+
+
+def _unpack_json(stored: object) -> str:
+    """还原 _pack_json 压过的载荷；老数据（未压缩）原样返回。"""
+    text = str(stored)
+    if not text.startswith(_PACK_PREFIX):
+        return text
+    return zlib.decompress(base64.b64decode(text[len(_PACK_PREFIX):])).decode("utf-8")
 
 
 # 玩家存档折叠：每玩家一行（state_type='player', state_key='main'），行内为
@@ -794,7 +814,7 @@ class SQLiteStateStore:
             ).fetchone()
         if row is None:
             return None
-        stored = json.loads(str(row[2]))
+        stored = json.loads(_unpack_json(row[2]))
         payload = stored.get("payload")
         if not isinstance(payload, dict):
             raise DatabaseError("已提交事务缺少对象载荷")
@@ -824,7 +844,7 @@ class SQLiteStateStore:
                     (command.user_id, command.request_id),
                 ).fetchone()
                 if existing is not None:
-                    stored = json.loads(str(existing[2]))
+                    stored = json.loads(_unpack_json(existing[2]))
                     if stored.get("command") != fingerprint:
                         raise IdempotencyConflictError("request_id 已提交过不同事务")
                     connection.execute("COMMIT")
@@ -885,7 +905,7 @@ class SQLiteStateStore:
                         command.user_id,
                         command.request_id,
                         command.business_type,
-                        _encode_ready(changes_json),
+                        _pack_json(_encode_ready(changes_json)),
                         committed_at,
                     ),
                 )
@@ -1353,7 +1373,7 @@ def _receipt_from_row(
     *,
     replayed: bool,
 ) -> TransactionReceipt:
-    stored = json.loads(str(row[2]))
+    stored = json.loads(_unpack_json(row[2]))
     changes = tuple(
         MutationChange(
             str(change.get("scope", "player_state")),
