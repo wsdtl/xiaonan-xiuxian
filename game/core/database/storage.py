@@ -222,6 +222,13 @@ def _logical_key(state_type: str, state_key: str) -> str:
 def _load_logical_state(connection, user_id: str) -> dict[str, dict[str, object]]:
     """读出某玩家全部逻辑状态（自动合并老形态的行）。"""
     entries: dict[str, dict[str, object]] = {}
+    blob = connection.execute(
+        "SELECT state_json FROM player_state WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    if blob is not None:
+        for key, entry in json.loads(str(blob[0])).items():
+            entries[str(key)] = entry
+        return entries
     for row in connection.execute(
         "SELECT state_type, state_key, state_json, version, updated_at "
         "FROM state_snapshot WHERE user_id = ?",
@@ -249,11 +256,14 @@ def _load_logical_state(connection, user_id: str) -> dict[str, dict[str, object]
 def _store_logical_state(connection, user_id: str, payload, committed_at: str) -> None:
     """整体写回单行，并清掉该玩家残留的老形态行。"""
     current = connection.execute(
-        "SELECT version FROM state_snapshot "
-        "WHERE user_id = ? AND state_type = ? AND state_key = ?",
-        (user_id, _BLOB_TYPE, _BLOB_KEY),
+        "SELECT version FROM player_state WHERE user_id = ?", (user_id,)
     ).fetchone()
     next_row_version = (int(current[0]) + 1) if current is not None else 1
+    connection.execute("DELETE FROM player_state WHERE user_id = ?", (user_id,))
+    connection.execute(
+        "INSERT INTO player_state (user_id, state_json, version, updated_at) VALUES (?, ?, ?, ?)",
+        (user_id, json.dumps(payload, ensure_ascii=False, sort_keys=True), next_row_version, committed_at),
+    )
     connection.execute(
         "DELETE FROM state_snapshot WHERE user_id = ? AND NOT (state_type = ? AND state_key = ?)",
         (user_id, _BLOB_TYPE, _BLOB_KEY),
@@ -317,7 +327,13 @@ class SQLiteStateStore:
                     space_type TEXT NOT NULL,
                     space_id TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS ix_state_snapshot_user
+                CREATE TABLE IF NOT EXISTS player_state (
+                user_id TEXT PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                version INTEGER NOT NULL CHECK (version > 0),
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_state_snapshot_user
                 ON state_snapshot(user_id, state_type);
                 CREATE INDEX IF NOT EXISTS ix_committed_transaction_user
                 ON committed_transaction(user_id, committed_at);
