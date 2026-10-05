@@ -155,6 +155,72 @@ def open_request_connections() -> Callable[[], None]:
     return close
 
 
+# 玩家存档折叠：每玩家一行（state_type='player', state_key='main'），行内为
+# { "类型/键": {"值": …, "版本": n, "时间": …} }；老形态（一个状态键一行）读写时现场合并。
+_BLOB_TYPE = "player"
+_BLOB_KEY = "main"
+
+
+def _逻辑键(state_type: str, state_key: str) -> str:
+    return f"{state_type}/{state_key}"
+
+
+def _读逻辑状态(connection: sqlite3.Connection, user_id: str) -> dict[str, dict[str, object]]:
+    """读出某玩家全部逻辑状态（自动合并老形态的行）。"""
+    条目: dict[str, dict[str, object]] = {}
+    for 行 in connection.execute(
+        "SELECT state_type, state_key, state_json, version, updated_at "
+        "FROM state_snapshot WHERE user_id = ?",
+        (user_id,),
+    ).fetchall():
+        state_type, state_key, state_json, version, updated_at = 行
+        if str(state_type) == _BLOB_TYPE and str(state_key) == _BLOB_KEY:
+            continue
+        条目[_逻辑键(str(state_type), str(state_key))] = {
+            "值": json.loads(str(state_json)),
+            "版本": int(version),
+            "时间": str(updated_at),
+        }
+    行 = connection.execute(
+        "SELECT state_json FROM state_snapshot "
+        "WHERE user_id = ? AND state_type = ? AND state_key = ?",
+        (user_id, _BLOB_TYPE, _BLOB_KEY),
+    ).fetchone()
+    if 行 is not None:
+        for 键, 项 in json.loads(str(行[0])).items():
+            条目[str(键)] = 项
+    return 条目
+
+
+def _写逻辑状态(
+    connection: sqlite3.Connection,
+    user_id: str,
+    payload: dict[str, dict[str, object]],
+    committed_at: str,
+) -> None:
+    """整体写回单行，并清掉该玩家残留的老形态行。"""
+    现有 = connection.execute(
+        "SELECT version FROM state_snapshot "
+        "WHERE user_id = ? AND state_type = ? AND state_key = ?",
+        (user_id, _BLOB_TYPE, _BLOB_KEY),
+    ).fetchone()
+    新版本 = (int(现有[0]) + 1) if 现有 is not None else 1
+    connection.execute(
+        "DELETE FROM state_snapshot WHERE user_id = ? AND NOT (state_type = ? AND state_key = ?)",
+        (user_id, _BLOB_TYPE, _BLOB_KEY),
+    )
+    connection.execute(
+        "DELETE FROM state_snapshot WHERE user_id = ? AND state_type = ? AND state_key = ?",
+        (user_id, _BLOB_TYPE, _BLOB_KEY),
+    )
+    connection.execute(
+        "INSERT INTO state_snapshot (user_id, state_type, state_key, state_json, version, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (user_id, _BLOB_TYPE, _BLOB_KEY,
+         json.dumps(payload, ensure_ascii=False, sort_keys=True), 新版本, committed_at),
+    )
+
+
 class SQLiteStateStore:
     """玩家状态、位置与幂等事务的 SQLite 仓储。"""
 
@@ -519,15 +585,11 @@ class SQLiteStateStore:
         self._require_initialized()
         _validate_address(address)
         with self._connect(reusable=True) as connection:
-            row = connection.execute(
-                """
-                SELECT state_json, version, updated_at
-                FROM state_snapshot
-                WHERE user_id = ? AND state_type = ? AND state_key = ?
-                """,
-                (address.user_id, address.state_type, address.state_key),
-            ).fetchone()
-        return _snapshot(address, row) if row is not None else None
+            条目 = _读逻辑状态(connection, address.user_id)
+        项 = 条目.get(_逻辑键(address.state_type, address.state_key))
+        if 项 is None:
+            return None
+        return StateSnapshot(address, _freeze_json(项["值"]), int(项["版本"]), str(项["时间"]))
 
     def list_for_user(
         self, user_id: str, state_type: str | None = None
@@ -536,24 +598,16 @@ class SQLiteStateStore:
         _validate_text(user_id, "user_id")
         if state_type is not None:
             _validate_text(state_type, "state_type")
-        query = (
-            "SELECT state_type, state_key, state_json, version, updated_at "
-            "FROM state_snapshot WHERE user_id = ?"
-        )
-        parameters: list[object] = [user_id]
-        if state_type is not None:
-            query += " AND state_type = ?"
-            parameters.append(state_type)
-        query += " ORDER BY state_type, state_key"
         with self._connect(reusable=True) as connection:
-            rows = connection.execute(query, parameters).fetchall()
-        return tuple(
-            _snapshot(
-                StateAddress(user_id, str(row[0]), str(row[1])),
-                row[2:],
-            )
-            for row in rows
-        )
+            条目 = _读逻辑状态(connection, user_id)
+        出: list[StateSnapshot] = []
+        for 键 in sorted(条目, key=lambda 名: tuple(名.split("/", 1))):
+            类型, 键名 = 键.split("/", 1)
+            if state_type is not None and 类型 != state_type:
+                continue
+            项 = 条目[键]
+            出.append(StateSnapshot(StateAddress(user_id, 类型, 键名), _freeze_json(项["值"]), int(项["版本"]), str(项["时间"])))
+        return tuple(出)
 
     def get_many(
         self, addresses: tuple[StateAddress, ...]
@@ -567,35 +621,18 @@ class SQLiteStateStore:
             {(item.user_id, item.state_type, item.state_key) for item in addresses}
         ):
             raise ValueError("批量状态地址不能重复")
-        snapshots: dict[tuple[str, str, str], StateSnapshot] = {}
+        快照: dict[tuple[str, str, str], StateSnapshot] = {}
         with self._connect(reusable=True) as connection:
-            for chunk in _chunks(addresses, 300):
-                placeholders = ",".join("(?, ?, ?)" for _ in chunk)
-                parameters = tuple(
-                    value
-                    for address in chunk
-                    for value in (
-                        address.user_id,
-                        address.state_type,
-                        address.state_key,
+            for 用户 in sorted({item.user_id for item in addresses}):
+                for 键, 项 in _读逻辑状态(connection, 用户).items():
+                    类型, 键名 = 键.split("/", 1)
+                    快照[(用户, 类型, 键名)] = StateSnapshot(
+                        StateAddress(用户, 类型, 键名), _freeze_json(项["值"]), int(项["版本"]), str(项["时间"])
                     )
-                )
-                rows = connection.execute(
-                    f"""
-                    SELECT user_id, state_type, state_key, state_json, version, updated_at
-                    FROM state_snapshot
-                    WHERE (user_id, state_type, state_key) IN ({placeholders})
-                    """,
-                    parameters,
-                ).fetchall()
-                for row in rows:
-                    key = (str(row[0]), str(row[1]), str(row[2]))
-                    snapshots[key] = _snapshot(StateAddress(*key), row[3:])
         return tuple(
-            snapshots[key]
+            快照[(address.user_id, address.state_type, address.state_key)]
             for address in addresses
-            if (key := (address.user_id, address.state_type, address.state_key))
-            in snapshots
+            if (address.user_id, address.state_type, address.state_key) in 快照
         )
 
     def get_location(self, user_id: str) -> LocationRecord | None:
@@ -906,81 +943,30 @@ def _apply_mutation(
     mutation: StateMutation,
     committed_at: str,
 ) -> MutationChange:
-    row = connection.execute(
-        """
-        SELECT state_json, version
-        FROM state_snapshot
-        WHERE user_id = ? AND state_type = ? AND state_key = ?
-        """,
-        (mutation.user_id, mutation.state_type, mutation.state_key),
-    ).fetchone()
-    current_version = int(row[1]) if row is not None else 0
+    条目 = _读逻辑状态(connection, mutation.user_id)
+    键 = _逻辑键(mutation.state_type, mutation.state_key)
+    现有 = 条目.get(键)
+    current_version = int(现有["版本"]) if 现有 is not None else 0
     if current_version != mutation.expected_version:
         raise StateConflictError(
             f"状态版本冲突：{mutation.state_type}/{mutation.state_key} "
             f"期望 {mutation.expected_version}，实际 {current_version}"
         )
     if mutation.value is None:
-        if row is None:
+        if 现有 is None:
             raise StateConflictError("不能删除不存在的状态")
-        connection.execute(
-            "DELETE FROM state_snapshot WHERE user_id = ? AND state_type = ? AND state_key = ?",
-            (mutation.user_id, mutation.state_type, mutation.state_key),
-        )
+        条目.pop(键)
+        _写逻辑状态(connection, mutation.user_id, 条目, committed_at)
         return MutationChange(
-            "player_state",
-            mutation.user_id,
-            mutation.state_type,
-            mutation.state_key,
-            "delete",
-            current_version,
-            None,
+            "player_state", mutation.user_id, mutation.state_type, mutation.state_key,
+            "delete", current_version, None,
         )
-
-    encoded = _encode(mutation.value)
     next_version = current_version + 1
-    if row is None:
-        connection.execute(
-            """
-            INSERT INTO state_snapshot (
-                user_id, state_type, state_key, state_json, version, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                mutation.user_id,
-                mutation.state_type,
-                mutation.state_key,
-                encoded,
-                next_version,
-                committed_at,
-            ),
-        )
-        operation = "insert"
-    else:
-        connection.execute(
-            """
-            UPDATE state_snapshot
-            SET state_json = ?, version = ?, updated_at = ?
-            WHERE user_id = ? AND state_type = ? AND state_key = ?
-            """,
-            (
-                encoded,
-                next_version,
-                committed_at,
-                mutation.user_id,
-                mutation.state_type,
-                mutation.state_key,
-            ),
-        )
-        operation = "update"
+    条目[键] = {"值": json.loads(_encode(mutation.value)), "版本": next_version, "时间": committed_at}
+    _写逻辑状态(connection, mutation.user_id, 条目, committed_at)
     return MutationChange(
-        "player_state",
-        mutation.user_id,
-        mutation.state_type,
-        mutation.state_key,
-        operation,
-        current_version or None,
-        next_version,
+        "player_state", mutation.user_id, mutation.state_type, mutation.state_key,
+        "insert" if 现有 is None else "update", current_version or None, next_version,
     )
 
 
