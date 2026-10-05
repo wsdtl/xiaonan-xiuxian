@@ -219,66 +219,25 @@ def _logical_key(state_type: str, state_key: str) -> str:
     return f"{state_type}/{state_key}"
 
 
-def _load_logical_state(connection, user_id: str) -> dict[str, dict[str, object]]:
-    """读出某玩家全部逻辑状态（自动合并老形态的行）。"""
+def _load_logical_state(connection: sqlite3.Connection, user_id: str) -> dict[str, dict[str, object]]:
+    """读出某玩家全部逻辑状态（只认 player_state，一人一行）。"""
     entries: dict[str, dict[str, object]] = {}
-    blob = connection.execute(
-        "SELECT state_json FROM player_state WHERE user_id = ?", (user_id,)
-    ).fetchone()
-    if blob is not None:
-        for key, entry in json.loads(str(blob[0])).items():
-            entries[str(key)] = entry
+    blob = connection.execute("SELECT state_json FROM player_state WHERE user_id = ?", (user_id,)).fetchone()
+    if blob is None:
         return entries
-    for row in connection.execute(
-        "SELECT state_type, state_key, state_json, version, updated_at "
-        "FROM state_snapshot WHERE user_id = ?",
-        (user_id,),
-    ).fetchall():
-        state_type, state_key, state_json, version, updated_at = row
-        if str(state_type) == _BLOB_TYPE and str(state_key) == _BLOB_KEY:
-            continue
-        entries[_logical_key(str(state_type), str(state_key))] = {
-            _ENTRY_VALUE: json.loads(str(state_json)),
-            _ENTRY_VERSION: int(version),
-            _ENTRY_UPDATED: str(updated_at),
-        }
-    blob = connection.execute(
-        "SELECT state_json FROM state_snapshot "
-        "WHERE user_id = ? AND state_type = ? AND state_key = ?",
-        (user_id, _BLOB_TYPE, _BLOB_KEY),
-    ).fetchone()
-    if blob is not None:
-        for key, entry in json.loads(str(blob[0])).items():
-            entries[str(key)] = entry
+    for key, entry in json.loads(str(blob[0])).items():
+        entries[str(key)] = entry
     return entries
 
-
-def _store_logical_state(connection, user_id: str, payload, committed_at: str) -> None:
-    """整体写回单行，并清掉该玩家残留的老形态行。"""
-    current = connection.execute(
-        "SELECT version FROM player_state WHERE user_id = ?", (user_id,)
-    ).fetchone()
+def _store_logical_state(connection: sqlite3.Connection, user_id: str, payload, committed_at: str) -> None:
+    """整体写回 player_state 单行（每人一行）。"""
+    current = connection.execute("SELECT version FROM player_state WHERE user_id = ?", (user_id,)).fetchone()
     next_row_version = (int(current[0]) + 1) if current is not None else 1
     connection.execute("DELETE FROM player_state WHERE user_id = ?", (user_id,))
     connection.execute(
         "INSERT INTO player_state (user_id, state_json, version, updated_at) VALUES (?, ?, ?, ?)",
         (user_id, json.dumps(payload, ensure_ascii=False, sort_keys=True), next_row_version, committed_at),
     )
-    connection.execute(
-        "DELETE FROM state_snapshot WHERE user_id = ? AND NOT (state_type = ? AND state_key = ?)",
-        (user_id, _BLOB_TYPE, _BLOB_KEY),
-    )
-    connection.execute(
-        "DELETE FROM state_snapshot WHERE user_id = ? AND state_type = ? AND state_key = ?",
-        (user_id, _BLOB_TYPE, _BLOB_KEY),
-    )
-    connection.execute(
-        "INSERT INTO state_snapshot (user_id, state_type, state_key, state_json, version, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, _BLOB_TYPE, _BLOB_KEY,
-         json.dumps(payload, ensure_ascii=False, sort_keys=True), next_row_version, committed_at),
-    )
-
 
 class SQLiteStateStore:
     """玩家状态、位置与幂等事务的 SQLite 仓储。"""
@@ -297,16 +256,7 @@ class SQLiteStateStore:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(
                 """
-                CREATE TABLE IF NOT EXISTS state_snapshot (
-                    user_id TEXT NOT NULL,
-                    state_type TEXT NOT NULL,
-                    state_key TEXT NOT NULL,
-                    state_json TEXT NOT NULL,
-                    version INTEGER NOT NULL CHECK (version > 0),
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (user_id, state_type, state_key)
-                );
-                CREATE TABLE IF NOT EXISTS committed_transaction (
+                                CREATE TABLE IF NOT EXISTS committed_transaction (
                     transaction_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     request_id TEXT NOT NULL,
@@ -333,8 +283,6 @@ class SQLiteStateStore:
                 version INTEGER NOT NULL CHECK (version > 0),
                 updated_at TEXT NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS ix_state_snapshot_user
-                ON state_snapshot(user_id, state_type);
                 CREATE INDEX IF NOT EXISTS ix_committed_transaction_user
                 ON committed_transaction(user_id, committed_at);
                 CREATE INDEX IF NOT EXISTS ix_player_location_xy
@@ -388,7 +336,7 @@ class SQLiteStateStore:
         self._require_initialized()
         with self._connect(reusable=True) as connection:
             state_count = int(
-                connection.execute("SELECT COUNT(*) FROM state_snapshot").fetchone()[0]
+                connection.execute("SELECT COUNT(*) FROM player_state").fetchone()[0]
             )
             location_count = int(
                 connection.execute("SELECT COUNT(*) FROM player_location").fetchone()[0]
