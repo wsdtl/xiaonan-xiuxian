@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import zlib
+import pathlib
 import sqlite3
+import time
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
@@ -161,34 +164,91 @@ _RECEIPT_LIMIT_PER_USER = 100
 """每个玩家保留的幂等回执条数上限。回执只需覆盖"重放一次"的窗口，不需要长期历史。"""
 
 
-def _prune_receipts(connection: sqlite3.Connection, keep_per_user: int) -> int:
-    """每个玩家只保留最近 keep_per_user 笔幂等回执（复用调用方连接，避免写事务中再开连接）。"""
-    removed = 0
-    owners = [
-        str(row[0])
-        for row in connection.execute(
-            "SELECT DISTINCT user_id FROM committed_transaction"
-        ).fetchall()
-    ]
-    for owner in owners:
-        found = int(
-            connection.execute(
-                "SELECT COUNT(*) FROM committed_transaction WHERE user_id = ?", (owner,)
-            ).fetchone()[0]
-        )
-        if found <= keep_per_user:
-            continue
-        connection.execute(
-            "DELETE FROM committed_transaction WHERE user_id = ? AND rowid NOT IN "
-            "(SELECT rowid FROM committed_transaction WHERE user_id = ? "
-            " ORDER BY rowid DESC LIMIT ?)",
-            (owner, owner, keep_per_user),
-        )
-        removed += found - keep_per_user
-    return removed
-
-
 _PACK_PREFIX = "gz:"
+_RECEIPT_LIMIT_PER_USER = 100
+
+
+_RECEIPT_TTL_SECONDS = 7 * 24 * 3600
+
+
+def _log_db_path() -> pathlib.Path:
+    from launch.battle_log import runtime_log_database_path
+
+    return pathlib.Path(runtime_log_database_path())
+
+
+def _log_connection() -> sqlite3.Connection:
+    connection = sqlite3.connect(_log_db_path())
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS log_committed_transactions (
+            transaction_id TEXT PRIMARY KEY,
+            user_id        TEXT NOT NULL,
+            request_id     TEXT NOT NULL,
+            business_type  TEXT NOT NULL,
+            changes_json   TEXT NOT NULL,
+            committed_at   TEXT NOT NULL,
+            expires_at     REAL NOT NULL,
+            scope          TEXT NOT NULL DEFAULT ''
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_log_committed_user_request "
+        "ON log_committed_transactions(scope, user_id, request_id)"
+    )
+    return connection
+
+
+def _read_log_receipt(scope: str, user_id: str, request_id: str):
+    connection = _log_connection()
+    try:
+        return connection.execute(
+            "SELECT transaction_id, business_type, changes_json, committed_at "
+            "FROM log_committed_transactions "
+            "WHERE scope = ? AND user_id = ? AND request_id = ? AND expires_at > ?",
+            (scope, user_id, request_id, time.time()),
+        ).fetchone()
+    finally:
+        connection.close()
+
+
+def _write_log_receipt(scope, transaction_id, user_id, request_id, business_type, changes_json, committed_at) -> None:
+    connection = _log_connection()
+    try:
+        connection.execute(
+            "INSERT OR REPLACE INTO log_committed_transactions "
+            "(transaction_id, user_id, request_id, business_type, changes_json, committed_at, expires_at, scope) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (transaction_id, user_id, request_id, business_type, changes_json,
+             committed_at, time.time() + _RECEIPT_TTL_SECONDS, scope),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _prune_log_receipts(scope: str, keep_per_user: int) -> int:
+    connection = _log_connection()
+    removed = 0
+    try:
+        owners = [str(r[0]) for r in connection.execute(
+            "SELECT DISTINCT user_id FROM log_committed_transactions WHERE scope = ?", (scope,)).fetchall()]
+        for owner in owners:
+            found = int(connection.execute(
+                "SELECT COUNT(*) FROM log_committed_transactions WHERE scope = ? AND user_id = ?",
+                (scope, owner)).fetchone()[0])
+            if found <= keep_per_user:
+                continue
+            connection.execute(
+                "DELETE FROM log_committed_transactions WHERE scope = ? AND user_id = ? AND rowid NOT IN "
+                "(SELECT rowid FROM log_committed_transactions WHERE scope = ? AND user_id = ? ORDER BY rowid DESC LIMIT ?)",
+                (scope, owner, scope, owner, keep_per_user))
+            removed += found - keep_per_user
+        connection.commit()
+    finally:
+        connection.close()
+    return removed
 
 
 def _pack_json(text: str) -> str:
@@ -327,10 +387,12 @@ class SQLiteStateStore:
         self._initialized = True
 
     def prune_receipts(self, keep_per_user: int = _RECEIPT_LIMIT_PER_USER) -> int:
-        """每个玩家只保留最近 keep_per_user 笔幂等回执，返回删除行数。"""
         self._require_initialized()
-        with self._connect() as connection:
-            return _prune_receipts(connection, keep_per_user)
+        return _prune_log_receipts(self._receipt_scope(), keep_per_user)
+
+    def _receipt_scope(self) -> str:
+        """回执作用域：按存档库路径隔离。"""
+        return hashlib.sha1(str(self.path.resolve()).encode("utf-8")).hexdigest()[:16]
 
     def counts(self) -> tuple[int, int, int, int, int, int]:
         self._require_initialized()
@@ -798,21 +860,11 @@ class SQLiteStateStore:
                 )
         return tuple(result)
 
-    def committed_transaction(
-        self, user_id: str, request_id: str
-    ) -> CommittedTransaction | None:
-        """只读取得一次已经提交的幂等事务。"""
+    def committed_transaction(self, user_id: str, request_id: str) -> CommittedTransaction | None:
+        """只读取得一次已经提交的幂等事务（回执住在日志库）。"""
 
         self._require_initialized()
-        with self._connect(reusable=True) as connection:
-            row = connection.execute(
-                """
-                SELECT transaction_id, business_type, changes_json, committed_at
-                FROM committed_transaction
-                WHERE user_id = ? AND request_id = ?
-                """,
-                (user_id, request_id),
-            ).fetchone()
+        row = _read_log_receipt(self._receipt_scope(), user_id, request_id)
         if row is None:
             return None
         stored = json.loads(_unpack_json(row[2]))
@@ -820,10 +872,7 @@ class SQLiteStateStore:
         if not isinstance(payload, dict):
             raise DatabaseError("已提交事务缺少对象载荷")
         command = TransactionCommand(user_id, request_id, str(row[1]), (), {})
-        return CommittedTransaction(
-            _receipt_from_row(command, row, replayed=True),
-            _freeze_json(payload),
-        )
+        return CommittedTransaction(_receipt_from_row(command, row, replayed=True), _freeze_json(payload))
 
     def commit(self, command: TransactionCommand) -> TransactionReceipt:
         self._require_initialized()
@@ -836,20 +885,12 @@ class SQLiteStateStore:
         with self._write_lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
-                existing = connection.execute(
-                    """
-                    SELECT transaction_id, business_type, changes_json, committed_at
-                    FROM committed_transaction
-                    WHERE user_id = ? AND request_id = ?
-                    """,
-                    (command.user_id, command.request_id),
-                ).fetchone()
+                existing = _read_log_receipt(self._receipt_scope(), command.user_id, command.request_id)
                 if existing is not None:
                     stored = json.loads(_unpack_json(existing[2]))
                     if stored.get("command") != fingerprint:
                         raise IdempotencyConflictError("request_id 已提交过不同事务")
                     connection.execute("COMMIT")
-                    _prune_receipts(connection, _RECEIPT_LIMIT_PER_USER)
                     return _receipt_from_row(command, existing, replayed=True)
 
                 changes: list[MutationChange] = []
@@ -895,26 +936,15 @@ class SQLiteStateStore:
                 # 这三部分都已经过 `_json_value`（`_command_json` / `_shared_entity_storage`
                 # 内含），`changes` 全是标量，所以直接编码；再走一趟规范化只是把同一棵
                 # 58 万字符的树又爬一遍。
-                connection.execute(
-                    """
-                    INSERT INTO committed_transaction (
-                        transaction_id, user_id, request_id, business_type,
-                        changes_json, committed_at
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        transaction_id,
-                        command.user_id,
-                        command.request_id,
-                        command.business_type,
-                        _pack_json(_encode_ready(changes_json)),
-                        committed_at,
-                    ),
-                )
                 connection.execute("COMMIT")
             except Exception:
                 connection.execute("ROLLBACK")
                 raise
+        _write_log_receipt(
+            self._receipt_scope(), transaction_id, command.user_id, command.request_id,
+            command.business_type, _pack_json(_encode_ready(changes_json)), committed_at,
+        )
+        _prune_log_receipts(self._receipt_scope(), _RECEIPT_LIMIT_PER_USER)
         return TransactionReceipt(
             transaction_id=transaction_id,
             user_id=command.user_id,
