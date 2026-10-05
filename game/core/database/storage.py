@@ -157,6 +157,37 @@ def open_request_connections() -> Callable[[], None]:
     return close
 
 
+_RECEIPT_LIMIT_PER_USER = 100
+"""每个玩家保留的幂等回执条数上限。回执只需覆盖"重放一次"的窗口，不需要长期历史。"""
+
+
+def _prune_receipts(connection: sqlite3.Connection, keep_per_user: int) -> int:
+    """每个玩家只保留最近 keep_per_user 笔幂等回执（复用调用方连接，避免写事务中再开连接）。"""
+    removed = 0
+    owners = [
+        str(row[0])
+        for row in connection.execute(
+            "SELECT DISTINCT user_id FROM committed_transaction"
+        ).fetchall()
+    ]
+    for owner in owners:
+        found = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM committed_transaction WHERE user_id = ?", (owner,)
+            ).fetchone()[0]
+        )
+        if found <= keep_per_user:
+            continue
+        connection.execute(
+            "DELETE FROM committed_transaction WHERE user_id = ? AND rowid NOT IN "
+            "(SELECT rowid FROM committed_transaction WHERE user_id = ? "
+            " ORDER BY rowid DESC LIMIT ?)",
+            (owner, owner, keep_per_user),
+        )
+        removed += found - keep_per_user
+    return removed
+
+
 _PACK_PREFIX = "gz:"
 
 
@@ -330,6 +361,12 @@ class SQLiteStateStore:
                 """
             )
         self._initialized = True
+
+    def prune_receipts(self, keep_per_user: int = _RECEIPT_LIMIT_PER_USER) -> int:
+        """每个玩家只保留最近 keep_per_user 笔幂等回执，返回删除行数。"""
+        self._require_initialized()
+        with self._connect() as connection:
+            return _prune_receipts(connection, keep_per_user)
 
     def counts(self) -> tuple[int, int, int, int, int, int]:
         self._require_initialized()
@@ -848,6 +885,7 @@ class SQLiteStateStore:
                     if stored.get("command") != fingerprint:
                         raise IdempotencyConflictError("request_id 已提交过不同事务")
                     connection.execute("COMMIT")
+                    _prune_receipts(connection, _RECEIPT_LIMIT_PER_USER)
                     return _receipt_from_row(command, existing, replayed=True)
 
                 changes: list[MutationChange] = []
