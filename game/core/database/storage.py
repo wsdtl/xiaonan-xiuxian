@@ -200,6 +200,25 @@ def _log_connection() -> sqlite3.Connection:
     return connection
 
 
+def _read_log_receipt_on(connection, scope: str, user_id: str, request_id: str):
+    return connection.execute(
+        "SELECT transaction_id, business_type, changes_json, committed_at "
+        "FROM log_committed_transactions "
+        "WHERE scope = ? AND user_id = ? AND request_id = ? AND expires_at > ?",
+        (scope, user_id, request_id, time.time()),
+    ).fetchone()
+
+
+def _write_log_receipt_on(connection, scope, transaction_id, user_id, request_id, business_type, changes_json, committed_at) -> None:
+    connection.execute(
+        "INSERT OR REPLACE INTO log_committed_transactions "
+        "(transaction_id, user_id, request_id, business_type, changes_json, committed_at, expires_at, scope) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (transaction_id, user_id, request_id, business_type, changes_json,
+         committed_at, time.time() + _RECEIPT_TTL_SECONDS, scope),
+    )
+
+
 def _read_log_receipt(scope: str, user_id: str, request_id: str):
     connection = _log_connection()
     try:
@@ -224,6 +243,15 @@ def _write_log_receipt(scope, transaction_id, user_id, request_id, business_type
              committed_at, time.time() + _RECEIPT_TTL_SECONDS, scope),
         )
         connection.commit()
+    finally:
+        connection.close()
+
+
+def _count_log_receipts(scope: str) -> int:
+    connection = _log_connection()
+    try:
+        return int(connection.execute(
+            "SELECT COUNT(*) FROM log_committed_transactions WHERE scope = ?", (scope,)).fetchone()[0])
     finally:
         connection.close()
 
@@ -316,16 +344,7 @@ class SQLiteStateStore:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.executescript(
                 """
-                                CREATE TABLE IF NOT EXISTS committed_transaction (
-                    transaction_id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    request_id TEXT NOT NULL,
-                    business_type TEXT NOT NULL,
-                    changes_json TEXT NOT NULL,
-                    committed_at TEXT NOT NULL,
-                    UNIQUE (user_id, request_id)
-                );
-                CREATE TABLE IF NOT EXISTS player_location (
+                                                CREATE TABLE IF NOT EXISTS player_location (
                     user_id TEXT PRIMARY KEY,
                     x INTEGER NOT NULL,
                     y INTEGER NOT NULL,
@@ -343,8 +362,6 @@ class SQLiteStateStore:
                 version INTEGER NOT NULL CHECK (version > 0),
                 updated_at TEXT NOT NULL
             );
-                CREATE INDEX IF NOT EXISTS ix_committed_transaction_user
-                ON committed_transaction(user_id, committed_at);
                 CREATE INDEX IF NOT EXISTS ix_player_location_xy
                 ON player_location(x, y, user_id);
                 CREATE TABLE IF NOT EXISTS shared_entity (
@@ -403,11 +420,7 @@ class SQLiteStateStore:
             location_count = int(
                 connection.execute("SELECT COUNT(*) FROM player_location").fetchone()[0]
             )
-            transaction_count = int(
-                connection.execute(
-                    "SELECT COUNT(*) FROM committed_transaction"
-                ).fetchone()[0]
-            )
+            transaction_count = _count_log_receipts(self._receipt_scope())
             shared_entity_count = int(
                 connection.execute("SELECT COUNT(*) FROM shared_entity").fetchone()[0]
             )
@@ -884,13 +897,19 @@ class SQLiteStateStore:
         committed_at = _now()
         with self._write_lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            log_connection = _log_connection()
+            log_connection.execute("BEGIN IMMEDIATE")
             try:
-                existing = _read_log_receipt(self._receipt_scope(), command.user_id, command.request_id)
+                existing = _read_log_receipt_on(
+                    log_connection, self._receipt_scope(), command.user_id, command.request_id
+                )
                 if existing is not None:
                     stored = json.loads(_unpack_json(existing[2]))
                     if stored.get("command") != fingerprint:
                         raise IdempotencyConflictError("request_id 已提交过不同事务")
                     connection.execute("COMMIT")
+                    log_connection.rollback()
+                    log_connection.close()
                     return _receipt_from_row(command, existing, replayed=True)
 
                 changes: list[MutationChange] = []
@@ -939,11 +958,16 @@ class SQLiteStateStore:
                 connection.execute("COMMIT")
             except Exception:
                 connection.execute("ROLLBACK")
+                log_connection.rollback()
+                log_connection.close()
                 raise
-        _write_log_receipt(
-            self._receipt_scope(), transaction_id, command.user_id, command.request_id,
-            command.business_type, _pack_json(_encode_ready(changes_json)), committed_at,
+        _write_log_receipt_on(
+            log_connection, self._receipt_scope(), transaction_id, command.user_id,
+            command.request_id, command.business_type,
+            _pack_json(_encode_ready(changes_json)), committed_at,
         )
+        log_connection.commit()
+        log_connection.close()
         _prune_log_receipts(self._receipt_scope(), _RECEIPT_LIMIT_PER_USER)
         return TransactionReceipt(
             transaction_id=transaction_id,
