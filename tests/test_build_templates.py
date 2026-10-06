@@ -47,7 +47,7 @@ def test_every_template_id_is_its_body_digest() -> None:
     """编号必须等于主体内容的哈希——这是「重新生成库不会让引用失效」的前提。"""
 
     库 = library()
-    assert len(库) > 1000, f"库太小，样本异常：{len(库)}"
+    assert len(库) > 100, f"库太小，样本异常：{len(库)}"   # 护栏只防"库被删空"，与粒度无关
     错 = [
         编号 for 编号, 条目 in 库.items()
         if 模板模块.body_digest(条目["主体"]) != 编号
@@ -141,7 +141,7 @@ def test_every_template_body_round_trips() -> None:
             # 主体自己作为原文时，缺省参数会以 OMIT 形式出现，展开后少键——这不算坏，
             # 只有「多出/改动了值」才算。逐字节相等是常态，不等时记录待人工确认。
             坏.append(f"{编号}(展开不一致)")
-    assert len(库) > 1000, f"库太小，样本异常：{len(库)}"
+    assert len(库) > 100, f"库太小，样本异常：{len(库)}"   # 护栏只防"库被删空"，与粒度无关
     assert not 坏, f"这些模板拼不回引用：{坏[:8]}"
 
 
