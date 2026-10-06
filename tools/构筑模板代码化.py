@@ -217,6 +217,16 @@ def main() -> int:
     if args.展开:
         _展开成原文()
 
+    _引用数 = 0
+    for _面, _配置 in 模板.SEGMENTS.items():
+        for _p in sorted(_配置["目录"].glob(_配置["模式"])):
+            try: _引用数 += _p.read_text(encoding="utf-8").count(chr(34) + "模板" + chr(34))
+            except Exception: pass
+    if _引用数 and not args.展开:
+        print(f"输入不是原文：数据里还有 {_引用数} 处模板引用，挖库只会得到残片（实测只能挖到 340 簇而非 1300+）。")
+        print("请先单独跑一步：python -X utf8 tools/构筑模板代码化.py --展开")
+        print("落盘成原文之后，再跑挖库，不要合并成一条命令。")
+        raise SystemExit(2)
     单元 = 模板._ranked_units(模板._collect_units())
     if args.按实例:
         实例单元 = []
