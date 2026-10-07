@@ -37,9 +37,23 @@ class _就绪:
         return SimpleNamespace(initialized=True)
 
 
+_共享数据: JsonDataService | None = None
+
+
+def _数据() -> JsonDataService:
+    """整个模块共用一份只读快照——每例重建一次数据服务是纯浪费。"""
+
+    global _共享数据
+    if _共享数据 is None:
+        _共享数据 = JsonDataService(DATA)
+        _共享数据.initialize()
+    return _共享数据
+
+
 def _服务(tree: pathlib.Path | None = None) -> ActionGroupService:
-    data = JsonDataService(tree or DATA)
-    data.initialize()
+    data = _数据() if tree is None else JsonDataService(tree)
+    if tree is not None:
+        data.initialize()
     return ActionGroupService(data, _就绪(), _就绪())
 
 
@@ -69,7 +83,7 @@ def test_自报清单外的动作拒绝启动() -> None:
 
 
 def _改过的数据树(tmp_path: pathlib.Path, 清单: object) -> pathlib.Path:
-    tree = pathlib.Path(shutil.copytree(DATA, tmp_path / "data"))
+    tree = pathlib.Path(shutil.copytree(DATA, tmp_path / "data", copy_function=shutil.copyfile))
     rules = tree / "宗门" / "规则" / "宗门.json"
     raw = json.loads(rules.read_text(encoding="utf-8"))
     raw["同行"]["共同行动"] = 清单

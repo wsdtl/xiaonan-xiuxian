@@ -14,7 +14,7 @@ DATA = Path(__file__).resolve().parents[1] / "data"
 
 @pytest.fixture
 def tree(tmp_path):
-    return Path(shutil.copytree(DATA, tmp_path / "data"))
+    return Path(shutil.copytree(DATA, tmp_path / "data", copy_function=shutil.copyfile))
 
 
 @pytest.mark.parametrize("fault", ["missing", "foreign", "unknown", "identity", "unmatched"])
