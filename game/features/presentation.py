@@ -66,6 +66,33 @@ def project_buttons(
     )
 
 
+#: 按钮「行为」的白名单。
+BUTTON_BEHAVIORS = frozenset({"callback", "send", "fill", "link"})
+
+
+def project_unique_buttons(
+    rows: object,
+    *,
+    label: str,
+    keys: tuple[str, ...] = BUTTON_KEYS_WITHOUT_CONDITION,
+) -> tuple[Button, ...]:
+    """投影按钮并校验编号唯一、必填齐全、行为在白名单内。
+
+    宗门系三处（藏经阁 / 灵藏 / 万珍殿）的按钮校验逐字节相同，收在这里；
+    需要不同唯一性口径的玩法仍走 project_buttons 后自行校验。
+    """
+
+    result = project_buttons(rows, label=label, keys=keys)
+    if len({button["编号"] for button in result}) != len(result):
+        raise JsonDataError(f"{label}按钮编号不能重复")
+    if any(
+        not button["编号"] or not button["命令"] or button["行为"] not in BUTTON_BEHAVIORS
+        for button in result
+    ):
+        raise JsonDataError(f"{label}存在不完整按钮")
+    return result
+
+
 def select_buttons(
     buttons: tuple[Button, ...],
     *,
@@ -100,7 +127,9 @@ __all__ = [
     "Button",
     "POSITIONED_BUTTON_KEYS",
     "format_command",
+    "BUTTON_BEHAVIORS",
     "project_buttons",
+    "project_unique_buttons",
     "require_mapping",
     "require_sequence",
     "select_buttons",

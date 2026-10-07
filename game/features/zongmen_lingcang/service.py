@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from game.core.sect_assets import SectAssetTransfer, SectAssetError, SectAssetService
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from math import ceil
 from types import MappingProxyType
 
@@ -18,7 +18,7 @@ from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
-from game.features.presentation import require_mapping
+from game.features.presentation import project_unique_buttons, require_mapping
 
 from .contracts import LingcangAction, LingcangCopy, LingcangFeatureError, LingcangPage
 
@@ -169,27 +169,7 @@ class LingcangFeature:
 
 
 def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
-    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
-        raise JsonDataError(f"{label}必须是字典列表")
-    keys = ("条件", "编号", "名称", "命令", "行为", "样式")
-    result = tuple(
-        MappingProxyType(
-            {
-                key: str(require_mapping(raw, f"{label}[]").get(key) or "").strip()
-                for key in keys
-            }
-        )
-        for raw in value
-    )
-    if len({button["编号"] for button in result}) != len(result):
-        raise JsonDataError(f"{label}按钮编号不能重复")
-    if any(
-        not button["编号"]
-        or not button["命令"]
-        or button["行为"] not in {"callback", "send", "fill", "link"}
-        for button in result
-    ):
-        raise JsonDataError(f"{label}存在不完整按钮")
+    return project_unique_buttons(value, label=label)
     return result
 
 
