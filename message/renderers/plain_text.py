@@ -73,7 +73,9 @@ def _render_rich(value: RichText) -> str:
         elif isinstance(span, Link):
             parts.append(f"{_render_rich(span.label)} ({span.url})")
         elif isinstance(span, CommandLink):
-            parts.append(_render_rich(span.label))
+            # 纯文本出口没有可点按钮：命令原文必须跟着标签一起出来，
+            # 否则这份文本既点不了、也抄不出一条能执行的命令。
+            parts.append(f"{_render_rich(span.label)}（{span.command}）")
         elif isinstance(span, FieldSeparator):
             parts.append(" | ")
     return "".join(parts)
