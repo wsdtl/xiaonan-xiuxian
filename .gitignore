@@ -26,7 +26,7 @@ certs/*
 .vscode/
 pytest-of-*/
 xiaonan-test-db-*/
-装配判断-*/
+装配判*/
 
 # 兜底：万一还有工具往根下写 `_` 开头的文件，也不入库
 /_*.txt
