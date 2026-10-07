@@ -135,7 +135,11 @@ def _grades(root: pathlib.Path) -> list[str]:
 
 
 def digest(root: pathlib.Path, sample: int) -> tuple[dict[str, object], list[str]]:
-    database_path = pathlib.Path(tempfile.mkdtemp(prefix="装配判据-")) / "game.db"
+    # 临时库落在 _输出/ 下（已被 .gitignore 忽略）：本环境的 TEMP/TMP 没设，
+    # 用默认 mkdtemp 会把目录丢在仓库根，而且这份摘要跑一次要留一个库。
+    scratch = ROOT / "_输出" / "测试临时"
+    scratch.mkdir(parents=True, exist_ok=True)
+    database_path = pathlib.Path(tempfile.mkdtemp(prefix="装配判据-", dir=scratch)) / "game.db"
     _temp_config(database_path)
 
     from game.app import build_game_services
@@ -219,6 +223,9 @@ def digest(root: pathlib.Path, sample: int) -> tuple[dict[str, object], list[str
         services.core.database.close()
 
     asyncio.run(run())
+    for leftover in database_path.parent.glob("*"):
+        leftover.unlink(missing_ok=True)
+    database_path.parent.rmdir()
     return summary, failures
 
 
