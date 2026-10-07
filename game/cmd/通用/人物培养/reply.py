@@ -81,7 +81,11 @@ def breakthrough(
     feature: CharacterCultivationFeature, result: CharacterBreakthroughResult
 ) -> DocumentMessage:
     text = feature.copy("突破", "人物成功").format_map(
-        {"丹药": result.medicine_name, "境界": result.realm_name}
+        {
+            "品级": result.medicine_grade,
+            "丹药": result.medicine_name,
+            "境界": result.realm_name,
+        }
     )
     builder = (
         M.document()

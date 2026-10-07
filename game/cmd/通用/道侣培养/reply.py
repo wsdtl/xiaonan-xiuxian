@@ -56,7 +56,12 @@ def breakthrough(
     feature: CompanionCultivationFeature, result: CompanionBreakthroughResult
 ) -> DocumentMessage:
     text = feature.copy("突破", "道侣成功").format_map(
-        {"名称": result.view.definition.name, "丹药": result.medicine_name, "境界": result.view.realm_name},
+        {
+            "名称": result.view.definition.name,
+            "品级": result.medicine_grade,
+            "丹药": result.medicine_name,
+            "境界": result.view.realm_name,
+        },
     )
     return (
         M.document()

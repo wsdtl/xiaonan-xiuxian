@@ -239,8 +239,12 @@ class CharacterCultivationFeature:
         ) as exc:
             raise CharacterCultivationFeatureError(str(exc)) from exc
         return CharacterBreakthroughResult(
-            profile, self._medicine_name(medicine_id), character_plan.realm_name_after, receipt.replayed
-            , activation
+            profile,
+            self._medicine_name(medicine_id),
+            stack.grade.name,
+            character_plan.realm_name_after,
+            receipt.replayed,
+            activation,
         )
 
     async def forge_law(self, request: CharacterLawRequest) -> CharacterLawResult:

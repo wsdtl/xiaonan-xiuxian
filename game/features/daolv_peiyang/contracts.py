@@ -47,6 +47,8 @@ class CompanionLawRequest:
 class CompanionBreakthroughResult:
     view: CompanionCultivationView
     medicine_name: str
+    #: 消耗的那份丹药的品级。品级是实例级事实，消耗的是具体哪一品必须露出来。
+    medicine_grade: str
     replayed: bool
 
 

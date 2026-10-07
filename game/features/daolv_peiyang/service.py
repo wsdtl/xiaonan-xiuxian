@@ -171,7 +171,9 @@ class CompanionCultivationFeature:
             InventoryChangeError,
         ) as exc:
             raise CompanionCultivationFeatureError(str(exc)) from exc
-        return CompanionBreakthroughResult(view, medicine.name, receipt.replayed)
+        return CompanionBreakthroughResult(
+            view, medicine.name, stack.grade.name, receipt.replayed
+        )
 
     async def forge_law(self, request: CompanionLawRequest) -> CompanionLawResult:
         self._require_initialized()
