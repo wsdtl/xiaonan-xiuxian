@@ -31,7 +31,7 @@ REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("启动顺序", ("tools/验证启动顺序.py",)),
     ("语法（game/tools/launch/message/tests）", ("-m", "compileall", "-q", "game", "tools", "launch", "message", "tests")),
     ("单元测试（分片并发）", ("tools/跑测试.py",)),
-    ("战斗说明审查", ("tools/audit_combat_descriptions.py",)),
+    ("战斗说明审查", ("tools/卡面说明审查.py",)),
     ("战斗文本渲染", ("tools/渲染战斗文本.py",)),
     ("协议适配", ("tools/验收/协议适配对照.py",)),
     ("基准文件命名", ("tools/架构审查/检查基准文件.py",)),
