@@ -19,7 +19,7 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
 #: 并发组数：测试本身几乎不占 CPU，瓶颈是各自装数据；给足并发就能摊平。
-GROUPS = max(1, min(12, os.cpu_count() or 4))
+GROUPS = max(1, min(8, os.cpu_count() or 4))
 
 
 def _shards() -> list[list[str]]:
