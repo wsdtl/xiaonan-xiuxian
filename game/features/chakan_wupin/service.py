@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 
+from game.core.asset import AssetService, AssetStateError
 from game.core.combat import CombatService, render_body, render_listeners
 from game.core.item_catalog import (
     ItemCatalogService,
@@ -12,15 +13,18 @@ from game.core.item_catalog import (
     ItemNotFoundError,
 )
 
-from .contracts import ItemInspectionResult
+from .contracts import HeldGrade, ItemInspectionResult
 
 
 class ItemInspectionFeature:
     """把实体查询结果交给命令层，不携带命令或消息协议依赖。"""
 
-    def __init__(self, catalog: ItemCatalogService, combat: CombatService) -> None:
+    def __init__(
+        self, catalog: ItemCatalogService, combat: CombatService, asset: AssetService
+    ) -> None:
         self._catalog = catalog
         self._combat = combat
+        self._asset = asset
         self._initialized = False
 
     def initialize(self) -> None:
@@ -32,21 +36,50 @@ class ItemInspectionFeature:
             raise RuntimeError("战斗核心必须先于查看实体玩法启动")
         self._initialized = True
 
-    def inspect(self, query: str) -> ItemInspectionResult:
+    async def inspect(self, query: str, user_id: str = "") -> ItemInspectionResult:
         if not self._initialized:
             raise RuntimeError("查看实体玩法微服务尚未初始化")
         normalized = " ".join(str(query or "").split())
         try:
+            detail = self._catalog.inspect_entity(normalized)
             return ItemInspectionResult(
                 normalized,
-                detail=(detail := self._catalog.inspect_entity(normalized)),
+                detail=detail,
                 related_details=self._related_details(detail),
                 rendered=_rendered_lines(detail, self._combat.rule_layer()),
+                held_grades=await self._held_grades(user_id, detail.item_id),
             )
         except ItemNameAmbiguousError as exc:
             return ItemInspectionResult(normalized, candidates=exc.candidates)
         except ItemNotFoundError:
             return ItemInspectionResult(normalized)
+
+    async def _held_grades(self, user_id: str, content_id: str) -> tuple[HeldGrade, ...]:
+        """执行者持有该编号的品级。没创建人物、没持有，都按「未持有」处理。
+
+        查看是公开查询：实体本身没有品级，能显示的唯一品级事实就是「我手里那份是哪一品」。
+        """
+
+        normalized = str(user_id or "").strip()
+        if not normalized:
+            return ()
+        try:
+            snapshot = await self._asset.snapshot(normalized)
+        except (ValueError, AssetStateError):
+            return ()
+        found: dict[str, HeldGrade] = {}
+        for entry in snapshot.entries:
+            if entry.content_id != content_id or not entry.grade_id:
+                continue
+            previous = found.get(entry.grade_id)
+            grade = self._asset.grade(entry.grade_id)
+            found[entry.grade_id] = HeldGrade(
+                grade.grade_id,
+                grade.name,
+                float(grade.ability_multiplier),
+                entry.quantity + (previous.quantity if previous else 0),
+            )
+        return tuple(sorted(found.values(), key=lambda item: item.multiplier))
 
     def _related_details(self, detail: ItemDetail) -> tuple[ItemDetail, ...]:
         """解析详情实际引用的编号实体，供玩家页显示名称和真实效果。"""

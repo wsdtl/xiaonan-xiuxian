@@ -48,9 +48,12 @@ async def assembly_scheme(request: Request) -> JSONResponse:
 
 
 @router.get("/content")
-async def assembly_content(section: str, content_id: str) -> JSONResponse:
+async def assembly_content(section: str, content_id: str, grade: str = "") -> JSONResponse:
     try:
-        return JSONResponse(current_game_services().features.zhuangpei.detail(section, content_id), headers=HEADERS)
+        return JSONResponse(
+            current_game_services().features.zhuangpei.detail(section, content_id, grade),
+            headers=HEADERS,
+        )
     except ZhuangpeiFeatureError as exc:
         return failure(str(exc))
 

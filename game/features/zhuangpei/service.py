@@ -156,15 +156,43 @@ class ZhuangpeiFeature:
     def open_code(self, code: str) -> dict:
         return self.scheme(decode(code))
 
-    def detail(self, section: str, content_id: str) -> dict:
+    def detail(self, section: str, content_id: str, grade: str = "") -> dict:
+        """一份内容的详情。
+
+        **品级是实例级事实**（`data/基础/定义/编号.json` 的「编号不承载品级」），
+        所以详情必须把它接进来显示：同一个编号在不同品级下是两份东西。
+        品级只影响整门内容一层的威力倍率，**不改写卡面里的逐个数字**
+        （见 `data/基础/定义/说明.md`「不得遍历所有数字进行无差别缩放」）。
+        """
+
         if section not in SECTIONS:
             raise ZhuangpeiFeatureError("请选择功法、真意、气机或器律")
+        if section == "器律" and grade:
+            raise ZhuangpeiFeatureError("器律按器阶划分，没有品级")
         try:
             value = self._data.entity(section, content_id)
         except JsonDataError as exc:
             raise ZhuangpeiFeatureError(str(exc)) from exc
         lines, _ = render_body(value, self._combat.rule_layer())
-        return {"name": value["名称"], "lines": list(lines)}
+        head = self._grade_line(grade)
+        return {
+            "name": value["名称"],
+            "grade": grade,
+            "grade_name": self._asset.grade(grade).name if grade else "",
+            "lines": ([head] if head else []) + list(lines),
+        }
+
+    def _grade_line(self, grade: str) -> str:
+        """详情头部的品级行；没给品级就说明「按基础值」，不假装知道。"""
+
+        if not grade:
+            return str(self._copy.get("品级缺省") or "")
+        try:
+            value = self._asset.grade(grade)
+        except AssetStateError as exc:
+            raise ZhuangpeiFeatureError(f"未知品级：{grade}") from exc
+        template = str(self._copy.get("品级行") or "")
+        return template.replace("{品级}", value.name).replace("{倍率}", f"{value.ability_multiplier:g}")
 
     async def current(self, user_id: str) -> ZhuangpeiResult:
         value = self.scheme(self._profile_build(await self._character.profile(user_id)))

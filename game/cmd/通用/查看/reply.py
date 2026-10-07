@@ -74,6 +74,7 @@ def inspection(result: ItemInspectionResult) -> DocumentMessage:
             SectionInput(detail.fields, related, result.rendered),
         )
     )
+    lines = _with_held_grade(detail.section, result, lines)
     reply = M.document().header(detail.name)
     # 构筑正文统一从说明字段进入详情区；其他实体仍使用短引言加结构化详情。
     description = _player_description(detail)
@@ -98,6 +99,26 @@ def inspection(result: ItemInspectionResult) -> DocumentMessage:
             M.status("暂无", tone="muted"), " 暂无更多记载。"
         )
     return reply.build()
+
+
+def _with_held_grade(
+    section: str, result: ItemInspectionResult, lines: tuple[str, ...]
+) -> tuple[str, ...]:
+    """把执行者持有那份的品级放到详情最前面。
+
+    品级是实例级事实：实体没有品级，所以这里只能显示「我手里那份是哪一品」。
+    构筑四类还要给出它带来的能力倍率（战斗里就是威力倍率）——**只加这一行，
+    卡面里的逐个数字逐字不动**（见 `data/基础/定义/说明.md` 的缩放禁令）。
+    """
+
+    grades = result.held_grades
+    if not grades:
+        return ("品级：未持有（按基础值）",) + lines
+    if section in {"功法", "真意", "气机", "器律"}:
+        head = tuple(f"品级：{item.name} · 能力 ×{item.multiplier:g}" for item in grades)
+    else:
+        head = tuple(f"品级：{item.name}" for item in grades)
+    return head + lines
 
 
 def _display_title(category: str) -> tuple[str, str]:

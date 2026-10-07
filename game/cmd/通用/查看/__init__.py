@@ -23,13 +23,13 @@ from typing import Any
         },
     },
 )
-async def inspect_entity(message: str, manager: Any) -> None:
+async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
     query = " ".join(str(message or "").split())
     if not query:
         await manager.send(reply.missing_query())
         return
 
-    result = current_game_services().features.chakan_wupin.inspect(query)
+    result = await current_game_services().features.chakan_wupin.inspect(query, user_id)
     await manager.send(reply.inspection(result))
 
 

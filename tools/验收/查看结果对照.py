@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import dataclasses
 import json
 import pathlib
@@ -67,7 +68,7 @@ def _stable(value: object) -> str:
     return json.dumps(_canonical(value), ensure_ascii=False, sort_keys=True)
 
 
-def digest(root: pathlib.Path) -> tuple[dict[str, object], list[str]]:
+async def digest(root: pathlib.Path) -> tuple[dict[str, object], list[str]]:
     """返回（摘要, 失败清单）。失败要记账：抛错当成空页会掩盖最该看见的回归。"""
 
     services = build_game_services(data_dir=root)
@@ -75,7 +76,7 @@ def digest(root: pathlib.Path) -> tuple[dict[str, object], list[str]]:
     failures: list[str] = []
     for entity in services.core.data.numbered_entities():
         try:
-            result = services.features.chakan_wupin.inspect(entity.entity_id)
+            result = await services.features.chakan_wupin.inspect(entity.entity_id)
             message = inspection(result)
         except Exception as exc:  # noqa: BLE001 - 任何异常都要变成可见的失败
             failures.append(f"{entity.entity_id}：{type(exc).__name__}: {exc}")
@@ -107,7 +108,7 @@ def main() -> int:
     args = parser.parse_args()
 
     root = pathlib.Path(args.数据)
-    summary, failures = digest(root)
+    summary, failures = asyncio.run(digest(root))
     print(f"{len(summary)} 条，失败 {len(failures)} 条；数据目录 {root}")
     for failure in failures:
         print(f"  {failure}")

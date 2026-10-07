@@ -84,7 +84,7 @@ function renderCandidates() {
       if (!detail.open || loaded || loading) return;
       loading = true;
       try {
-        const value = await request("/assembly/content?section=" + encodeURIComponent(section) + "&content_id=" + entry.id);
+        const value = await request("/assembly/content?section=" + encodeURIComponent(section) + "&content_id=" + entry.id + "&grade=" + encodeURIComponent(entry.grade || ""));
         detail.append(element("p", value.lines.join("\n")));
         loaded = true;
       } catch (error) { status("说明读取失败：" + error.message + "，重新展开可重试。", true); }
