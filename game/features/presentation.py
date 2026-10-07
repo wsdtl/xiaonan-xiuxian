@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
 
@@ -114,6 +114,37 @@ def select_buttons(
     )
 
 
+def paged_settlement_actions(
+    project: Callable[..., tuple[object, ...]],
+    buttons: tuple[Button, ...],
+    *,
+    page: int,
+    total_pages: int,
+) -> tuple[object, ...]:
+    """「总结」页的分页按钮：按当前页决定开放「存在上一页 / 存在下一页」。
+
+    闭关 / 探险 / 采药 / 采矿四处逐字节相同，收在这里；`project` 是各玩法自己的
+    `actions`（它们的动作类型不同）。
+    """
+
+    conditions = set()
+    if page > 1:
+        conditions.add("存在上一页")
+    if page < total_pages:
+        conditions.add("存在下一页")
+    return project(buttons, "总结", conditions, {"上一页": page - 1, "下一页": page + 1})
+
+
+def validate_page_buttons(buttons: tuple[Button, ...], label: str) -> None:
+    """按钮只许落在「开始 / 进度 / 总结」三页，且同一页面内编号唯一。"""
+
+    if any(button["页面"] not in {"开始", "进度", "总结"} for button in buttons):
+        raise JsonDataError(f"{label}按钮使用了未知页面")
+    identities = tuple((button["页面"], button["编号"]) for button in buttons)
+    if len(identities) != len(set(identities)):
+        raise JsonDataError(f"{label}同一页面的按钮编号不能重复")
+
+
 def format_command(button: Button, variables: Mapping[str, object] | None) -> str:
     """按变量表展开按钮命令模板，缺少变量时指明具体名称。"""
 
@@ -130,6 +161,8 @@ __all__ = [
     "BUTTON_BEHAVIORS",
     "project_buttons",
     "project_unique_buttons",
+    "paged_settlement_actions",
+    "validate_page_buttons",
     "require_mapping",
     "require_sequence",
     "select_buttons",

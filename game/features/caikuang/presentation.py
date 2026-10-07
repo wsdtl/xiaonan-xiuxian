@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
-from game.features.presentation import project_buttons, require_mapping
+from game.features.presentation import project_buttons, require_mapping, validate_page_buttons, validate_page_buttons
 
 from .contracts import OreGatheringAction, OreGatheringCopy
 
@@ -32,7 +32,7 @@ def load_presentation(
         data.dataset("采矿按钮").get("按钮"),
         label="采矿按钮",
     )
-    _validate_buttons(buttons, "采矿")
+    validate_page_buttons(buttons, "采矿")
     return OreGatheringCopy(text), buttons
 
 
@@ -55,14 +55,6 @@ def actions(
         if button["页面"] == page
         and (not button["条件"] or button["条件"] in conditions)
     )
-
-
-def _validate_buttons(buttons: tuple[Mapping[str, str], ...], label: str) -> None:
-    if any(button["页面"] not in {"开始", "进度", "总结"} for button in buttons):
-        raise JsonDataError(f"{label}按钮使用了未知页面")
-    identities = tuple((button["页面"], button["编号"]) for button in buttons)
-    if len(identities) != len(set(identities)):
-        raise JsonDataError(f"{label}同一页面的按钮编号不能重复")
 
 
 __all__ = ["actions", "load_presentation"]

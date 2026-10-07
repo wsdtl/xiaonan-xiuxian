@@ -100,17 +100,7 @@ class ExplorationFeature:
     def settlement_actions(
         self, page: int, total_pages: int
     ) -> tuple[ExplorationAction, ...]:
-        conditions = set()
-        if page > 1:
-            conditions.add("存在上一页")
-        if page < total_pages:
-            conditions.add("存在下一页")
-        return actions(
-            self._buttons,
-            "总结",
-            conditions,
-            {"上一页": page - 1, "下一页": page + 1},
-        )
+        return paged_settlement_actions(actions, self._buttons, page=page, total_pages=total_pages)
 
     def item_label(self, item_id: str, grade_id: str) -> str:
         return f"{self._asset.grade(grade_id).name}{self._items.get(item_id).name}"
