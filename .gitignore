@@ -27,6 +27,8 @@ certs/*
 pytest-of-*/
 xiaonan-test-db-*/
 装配判*/
+pip-metadata-*/
+pip-unpack-*/
 
 # 兜底：万一还有工具往根下写 `_` 开头的文件，也不入库
 /_*.txt

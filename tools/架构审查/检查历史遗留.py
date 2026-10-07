@@ -6,7 +6,7 @@
 2. **悬空脚本引用**：文档里以反引号点名的 `*.py` 必须真实存在（删脚本不删文档同样要红）；
 3. **脚本都得有执行者**：`tools/` 下的脚本要么被别的文件点名，要么被 import——
    只写不用的脚本和删一半的重构一样是旧账；
-4. **自映射别名表**：`game/` 里整表都是 `{"A": "A"}` 的字典等于默认分支，属空转兼容层。
+5. **自映射别名表**：`game/` 里整表都是 `{"A": "A"}` 的字典等于默认分支，属空转兼容层。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查历史遗留.py
 
@@ -143,6 +143,57 @@ def check_scripts_have_callers() -> list[str]:
     return problems
 
 
+def check_unused_imports() -> list[str]:
+    """导入了却没用，就是没清干净的残渣。
+
+    __init__.py 不算：那里的导入是**故意转出**的公开 API，本就不该在本文件里使用。
+    冻结层（launch/ 与 message/）当前也是 0 处，所以一并纳入检查。
+    """
+
+    problems: list[str] = []
+    for path in sorted(ROOT.rglob("*.py")):
+        if {".venv", ".git", "_输出", "__pycache__"} & set(path.parts):
+            continue
+        if path.name == "__init__.py":
+            continue
+        source = path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError:
+            continue
+        imported: dict[str, int] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imported[alias.asname or alias.name.split(".")[0]] = node.lineno
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name != "*":
+                        imported[alias.asname or alias.name] = node.lineno
+        used: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                used.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                current: ast.expr = node
+                while isinstance(current, ast.Attribute):
+                    current = current.value
+                if isinstance(current, ast.Name):
+                    used.add(current.id)
+        body = "\n".join(
+            line
+            for line in source.splitlines()
+            if not line.strip().startswith(("import ", "from "))
+        )
+        for name, line in imported.items():
+            if name == "annotations" or name in used or name in body:
+                continue
+            problems.append(
+                f"{path.relative_to(ROOT).as_posix()}:{line} 导入了 {name} 却没用"
+            )
+    return problems
+
+
 def check_deprecated_apis() -> list[str]:
     """弃用的标准库 API 不许进来。
 
@@ -206,6 +257,7 @@ CHECKS = (
     ("脚本执行者", check_scripts_have_callers),
     ("自映射别名表", check_self_mapping_tables),
     ("弃用 API", check_deprecated_apis),
+    ("未使用的导入", check_unused_imports),
 )
 
 

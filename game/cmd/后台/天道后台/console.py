@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from launch.battle_log import BATTLE_MAX_ROWS, BATTLE_RETENTION_SECONDS, BattleReportStore
+from launch.battle_log import BATTLE_RETENTION_SECONDS, BattleReportStore
 from .storage import MessageFlowRow, MessageFlowStore
 from launch.adapter.local import LocalDispatchResult
 

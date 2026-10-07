@@ -6,7 +6,6 @@
 from types import SimpleNamespace
 
 from game.cmd.通用.切磋 import reply
-from launch.paths import public_url
 
 
 class StubFeature:
