@@ -1,6 +1,7 @@
 """Component routing failures and real domain initialization."""
 
 import json
+import os
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -11,10 +12,21 @@ from game.core.data import JsonDataError, JsonDataService
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 
+def _写(path: Path, text: str) -> None:
+    """原子替换：先写临时文件再 `os.replace`。
+
+    副本是用硬链接建的（快得几乎不花时间），而硬链接上直接 `write_text` 会截断
+    同一个 inode、把真实 `data/` 一起写坏；`os.replace` 断开链接、只改副本。
+    """
+
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
 
 @pytest.fixture
 def tree(tmp_path):
-    return Path(shutil.copytree(DATA, tmp_path / "data", copy_function=shutil.copyfile))
+    return Path(shutil.copytree(DATA, tmp_path / "data", copy_function=os.link))
 
 
 @pytest.mark.parametrize("fault", ["missing", "foreign", "unknown", "identity", "unmatched"])
@@ -32,7 +44,7 @@ def test_invalid_component_is_rejected(tree, fault):
             value["组件"] = "世界"
         else:
             value["读取规则"][0]["路径"] = "世界/内容/地势.json"
-        manifest.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+        _写(manifest, json.dumps(value, ensure_ascii=False))
     with pytest.raises(JsonDataError):
         JsonDataService(tree).initialize()
 
@@ -46,13 +58,13 @@ def _搬到第二层(tree, 大类: str, 组件: str) -> None:
     value = json.loads(manifest.read_text(encoding="utf-8"))
     for row in value["读取规则"]:
         row["路径"] = f"{大类}/{row['路径']}"
-    manifest.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    _写(manifest, json.dumps(value, ensure_ascii=False))
     entry = tree / "基础/读取规则.json"
     routing = json.loads(entry.read_text(encoding="utf-8"))
     routing["扫描目录"] = [
         f"{大类}/{组件}" if x == 组件 else x for x in routing["扫描目录"]
     ]
-    entry.write_text(json.dumps(routing, ensure_ascii=False), encoding="utf-8")
+    _写(entry, json.dumps(routing, ensure_ascii=False))
 
 
 def test_component_may_sit_in_a_category_directory(tree):
@@ -69,7 +81,7 @@ def test_category_directory_without_entry_is_rejected(tree):
     entry = tree / "基础/读取规则.json"
     routing = json.loads(entry.read_text(encoding="utf-8"))
     routing["扫描目录"] = [x for x in routing["扫描目录"] if x != "武备/战斗"]
-    entry.write_text(json.dumps(routing, ensure_ascii=False), encoding="utf-8")
+    _写(entry, json.dumps(routing, ensure_ascii=False))
     with pytest.raises(JsonDataError):
         JsonDataService(tree).initialize()
 
@@ -81,7 +93,7 @@ def test_nested_component_must_register_under_its_own_prefix(tree):
     manifest = tree / "武备/战斗/组件.json"
     value = json.loads(manifest.read_text(encoding="utf-8"))
     value["读取规则"][0]["路径"] = value["读取规则"][0]["路径"].removeprefix("武备/")
-    manifest.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+    _写(manifest, json.dumps(value, ensure_ascii=False))
     with pytest.raises(JsonDataError):
         JsonDataService(tree).initialize()
 

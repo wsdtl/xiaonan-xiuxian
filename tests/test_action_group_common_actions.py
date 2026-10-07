@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import shutil
 from types import SimpleNamespace
@@ -36,6 +37,18 @@ class _就绪:
     def status(self):
         return SimpleNamespace(initialized=True)
 
+
+
+def _写(path: Path, text: str) -> None:
+    """原子替换：先写临时文件再 `os.replace`。
+
+    副本是用硬链接建的（快得几乎不花时间），而硬链接上直接 `write_text` 会截断
+    同一个 inode、把真实 `data/` 一起写坏；`os.replace` 断开链接、只改副本。
+    """
+
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 _共享数据: JsonDataService | None = None
 
@@ -83,13 +96,11 @@ def test_自报清单外的动作拒绝启动() -> None:
 
 
 def _改过的数据树(tmp_path: pathlib.Path, 清单: object) -> pathlib.Path:
-    tree = pathlib.Path(shutil.copytree(DATA, tmp_path / "data", copy_function=shutil.copyfile))
+    tree = pathlib.Path(shutil.copytree(DATA, tmp_path / "data", copy_function=os.link))
     rules = tree / "宗门" / "规则" / "宗门.json"
     raw = json.loads(rules.read_text(encoding="utf-8"))
     raw["同行"]["共同行动"] = 清单
-    rules.write_text(
-        json.dumps(raw, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    _写(rules, json.dumps(raw, ensure_ascii=False, indent=2) + "\n")
     return tree
 
 

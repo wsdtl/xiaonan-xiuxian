@@ -1,7 +1,8 @@
-"""跑单元测试：把 tests/ 的文件分成若干组并发跑，缩短墙钟。
+"""跑单元测试：把 tests/ 拆成耗时相近的若干片并发跑，缩短墙钟。
 
-测试文件彼此独立，但都要装一遍数据快照（每次约 1.4 秒），串行跑是纯浪费。
-这里按文件轮转分组、并发执行，任一组的 pytest 非零退出即整体非零退出。
+两份浪费要收掉：① 各文件都要单独装一遍数据快照，串行跑是纯浪费；② 单文件也能
+很贵（`test_component_loading.py` 一个文件就 20 秒），独占一片会把墙钟锁死在它身上。
+所以超过阈值的文件**按用例再拆**，分组用实测耗时做 LPT。
 
     .venv/Scripts/python.exe -X utf8 tools/跑测试.py
 
@@ -18,15 +19,13 @@ import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
-#: 并发组数：测试本身几乎不占 CPU，瓶颈是各自装数据；给足并发就能摊平。
 GROUPS = max(1, min(8, os.cpu_count() or 4))
 
-
-#: 实测的每文件耗时（秒），用来做 LPT 平衡分组——按文件大小分会严重失衡
-#: （最大的文件比最小的大 15 倍）。刷新方式：对每个 tests/test_*.py 单独计时。
+#: 实测的每文件耗时（秒），用来做 LPT 平衡分组——按文件大小分会严重失衡。
+#: 刷新方式：对每个 `tests/test_*.py` 单独计时。
 WEIGHTS: dict[str, float] = {
-    "test_component_loading.py": 25.6,
-    "test_action_group_common_actions.py": 22.9,
+    "test_component_loading.py": 20.7,
+    "test_action_group_common_actions.py": 18.6,
     "test_alchemy_missing_guidance.py": 11.5,
     "test_data_contract.py": 10.2,
     "test_zhuangpei.py": 7.1,
@@ -53,25 +52,59 @@ WEIGHTS: dict[str, float] = {
 }
 #: 权重表里没有的新文件按这个估——宁可略高，别让它把一片拖长。
 DEFAULT_WEIGHT = 3.0
+#: 耗时超过这个值的文件按用例拆开，不让一个文件独占一片。
+SPLIT_THRESHOLD = 10.0
+#: 拆成几份。
+SPLIT_PARTS = 3
+
+
+def _collect(path: pathlib.Path) -> list[str]:
+    """取一个测试文件的用例 node id，用来把它拆开跑。"""
+
+    done = subprocess.run(
+        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--collect-only", str(path)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return [line.strip() for line in (done.stdout or "").splitlines() if "::" in line]
+
+
+def _units() -> list[tuple[float, list[str]]]:
+    """把测试拆成「权重 + 一组 pytest 参数」的工作单元。"""
+
+    units: list[tuple[float, list[str]]] = []
+    for path in sorted(TESTS.glob("test_*.py")):
+        weight = WEIGHTS.get(path.name, DEFAULT_WEIGHT)
+        relative = f"tests/{path.name}"
+        if weight <= SPLIT_THRESHOLD:
+            units.append((weight, [relative]))
+            continue
+        node_ids = _collect(path)
+        if len(node_ids) < SPLIT_PARTS:
+            units.append((weight, [relative]))
+            continue
+        for part in (node_ids[index::SPLIT_PARTS] for index in range(SPLIT_PARTS)):
+            units.append((weight / SPLIT_PARTS, part))
+    return units
 
 
 def _shards() -> list[list[str]]:
-    """按实测耗时做 LPT 平衡分组，让墙钟逼近最大单片。"""
+    """按权重做 LPT 平衡分组，让墙钟逼近最大单片。"""
 
-    files = sorted(TESTS.glob("test_*.py"), key=lambda p: WEIGHTS.get(p.name, DEFAULT_WEIGHT), reverse=True)
-    if not files:
-        return []
     groups: list[list[str]] = [[] for _ in range(GROUPS)]
     load = [0.0] * GROUPS
-    for path in files:
+    for weight, args in sorted(_units(), key=lambda unit: -unit[0]):
         slot = load.index(min(load))
-        groups[slot].append(path.name)
-        load[slot] += WEIGHTS.get(path.name, DEFAULT_WEIGHT)
+        groups[slot].extend(args)
+        load[slot] += weight
     return [group for group in groups if group]
 
 
 def _run(job: tuple[int, list[str]]) -> tuple[bool, str, float]:
-    index, group = job
+    index, args = job
     started = time.perf_counter()
     # 本环境的 TEMP/TMP 没设，pytest 与 tempfile 会回落到当前工作目录，把
     # pytest-of-* 与临时库落在仓库根。显式指到 _输出/ 下（已被 .gitignore 忽略）。
@@ -79,7 +112,7 @@ def _run(job: tuple[int, list[str]]) -> tuple[bool, str, float]:
     basetemp.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "TEMP": str(basetemp), "TMP": str(basetemp)}
     done = subprocess.run(
-        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--basetemp", str(basetemp), *[f"tests/{name}" for name in group]],
+        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--basetemp", str(basetemp), *args],
         cwd=ROOT,
         env=env,
         capture_output=True,
@@ -101,7 +134,7 @@ def main() -> int:
     failures: list[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(groups)) as pool:
         for index, (ok, tail, seconds) in enumerate(pool.map(_run, enumerate(groups, start=1)), start=1):
-            print(f"  [{'通过' if ok else '失败'}] 第 {index} 组（{len(groups[index - 1])} 个文件） {seconds:>6.1f}s  {tail}")
+            print(f"  [{'通过' if ok else '失败'}] 第 {index} 组（{len(groups[index - 1])} 个单元） {seconds:>6.1f}s  {tail}")
             if not ok:
                 failures.append(str(index))
     wall = time.perf_counter() - started
