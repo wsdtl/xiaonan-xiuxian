@@ -87,14 +87,21 @@ def run_one(item: tuple[str, tuple[str, ...]]) -> tuple[str, bool, str, float]:
 def main() -> int:
     started = time.perf_counter()
     failures: list[str] = []
-    # 并发上限按核数取一半：单元测试自己还会再开 8 片，全开满会超订到 27 个进程，
-    # 实测墙钟反而更慢（各项都被拖长）。
-    workers = max(1, (os.cpu_count() or 4) // 2)
+    # 两阶段跑：单元测试自己会开分片，和别的项抢核只会互相拖（实测它内部墙钟从 23 秒
+    # 涨到 46 秒），所以先让它独占跑完，其余项再并发。并发上限按核数取一半——全开满
+    # 会超订，实测墙钟反而更慢。
+    workers = max(1, (os.cpu_count() or 4) * 5 // 8)
+    heavies = tuple(item for item in REQUIRED if "单元测试" in item[0])
+    others = tuple(item for item in REQUIRED if item not in heavies)
+    measured = {item[0]: run_one(item) for item in heavies}
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        for name, ok, tail, seconds in pool.map(run_one, REQUIRED):
-            print(f"  [{'通过' if ok else '失败'}] {name:<28} {seconds:>6.1f}s  {tail}")
-            if not ok:
-                failures.append(name)
+        for item, result in zip(others, pool.map(run_one, others)):
+            measured[item[0]] = result
+    for item in REQUIRED:
+        name, ok, tail, seconds = measured[item[0]]
+        print(f"  [{'通过' if ok else '失败'}] {name:<28} {seconds:>6.1f}s  {tail}")
+        if not ok:
+            failures.append(name)
     wall = time.perf_counter() - started
     if failures:
         print(f"总账：{len(REQUIRED)} 项，失败 {len(failures)} 项 —— {'、'.join(failures)}（墙钟 {wall:.1f}s）")
