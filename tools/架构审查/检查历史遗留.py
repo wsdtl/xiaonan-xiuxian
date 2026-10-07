@@ -1,10 +1,12 @@
 """历史遗留守门：已清掉的东西不许回来。
 
-三组检查：
+四组检查：
 
 1. **归档目录不得回来**：`tools/` 下不再有一次性 / 迁移 / 原型 目录；
 2. **悬空脚本引用**：文档里以反引号点名的 `*.py` 必须真实存在（删脚本不删文档同样要红）；
-3. **自映射别名表**：`game/` 里整表都是 `{"A": "A"}` 的字典等于默认分支，属空转兼容层。
+3. **脚本都得有执行者**：`tools/` 下的脚本要么被别的文件点名，要么被 import——
+   只写不用的脚本和删一半的重构一样是旧账；
+4. **自映射别名表**：`game/` 里整表都是 `{"A": "A"}` 的字典等于默认分支，属空转兼容层。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查历史遗留.py
 
@@ -27,6 +29,8 @@ GAME = ROOT / "game"
 FORBIDDEN_DIR_WORDS = ("一次性", "迁移", "原型", "归档", "废弃")
 #: 文档里点名脚本的形态：反引号包起来的 xxx.py（可带目录前缀）。
 SCRIPT_REF = re.compile(r"`([^`\s]*?([A-Za-z0-9_\u4e00-\u9fff-]+)\.py)`")
+#: import 行：判断脚本有没有调用者时只看这些行，不看全文。
+IMPORT_LINE = re.compile(r"\s*(?:from|import)\s")
 
 
 def check_archive_dirs() -> list[str]:
@@ -61,6 +65,45 @@ def check_dangling_script_refs() -> list[str]:
     return problems
 
 
+def check_scripts_have_callers() -> list[str]:
+    """tools/ 下的脚本都得有人叫得动：被别的文件点名，或被 import。
+
+    包内的 __init__.py 不算——它由导入机制装载，不需要调用者。
+    先把全文与导入行各聚一次，再逐脚本比对：逐文件正则会把这项从 11 秒拖到 29 秒。
+    """
+
+    blob: list[str] = []
+    imports: list[str] = []
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or path.suffix not in {".py", ".md"}:
+            continue
+        if {".venv", ".git", "_输出", "__pycache__"} & set(path.parts):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        blob.append(text)
+        imports.extend(
+            line for line in text.splitlines() if IMPORT_LINE.match(line)
+        )
+    haystack = "\n".join(blob)
+    problems: list[str] = []
+    for script in sorted(TOOLS.rglob("*.py")):
+        if script.name == "__init__.py":
+            continue
+        stem = script.stem
+        dotted = script.relative_to(ROOT).with_suffix("").as_posix().replace("/", ".")
+        if f"{stem}.py" in haystack or dotted in haystack:
+            continue
+        if any(stem in line for line in imports):
+            continue
+        problems.append(
+            f"{script.relative_to(ROOT).as_posix()} 没有任何执行者（既没被点名也没被导入）"
+        )
+    return problems
+
+
 def check_self_mapping_tables() -> list[str]:
     """整表 {"A": "A"} 的字典就是空转，等价于 get(key, key)。"""
 
@@ -90,6 +133,7 @@ def check_self_mapping_tables() -> list[str]:
 CHECKS = (
     ("归档目录", check_archive_dirs),
     ("悬空脚本引用", check_dangling_script_refs),
+    ("脚本执行者", check_scripts_have_callers),
     ("自映射别名表", check_self_mapping_tables),
 )
 
