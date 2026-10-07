@@ -223,6 +223,21 @@ def _inline_commands(blocks: Iterable[DocumentBlock]) -> set[str]:
     return commands
 
 
+def _command_label(label: object) -> RichText:
+    """可点命令的标签必须是纯文本。
+
+    标签一旦带 tone，markdown 渲染会把它变成 `$公式$` 再包进 `[...]`，
+    而 QQ 不解析公式内的链接——按钮就点不动了（见 `qq_protocol/render.py` 的
+    `force_formula`）。所以这里统一抹掉 tone，非文本片段直接报错。
+    """
+
+    spans = _rich(label)
+    for span in spans:
+        if not isinstance(span, Text):
+            raise ValueError("可点命令的标签只能用普通文本")
+    return tuple(Text(span.value) for span in spans)
+
+
 class M:
     """业务层唯一消息构造入口。"""
 
@@ -265,5 +280,5 @@ class M:
         reply: bool = False,
     ) -> CommandLink:
         return CommandLink(
-            _rich(label), str(command or "").strip(), submit=submit, reply=reply
+            _command_label(label), str(command or "").strip(), submit=submit, reply=reply
         )

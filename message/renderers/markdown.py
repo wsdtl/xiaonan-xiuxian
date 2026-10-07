@@ -163,8 +163,10 @@ def _render_rich(
             )
         elif isinstance(span, CommandLink):
             flush_formula()
+            # 标签一律按正文渲染：caption 行与带 tone 的标签都会把标签推进公式，
+            # 而 QQ 不解析 [公式](mqqapi://...) 这种链接，按钮就废了。
             parts.append(
-                command_renderer(span, line_size, default_tone, _has_tone(span.label))
+                command_renderer(span, "body", default_tone, False)
                 if command_renderer
                 else _render_rich(
                     span.label,

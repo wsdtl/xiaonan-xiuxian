@@ -16,8 +16,8 @@ def scheme(title: str, value: ZhuangpeiResult) -> DocumentMessage:
         builder.line(line)
     if value.replayed:
         builder.line("这次是重复请求，没有重复消耗库存")
-    builder.line("装配码（复制下面这一行发给机器人即可导入）：")
-    return builder.line(f"导入装配 {value.code}").build()
+    builder.line("装配码（点一下即可导入，也可以复制）：")
+    return builder.line(M.command(value.code, f"导入装配 {value.code}")).build()
 
 
 def notice(text: str) -> DocumentMessage:

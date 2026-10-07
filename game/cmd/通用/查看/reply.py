@@ -48,7 +48,6 @@ def inspection(result: ItemInspectionResult) -> DocumentMessage:
                         tone=_category_tone(candidate.section),
                     ),
                     f"查看 {candidate.item_id}",
-                    submit=False,
                 ),
                 f" · {candidate.item_id}",
             )
