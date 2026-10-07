@@ -9,6 +9,9 @@ from math import ceil
 from types import MappingProxyType
 
 from game.core.asset import (
+    Choice as _Choice,
+    Edge as _Edge,
+    minimum_cost_matching as _minimum_cost_matching,
     AssetEntry,
     AssetService,
     AssetStateError,
@@ -69,8 +72,6 @@ from game.core.data import (
 )
 
 _LAW_STAGES = ("灵器", "法器", "法宝", "后天灵宝")
-_SECONDARY_COST = 1_000_000_000
-_GRADE_COST = 100_000
 
 
 @dataclass(frozen=True)
@@ -79,24 +80,6 @@ class _MaterialIdentity:
     name: str
     primary_trait: str
     secondary_trait: str = ""
-
-
-@dataclass(frozen=True)
-class _Choice:
-    identity: _MaterialIdentity
-    entry: AssetEntry
-    slot: int
-    trait: str
-    relation: str
-    quantity: int
-
-
-@dataclass
-class _Edge:
-    target: int
-    reverse: int
-    capacity: int
-    cost: int
 
 
 class ForgingService:
@@ -811,93 +794,6 @@ class ForgingService:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("炼器核心微服务尚未初始化")
-
-
-# 本函数与 `game/core/alchemy/service.py` 的同名函数**逐字相同**（差异只有换行格式）。
-# 两处必须同步修改：只改一处，炼器与炼丹的「最省匹配」就会悄悄分叉。
-def _minimum_cost_matching(
-    item_ids: tuple[str, ...],
-    slot_count: int,
-    choices: Sequence[_Choice],
-    asset: AssetService,
-) -> dict[int, _Choice]:
-    if not item_ids or not slot_count:
-        return {}
-    item_index = {item_id: index for index, item_id in enumerate(item_ids)}
-    source = 0
-    item_start = 1
-    slot_start = item_start + len(item_ids)
-    sink = slot_start + slot_count
-    graph: list[list[_Edge]] = [[] for _ in range(sink + 1)]
-
-    def add_edge(origin: int, target: int, capacity: int, cost: int) -> _Edge:
-        forward = _Edge(target, len(graph[target]), capacity, cost)
-        backward = _Edge(origin, len(graph[origin]), 0, -cost)
-        graph[origin].append(forward)
-        graph[target].append(backward)
-        return forward
-
-    for index in range(len(item_ids)):
-        add_edge(source, item_start + index, 1, 0)
-    for slot in range(slot_count):
-        add_edge(slot_start + slot, sink, 1, 0)
-    tracked: list[tuple[_Choice, _Edge]] = []
-    for choice in sorted(
-        choices,
-        key=lambda value: (
-            value.identity.item_id,
-            value.slot,
-            value.relation,
-            value.entry.grade_id,
-        ),
-    ):
-        grade_order = asset.grade(choice.entry.grade_id).order
-        rank = item_index[choice.identity.item_id]
-        cost = (
-            (_SECONDARY_COST if choice.relation == "旁脉" else 0)
-            + grade_order * _GRADE_COST
-            + rank
-        )
-        tracked.append(
-            (
-                choice,
-                add_edge(
-                    item_start + item_index[choice.identity.item_id],
-                    slot_start + choice.slot,
-                    1,
-                    cost,
-                ),
-            )
-        )
-    while True:
-        distances = [10**30] * len(graph)
-        previous: list[tuple[int, int] | None] = [None] * len(graph)
-        distances[source] = 0
-        for _ in range(len(graph) - 1):
-            changed = False
-            for origin, edges in enumerate(graph):
-                if distances[origin] == 10**30:
-                    continue
-                for edge_index, edge in enumerate(edges):
-                    if (
-                        edge.capacity
-                        and distances[origin] + edge.cost < distances[edge.target]
-                    ):
-                        distances[edge.target] = distances[origin] + edge.cost
-                        previous[edge.target] = (origin, edge_index)
-                        changed = True
-            if not changed:
-                break
-        if previous[sink] is None:
-            break
-        node = sink
-        while node != source:
-            origin, edge_index = previous[node]  # type: ignore[misc]
-            edge = graph[origin][edge_index]
-            edge.capacity -= 1
-            graph[node][edge.reverse].capacity += 1
-            node = origin
-    return {choice.slot: choice for choice, edge in tracked if edge.capacity == 0}
 
 
 def _material_payload(material: ForgingMaterial) -> dict[str, object]:

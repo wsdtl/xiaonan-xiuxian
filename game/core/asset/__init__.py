@@ -27,6 +27,7 @@ from .contracts import (
     LawReserveChangePlan,
     LawReserveStack,
 )
+from .matching import Choice, Edge, minimum_cost_matching
 from .service import AssetService
 
 __all__ = [
@@ -34,6 +35,9 @@ __all__ = [
     "AssetEntry",
     "AssetGrade",
     "AssetService",
+    "Choice",
+    "Edge",
+    "minimum_cost_matching",
     "AssetSnapshot",
     "AssetSortRules",
     "AssetStateError",
