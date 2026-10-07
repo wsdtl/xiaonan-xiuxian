@@ -9,6 +9,7 @@ from pkgutil import walk_packages
 from fastapi import APIRouter
 
 
+
 def _load_component_routers() -> APIRouter:
     router = APIRouter()
     package_path = [str(Path(__file__).parent)]

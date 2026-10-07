@@ -102,9 +102,28 @@ def check_rendered_links_are_plain() -> list[str]:
     return problems
 
 
+def check_branches_resolve() -> list[str]:
+    """A|B <参数> 只认已注册的分支；够参数的直接发，还差参数的只填入。"""
+
+    from game.cmd.通用.帮助.branches import branches_of, is_complete
+
+    problems: list[str] = []
+    cases = {"查看|借阅功法 400001": 2, "查看|装配 400001": 1, "查看 400001": 0}
+    for text, expected in cases.items():
+        found = branches_of(text)
+        if len(found) != expected:
+            problems.append(text + " 解析出 " + str(len(found)) + " 个分支，期望 " + str(expected))
+    known = dict(branches_of("查看|借阅功法 400001"))
+    if known.get("查看") and not is_complete(known["查看"]):
+        problems.append("完整命令「查看 400001」被当成不完整")
+    if known.get("借阅功法") and is_complete(known["借阅功法"]):
+        problems.append("还差槽位的「借阅功法 400001」被当成完整")
+    return problems
+
 CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
+    ("多分支解析", check_branches_resolve),
 )
 
 

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# 多分支命令与帮助同类（都是命令导航）；显式导入才会注册。
+from . import branches as _branches  # noqa: F401
+
 from ...command import GameCommand
 from . import reply
 from typing import Any

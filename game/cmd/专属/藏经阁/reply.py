@@ -25,15 +25,11 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
         builder.item(
             index,
             f"{entry.grade_name} · ",
-            M.command(M.text(entry.name), f"查看 {entry.content_id}"),
+            # 同一份功法有两条命令（查看 / 借阅功法），参数尾巴一样，合成一个分支控件：
+            # 点一次回选择菜单，够参数的直接发、还差槽位的只填入。
+            M.command(entry.name, f"查看|借阅功法 {entry.content_id}"),
             " · ",
-            M.command(entry.content_id, f"查看 {entry.content_id}"),
-            " · ",
-            M.command(
-                M.text("借阅至"),
-                f"借阅功法 {entry.content_id}",
-                submit=False,
-            ),
+            entry.content_id,
         )
     builder.small(_text(copy, "页码", {"当前页": value.page, "总页数": value.page_count}))
     builder.small(_text(copy, "说明"))
