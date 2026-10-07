@@ -25,30 +25,24 @@ GROUPS = max(1, min(8, os.cpu_count() or 4))
 #: 刷新方式：对每个 `tests/test_*.py` 单独计时。
 WEIGHTS: dict[str, float] = {
     "test_component_loading.py": 20.7,
+    "test_content_conventions.py": 7.0,
     "test_action_group_common_actions.py": 18.6,
     "test_alchemy_missing_guidance.py": 11.5,
     "test_data_contract.py": 10.2,
     "test_zhuangpei.py": 7.1,
+    "test_battle_report.py": 4.0,
     "test_prepared_status.py": 6.7,
     "test_lingtian_terrain.py": 6.7,
     "test_breakthrough_medicine_source.py": 6.0,
-    "test_zhuangpei_site.py": 5.3,
     "test_combat_entry_surfaces.py": 5.1,
     "test_enemy_and_raid.py": 4.0,
     "test_cangjing_borrow_invalidation.py": 3.9,
     "test_inherent_rules.py": 3.6,
-    "test_race_registry.py": 3.5,
-    "test_battle_report_site.py": 3.4,
     "test_build_templates.py": 2.7,
     "test_lingcang_take_wiring.py": 2.7,
-    "test_term_naming.py": 2.4,
     "test_command_minimal_signatures.py": 2.0,
     "test_qiecuo_report_link.py": 2.0,
-    "test_battle_report_store.py": 1.9,
-    "test_zhuangpei_codec.py": 1.8,
     "test_exploration_groups.py": 1.7,
-    "test_battle_report_assets.py": 1.7,
-    "test_attribute_calibers.py": 1.7,
 }
 #: 权重表里没有的新文件按这个估——宁可略高，别让它把一片拖长。
 DEFAULT_WEIGHT = 3.0

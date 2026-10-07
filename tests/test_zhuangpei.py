@@ -1,4 +1,10 @@
-"""装配台真实临时数据库集成；不修改试玩存档。"""
+"""装配台契约：装配码、命令层、网页接口与真实临时库集成。
+
+由原 test_zhuangpei.py + test_zhuangpei_codec.py + test_zhuangpei_site.py 并档而来：它们本就同属一个领域，
+分开写只会让每份都重新装一遍服务。
+"""
+from __future__ import annotations
+
 import asyncio
 import importlib
 import itertools
@@ -489,3 +495,283 @@ def test_content_uses_combat_public_renderer(services, section, cid):
     value = services.features.zhuangpei.detail(section, cid)
     assert value["name"] and value["lines"]
     assert not any("未支持" in line for line in value["lines"])
+
+# ─────────── 原 tests/test_zhuangpei_codec.py ───────────
+
+import base64
+import binascii
+import random
+
+import pytest
+
+from game.features.zhuangpei.codec import AssemblyCodeError, decode, encode, normalize
+
+def empty():
+    return {"功法": [], "真意": [], "气机": [], "器律": []}
+
+
+def test_stable_content_only_and_preserves_holes():
+    build = empty()
+    build["功法"] = [None, {"编号": "400001", "品级": "02"}, None]
+    code = encode(build)
+    assert decode(code)["功法"] == (None, {"编号": "400001", "品级": "02"})
+    assert encode(dict(reversed(list(build.items())))) == code
+    build["功法"].pop()
+    assert encode(build) == code
+    build["功法"].reverse()
+    assert encode(build) != code
+    assert encode(empty()) == encode(decode(encode(empty())))
+
+
+def test_randomized_roundtrip():
+    rng = random.Random(20260929)
+    for _ in range(200):
+        build = {s: [None if rng.random() < .3 else {"编号": f"{rng.randrange(1, 999999):06d}", "品级": "" if s == "器律" else f"{rng.randrange(1, 10):02d}"} for _ in range(rng.randrange(9))] for s in empty()}
+        assert decode(encode(build)) == normalize(build)
+
+
+@pytest.mark.parametrize("value", ["ZP0.invalid", "ZP1.", "ZP1.@@@", "x"*3000, "", None, 12, "ZP1.AAAAAAA="])
+def test_invalid_codes(value):
+    with pytest.raises(AssemblyCodeError):
+        decode(value)
+
+
+def test_damage_rejected():
+    code = encode(empty())
+    replacement = "A" if code[-1] != "A" else "B"
+    with pytest.raises(AssemblyCodeError):
+        decode(code[:-1] + replacement)
+
+
+@pytest.mark.parametrize("entry", [
+    {"编号": "000000", "品级": "01"}, {"编号": "400001", "品级": "黄"},
+    {"编号": "400001", "品级": "00"}, {"编号": 400001, "品级": "01"},
+    {"编号": "400001", "品级": "01", "用户": "A"}, {"编号": "４００００１", "品级": "01"},
+    {"编号": "400001"}, "400001", True,
+])
+def test_bad_entries(entry):
+    build = empty()
+    build["功法"] = [entry]
+    with pytest.raises(AssemblyCodeError):
+        encode(build)
+
+
+def test_structure_bounds():
+    for build in ({}, {**empty(), "scope": "all"}, {**empty(), "功法": [None]*65}, {**empty(), "功法": "x"},
+                  {**empty(), "器律": [{"编号": "700001", "品级": "01"}]}):
+        with pytest.raises(AssemblyCodeError):
+            encode(build)
+
+
+def craft(body: bytes) -> str:
+    """按协议手搓一份带正确 CRC 的码，用来打解码器内部的分支。"""
+    raw = bytes(body) + binascii.crc_hqx(bytes(body), 0xFFFF).to_bytes(2, "big")
+    return "ZP1." + base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def test_inner_version_byte_reports_version_error():
+    """外层前缀对、内层版本号不对 ⇒ 说"版本不受支持"，不能说"损坏"。"""
+    with pytest.raises(AssemblyCodeError, match="版本"):
+        decode(craft(bytes([2, 0, 0, 0, 0])))
+
+
+def test_crafted_payloads_rejected():
+    for body in (
+        bytes([1, 65, 0, 0, 0]),                       # 槽位数超过上限
+        bytes([1, 1, 0x80, 0x80, 0x80, 0x00, 0, 0, 0]),  # 变长整数用了四字节
+        bytes([1, 0, 0, 0, 0, 7]),                     # 尾部多余字节
+        bytes([1]),                                    # 正文过短
+    ):
+        with pytest.raises(AssemblyCodeError):
+            decode(craft(body))
+
+
+def test_whitespace_and_padding_tolerated():
+    """从聊天里复制来的码常带首尾空白或 base64 补位，都要认。"""
+    code = encode(empty())
+    assert decode("  " + code + "\n") == decode(code)
+    assert decode(code + "=" * (-len(code) % 4)) == decode(code)
+
+# ─────────── 原 tests/test_zhuangpei_site.py ───────────
+
+import asyncio
+import importlib
+from types import SimpleNamespace
+from urllib.parse import quote
+
+import pytest
+from fastapi import FastAPI
+
+from game.features.zhuangpei import ZhuangpeiFeatureError, encode
+
+
+def _app(services, monkeypatch):
+    site = importlib.import_module("game.cmd.通用.装配台.site")
+    monkeypatch.setattr(site, "current_game_services", lambda: services)
+    app = FastAPI()
+    app.include_router(site.router)
+    return app
+
+
+def test_scope_for_unknown_user_is_clean_error(services, monkeypatch):
+    """查一个不存在或没公开的用户名 ⇒ 400 + 人话，而不是 500 堆栈。"""
+    with HttpClient(_app(services, monkeypatch)) as client:
+        response = client.get("/assembly/data?scope=user:no-such-user")
+        assert response.status_code == 400
+        assert "公开" in response.json()["error"]
+
+
+def test_content_endpoint_contract(services, monkeypatch):
+    with HttpClient(_app(services, monkeypatch)) as client:
+        good = client.get(f"/assembly/content?section={quote('功法')}&content_id=400001")
+        assert good.status_code == 200
+        assert good.json()["name"] and isinstance(good.json()["lines"], list)
+        bad_section = client.get(f"/assembly/content?section={quote('不存在的类')}&content_id=400001")
+        assert bad_section.status_code == 400
+        assert "功法" in bad_section.json()["error"]
+        assert client.get(f"/assembly/content?section={quote('功法')}&content_id=999999").status_code == 400
+        assert client.get(f"/assembly/content?section={quote('功法')}").status_code == 422
+
+
+def test_scheme_endpoint_payload_edges(services, monkeypatch):
+    with HttpClient(_app(services, monkeypatch)) as client:
+        for payload in ({"build": None}, {"code": ""}, {"code": 12}, {}, {"build": blank(), "code": "x"}):
+            assert client.post("/assembly/scheme", json=payload).status_code == 400, payload
+
+
+def test_import_command_format_hint_does_not_write(services, monkeypatch):
+    """空参、多参只给格式提示，不产生任何事务。"""
+    module = importlib.import_module("game.cmd.通用.装配台")
+    monkeypatch.setattr(module, "current_game_services", lambda: services)
+    sent: list = []
+
+    async def send(value):
+        sent.append(value)
+
+    manager = SimpleNamespace(send=send)
+
+    async def run():
+        uid = await player(services)
+        before = services.core.database.status().transaction_count
+        for index, message in enumerate(("", "   ", "ZP1.abc extra")):
+            await module.import_assembly(
+                user_id=uid, message=message,
+                message_context=SimpleNamespace(request_id=f"format-{index}"), manager=manager,
+            )
+            assert "格式：导入装配 装配码" in str(sent[-1])
+        assert services.core.database.status().transaction_count == before
+
+    asyncio.run(run())
+
+
+def test_public_toggle_command_cards(services, monkeypatch):
+    module = importlib.import_module("game.cmd.通用.装配台")
+    monkeypatch.setattr(module, "current_game_services", lambda: services)
+    sent: list = []
+
+    async def send(value):
+        sent.append(value)
+
+    manager = SimpleNamespace(send=send)
+
+    async def run():
+        uid = await player(services)
+        await module.toggle_public(user_id=uid, message_context=SimpleNamespace(request_id="pub-1"), manager=manager)
+        assert "已公开" in str(sent[-1])
+        await module.toggle_public(user_id=uid, message_context=SimpleNamespace(request_id="pub-2"), manager=manager)
+        assert "已关闭" in str(sent[-1])
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("text", ["ZP1.abc", "　", "ZP1.abc extra"])
+def test_import_command_error_card_names_the_code(services, monkeypatch, text):
+    """非法码一律落错误卡片，且提示里要认得出是"装配码"问题。"""
+    module = importlib.import_module("game.cmd.通用.装配台")
+    monkeypatch.setattr(module, "current_game_services", lambda: services)
+    sent: list = []
+
+    async def send(value):
+        sent.append(value)
+
+    async def run():
+        uid = await player(services)
+        await module.import_assembly(
+            user_id=uid, message=text,
+            message_context=SimpleNamespace(request_id=f"parse-{abs(hash(text))}"),
+            manager=SimpleNamespace(send=send),
+        )
+        assert "装配码" in str(sent[-1])
+
+    asyncio.run(run())
+
+
+def test_public_scope_lists_that_users_holdings(services, monkeypatch):
+    """公开后按用户名能选到对方的池；关闭后立刻从列表与范围内消失。"""
+
+    async def run():
+        uid = await player(services)
+        await acquire(services, uid, "功法", "400001")
+        await services.features.zhuangpei.toggle_public(uid, "scope-open")
+        with HttpClient(_app(services, monkeypatch)) as client:
+            data = client.get(f"/assembly/data?scope=user:{uid}").json()
+            assert data["scope"] == f"user:{uid}"
+            entry = next(e for e in data["entries"] if e["section"] == "功法" and e["id"] == "400001")
+            assert entry["quantity"] == 1 and entry["equipped"] == []
+            assert f"user:{uid}" in {value["id"] for value in client.get("/assembly/data").json()["scopes"]}
+            await services.features.zhuangpei.toggle_public(uid, "scope-close")
+            closed = client.get(f"/assembly/data?scope=user:{uid}")
+            assert closed.status_code == 400 and "公开" in closed.json()["error"]
+            assert f"user:{uid}" not in {value["id"] for value in client.get("/assembly/data").json()["scopes"]}
+
+    asyncio.run(run())
+
+
+def test_public_scope_keeps_equipped_entry_without_stock(services, monkeypatch):
+    """真意按规则会被消耗：装进槽位后库存归零，但条目仍要留在本人清单里。"""
+
+    async def run():
+        uid = await player(services)
+        content_id = next(iter(services.core.data.entities("真意")))
+        await acquire(services, uid, "真意", content_id)
+        code = encode({**blank(), "真意": [item(content_id)]})
+        await services.features.zhuangpei.import_code(uid, "stock-import", code)
+        await services.features.zhuangpei.toggle_public(uid, "stock-open")
+        with HttpClient(_app(services, monkeypatch)) as client:
+            entries = client.get(f"/assembly/data?scope=user:{uid}").json()["entries"]
+            entry = next(e for e in entries if e["section"] == "真意" and e["id"] == content_id)
+            assert entry["quantity"] == 0
+            assert entry["equipped"] == [1]
+
+    asyncio.run(run())
+
+
+def test_same_request_id_with_other_code_is_refused(services):
+    """同请求编号复用到不同码 ⇒ 明确拒绝，而不是当成重放。"""
+
+    async def run():
+        uid = await player(services)
+        ids = tuple(services.core.data.entities("功法"))[:2]
+        for content_id in ids:
+            await acquire(services, uid, "功法", content_id)
+        feature = services.features.zhuangpei
+        await feature.import_code(uid, "same-request", encode({**blank(), "功法": [item(ids[0])]}))
+        with pytest.raises(ZhuangpeiFeatureError, match="同一请求编号"):
+            await feature.import_code(uid, "same-request", encode({**blank(), "功法": [item(ids[1])]}))
+        # 同一个码重放 ⇒ 幂等回执，不报错
+        replay = await feature.import_code(uid, "same-request", encode({**blank(), "功法": [item(ids[0])]}))
+        assert replay.replayed is True
+
+    asyncio.run(run())
+
+
+def test_scheme_rejects_duplicate_and_over_limit(services):
+    """整套校验的两条硬边界：超过人物槽位上限、同类里重复装同一内容。"""
+    feature = services.features.zhuangpei
+    ids = tuple(services.core.data.entities("功法"))
+    limits = services.core.character.assembly_limits()
+    with pytest.raises(ZhuangpeiFeatureError, match="槽位上限"):
+        feature.scheme({**blank(), "功法": [item(ids[0])] * (limits["功法"] + 1)})
+    assert limits["功法"] >= 2
+    with pytest.raises(ZhuangpeiFeatureError, match="不能重复装配"):
+        feature.scheme({**blank(), "功法": [item(ids[0]), item(ids[0])]})
