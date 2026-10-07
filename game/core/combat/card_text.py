@@ -411,7 +411,7 @@ class CardText:
             for index, skill in enumerate(actives, 1):
                 lines.extend(self._skill(index, skill))
         if passives:
-            # 一个被动只挂一条监听（`拆被动.py`）。读本卡计量的那类监听归「裁定」段，
+            # 一个被动只挂一条监听。读本卡计量的那类监听归「裁定」段，
             # 于是有些被动在正文里一句都没有——那就**整条不列**，并且把编号重新连起来，
             # 免得出现「③[] 空着」这种断号（实测拆完之后就有一堆）。
             visible = [(skill, self._passive_body(skill)) for skill in passives]

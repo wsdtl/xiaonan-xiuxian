@@ -435,7 +435,7 @@ def check_core_namespace() -> list[Finding]:
 def check_game_tools_dependency() -> list[Finding]:
     """`game` 不得导入 `tools`（见 `系统架构.md` 第四节）。
 
-    `tools` 是维护期代码（审查、测量、一次性迁移）。运行期依赖它会把维护脚本拖进
+    `tools` 是维护期代码（审查、测量）。运行期依赖它会把维护脚本拖进
     游戏进程，也会把「tools 可以访问内部实现」这条单向许可变成双向耦合。
     """
 
@@ -1017,7 +1017,7 @@ def check_file_encodings() -> list[Finding]:
     BOM 会让 `ast.parse` 与 `json.loads` **直接报错**（不是警告）——`tools/说明.md` 里
     记过这条教训：造探针文件时用 `Set-Content -Encoding UTF8` 写出的 BOM 让整支审查
     当场死掉，看着像「查出了违规」。第 82 轮清出 4 个带 BOM 的文件（2 个数据说明、
-    2 个工具脚本），其中 `tools/一次性迁移/气机重定价.py` 因为 BOM 连 AST 都解析不了。
+    2 个工具脚本）。
     """
 
     findings: list[Finding] = []

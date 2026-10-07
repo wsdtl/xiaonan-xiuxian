@@ -65,7 +65,7 @@ def audit(root: Path) -> list[str]:
                 if SECTION.search(description):
                     errors.append(
                         f"{category}/{name}: 说明里写了规则正文；正文由渲染器现算，"
-                        "存储的正文会漂移（跑 tools/一次性迁移/裁掉规则正文.py）"
+                        "存储的正文会漂移（正文由渲染器现算）"
                     )
     return errors
 
