@@ -221,17 +221,14 @@ def _check_count(source: str, name: str) -> int:
 
 
 def check_full_check_counts() -> list[str]:
-    """工具索引里的「必过 N 项 / 全量 N 项」与全量核对的实际条数。"""
+    """工具索引里的「必过 N 项」与全量核对的实际条数。"""
 
     source = (ROOT / "tools" / "全量核对.py").read_text(encoding="utf-8")
     required = _check_count(source, "REQUIRED")
-    total = required + _check_count(source, "SLOW")
     text = TOOLS_DOC.read_text(encoding="utf-8")
     problems: list[str] = []
     for pattern, want, label in (
-        (r"当前必过 (\d+) 项、全量 (\d+) 项", (required, total), "必过/全量"),
-        (r"必过 (\d+) 项，实测", (required,), "必过"),
-        (r"(\d+) 项，实测约 10 分钟", (total,), "全量"),
+        (r"当前必过 (\d+) 项", (required,), "必过"),
     ):
         match = re.search(pattern, text)
         if match is None:

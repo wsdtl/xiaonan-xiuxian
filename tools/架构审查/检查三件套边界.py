@@ -22,6 +22,8 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 CONTENT = ROOT / "data" / "战斗" / "内容"
 
 #: 计数类配额：用到叠层设施的功法卡占比上限（现状 97.7%，目标 ≤25%）。
