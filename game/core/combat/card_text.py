@@ -128,15 +128,6 @@ SORT_PHRASES = {
     "行动条从高到低": "行动条最前",
 }
 
-COMPARE_PHRASES = {
-    "等于": "等于",
-    "不等于": "不等于",
-    "大于": "大于",
-    "大于等于": "大于等于",
-    "小于": "小于",
-    "小于等于": "小于等于",
-}
-
 #: 二元计算的写法；乘方与取小/取大另有句式，不走这张表。
 CALC_PHRASES = {
     "相加": "+",
@@ -144,10 +135,6 @@ CALC_PHRASES = {
     "相乘": "×",
     "相除": "÷",
 }
-
-RESOURCE_PHRASES = {"血气": "血气", "精神": "精神", "护盾": "护盾"}
-
-STATUS_CATEGORY_PHRASES = {"正面": "正面", "负面": "负面", "中性": "中性"}
 
 
 #: 技能与处理段的序号。现有说明用圈码，渲染沿用。
@@ -1315,7 +1302,7 @@ class CardText:
             parts.append(f"[{name}]")
         category = node.get("分类")
         if category:
-            parts.append(f"{STATUS_CATEGORY_PHRASES.get(str(category), str(category))}状态")
+            parts.append(f"{category}状态")
         labels = node.get("标签")
         if isinstance(labels, Sequence) and not isinstance(labels, (str, bytes)) and labels:
             parts.append("、".join(f"[{item}]" for item in labels))
@@ -1340,12 +1327,12 @@ class CardText:
     def _condition_number(self, node: Mapping) -> str:
         left = self._value(node.get("左值"))
         right = self._value(node.get("右值"))
-        compare = COMPARE_PHRASES.get(str(node.get("比较") or ""), str(node.get("比较") or ""))
+        compare = str(node.get("比较") or "")
         return f"{left}{compare}{right}"
 
     def _condition_status(self, node: Mapping) -> str:
         owner = self._target(node.get("目标"))
-        compare = COMPARE_PHRASES.get(str(node.get("比较") or ""), str(node.get("比较") or ""))
+        compare = str(node.get("比较") or "")
         stacks = node.get("层数")
         prefix = f"{owner}的[{node.get('状态')}]"
         return f"{prefix}层数{compare}{_number(stacks)}" if compare else prefix
@@ -1355,10 +1342,9 @@ class CardText:
         raw = str(node.get("对象") or "")
         if not raw:
             return f"目标是{node.get('值')}"
-        side = {"来源": "来源", "目标": "目标"}.get(raw)
-        if side is None:
-            side = self._fallback("类型条件对象不认识", "目标")
-        return f"{side}是{node.get('值')}"
+        if raw not in ("来源", "目标"):
+            raw = self._fallback("类型条件对象不认识", "目标")
+        return f"{raw}是{node.get('值')}"
 
     def _condition_tags(self, node: Mapping) -> str:
         relation = {
@@ -1524,20 +1510,20 @@ class CardText:
 
     def _ability_restore_resource(self, node: Mapping) -> str:
         target = self._target(node.get("目标"))
-        resource = RESOURCE_PHRASES.get(str(node.get("资源")), str(node.get("资源")))
+        resource = str(node.get("资源"))
         value = self._dedupe(target, self._value(node.get("数值")))
         return f"{target}恢复{value}点{resource}"
 
     def _ability_spend_resource(self, node: Mapping) -> str:
         target = self._target(node.get("目标"))
-        resource = RESOURCE_PHRASES.get(str(node.get("资源")), str(node.get("资源")))
+        resource = str(node.get("资源"))
         value = self._dedupe(target, self._value(node.get("数值")))
         text = f"{target}消耗{value}点{resource}"
         return text + self._short_fall(node)
 
     def _ability_set_resource(self, node: Mapping) -> str:
         target = self._target(node.get("目标"))
-        resource = RESOURCE_PHRASES.get(str(node.get("资源")), str(node.get("资源")))
+        resource = str(node.get("资源"))
         return f"将{target}的{resource}设为{self._value(node.get('数值'))}"
 
     def _ability_transfer_resource(self, node: Mapping) -> str:
@@ -1918,9 +1904,7 @@ class CardText:
         """
 
         target = self._target(node.get("目标"))
-        field = {"阵营": "阵营", "主人": "主人", "控制者": "控制者"}.get(
-            str(node.get("字段") or ""), str(node.get("字段") or "")
-        )
+        field = str(node.get("字段") or "")
         if node.get("归属目标"):
             return f"将{target}的{field}改到{self._target(node['归属目标'])}"
         return f"将{target}的{field}改到‹{node.get('阵营')}›"

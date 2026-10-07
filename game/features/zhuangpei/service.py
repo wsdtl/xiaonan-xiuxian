@@ -191,6 +191,11 @@ class ZhuangpeiFeature:
                 return self._result(replay, replayed=True)
             raise ZhuangpeiFeatureError("人物或库存已经变化，请重新导入") from exc
         except (AssetStateError, CharacterStateError, CharacterNotFoundError, JsonDataError, PlayerStateError, InnateTreasureError) as exc:
+            # 同一个 request_id 的两个并发请求：后到的那个可能在库存校验时先失败
+            # （前一个刚把库存扣掉）。只要前一个已经落库，这里就按回执回放，不重复扣料。
+            replay = await self._replay(user_id, request_id, IMPORT, canonical)
+            if replay is not None:
+                return self._result(replay, replayed=True)
             raise ZhuangpeiFeatureError(str(exc)) from exc
         return self._result(payload, replayed=False)
 
