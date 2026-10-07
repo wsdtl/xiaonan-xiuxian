@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import sys
-
 import uvicorn
 from fastapi import FastAPI
 
@@ -15,14 +12,6 @@ from launch import (
     config,
     lifespan,
 )
-
-
-def configure_windows_event_loop() -> None:
-    if sys.platform != "win32":
-        return
-    policy = getattr(asyncio, "WindowsSelectorEventLoopPolicy", None)
-    if policy is not None:
-        asyncio.set_event_loop_policy(policy())
 
 
 def create_app() -> FastAPI:
@@ -47,8 +36,10 @@ def uvicorn_ssl_kwargs() -> dict[str, str]:
     }
 
 
+# 不要在 Windows 上改事件循环策略：`asyncio.set_event_loop_policy` 与
+# `WindowsSelectorEventLoopPolicy` 都已弃用，而全库没有任何地方用 Selector 循环
+# 独有的 `add_reader`——HTTP/WebSocket 与 APScheduler 在默认的 Proactor 上都跑得动。
 if __name__ == "__main__":
-    configure_windows_event_loop()
     uvicorn.run(
         app="main:create_app",
         factory=True,

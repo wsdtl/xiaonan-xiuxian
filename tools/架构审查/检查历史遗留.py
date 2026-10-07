@@ -31,6 +31,22 @@ FORBIDDEN_DIR_WORDS = ("一次性", "迁移", "原型", "归档", "废弃")
 SCRIPT_REF = re.compile(r"`([^`\s]*?([A-Za-z0-9_\u4e00-\u9fff-]+)\.py)`")
 #: import 行：判断脚本有没有调用者时只看这些行，不看全文。
 IMPORT_LINE = re.compile(r"\s*(?:from|import)\s")
+#: 已弃用或已移除的标准库 API：出现即红（3.12 起弃用的那批 + 更早移除的）。
+DEPRECATED_APIS = (
+    "asyncio.set_event_loop_policy",
+    "asyncio.get_event_loop_policy",
+    "WindowsSelectorEventLoopPolicy",
+    "WindowsProactorEventLoopPolicy",
+    "asyncio.get_event_loop(",
+    "asyncio.coroutine",
+    "asyncio.Task.all_tasks",
+    "datetime.utcnow",
+    "datetime.utcfromtimestamp",
+    "ssl.match_hostname",
+    "locale.getdefaultlocale",
+    "pkg_resources",
+    "distutils",
+)
 
 
 def check_archive_dirs() -> list[str]:
@@ -127,6 +143,36 @@ def check_scripts_have_callers() -> list[str]:
     return problems
 
 
+def check_deprecated_apis() -> list[str]:
+    """弃用的标准库 API 不许进来。
+
+    `main.py` 原先调 `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())`：
+    它从第一个提交起就是没有依据的样板（全库没有一处用 Selector 循环独有的
+    `add_reader`），而这两个 API 都已弃用。删掉之后由这条守着，别再写回去。
+
+    本文件要写下这些 API 的名字才查得了它们，所以豁免自身；注释行不算调用。
+    """
+
+    problems: list[str] = []
+    guard = pathlib.Path(__file__).resolve()
+    for path in sorted(ROOT.rglob("*.py")):
+        if {".venv", ".git", "_输出", "__pycache__"} & set(path.parts):
+            continue
+        if path.resolve() == guard:
+            continue
+        for line_no, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if line.lstrip().startswith("#"):
+                continue
+            for api in DEPRECATED_APIS:
+                if api in line:
+                    problems.append(
+                        f"{path.relative_to(ROOT).as_posix()}:{line_no} 用了已弃用的 {api}"
+                    )
+    return problems
+
+
 def check_self_mapping_tables() -> list[str]:
     """整表 {"A": "A"} 的字典就是空转，等价于 get(key, key)。"""
 
@@ -159,6 +205,7 @@ CHECKS = (
     ("悬空脚本引用", check_dangling_script_refs),
     ("脚本执行者", check_scripts_have_callers),
     ("自映射别名表", check_self_mapping_tables),
+    ("弃用 API", check_deprecated_apis),
 )
 
 
