@@ -67,7 +67,6 @@ LATEST_KEY = "main"
 class RetreatService:
     """拥有闭关会话、预计算结果和最终结算的唯一核心边界。"""
 
-    state_types = frozenset({SESSION_STATE, LATEST_STATE, SETTLEMENT_STATE})
 
     def __init__(
         self,

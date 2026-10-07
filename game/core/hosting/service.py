@@ -52,7 +52,6 @@ PHASES = frozenset({WAIT_START, WAIT_END, EXECUTE_START, EXECUTE_END})
 
 
 class HostingService:
-    state_types = frozenset({LATEST_STATE})
 
     def __init__(
         self,

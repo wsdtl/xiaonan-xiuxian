@@ -48,7 +48,6 @@ class _Store:
 class TradeService:
     """解释地点货架，并原子交换人物灵石与修行资粮。"""
 
-    state_types: frozenset[str] = frozenset()
 
     def __init__(
         self,

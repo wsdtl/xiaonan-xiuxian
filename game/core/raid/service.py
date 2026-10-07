@@ -53,7 +53,6 @@ LATEST_STATE = "raid_latest"
 class RaidService:
     """读取讨伐专属敌方来源并组装公共战斗请求。"""
 
-    state_types = frozenset({SESSION_STATE, SETTLEMENT_STATE, LATEST_STATE})
 
     def __init__(
         self,

@@ -81,7 +81,6 @@ from .contracts import (
 class CharacterService:
     """拥有玩家角色状态写权限的唯一核心服务。"""
 
-    state_types = frozenset({"character", "cultivation", "weapon"})
 
     def __init__(
         self,

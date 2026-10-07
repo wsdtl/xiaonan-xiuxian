@@ -59,7 +59,6 @@ _CULTIVATION_RESERVE_CATEGORIES = frozenset({"真意", "气机"})
 class AssetService:
     """解释玩家资产，并为跨领域事务生成普通物品变更计划。"""
 
-    state_types = _STATE_TYPES
 
     def __init__(self, data: JsonDataService, database: DatabaseService) -> None:
         self._data = data

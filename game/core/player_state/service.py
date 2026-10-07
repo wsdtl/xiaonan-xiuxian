@@ -46,7 +46,6 @@ CHARACTER_REQUIREMENTS = frozenset({"不限", "未创建", "已创建"})
 class PlayerStateService:
     """解释状态定义、检查守卫并原子更新三槽快照。"""
 
-    state_types = frozenset({STATE_TYPE})
 
     def __init__(self, data: JsonDataService, database: DatabaseService) -> None:
         self._data = data

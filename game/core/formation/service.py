@@ -81,7 +81,6 @@ _PREPARED_KEY = "main"
 class FormationService:
     """阵法定义、材料投入、阵藏转换和战斗快照的唯一入口。"""
 
-    state_types = frozenset({_PREPARED_STATE})
 
     def __init__(
         self,

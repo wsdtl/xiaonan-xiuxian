@@ -90,7 +90,6 @@ class _Mode:
 class GatheringService:
     """拥有采药与采矿会话、结果快照和最终结算的唯一核心边界。"""
 
-    state_types = frozenset({SESSION_STATE, LATEST_STATE, SETTLEMENT_STATE})
 
     def __init__(
         self,

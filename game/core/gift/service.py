@@ -22,7 +22,6 @@ BASIC_ITEM_CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
 
 
 class GiftService:
-    state_types = frozenset({RESULT_STATE})
 
     def __init__(self, data: JsonDataService, database: DatabaseService, location: LocationService, character: CharacterService, asset: AssetService, item_catalog: ItemCatalogService) -> None:
         self._data = data

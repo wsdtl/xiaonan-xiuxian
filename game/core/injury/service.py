@@ -47,7 +47,6 @@ class _Definition:
 class InjuryService:
     """长期伤势的唯一状态所有者。"""
 
-    state_types = frozenset({STATE_TYPE})
 
     def __init__(self, data: JsonDataService, database: DatabaseService) -> None:
         self._data = data

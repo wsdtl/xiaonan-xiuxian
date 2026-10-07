@@ -48,7 +48,6 @@ MAIN_KEY = "main"
 class TeamService:
     """拥有队伍聚合和队伍邀请写权限的唯一核心服务。"""
 
-    state_types = frozenset({TEAM_STATE, INVITATION_STATE})
 
     def __init__(
         self,

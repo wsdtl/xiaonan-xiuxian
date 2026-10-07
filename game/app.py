@@ -945,7 +945,7 @@ def initialize_game_services() -> None:
 
     services = build_game_services()
     try:
-        validate_startup_contracts(services.core)
+        validate_startup_contracts(services.core.player_state)
         register_game_access_guard()
         # 核心库的连接只在**一条命令**内复用：驱动器进出请求范围时开、关，
         # 句柄不跨请求存活（见 game/core/database/说明.md）。

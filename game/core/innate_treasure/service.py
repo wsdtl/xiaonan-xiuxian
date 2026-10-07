@@ -53,7 +53,6 @@ _ABILITY_FIELDS = {
 class InnateTreasureService:
     """先天灵宝的唯一规则解释和状态写入边界。"""
 
-    state_types = frozenset({STATE_TYPE})
 
     def __init__(self, data: JsonDataService, database: DatabaseService) -> None:
         self._data = data

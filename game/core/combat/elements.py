@@ -33,30 +33,6 @@ def generate_five_elements(
     return result
 
 
-def relation_maps(
-    rules: Mapping[str, Any],
-) -> tuple[dict[str, str], dict[str, str]]:
-    return _relation_map(rules.get("相生"), "相生"), _relation_map(
-        rules.get("相克"), "相克"
-    )
-
-
-def _relation_map(value: Any, label: str) -> dict[str, str]:
-    if not isinstance(value, list):
-        raise TypeError(f"五行.{label}必须是数组")
-    result: dict[str, str] = {}
-    for index, raw in enumerate(value):
-        row = _mapping(raw, f"五行.{label}[{index}]")
-        source = str(row.get("来源") or "")
-        target = str(row.get("目标") or "")
-        if source not in ELEMENTS or target not in ELEMENTS or source in result:
-            raise ValueError(f"五行.{label}[{index}]关系无效")
-        result[source] = target
-    if set(result) != set(ELEMENTS):
-        raise ValueError(f"五行.{label}必须覆盖木火土金水")
-    return result
-
-
 def _mapping(value: Any, label: str) -> Mapping[str, Any]:
     return mapping(value, label, error=TypeError)
 
@@ -65,4 +41,4 @@ def _number(value: Any, label: str) -> float:
     return number(value, label, error=TypeError)
 
 
-__all__ = ["ELEMENTS", "generate_five_elements", "relation_maps"]
+__all__ = ["ELEMENTS", "generate_five_elements"]

@@ -75,7 +75,6 @@ _TERMINAL = frozenset({"已结算", "已拒绝", "已撤回", "已过期", "已�
 
 
 class SectWarService:
-    state_types = frozenset({STATE_TYPE})
 
     def __init__(
         self,

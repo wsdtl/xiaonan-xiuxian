@@ -40,7 +40,6 @@ CHALLENGE_STATE = "duel_challenge"
 
 
 class DuelService:
-    state_types = frozenset({CHALLENGE_STATE})
 
     def __init__(
         self,

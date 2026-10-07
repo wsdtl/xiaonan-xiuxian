@@ -96,7 +96,7 @@ def test_all_services_and_startup_contracts(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "game_config", replace(app.game_config, database=isolated))
     services = app.build_game_services(data_dir=DATA)
     try:
-        validate_startup_contracts(services.core)
+        validate_startup_contracts(services.core.player_state)
         assert services.core.data.status().loaded
     finally:
         services.core.database.close()

@@ -45,7 +45,6 @@ MAIN_KEY = "main"
 
 
 class SectService:
-    state_types = frozenset({INVITATION_STATE})
 
     def __init__(
         self,

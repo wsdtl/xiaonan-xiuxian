@@ -72,7 +72,6 @@ _AFFECTION_QUANTUM = Decimal("0.1")
 class CompanionService:
     """拥有道侣静态身份和玩家个人道侣状态的核心边界。"""
 
-    state_types = frozenset({RELATION_STATE, ACTIVE_STATE, INSTANCE_STATE})
 
     def __init__(
         self,

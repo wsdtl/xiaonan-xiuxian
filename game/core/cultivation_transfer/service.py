@@ -24,7 +24,6 @@ from .contracts import (
 class CultivationTransferService:
     """只负责正式规则和纯数值，不持有角色状态。"""
 
-    state_types = frozenset()
 
     def __init__(
         self, data: JsonDataService, growth: GrowthService, world: WorldService

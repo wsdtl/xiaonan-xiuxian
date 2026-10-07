@@ -85,9 +85,6 @@ LATEST_KEY = "main"
 class ExplorationService:
     """拥有普通探险会话及逐场结果的唯一核心边界。"""
 
-    state_types = frozenset(
-        {SESSION_STATE, BATTLE_STATE, LATEST_STATE, SETTLEMENT_STATE}
-    )
 
     def __init__(
         self,
