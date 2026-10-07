@@ -19,7 +19,7 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
 #: 并发组数：测试本身几乎不占 CPU，瓶颈是各自装数据；给足并发就能摊平。
-GROUPS = max(1, min(8, os.cpu_count() or 4))
+GROUPS = max(1, min(12, os.cpu_count() or 4))
 
 
 def _shards() -> list[list[str]]:
@@ -37,11 +37,18 @@ def _shards() -> list[list[str]]:
     return [group for group in groups if group]
 
 
-def _run(group: list[str]) -> tuple[bool, str, float]:
+def _run(job: tuple[int, list[str]]) -> tuple[bool, str, float]:
+    index, group = job
     started = time.perf_counter()
+    # 本环境的 TEMP/TMP 没设，pytest 与 tempfile 会回落到当前工作目录，把
+    # pytest-of-* 与临时库落在仓库根。显式指到 _输出/ 下（已被 .gitignore 忽略）。
+    basetemp = ROOT / "_输出" / "测试临时" / f"片{index}"
+    basetemp.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ, "TEMP": str(basetemp), "TMP": str(basetemp)}
     done = subprocess.run(
-        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", *[f"tests/{name}" for name in group]],
+        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--basetemp", str(basetemp), *[f"tests/{name}" for name in group]],
         cwd=ROOT,
+        env=env,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -60,7 +67,7 @@ def main() -> int:
     started = time.perf_counter()
     failures: list[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(groups)) as pool:
-        for index, (ok, tail, seconds) in enumerate(pool.map(_run, groups), start=1):
+        for index, (ok, tail, seconds) in enumerate(pool.map(_run, enumerate(groups, start=1)), start=1):
             print(f"  [{'通过' if ok else '失败'}] 第 {index} 组（{len(groups[index - 1])} 个文件） {seconds:>6.1f}s  {tail}")
             if not ok:
                 failures.append(str(index))

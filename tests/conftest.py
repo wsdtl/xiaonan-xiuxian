@@ -6,9 +6,7 @@
 """
 from __future__ import annotations
 
-import tempfile
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
@@ -16,10 +14,14 @@ import game.app as app
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _isolated_database():
-    """整个会话把游戏数据库指到本进程专属的临时目录。"""
+def _isolated_database(tmp_path_factory):
+    """整个会话把游戏数据库指到本进程专属的临时目录。
 
-    root = Path(tempfile.mkdtemp(prefix="xiaonan-test-db-"))
+    用 `tmp_path_factory` 而不是 `mkdtemp`：本环境的 TEMP/TMP 没设，`mkdtemp`
+    会回落到当前工作目录，把临时库落在仓库根；pytest 自己会在会话结束时收掉。
+    """
+
+    root = tmp_path_factory.mktemp("game-db")
     app.game_config = replace(
         app.game_config,
         database=replace(app.game_config.database, path=root / "game.db"),
