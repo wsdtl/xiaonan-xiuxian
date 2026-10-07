@@ -31,6 +31,14 @@ FORBIDDEN_DIR_WORDS = ("一次性", "迁移", "原型", "归档", "废弃")
 SCRIPT_REF = re.compile(r"`([^`\s]*?([A-Za-z0-9_\u4e00-\u9fff-]+)\.py)`")
 #: import 行：判断脚本有没有调用者时只看这些行，不看全文。
 IMPORT_LINE = re.compile(r"\s*(?:from|import)\s")
+#: 已知的工具临时目录前缀：出现在工作区根就是落错了地方。
+STRAY_TEMP_PREFIXES = (
+    "pip-",
+    "pytest-of-",
+    "xiaonan-test-db-",
+    "装配判",
+    "probe-",
+)
 #: 已弃用或已移除的标准库 API：出现即红（3.12 起弃用的那批 + 更早移除的）。
 DEPRECATED_APIS = (
     "asyncio.set_event_loop_policy",
@@ -224,6 +232,25 @@ def check_deprecated_apis() -> list[str]:
     return problems
 
 
+def check_stray_temp_dirs() -> list[str]:
+    """工作区根不许堆工具临时件。
+
+    本环境只有工作区内可写，Python 的 tempfile 会回落到当前目录，于是
+    pip-*/pytest-of-*/*test-db*/装配判* 这类中间件全堆到仓库根。工具该把
+    TEMP/TMP 指向 `_输出/临时`；这里负责让漏网的当场变红。
+    """
+
+    problems: list[str] = []
+    for entry in sorted(ROOT.iterdir()):
+        if not entry.is_dir() or not STRAY_TEMP_PREFIXES:
+            continue
+        if any(entry.name.startswith(prefix) for prefix in STRAY_TEMP_PREFIXES):
+            problems.append(
+                f"{entry.name}/ 是工具临时件，应落到 _输出/临时（把 TEMP/TMP 指过去）"
+            )
+    return problems
+
+
 def check_self_mapping_tables() -> list[str]:
     """整表 {"A": "A"} 的字典就是空转，等价于 get(key, key)。"""
 
@@ -258,6 +285,7 @@ CHECKS = (
     ("自映射别名表", check_self_mapping_tables),
     ("弃用 API", check_deprecated_apis),
     ("未使用的导入", check_unused_imports),
+    ("临时件不入根", check_stray_temp_dirs),
 )
 
 

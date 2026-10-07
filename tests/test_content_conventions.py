@@ -251,8 +251,8 @@ from pathlib import Path
 import pytest
 
 DATA = Path(__file__).resolve().parents[1] / "data"
-if str(DATA.parent / "tools") not in sys.path:
-    sys.path.insert(0, str(DATA.parent / "tools"))
+if str(DATA.parent / "tools" / "库") not in sys.path:
+    sys.path.insert(0, str(DATA.parent / "tools" / "库"))
 
 from 构筑模板展开 import expand_build_document  # noqa: E402
 

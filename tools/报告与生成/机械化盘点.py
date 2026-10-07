@@ -23,6 +23,12 @@
 
 from __future__ import annotations
 
+import pathlib as _pathlib
+import sys as _sys
+
+# 共用库住在 tools/库/：脚本按文件运行时 sys.path[0] 是自己的目录，得手动加。
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1] / "库"))
+
 import argparse
 import collections
 import json
@@ -30,7 +36,7 @@ import math
 import pathlib
 import sys
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from 全库扫描 import 全库文档  # noqa: E402

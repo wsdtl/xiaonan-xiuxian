@@ -35,7 +35,7 @@ import collections
 import json
 import pathlib
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 SECTIONS = (
     ("真意", "data/战斗/内容/真意/真意-*.json"),
     ("器律", "data/物品/炼器/内容/器律-*.json"),

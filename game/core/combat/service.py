@@ -135,7 +135,7 @@ class CombatService:
             raise RuntimeError("阵法核心必须先于战斗核心启动")
 
         templates = _template_library()
-        # 构筑模板库是引擎基础设施（生成自真实实例，见 tools/构筑模板代码化.py），
+        # 构筑模板库是引擎基础设施（生成自真实实例，见 tools/报告与生成/构筑模板代码化.py），
         # 不进 JSON 快照；交给基石同时用于校验与引擎。
         foundation = load_battle_foundation(
             self._data,

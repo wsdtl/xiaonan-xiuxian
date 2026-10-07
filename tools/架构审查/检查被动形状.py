@@ -12,6 +12,12 @@
 
 from __future__ import annotations
 
+import pathlib as _pathlib
+import sys as _sys
+
+# 共用库住在 tools/库/：脚本按文件运行时 sys.path[0] 是自己的目录，得手动加。
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1] / "库"))
+
 import collections
 import pathlib
 import sys

@@ -8,7 +8,7 @@ import sys
 import re
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from game.core.data import JsonDataService
 
@@ -91,7 +91,7 @@ def _six_digit_values(value: object) -> tuple[str, ...]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="审查正式 JSON 数据")
-    parser.add_argument("--data", type=Path, default=Path(__file__).parents[1] / "data")
+    parser.add_argument("--data", type=Path, default=Path(__file__).parents[2] / "data")
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args()
     report = audit(args.data)

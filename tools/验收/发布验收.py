@@ -12,12 +12,22 @@
 """
 from __future__ import annotations
 
+import os
+
 import pathlib
 import subprocess
 import sys
 import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+# 本环境（DSH 沙箱）只允许写工作区内：%TEMP% 对 Python 一律 PermissionError，
+# tempfile 于是回落到当前目录，把 pip-*/pytest-of-* 这类临时件丢在仓库根。
+# 把 TEMP/TMP 指到 _输出/临时（已被 .gitignore 忽略），子进程一并继承。
+_SCRATCH = ROOT / "_输出" / "临时"
+_SCRATCH.mkdir(parents=True, exist_ok=True)
+os.environ["TEMP"] = os.environ["TMP"] = str(_SCRATCH)
+
 
 CHANNELS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("语料通道", ("tools/验收/语料对照.py", "--对照", "tools/基准/语料摘要.sem")),

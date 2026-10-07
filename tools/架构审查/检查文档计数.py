@@ -37,6 +37,10 @@ TOOLS_DOC = ROOT / "tools" / "说明.md"
 #: 工具索引里按目录给出的类别；位置列写这些字样的行，数目直接与目录里的脚本数比。
 DIRECTORY_CATEGORIES = {
     "架构审查/": "tools/架构审查",
+    "行为验证/": "tools/行为验证",
+    "报告与生成/": "tools/报告与生成",
+    "库/": "tools/库",
+    "语料验收/": "tools/验收",
     "公式预览/": "tools/公式预览",
 }
 SKIP_PARTS = {"__pycache__"}
@@ -145,24 +149,25 @@ def check_tools_totals() -> list[str]:
 
     text = TOOLS_DOC.read_text(encoding="utf-8")
     problems: list[str] = []
-    match = re.search(
-        r"共 \*\*(\d+) 支脚本\*\*：根下 (\d+) · `架构审查/` (\d+) · `公式预览/` (\d+)",
-        text,
-    )
-    if match is None:
+    head = re.search(r"共 \*\*(\d+) 支脚本\*\*：([^（\n]+)", text)
+    if head is None:
         return ["工具索引里找不到脚本总数的句子"]
-    got = tuple(int(value) for value in match.groups())
-    want = (
-        sum(len(_scripts(path)) for path in ("tools", "tools/架构审查", "tools/公式预览")),
-        len(_scripts("tools")),
-        len(_scripts("tools/架构审查")),
-        len(_scripts("tools/公式预览")),
-    )
-    if got != want:
-        labels = ("脚本总数", "根下", "架构审查", "公式预览")
-        for label, was, now in zip(labels, got, want):
-            if was != now:
-                problems.append(f"工具索引写「{label} {was}」，实际 {now}")
+    total = int(head.group(1))
+    tail = head.group(2)
+    root = re.search(r"根下\s*(\d+)", tail)
+    written = {label: int(count) for label, count in re.findall(r"`([^`]+/)`\s*(\d+)", tail)}
+    # 目录分类由 DIRECTORY_CATEGORIES 给出：加一个新目录，索引与这里一起加，判据自动跟上。
+    want_dirs = {label: len(_scripts(where)) for label, where in DIRECTORY_CATEGORIES.items()}
+    want_root = len(_scripts("tools"))
+    want_total = want_root + sum(want_dirs.values())
+    if root is None or int(root.group(1)) != want_root:
+        problems.append(f"工具索引写「根下 {root.group(1) if root else '?'}」，实际 {want_root}")
+    if total != want_total:
+        problems.append(f"工具索引写「脚本总数 {total}」，实际 {want_total}")
+    for label, want in want_dirs.items():
+        got = written.get(label)
+        if got != want:
+            problems.append(f"工具索引写「{label} {got if got is not None else '缺'}」，实际 {want}")
 
     rows = _category_rows(text)
     if not rows:
@@ -190,10 +195,11 @@ def check_tools_listing() -> list[str]:
     problems: list[str] = []
     index = TOOLS_DOC.read_text(encoding="utf-8")
     review_doc = (ROOT / "tools" / "架构审查" / "说明.md").read_text(encoding="utf-8")
-    for relative, text in (
-        ("tools", index),
-        ("tools/架构审查", review_doc),
-    ):
+    listing = {"tools/架构审查": review_doc}
+    for relative in ("tools", *DIRECTORY_CATEGORIES.values()):
+        if relative != "tools/架构审查":
+            listing[relative] = index
+    for relative, text in listing.items():
         for name in _scripts(relative):
             if f"`{name}`" not in text:
                 problems.append(f"{relative}/说明没有点名 {name}")

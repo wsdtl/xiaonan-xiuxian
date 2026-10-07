@@ -12,6 +12,8 @@
 """
 from __future__ import annotations
 
+import os
+
 import concurrent.futures
 import pathlib
 import subprocess
@@ -19,6 +21,14 @@ import sys
 import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+# 本环境（DSH 沙箱）只允许写工作区内：%TEMP% 对 Python 一律 PermissionError，
+# tempfile 于是回落到当前目录，把 pip-*/pytest-of-* 这类临时件丢在仓库根。
+# 把 TEMP/TMP 指到 _输出/临时（已被 .gitignore 忽略），子进程一并继承。
+_SCRATCH = ROOT / "_输出" / "临时"
+_SCRATCH.mkdir(parents=True, exist_ok=True)
+os.environ["TEMP"] = os.environ["TMP"] = str(_SCRATCH)
+
 
 #: 必过项。每项一个名字 + 一组 argv（相对项目根）。
 REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -28,18 +38,18 @@ REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("数据驱动", ("tools/架构审查/检查数据驱动.py",)),
     ("卡形判据（14 支）", ("tools/架构审查/检查卡形.py",)),
     ("战报展示", ("tools/架构审查/检查战报展示.py",)),
-    ("启动顺序", ("tools/验证启动顺序.py",)),
+    ("启动顺序", ("tools/行为验证/验证启动顺序.py",)),
     ("语法（game/tools/launch/message/tests）", ("-m", "compileall", "-q", "game", "tools", "launch", "message", "tests")),
     ("单元测试（分片并发）", ("tools/跑测试.py",)),
-    ("战斗说明审查", ("tools/卡面说明审查.py",)),
-    ("战斗文本渲染", ("tools/渲染战斗文本.py",)),
+    ("战斗说明审查", ("tools/报告与生成/卡面说明审查.py",)),
+    ("战斗文本渲染", ("tools/报告与生成/渲染战斗文本.py",)),
     ("协议适配", ("tools/验收/协议适配对照.py",)),
     ("基准文件命名", ("tools/架构审查/检查基准文件.py",)),
     ("静态资源", ("tools/架构审查/检查静态资源.py",)),
     ("文档计数", ("tools/架构审查/检查文档计数.py",)),
     ("规则层", ("tools/架构审查/检查规则层.py",)),
-    ("规则层行为", ("tools/验证规则层.py",)),
-    ("机械化棘轮", ("tools/机械化盘点.py",)),
+    ("规则层行为", ("tools/行为验证/验证规则层.py",)),
+    ("机械化棘轮", ("tools/报告与生成/机械化盘点.py",)),
     ("历史遗留守门", ("tools/架构审查/检查历史遗留.py",)),
 )
 

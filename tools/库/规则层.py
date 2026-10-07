@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import pathlib
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 RULE_LAYER_PATH = ROOT / "data" / "战斗" / "定义" / "规则层.json"
 
 

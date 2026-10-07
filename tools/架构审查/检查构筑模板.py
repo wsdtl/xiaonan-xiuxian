@@ -2,7 +2,7 @@
 
 ## 检查什么
 
-模板库是**代码**（`game/core/combat/template_data.py`，由 `tools/构筑模板代码化.py`
+模板库是**代码**（`game/core/combat/template_data.py`，由 `tools/报告与生成/构筑模板代码化.py`
 从真实实例机械生成）。
 
 1. **每份模板都有非空 `说明`**，且说明只讲机制形状、不含词条字眼。写进「蓄元」「归元」
@@ -21,6 +21,12 @@
 """
 
 from __future__ import annotations
+
+import pathlib as _pathlib
+import sys as _sys
+
+# 共用库住在 tools/库/：脚本按文件运行时 sys.path[0] 是自己的目录，得手动加。
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1] / "库"))
 
 import pathlib
 import sys

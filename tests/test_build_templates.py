@@ -154,7 +154,7 @@ def test_data_references_point_at_existing_templates() -> None:
     from pathlib import Path as _Path
     import sys as _sys
 
-    _tools = str(_Path(__file__).resolve().parents[1] / "tools")
+    _tools = str(_Path(__file__).resolve().parents[1] / "tools" / "库")
     if _tools not in _sys.path:
         _sys.path.insert(0, _tools)
     import 构筑模板 as 构筑

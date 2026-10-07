@@ -15,7 +15,7 @@ import json
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CONTENT = ("功法", "真意", "气机", "器律")
 #: 生成器留下的占位残句；它会被玩家当成规则读，所以必须当错误报出来。
 PLACEHOLDER = "按 JSON 能力执行"
