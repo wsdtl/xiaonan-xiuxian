@@ -97,7 +97,7 @@ def collected(
         builder.item(
             index,
             M.command(
-                M.text(f"{output.grade_name}{output.name}", tone="emphasis"),
+                M.text(f"{output.grade_name}{output.name}"),
                 f"查看 {output.content_id}",
             ),
             f" × {output.quantity}",

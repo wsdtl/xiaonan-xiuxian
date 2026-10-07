@@ -40,7 +40,7 @@ def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[Forma
         builder.item(
             index,
             M.command(
-                M.text(entry.formation.name, tone="mystic"),
+                M.text(entry.formation.name),
                 f"查看 {entry.formation.formation_id}",
             ),
         ).small(f"编号：{entry.formation.formation_id} · {entry.formation.core}")

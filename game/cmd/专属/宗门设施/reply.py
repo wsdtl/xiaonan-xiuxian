@@ -47,7 +47,7 @@ def page(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessage:
             )
         if entry.content_id.isdigit() and len(entry.content_id) == 6:
             parts[0] = M.command(
-                M.text(entry.name, tone="mystic"), f"查看 {entry.content_id}"
+                M.text(entry.name), f"查看 {entry.content_id}"
             )
             parts.extend(
                 (" · ", M.command(entry.content_id, f"查看 {entry.content_id}"))
@@ -116,7 +116,7 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
             index,
             f"{category} · ",
             M.command(
-                M.text(material.name, tone="emphasis"),
+                M.text(material.name),
                 f"查看 {material.item_id}",
             ),
             f" × {material.quantity}",

@@ -32,7 +32,7 @@ def view(feature: InnateTreasureFeature, result: InnateTreasureView) -> Document
             builder.item(
                 index,
                 M.command(
-                    M.text(treasure.name, tone="cultivation"),
+                    M.text(treasure.name),
                     f"查看 {treasure.treasure_id}",
                 ),
                 f" · {treasure.authority}",
@@ -73,7 +73,7 @@ def _append_treasure(builder: DocumentBuilder, treasure: InnateTreasure) -> None
     builder.field(
         "名称",
         M.command(
-            M.text(treasure.name, tone="cultivation"),
+            M.text(treasure.name),
             f"查看 {treasure.treasure_id}",
         ),
     )

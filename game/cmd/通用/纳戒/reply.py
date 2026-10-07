@@ -132,7 +132,7 @@ def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
             (
                 " · ",
                 M.command(
-                    M.text("装配", tone="positive"),
+                    M.text("装配"),
                     f"人物装配 功法 {entry.content_id} {entry.grade_id}",
                     submit=False,
                 ),

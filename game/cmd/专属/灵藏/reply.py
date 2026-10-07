@@ -30,7 +30,7 @@ def page(copy: LingcangCopy, value: LingcangPage, actions: Sequence[CommandActio
         builder.item(
             index,
             M.command(
-                M.text(f"{entry.grade_name}{entry.name}", tone="emphasis"),
+                M.text(f"{entry.grade_name}{entry.name}"),
                 f"查看 {entry.content_id}",
             ),
             f" × {entry.quantity}",

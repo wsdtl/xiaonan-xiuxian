@@ -88,7 +88,7 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessa
         ).line(
             feature.text("查看", "战书"),
             "：",
-            M.command(M.text(entry.war_id, tone="muted"), f"战况 {entry.war_id}"),
+            M.command(M.text(entry.war_id), f"战况 {entry.war_id}"),
         )
     return builder.small(
         feature.text("格式", "页码", {"当前页": value.page, "总页数": value.page_count})

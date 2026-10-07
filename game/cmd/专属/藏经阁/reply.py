@@ -25,12 +25,12 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
         builder.item(
             index,
             f"{entry.grade_name} · ",
-            M.command(M.text(entry.name, tone="mystic"), f"查看 {entry.content_id}"),
+            M.command(M.text(entry.name), f"查看 {entry.content_id}"),
             " · ",
             M.command(entry.content_id, f"查看 {entry.content_id}"),
             " · ",
             M.command(
-                M.text("借阅至", tone="positive"),
+                M.text("借阅至"),
                 f"借阅功法 {entry.content_id}",
                 submit=False,
             ),

@@ -30,7 +30,7 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]
         builder.item(
             index,
             f"{grade}",
-            M.command(M.text(entry.name, tone="mystic"), f"查看 {entry.content_id}"),
+            M.command(M.text(entry.name), f"查看 {entry.content_id}"),
             f" × {entry.quantity} · ",
             M.command(entry.content_id, f"查看 {entry.content_id}"),
         )

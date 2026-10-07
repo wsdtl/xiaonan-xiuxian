@@ -223,7 +223,6 @@ def _user_page(
                 M.command(
                     M.text(
                         feature.cultivation_label(insight.content_id, insight.grade_id),
-                        tone="mystic",
                     ),
                     f"查看 {insight.content_id}",
                 ),

@@ -43,7 +43,7 @@ def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
         builder.item(
             index,
             M.command(
-                M.text(f"{product.grade_name}{product.name}", tone="emphasis"),
+                M.text(f"{product.grade_name}{product.name}"),
                 f"购买 {product.content_id} {product.grade_id}",
                 submit=False,
             ),

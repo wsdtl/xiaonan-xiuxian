@@ -49,7 +49,7 @@ def current(
         builder.inline_section(
             copy.active_companion_section,
             M.command(
-                M.text(result.active_companion.name, tone="companion"),
+                M.text(result.active_companion.name),
                 f"查看 {result.active_companion.companion_id}",
             ),
             icon=copy.cultivator_icon,

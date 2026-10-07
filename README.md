@@ -78,7 +78,7 @@ bash start.sh
 游戏本体只保留 `tests/` 中的行为与数据契约测试；一切架构审查、边界检查、目录与命名校核都属于维护工具，统一放在 `tools/`，不进入游戏进程。
 
 ```powershell
-.venv/Scripts/python.exe -X utf8 tools/全量核对.py        # 必过 19 项，并发跑（推荐入口）
+.venv/Scripts/python.exe -X utf8 tools/全量核对.py        # 必过 21 项，并发跑（推荐入口）
 .venv/Scripts/python.exe -X utf8 tools/验收/发布验收.py    # 慢通道，发布前手动
 ```
 

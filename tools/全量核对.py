@@ -50,6 +50,8 @@ REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("规则层", ("tools/架构审查/检查规则层.py",)),
     ("规则层行为", ("tools/行为验证/验证规则层.py",)),
     ("机械化棘轮", ("tools/报告与生成/机械化盘点.py",)),
+    ("可点命令", ("tools/架构审查/检查可点命令.py",)),
+    ("品级露出", ("tools/架构审查/检查品级露出.py",)),
     ("历史遗留守门", ("tools/架构审查/检查历史遗留.py",)),
 )
 
@@ -85,7 +87,10 @@ def run_one(item: tuple[str, tuple[str, ...]]) -> tuple[str, bool, str, float]:
 def main() -> int:
     started = time.perf_counter()
     failures: list[str] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(REQUIRED)) as pool:
+    # 并发上限按核数取一半：单元测试自己还会再开 8 片，全开满会超订到 27 个进程，
+    # 实测墙钟反而更慢（各项都被拖长）。
+    workers = max(1, (os.cpu_count() or 4) // 2)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         for name, ok, tail, seconds in pool.map(run_one, REQUIRED):
             print(f"  [{'通过' if ok else '失败'}] {name:<28} {seconds:>6.1f}s  {tail}")
             if not ok:

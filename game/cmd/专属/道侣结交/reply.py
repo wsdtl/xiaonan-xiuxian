@@ -178,7 +178,7 @@ def gift(
             text(copy, "赠礼", "获得回礼"),
             (
                 M.command(
-                    M.text(result.reward_item.name, tone="companion"),
+                    M.text(result.reward_item.name),
                     f"查看 {result.reward_item.item_id}",
                 ),
                 *M.text(f" × {result.reward_quantity}"),

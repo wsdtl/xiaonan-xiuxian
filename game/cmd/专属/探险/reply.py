@@ -231,7 +231,7 @@ def _item_parts(
 ) -> tuple[object, ...]:
     return (
         M.command(
-            M.text(feature.item_label(item_id, grade_id), tone="emphasis"),
+            M.text(feature.item_label(item_id, grade_id)),
             f"查看 {item_id}",
         ),
         f" × {quantity}",

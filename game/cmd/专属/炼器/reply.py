@@ -65,7 +65,7 @@ def law_list(copy: ForgingCopy, value: ForgingLawList) -> DocumentMessage:
         builder.item(
             index,
             M.command(
-                M.text(entry.law.name, tone="metal"),
+                M.text(entry.law.name),
                 f"查看 {entry.law.law_id}",
             ),
             " · ",
@@ -165,7 +165,7 @@ def _materials(builder: DocumentBuilder, materials: Sequence[ForgingMaterial], *
         builder.item(
             index,
             M.command(
-                M.text(f"{material.grade_name}{material.name}", tone="emphasis"),
+                M.text(f"{material.grade_name}{material.name}"),
                 f"查看 {material.item_id}",
             ),
             f" × {material.quantity} · {material.trait}{relation}",

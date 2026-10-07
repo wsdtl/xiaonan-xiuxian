@@ -71,7 +71,7 @@ def recipe_list(
         builder.item(
             index,
             M.command(
-                M.text(entry.recipe.medicine_name, tone="positive"),
+                M.text(entry.recipe.medicine_name),
                 f"查看 {entry.recipe.recipe_id}",
             ),
             " · ",
@@ -185,7 +185,7 @@ def _material(builder: DocumentBuilder, index: int, material: AlchemyMaterial) -
     builder.item(
         index,
         M.command(
-            M.text(f"{material.grade_name}{material.name}", tone="emphasis"),
+            M.text(f"{material.grade_name}{material.name}"),
             f"查看 {material.item_id}",
         ),
         f" × {material.quantity} · {material.trait} · {material.relation}",

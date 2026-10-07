@@ -30,7 +30,7 @@ def item(
         .field(
             "基础物品",
             M.command(
-                M.text(f"{grade_name}{item_name}", tone="emphasis"),
+                M.text(f"{grade_name}{item_name}"),
                 f"查看 {value.item_id}",
             ),
         )

@@ -187,7 +187,7 @@ def _user_page(
 def _item_parts(feature: OreGatheringFeature, item: GatheredItem) -> tuple[object, ...]:
     return (
         M.command(
-            M.text(feature.item_label(item.item_id, item.grade_id), tone="metal"),
+            M.text(feature.item_label(item.item_id, item.grade_id)),
             f"查看 {item.item_id}",
         ),
         f" × {item.quantity}",
