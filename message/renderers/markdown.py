@@ -1,4 +1,13 @@
-"""公共 Document 到 Markdown 的结构渲染。"""
+"""公共 Document 到 Markdown 的结构渲染。
+
+**这条通道不产生公式。** 2026-10 实测：QQ 客户端不渲染公式，`small` 包出来的源码会原样
+露出（玩家看到的是「缺少目标」那一段前面挂着一串反斜杠命令）。所以状态、进度、带色调的
+强调与小字在这里**一律纯文本**，只保留结构：图标、分级引用（标题一层、正文二层）、字段分隔、
+链接与换行。
+
+公式（KaTeX）只属于**后台网页**那条路，由服务端的 HTML 投影负责，那里的降级由
+`tools/架构审查/检查公式降级.py` 守着（要求每个公式带非空 `data-plain`）。两条路互不替代。
+"""
 
 from __future__ import annotations
 
@@ -22,14 +31,10 @@ from ..schema import (
     Text,
 )
 from ..theme import (
-    CAPTION_SIZE_COMMAND,
-    PROGRESS_EMPTY_COLOR,
     PROGRESS_EMPTY_GLYPH,
-    PROGRESS_FILLED_COLOR,
     PROGRESS_FILLED_GLYPH,
     PROGRESS_SEGMENTS,
     LineSize,
-    tone_style,
 )
 
 CommandRenderer = Callable[[CommandLink, LineSize, str, bool], str]
@@ -93,7 +98,11 @@ def render_rich_markdown(
     default_tone: str = "",
     force_formula: bool = False,
 ) -> str:
-    """渲染一段 RichText，供协议驱动构造内联能力。"""
+    """渲染一段 RichText，供协议驱动构造内联能力。
+
+    `line_size` / `default_tone` / `force_formula` 只为不动物协议驱动的调用方而保留：
+    它们原来都服务于「谁进公式」，这条通道不再有公式，所以一律不再使用。
+    """
 
     return _render_rich(
         value,
@@ -111,7 +120,6 @@ def _title(value: RichText, icon: str, command_renderer: CommandRenderer | None)
 
 
 def _render_line(value: ContentLine, command_renderer: CommandRenderer | None) -> str:
-    # 只有明确的语义对象进入公式；普通 Markdown 文本保留原有层级和换行。
     return _render_rich(
         value.content,
         command_renderer,
@@ -129,140 +137,50 @@ def _render_rich(
     default_tone: str = "",
     force_formula: bool = False,
 ) -> str:
+    """一段富文本 → 正文。**不产生公式**：状态、进度、强调、小字都只是普通文字。"""
+
+    del line_size, default_tone, force_formula
     parts: list[str] = []
-    formula: list[str] = []
-    semantic_line = force_formula or line_size == "caption"
-
-    def flush_formula() -> None:
-        if not formula:
-            return
-        parts.append(f"${_size(''.join(formula), line_size)}$")
-        formula.clear()
-
     for span in value:
         if isinstance(span, Text):
-            tone = span.tone or default_tone
-            if semantic_line:
-                formula.append(_text_expression(span.value, tone=tone))
-            else:
-                flush_formula()
-                parts.append(_escape(span.value))
+            parts.append(_escape(span.value))
         elif isinstance(span, Status):
-            style = tone_style(span.tone)
-            if style.color:
-                formula.append(_status_expression(span))
-            else:
-                flush_formula()
-                parts.append(_escape(span.value))
+            parts.append(_escape(span.value))
         elif isinstance(span, Progress):
-            formula.append(_progress_expression(span))
+            parts.append(_progress_text(span))
         elif isinstance(span, Link):
-            flush_formula()
-            parts.append(
-                f"[{_render_rich(span.label, command_renderer, line_size=line_size, default_tone=default_tone, force_formula=_has_tone(span.label))}]({_escape_url(span.url)})"
-            )
+            parts.append(f"[{_render_rich(span.label, None)}]({_escape_url(span.url)})")
         elif isinstance(span, CommandLink):
-            flush_formula()
-            # 标签一律按正文渲染：caption 行与带 tone 的标签都会把标签推进公式，
-            # 而 QQ 不解析 [公式](mqqapi://...) 这种链接，按钮就废了。
             parts.append(
-                command_renderer(span, "body", default_tone, False)
+                command_renderer(span, "body", "", False)
                 if command_renderer
-                else _render_rich(
-                    span.label,
-                    None,
-                    line_size=line_size,
-                    default_tone=default_tone,
-                    force_formula=_has_tone(span.label),
-                )
+                else _render_rich(span.label, None)
             )
         elif isinstance(span, FieldSeparator):
-            if semantic_line:
-                formula.append(r"\text{ | }")
-            else:
-                flush_formula()
-                parts.append("&nbsp;|&nbsp;")
-    flush_formula()
+            parts.append(" | ")
     return "".join(parts)
 
 
-def _has_tone(value: RichText) -> bool:
-    """仅让明确的可点击名称保留局部公式装饰。"""
+def _progress_text(value: Progress) -> str:
+    """进度条用字形拼出来，纯文本即可——以前那段是公式，客户端不渲染就成了源码。"""
 
-    return any(isinstance(span, Text) and bool(span.tone) for span in value)
+    filled = round(PROGRESS_SEGMENTS * value.ratio)
+    empty = PROGRESS_SEGMENTS - filled
+    bar = PROGRESS_FILLED_GLYPH * filled + PROGRESS_EMPTY_GLYPH * empty
+    return f"{bar} {value.label}".rstrip() if value.label else bar
 
 
 def _render_header(block: HeaderBlock) -> str:
     text = "".join(span.value for span in block.content if isinstance(span, Text))
-    # 标题只承担 Markdown 结构，不参与公式字号或颜色美化。
     return f"**{_escape(text)}**"
 
 
-def _text_expression(value: str, *, tone: str) -> str:
-    expression = f"\\text{{{_escape_latex(value)}}}"
-    return _colorize(expression, tone_style(tone).color if tone else "")
-
-
-def _status_expression(value: Status) -> str:
-    style = tone_style(value.tone)
-    return _colorize(f"\\text{{{_escape_latex(value.value)}}}", style.color)
-
-
-def _progress_expression(value: Progress) -> str:
-    style = tone_style(value.tone)
-    filled = round(PROGRESS_SEGMENTS * value.ratio)
-    empty = PROGRESS_SEGMENTS - filled
-    parts: list[str] = []
-    if filled:
-        filled_text = f"\\text{{{PROGRESS_FILLED_GLYPH * filled}}}"
-        parts.append(_colorize(filled_text, style.color or PROGRESS_FILLED_COLOR))
-    if empty:
-        parts.append(
-            f"\\textcolor{{{PROGRESS_EMPTY_COLOR}}}"
-            f"{{\\text{{{PROGRESS_EMPTY_GLYPH * empty}}}}}"
-        )
-    if value.label:
-        label = f"\\text{{{_escape_latex(value.label)}}}"
-        parts.append(f"\\;{_colorize(label, style.color or PROGRESS_FILLED_COLOR)}")
-    return "".join(parts)
-
-
-def _colorize(expression: str, color: str) -> str:
-    """只在主题明确提供颜色时着色，否则保留原生公式文字。"""
-
-    return f"\\textcolor{{{color}}}{{{expression}}}" if color else expression
-
-
-def _size(value: str, line_size: LineSize) -> str:
-    # QQ 公式基线比 Markdown 正文偏大；所有局部公式统一降一档。
-    return f"\\{CAPTION_SIZE_COMMAND}{{{value}}}"
-
-
-def _escape_latex(value: object) -> str:
-    replacements = {
-        "\\": r"\textbackslash{}",
-        "{": r"\{",
-        "}": r"\}",
-        "$": r"\$",
-        "%": r"\%",
-        "_": r"\_",
-        "#": r"\#",
-        "&": r"\&",
-        "^": r"\^{}",
-        "~": r"\~{}",
-    }
-    text = str(value).replace("\r", " ").replace("\n", " ")
-    return "".join(replacements.get(character, character) for character in text)
-
-
 def _escape(value: object) -> str:
-    text = str(value or "")
-    for token in ("\\", "`", "*", "_", "$"):
-        text = text.replace(token, f"\\{token}")
-    # 公开文本统一使用半角方括号。只有紧随圆括号的方括号才会组成
-    # Markdown 链接；孤立的 [名称] 应原样交给客户端显示。
-    return text.replace("\r", " ").replace("\n", " ")
+    return str(value)
 
 
 def _escape_url(value: object) -> str:
-    return str(value or "").strip().replace(" ", "%20").replace(")", "%29")
+    return str(value).replace("(", "%28").replace(")", "%29")
+
+
+__all__ = ["render_markdown", "render_rich_markdown"]
