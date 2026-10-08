@@ -304,18 +304,15 @@ def main() -> int:
     for item in law_problems[:6]:
         print("     " + item)
     print("  [" + ("干净" if not distinct else str(len(distinct)) + " 处") + "] 两两不等（" + str(len(laws)) + " 条）")
+    print("  [" + ("干净" if not similar else str(len(similar)) + " 处") + "] 同模板换参数")
     for item in distinct[:4]:
         print("     " + item)
     pass
     if similar:
-        print("  [" + str(len(similar)) + " 处] 同模板换参数（同用途内事件+方式+产出三样全同）")
         for item in similar[:6]:
             print("     " + item)
-    else:
-        print("  [干净] 同模板换参数")
-    # 同模板换参数：旧设计里还有若干组（同契/行气/时序），它们会在逐条重做时一并消掉，
-    # 所以先报不判；64 条全部重做完成后把 similar 并进 problems 转硬。
-    problems += scope + law_problems + distinct
+    # 64 条逐条设计已全部完成，同模板换参数不再是「先报不判」——它就是不合格。
+    problems += scope + law_problems + distinct + similar
     if problems:
         print(f"器律形状 {len(problems)} 处")
         return 1
