@@ -12,6 +12,7 @@
   `data` 的大类数与 `读取规则.json` 的组件数、JSON 文档/实体/资源池数、注册命令与守卫数；
 - `tools/说明.md`：脚本总数与各目录数、每张分类表的条数与表里列出的脚本名、
   「必过 N 项 / 全量 N 项」与 `全量核对.py` 的 `REQUIRED` / `SLOW`。
+- 所有文档：同一份里同一个标题不许出现两次（写两遍就会出现「哪份才是新的」这种翻页）。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查文档计数.py
 
@@ -246,12 +247,43 @@ def check_full_check_counts() -> list[str]:
     return problems
 
 
+#: 扫文档时跳过的目录。
+DOC_SKIP_PARTS = {"__pycache__", ".venv", ".git", "node_modules", "_输出"}
+
+
+def check_no_duplicate_sections() -> list[str]:
+    """同一份文档里同一个标题不许出现两次。
+
+    出现过真事：message/消息协议说明.md 整篇写了两遍（261 行里 107 行逐字重复），
+    读的人得在两份之间判断哪份是新的，改的人也容易改到旧的那一份。
+    """
+
+    problems: list[str] = []
+    for path in sorted(ROOT.rglob("*.md")):
+        if any(part in DOC_SKIP_PARTS for part in path.parts):
+            continue
+        headings = [
+            line.strip()
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+            if line.startswith("#")
+        ]
+        for heading in dict.fromkeys(headings):
+            count = headings.count(heading)
+            if count > 1:
+                problems.append(
+                    path.relative_to(ROOT).as_posix()
+                    + "：" + heading[:40] + " 出现了 " + str(count) + " 次"
+                )
+    return problems
+
+
 CHECKS = (
     ("README 结构计数", check_readme_structure),
     ("README 实测规模", check_readme_runtime),
     ("工具索引总数", check_tools_totals),
     ("工具索引点名", check_tools_listing),
     ("核对项数", check_full_check_counts),
+    ("无重复章节", check_no_duplicate_sections),
 )
 
 
