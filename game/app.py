@@ -708,7 +708,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("roads", map_overview.road_count),
         )
     )
-    zhongzu = ZhongzuFeature(data, character)
+    zhongzu = ZhongzuFeature(data, character, combat)
     zhongzu.initialize()
     najie = NajieFeature(asset)
     najie.initialize()

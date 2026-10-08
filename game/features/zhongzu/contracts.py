@@ -8,15 +8,20 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RaceEntry:
-    """一个种族：编号是稳定标识，其余是登记表里的展示事实。"""
+    """一个种族：编号是稳定标识，其余是登记表里的事实。
+
+    `flavor` 是展示数据集里的族系风味句；`benefits` / `cost` 由 `天生规则[]` 经规则层 `卡面`
+    合成——**不落库**：抄一份进数据就会漂（这正是本次重构要消灭的东西）。
+    """
 
     number: str
     name: str
     lineage: str
     tiers: tuple[str, ...]
     lifespan: float
-    rules: tuple[tuple[str, str], ...]
-    summary: str
+    benefits: tuple[str, ...]
+    cost: str
+    flavor: str
 
 
 @dataclass(frozen=True)

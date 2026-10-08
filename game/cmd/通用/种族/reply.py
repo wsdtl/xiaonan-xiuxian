@@ -70,15 +70,13 @@ def detail(copy: ZhongzuCopy, race: RaceEntry) -> DocumentMessage:
         _text(copy, "详情", "寿元"), M.text(f"×{race.lifespan:g}", tone="emphasis")
     )
     builder.section(_text(copy, "详情", "天生规则"), icon="skill")
-    for name, source in race.rules:
-        if source:
-            builder.line(_text(copy, "详情", "规则来源").format_map(
-                {"名称": name, "来源": source}
-            ))
-        else:
-            builder.line(_text(copy, "详情", "规则").format_map({"名称": name}))
-    builder.section(_text(copy, "详情", "说明"), icon="notice")
-    builder.line(race.summary)
+    if race.cost:
+        builder.line(_text(copy, "详情", "本相代价").format_map({
+            "本相": _text(copy, "详情", "规则分隔").join(race.benefits),
+            "代价": race.cost,
+        }))
+    else:
+        builder.line(race.flavor)
     return builder.build()
 
 

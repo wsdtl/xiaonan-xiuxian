@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.character import CharacterService
+from game.core.combat import CombatService
 from game.core.data import JsonDataError, JsonDataService
 
 from .contracts import RaceEntry, RaceLineage, RaceOverview, ZhongzuCopy
@@ -13,21 +14,53 @@ from .contracts import RaceEntry, RaceLineage, RaceOverview, ZhongzuCopy
 #: 展示数据集三节的键，缺一个或多一个都拒绝启动（与其它展示数据集同一套做法）。
 COPY_SECTIONS: tuple[tuple[str, set[str]], ...] = (
     ("总览", {"标题", "引言", "页码", "提示"}),
-    ("详情", {"标题", "基础", "编号", "族系", "档次", "寿元", "天生规则", "说明", "规则", "规则来源"}),
+    ("详情", {"标题", "基础", "编号", "族系", "档次", "寿元", "天生规则", "本相代价", "规则分隔"}),
     ("错误", {"未找到", "页码有误"}),
 )
+
+#: 风味句按**族系**取，种族名同名键是特例（人族用的就是这一手）。
+FLAVOR_SECTION = "风味"
+
+
+def _face(cards: Mapping[str, str], name: str, source: str) -> str:
+    """一条天生规则的卡面：带 `{来源}` 的把方向填进去（方向由载体声明）。"""
+
+    return cards.get(name, name).replace("{来源}", source)
+
+
+def _flavor(copy: ZhongzuCopy, race: str, lineage: str) -> str:
+    """风味句：先按种族名找特例，再退回族系。
+
+    键写成 `f"{名}风味"` 是**故意的**：检查数据驱动.py 用 f-string 模板认动态键，
+    纯占位符（`f"{lineage}"`）它认不出来，会被判成「没人读的文案」。
+    """
+
+    section = copy.text.get(FLAVOR_SECTION) or {}
+    return str(section.get(f"{race}风味") or section.get(f"{lineage}风味") or "")
 
 
 class ZhongzuFeature:
     """只编排角色核心已经查死的登记表与展示数据集里的文案，不算数值。"""
 
-    def __init__(self, data: JsonDataService, character: CharacterService) -> None:
+    def __init__(
+        self, data: JsonDataService, character: CharacterService, combat: CombatService
+    ) -> None:
         self._data = data
         self._character = character
+        self._combat = combat
         self._overview: RaceOverview | None = None
         self._copy: ZhongzuCopy | None = None
         self._by_number: dict[str, RaceEntry] = {}
         self._by_name: dict[str, RaceEntry] = {}
+
+    def _load_cards(self) -> Mapping[str, str]:
+        """规则层登记表的 `卡面`：本相/代价的文案只有这一处出处。"""
+
+        rows = self._combat.rule_layer()
+        return MappingProxyType({
+            str(name): str((row or {}).get("卡面") or name)
+            for name, row in rows.items()
+        })
 
     def initialize(self) -> RaceOverview:
         if self._overview is not None:
@@ -35,6 +68,7 @@ class ZhongzuFeature:
         if not self._character.status().initialized:
             raise RuntimeError("角色核心微服务必须先于种族图鉴玩法启动")
         self._copy = self._load_copy()
+        cards = self._load_cards()
         races = self._character.races()
         grouped: dict[str, list[RaceEntry]] = {}
         tiers: list[str] = []
@@ -43,19 +77,22 @@ class ZhongzuFeature:
             for tier in entry_tiers:
                 if tier not in tiers:
                     tiers.append(tier)
-            rules = tuple(
+            used = tuple(
                 (str(node.get("名称") or ""), str(node.get("来源") or ""))
                 for node in entry.get("天生规则") or ()
                 if isinstance(node, Mapping)
             )
+            # 本相与代价由 `天生规则[]` 经规则层 `卡面` 合成——数据里不落库，就不会漂。
+            faces = [_face(cards, name, source) for name, source in used]
             race = RaceEntry(
                 number=str(entry.get("编号") or ""),
                 name=name,
                 lineage=str(entry.get("族系") or ""),
                 tiers=entry_tiers,
                 lifespan=float(str(entry.get("寿元系数") or 1.0)),
-                rules=rules,
-                summary=str(entry.get("说明") or ""),
+                benefits=tuple(faces[:-1]),
+                cost=faces[-1] if faces else "",
+                flavor=_flavor(self._copy, name, str(entry.get("族系") or "")),
             )
             grouped.setdefault(race.lineage, []).append(race)
             self._by_number[race.number] = race
