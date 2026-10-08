@@ -71,7 +71,8 @@ from game.core.data import (
     strict_text as _text,
 )
 
-_LAW_STAGES = ("灵器", "法器", "法宝", "后天灵宝")
+#: 器律可用器阶从数据的 `阶序` 推导（阶序 1 是凡器，不开放器律孔），代码不再另存一份。
+_LAW_STAGE_FLOOR = 2
 
 
 @dataclass(frozen=True)
@@ -129,9 +130,22 @@ class ForgingService:
             dict(_mapping(rules.get("本命武器"), "炼器规则.本命武器"))
         )
         law_rule = _mapping(rules.get("器则"), "炼器规则.器则")
-        self._stages = tuple(
-            _weapon_stage(_mapping(raw, "器则.器阶[]"))
+        rows = tuple(
+            _mapping(raw, "器则.器阶[]")
             for raw in _sequence(law_rule.get("器阶"), "器则.器阶")
+        )
+        self._stages = tuple(_weapon_stage(row) for row in rows)
+        # 器阶的阶梯（顺序与档位强度）在 器则.json 里声明，这里只校验、不另立一份：
+        # 与 品级.json 同一套做法——数据声明阶梯，代码读它。
+        orders = tuple(_positive_int(row.get("阶序"), "器则.器阶[].阶序") for row in rows)
+        if orders != tuple(range(1, len(rows) + 1)):
+            raise JsonDataError("器阶阶序必须是 1..N 且与数组顺序一致")
+        rates = tuple(_number(row.get("器律能力倍率"), "器则.器阶[].器律能力倍率") for row in rows)
+        if any(rates[index] >= rates[index + 1] for index in range(len(rates) - 1)):
+            raise JsonDataError("器律能力倍率必须随阶序严格递增")
+        self._law_stages = tuple(
+            stage.name for stage, order in zip(self._stages, orders)
+            if order >= _LAW_STAGE_FLOOR
         )
         self._stage_by_name = MappingProxyType(
             {stage.name: stage for stage in self._stages}
@@ -166,7 +180,7 @@ class ForgingService:
     def laws(self, stage: str) -> tuple[ForgingLaw, ...]:
         self._require_initialized()
         normalized = str(stage or "").strip()
-        if normalized not in _LAW_STAGES:
+        if normalized not in self._law_stages:
             raise ForgingError(f"未知器律器阶：{normalized or '<空>'}")
         return tuple(
             sorted(
@@ -321,14 +335,14 @@ class ForgingService:
             artisan,
             tuple(
                 (stage, sum(law.stage == stage for law in self._laws.values()))
-                for stage in _LAW_STAGES
+                for stage in self._law_stages
             ),
         )
 
     async def list_laws(self, user_id: str, stage: str) -> ForgingLawList:
         normalized = _request_text(user_id, "user_id")
         normalized_stage = str(stage or "").strip()
-        if normalized_stage not in _LAW_STAGES:
+        if normalized_stage not in self._law_stages:
             raise ForgingError(f"未知器律器阶：{normalized_stage or '<空>'}")
         location_name, artisan = await self._current_artisan(normalized)
         entries = await self._material_entries(normalized)
@@ -742,8 +756,8 @@ class ForgingService:
         maximum = _positive_int(self._weapon_rule.get("等级上限"), "本命武器.等级上限")
         if maximum != 100:
             raise JsonDataError("当前本命武器等级上限必须为100")
-        if tuple(stage.name for stage in self._stages) != ("凡器",) + _LAW_STAGES:
-            raise JsonDataError("器阶必须依次为凡器、灵器、法器、法宝、后天灵宝")
+        if not self._stages or self._stages[0].name != "凡器":
+            raise JsonDataError("器阶第一位必须是凡器（凡器不开放器律孔）")
         expected_level = 1
         for stage in self._stages:
             if stage.minimum_level != expected_level:
