@@ -1,14 +1,26 @@
 :root {
   color-scheme: light;
   --app-height: 100dvh;
-  --page: #edf0ec;
+  /* 页底与描边对齐装配台/舆图的暖纸玉色；圆角与阴影三档、缓动曲线也在这一层
+     定义一次，下面的精修块共用（先前这几项没定义，规则会静默失效）。 */
+  --page: #f7f5ef;
   --surface: #ffffff;
-  --surface-soft: #f5f7f4;
-  --ink: #1d2723;
-  --muted: #68736d;
-  --line: #d7ddd8;
+  --surface-soft: #f3f1e9;
+  --surface-strong: #ffffff;
+  --ink: #1d2a25;
+  --muted: #5c6b64;
+  --line: #e3ded1;
+  --line-strong: #cfc8b6;
   --green: #176d58;
   --green-dark: #105343;
+  --focus: #176d58;
+  --jade-deep: #134235;
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+  --sh-1: 0 1px 2px rgba(29, 42, 37, .05), 0 1px 3px rgba(29, 42, 37, .04);
+  --sh-2: 0 2px 6px rgba(29, 42, 37, .06), 0 8px 24px rgba(29, 42, 37, .08);
+  --t: 190ms cubic-bezier(.2, .7, .3, 1);
   --gold: #a7771f;
   --red: #a33c34;
   --blue: #2867a8;
@@ -439,6 +451,188 @@ button { cursor: pointer; }
 }
 
 .login-status { min-height: 20px; margin: 0; color: var(--red); font-size: 12px; }
+
+/* ------------------------------------------------------------------
+   外壳与气泡精修：配色/圆角/阴影/缓动对齐装配台与舆图，四个页面共用一套
+   视觉语言。只写 CSS，不动 app.js —— 用到的类名全部由脚本建立。 */
+
+body {
+  background:
+    radial-gradient(1100px 520px at 12% -10%, rgba(30, 106, 85, .07), transparent 62%),
+    radial-gradient(900px 460px at 108% 4%, rgba(176, 136, 58, .07), transparent 58%),
+    linear-gradient(180deg, #f7f5ef, #eeeae0);
+}
+
+.console-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, .82);
+  backdrop-filter: blur(10px) saturate(1.1);
+  box-shadow: var(--sh-1);
+}
+.brand-block h1 { letter-spacing: .06em; color: var(--jade-deep); }
+.brand-block span { letter-spacing: .2em; color: var(--muted); }
+
+.driver-filter {
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(19, 66, 53, .05);
+}
+.driver-filter button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 16px;
+  color: var(--muted);
+  background: transparent;
+  transition: background var(--t), color var(--t), box-shadow var(--t), transform var(--t);
+}
+.driver-filter button:hover { transform: translateY(-1px); }
+.driver-filter button.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, #237a62, var(--jade-deep));
+  box-shadow: 0 4px 12px rgba(19, 66, 53, .26);
+}
+
+.connection-status { letter-spacing: .06em; }
+.logout-button { border-radius: 999px; transition: background var(--t), color var(--t); }
+
+.message-stage { padding: 22px 0; }
+.message-list { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.message-list::-webkit-scrollbar { width: 9px; }
+.message-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+/* 一条消息：入场淡入上浮，悬停轻抬。 */
+.flow-row {
+  animation: flow-in 280ms cubic-bezier(.2, .7, .3, 1) both;
+}
+.message-stack { max-width: min(760px, 82%); }
+.bubble {
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong, #fff);
+  box-shadow: var(--sh-1);
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t);
+}
+.bubble:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sh-2);
+  border-color: var(--focus);
+}
+.flow-row.incoming .bubble {
+  border-color: #cfe2d8;
+  background: linear-gradient(180deg, #f2f9f5, #e9f2ed);
+  border-bottom-right-radius: 4px;
+}
+.flow-row.outgoing .bubble { border-bottom-left-radius: 4px; }
+.message-meta {
+  letter-spacing: .04em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.adapter-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  letter-spacing: .04em;
+}
+.adapter-tag.local { background: rgba(30, 106, 85, .1); border-color: #cfe2d8; }
+
+/* 正文里的引用块给一条玉色侧轨，与游戏消息里的层级天然对齐。 */
+.message-quote {
+  padding-left: 12px;
+  border-left: 2px solid rgba(30, 106, 85, .28);
+}
+.message-content a {
+  color: var(--focus);
+  text-underline-offset: 3px;
+  transition: color var(--t);
+}
+.message-content a:hover { color: var(--jade-deep); }
+
+.action-button, .inline-command {
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  transition: background var(--t), border-color var(--t), color var(--t), transform var(--t);
+}
+.action-button:hover:not(:disabled), .inline-command:hover {
+  border-color: var(--focus);
+  color: var(--focus);
+  transform: translateY(-1px);
+}
+.action-button.primary {
+  color: #fff;
+  border: 0;
+  background: linear-gradient(180deg, #237a62, var(--jade-deep));
+  box-shadow: 0 4px 14px rgba(19, 66, 53, .24);
+}
+
+/* 底部命令栏做成浮条，发送键与装配台的主按钮同一套。 */
+.command-composer {
+  margin: 0 18px 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: blur(10px) saturate(1.1);
+  box-shadow: var(--sh-2);
+}
+.command-composer textarea {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: #fff;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.command-composer textarea:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(30, 106, 85, .16);
+}
+.command-composer button {
+  color: #fff;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: linear-gradient(180deg, #237a62, var(--jade-deep));
+  box-shadow: 0 4px 14px rgba(19, 66, 53, .24);
+  transition: transform var(--t), box-shadow var(--t);
+}
+.command-composer button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(19, 66, 53, .3);
+}
+.command-composer button:active:not(:disabled) { transform: translateY(0) scale(.99); }
+
+.jump-latest {
+  border-radius: 999px;
+  box-shadow: var(--sh-2);
+  transition: transform var(--t), box-shadow var(--t);
+}
+.jump-latest:hover { transform: translateY(-2px); }
+
+.login-panel {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  box-shadow: var(--sh-2);
+  animation: flow-in 300ms cubic-bezier(.2, .7, .3, 1) both;
+}
+.login-panel input { border-radius: var(--r-sm); }
+.login-panel button {
+  color: #fff;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: linear-gradient(180deg, #237a62, var(--jade-deep));
+}
+
+@keyframes flow-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 @media (max-width: 700px) {
   .console-header {
