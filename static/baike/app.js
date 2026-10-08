@@ -41,11 +41,20 @@ function clear(list) {
 function renderPrefixes(table) {
   clear(el.prefixes);
   const frag = document.createDocumentFragment();
+  let lastGroup = "";
   for (const row of table) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
     button.className = "prefix-button";
+    const group = row["主体"];
+    if (group && group !== lastGroup) {
+      const heading = document.createElement("li");
+      heading.className = "group";
+      heading.textContent = group;
+      frag.append(heading);
+      lastGroup = group;
+    }
     const code = document.createElement("span");
     code.className = "prefix-code";
     code.textContent = row["前缀"];
@@ -146,6 +155,29 @@ function renderDetail(body) {
     list.append(term, desc);
   }
   el.detail.append(head, list);
+  const refs = body["引用"] || [];
+  if (refs.length) {
+    const title = document.createElement("h3");
+    title.className = "refs-title";
+    title.textContent = "关联";
+    const wrap = document.createElement("ul");
+    wrap.className = "refs";
+    for (const ref of refs) {
+      const item = document.createElement("li");
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.textContent = ref["名称"];
+      const where = document.createElement("span");
+      where.className = "chip-field";
+      where.textContent = ref["字段"];
+      chip.append(where);
+      chip.addEventListener("click", () => openDetail(ref["编号"]));
+      item.append(chip);
+      wrap.append(item);
+    }
+    el.detail.append(title, wrap);
+  }
   show(el.detail, true);
 }
 

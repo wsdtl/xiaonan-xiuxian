@@ -50,6 +50,52 @@ async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONRespons
     return JSONResponse({"模式": "总表", "前缀表": _prefix_rows(entries)}, headers=_data_headers())
 
 
+def _references(services, entity_id: str, value: object) -> list[dict[str, str]]:
+    """实体字段里指向别的实体的**编号式**引用。
+
+    只认「6 位数字且确实在目录里」的值——名字式引用（铸法、卡池来源、属性名一类）
+    不是带编号的实体，链不过去，所以这里不收，页面上也不假装能点。
+    """
+
+    catalog = {e.entity_id: e for e in services.core.data.numbered_entities()}
+    for race in services.core.character.races().values():
+        number = str(race.get("编号") or "")
+        if number:
+            catalog.setdefault(number, race)
+    found: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def visit(path: str, node: object) -> None:
+        if isinstance(node, Mapping):
+            for key, child in node.items():
+                visit((path + "." + str(key)) if path else str(key), child)
+            return
+        if isinstance(node, (list, tuple)):
+            for child in node:
+                visit(path, child)
+            return
+        text = str(node or "").strip()
+        if len(text) != 6 or not text.isdigit() or text == entity_id or text in seen:
+            return
+        target = catalog.get(text)
+        if target is None:
+            return
+        seen.add(text)
+        name = None
+        if isinstance(target, Mapping):
+            name = target.get("种族")
+        if name is None:
+            inner = getattr(target, "value", None)
+            name = inner.get("名称") if isinstance(inner, Mapping) else None
+        found.append({
+            "字段": path,
+            "编号": text,
+            "名称": str(name or text),
+        })
+
+    visit("", value)
+    return found
+
 def _detail(services, entity_id: str) -> JSONResponse:
     """单个实体的详情。按前缀分派：数据索引实体走 `entity_record`，种族走角色核心的 `races()`。"""
 
@@ -69,6 +115,7 @@ def _detail(services, entity_id: str) -> JSONResponse:
                 "名称": str(race.get("种族") or ""),
                 "来源": "种族",
                 "字段": jsonable_encoder(race),
+                "引用": _references(services, entity_id, race),
             },
             headers=headers,
         )
@@ -91,6 +138,7 @@ def _detail(services, entity_id: str) -> JSONResponse:
             "来源": str(record.section),
             "编号类别": str(record.number_category),
             "字段": jsonable_encoder(record.value),
+            "引用": _references(services, entity_id, record.value),
         },
         headers=headers,
     )
