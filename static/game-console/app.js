@@ -301,7 +301,6 @@
     // 文本一律过 html.escape，链接另过 _safe_url。所以这里用 innerHTML 是安全的；
     // 回退分支只能拿 content 原文自己转义。
     content.innerHTML = record.content_html || escapeHtml(record.content || "");
-    renderFormulas(content);
     bubble.appendChild(content);
     if (record.image && !content.querySelector("img") && isSafeUrl(record.image)) {
       const image = document.createElement("img");
@@ -321,27 +320,6 @@
     stack.append(meta, bubble);
     row.appendChild(stack);
     return row;
-  }
-
-  function renderFormulas(root) {
-    root.querySelectorAll(".message-formula").forEach((node) => {
-      const source = node.dataset.latex || "";
-      if (!source) return;
-      if (!window.katex) {
-        node.textContent = node.dataset.plain || source;
-        return;
-      }
-      try {
-        window.katex.render(source, node, {
-          displayMode: node.dataset.display === "true",
-          throwOnError: false,
-          strict: "ignore",
-          trust: false,
-        });
-      } catch (_) {
-        node.textContent = node.dataset.plain || source;
-      }
-    });
   }
 
   function createActions(record) {

@@ -69,9 +69,7 @@ def _markdown(value: str, flow_id: int) -> str:
             output.append(
                 f'<div class="message-quote depth-{min(depth, 3)}">{body}</div>'
             )
-        elif _is_formula_header(stripped) or (
-            stripped.startswith("**") and stripped.endswith("**")
-        ):
+        elif stripped.startswith("**") and stripped.endswith("**"):
             output.append(f'<div class="message-header">{body}</div>')
         else:
             output.append(f'<div class="message-line">{body}</div>')
@@ -119,12 +117,9 @@ def _inline(value: str, flow_id: int) -> str:
 
 
 def _format_text(value: str) -> str:
-    return "".join(
-        _formula_html(content, display=display)
-        if formula
-        else _format_plain_text(content)
-        for formula, content, display in _formula_parts(value)
-    )
+    """正文一律按纯文本转义——消息通道已不再产生公式（2026-10）。"""
+
+    return _format_plain_text(value)
 
 
 def _format_plain_text(value: str) -> str:
@@ -134,145 +129,6 @@ def _format_plain_text(value: str) -> str:
     escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
     escaped = escaped.replace("&amp;nbsp;", "&nbsp;")
     return escaped
-
-
-def _formula_parts(value: str) -> list[tuple[bool, str, bool]]:
-    """拆分受信任的公式边界；公式内容仍作为属性转义后交给 KaTeX。"""
-
-    text = str(value or "")
-    parts: list[tuple[bool, str, bool]] = []
-    cursor = 0
-    while cursor < len(text):
-        start = _next_formula_start(text, cursor)
-        if start < 0:
-            parts.append((False, text[cursor:], False))
-            break
-        if start > cursor:
-            parts.append((False, text[cursor:start], False))
-        delimiter = "$$" if text.startswith("$$", start) else "$"
-        end = _next_unescaped(text, delimiter, start + len(delimiter))
-        if end < 0:
-            parts.append((False, text[start:], False))
-            break
-        parts.append(
-            (
-                True,
-                text[start + len(delimiter) : end],
-                delimiter == "$$",
-            )
-        )
-        cursor = end + len(delimiter)
-    if not parts:
-        parts.append((False, text, False))
-    return parts
-
-
-def _next_formula_start(value: str, start: int) -> int:
-    index = start
-    while index < len(value):
-        index = value.find("$", index)
-        if index < 0:
-            return -1
-        if not _is_escaped(value, index):
-            return index
-        index += 1
-    return -1
-
-
-def _next_unescaped(value: str, delimiter: str, start: int) -> int:
-    index = start
-    while index < len(value):
-        index = value.find(delimiter, index)
-        if index < 0:
-            return -1
-        if not _is_escaped(value, index):
-            return index
-        index += len(delimiter)
-    return -1
-
-
-def _is_escaped(value: str, index: int) -> bool:
-    slashes = 0
-    cursor = index - 1
-    while cursor >= 0 and value[cursor] == "\\":
-        slashes += 1
-        cursor -= 1
-    return slashes % 2 == 1
-
-
-#: 公式里的命令：字母命令（text/textcolor/small/large…）与单字符命令（\; \, \ ）。
-_FORMULA_COMMAND = re.compile(r"\\[A-Za-z]+|\\.")
-_FORMULA_SPACES = frozenset({"\\ ", "\\;", "\\,", "\\quad", "\\qquad"})
-
-
-def _formula_group(text: str, index: int) -> tuple[str, int]:
-    """从 text[index] 是左花括号开始，取出配对的括号内容。"""
-
-    if index >= len(text) or text[index] != "{":
-        return "", index
-    depth = 0
-    cursor = index
-    while cursor < len(text):
-        if text[cursor] == "{":
-            depth += 1
-        elif text[cursor] == "}":
-            depth -= 1
-            if depth == 0:
-                return text[index + 1 : cursor], cursor + 1
-        cursor += 1
-    return text[index + 1 :], len(text)
-
-
-def _formula_plain(value: str) -> str:
-    """把公式还原成玩家看得懂的短文本：只留 text 里的字，丢掉字号与颜色。"""
-
-    text = str(value or "")
-    out: list[str] = []
-    cursor = 0
-    while cursor < len(text):
-        match = _FORMULA_COMMAND.match(text, cursor)
-        if match:
-            name = match.group(0)
-            cursor = match.end()
-            if cursor < len(text) and text[cursor] == "{":
-                if name == "\\text":
-                    content, cursor = _formula_group(text, cursor)
-                    out.append(_formula_plain(content))
-                elif name == "\\textcolor":
-                    _, cursor = _formula_group(text, cursor)
-                    if cursor < len(text) and text[cursor] == "{":
-                        content, cursor = _formula_group(text, cursor)
-                        out.append(_formula_plain(content))
-                else:
-                    content, cursor = _formula_group(text, cursor)
-                    out.append(_formula_plain(content))
-            elif name in _FORMULA_SPACES:
-                out.append(" ")
-            continue
-        char = text[cursor]
-        out.append(" " if char.isspace() else char)
-        cursor += 1
-    return " ".join("".join(out).split())
-
-
-def _formula_html(value: str, *, display: bool) -> str:
-    # data-plain 是给「KaTeX 没加载出来」时的降级：玩家该看到「空闲」，
-    # 而不是 $\small{\textcolor{...}{\text{空闲}}}$ 这一串。
-    return (
-        '<span class="message-formula" data-latex="'
-        + html.escape(value, quote=True)
-        + '" data-plain="'
-        + html.escape(_formula_plain(value), quote=True)
-        + '" data-display="'
-        + ("true" if display else "false")
-        + '"></span>'
-    )
-
-
-def _is_formula_header(value: str) -> bool:
-    return value.endswith("}$") and any(
-        value.startswith(f"$\\{size}{{") for size in ("large", "Large")
-    )
 
 
 def _plain(value: str) -> str:

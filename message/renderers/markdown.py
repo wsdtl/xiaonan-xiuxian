@@ -176,11 +176,18 @@ def _render_header(block: HeaderBlock) -> str:
 
 
 def _escape(value: object) -> str:
-    return str(value)
+    """转义 Markdown 标点：玩家名里的 \\ ` * _ $ 不能破坏消息结构。"""
+
+    text = str(value or "")
+    for token in ("\\", "`", "*", "_", "$"):
+        text = text.replace(token, f"\\{token}")
+    # 公开文本统一使用半角方括号。只有紧随圆括号的方括号才会组成
+    # Markdown 链接；孤立的 [名称] 应原样交给客户端显示。
+    return text.replace("\r", " ").replace("\n", " ")
 
 
 def _escape_url(value: object) -> str:
-    return str(value).replace("(", "%28").replace(")", "%29")
+    return str(value or "").strip().replace(" ", "%20").replace(")", "%29")
 
 
 __all__ = ["render_markdown", "render_rich_markdown"]

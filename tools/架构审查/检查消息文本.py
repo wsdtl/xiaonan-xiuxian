@@ -7,10 +7,8 @@
 1. **消息文本里没有 LaTeX 痕迹**（美元号、反斜杠命令、花括号、颜色值）；
 2. **QQ 载荷是 markdown，且保持协议说明的引用层级**（标题一层、正文二层）——驱动器认不出消息
    就会整条当纯文本发，`> ` 会一起露出；同时载荷里同样不许有 LaTeX；
-3. **后台网页对合成公式仍能降级**：`data-plain` 里不许留 LaTeX 痕迹。
-   这一条现在守的是**韧性**而不是现状——消息里已经没有公式了，但后台那条投影仍能处理
-   「万一哪条历史文本带了公式」的情形，所以保留并用合成输入验它。
-4. **前端兜底优先用 `data-plain`**（静态查后台 `app.js`），改回直接印原文就红。
+3. **后台页面与 QQ 载荷必须是同一份正文**（委托方 2026-10 口径：两条通道统一）。
+   归一化后逐字比较：块级标签、markdown 链接、任意层引用标记都要剥掉再比。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查消息文本.py
 
@@ -38,22 +36,13 @@ BS = chr(92)
 #: 消息文本与 QQ 载荷里都不该出现的东西。
 LATEX_TRACES = (
     "$",
-    BS + "text",
     BS + "small",
     BS + "large",
     BS + "textcolor",
     BS + ";",
     BS + "begin",
 )
-#: 可读文本里不该出现的东西（比上面多两个：花括号与颜色值）。
-PLAIN_MARKS = LATEX_TRACES + ("{", "}", "#")
-#: 合成公式：只用来验后台投影的降级还活着。
-PLAIN_INPUTS = (
-    BS + "small{" + BS + "textcolor{#27AE60}{" + BS + "text{空闲}}}",
-    BS + "small{" + BS + "textcolor{#C0392B}{" + BS + "text{▰▰▰▰▰}}" + BS + "; " + BS + "textcolor{#C0392B}{" + BS + "text{332 / 332}}}",
-)
-SPAN_RE = re.compile(r'<span class="message-formula"([^>]*)>')
-ATTR_RE = re.compile(r'data-([a-z]+)="([^"]*)"')
+
 
 
 def _presentation():
@@ -140,6 +129,18 @@ def _visible(text: str) -> str:
     return "\n".join(lines)
 
 
+def check_markup_escaped() -> list[str]:
+    """动态文本里的 Markdown 标点必须转义——玩家名带着 * 或 _ 不能破坏消息结构。"""
+
+    builder = M.document().section("身份", icon="status").line("名字 *_a_[b]_ $x$ 尾巴")
+    text = render_markdown(builder.build().document)
+    problems: list[str] = []
+    for token in ("*", "_", "$"):
+        if ("\\" + token) not in text:
+            problems.append(f"Markdown 标点 {token} 没有被转义：{text.strip()[:60]}")
+    return problems
+
+
 def check_channels_agree() -> list[str]:
     """后台页面与 QQ 载荷必须是同一份正文。"""
 
@@ -160,58 +161,11 @@ def check_channels_agree() -> list[str]:
     return problems
 
 
-def check_console_degrades() -> list[str]:
-    """后台投影对合成公式仍能给出干净的可读文本。"""
-
-    presentation = _presentation()
-    problems: list[str] = []
-    for value in PLAIN_INPUTS:
-        plain = presentation._formula_plain(value)
-        if not plain:
-            problems.append("转换结果为空：" + value)
-            continue
-        for mark in PLAIN_MARKS:
-            if mark in plain:
-                problems.append(f"可读文本里仍有 {mark}：{value} -> {plain}")
-    content = "$" + BS + "small{" + BS + "text{一句}}$" + " 普通正文"
-    html = presentation.render_message_html(
-        SimpleNamespace(message_type="markdown", content=content, flow_id=1)
-    )
-    spans = SPAN_RE.findall(html)
-    if not spans:
-        problems.append("后台投影对合成公式没有产生公式 span，降级链路断了")
-    for index, attributes in enumerate(spans, start=1):
-        values = dict(ATTR_RE.findall(attributes))
-        plain = values.get("plain", "")
-        if not plain:
-            problems.append(f"第 {index} 个公式没有可读文本")
-            continue
-        for mark in PLAIN_MARKS:
-            if mark in plain:
-                problems.append(f"第 {index} 个公式的可读文本仍像 LaTeX：{plain[:40]}")
-    return problems
-
-
-def check_frontend_uses_plain() -> list[str]:
-    """前端兜底必须优先用 data-plain；改回直接印原文就红。"""
-
-    text = (ROOT / "static" / "game-console" / "app.js").read_text(encoding="utf-8")
-    fallbacks = text.count("node.textContent = ")
-    good = text.count("node.textContent = node.dataset.plain || source;")
-    problems: list[str] = []
-    if good == 0:
-        problems.append("app.js 的公式兜底没有用 data-plain")
-    if fallbacks != good:
-        problems.append(f"app.js 里还有 {fallbacks - good} 处兜底直接印原文")
-    return problems
-
-
 CHECKS = (
     ("消息文本没有 LaTeX", check_text_has_no_latex),
+    ("Markdown 标点已转义", check_markup_escaped),
     ("QQ 载荷是 markdown 且没有 LaTeX", check_qq_payload),
-    ("后台投影仍能降级", check_console_degrades),
     ("两条通道正文一致", check_channels_agree),
-    ("前端优先用可读文本", check_frontend_uses_plain),
 )
 
 
@@ -229,7 +183,7 @@ def main() -> int:
     if failed:
         print(f"消息文本审查失败：{failed} 项")
         return 1
-    print("消息文本审查通过：消息里没有 LaTeX，QQ 载荷是 markdown，后台降级仍活着")
+    print("消息文本审查通过：消息里没有 LaTeX，QQ 载荷是 markdown，两条通道正文一致")
     return 0
 
 

@@ -277,20 +277,6 @@ button { cursor: pointer; }
 
 .message-content strong { font-weight: 800; }
 
-.message-formula {
-  display: inline-flex;
-  max-width: 100%;
-  vertical-align: baseline;
-}
-
-.message-formula[data-display="true"] {
-  display: flex;
-  overflow-x: auto;
-  padding: 2px 0;
-}
-
-.message-formula .katex { font-size: 1em; }
-
 .message-content a {
   color: var(--blue);
   text-decoration: none;
