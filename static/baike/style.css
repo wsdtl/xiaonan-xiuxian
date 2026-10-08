@@ -252,3 +252,12 @@ body {
 .card-sub { color: var(--muted); font-size: 12px; }
 
 .hit { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 0 2px; }
+
+::selection { background: var(--accent-soft); color: var(--accent); }
+
+@media print {
+  .topbar, .sidebar, .pager, .back { display: none; }
+  .app { grid-template-columns: 1fr; }
+  .content { padding: 0; }
+  .fields { border-color: #cccccc; }
+}

@@ -200,7 +200,10 @@ function renderDetail(body) {
   head.append(title, meta, back);
   const list = document.createElement("dl");
   list.className = "fields";
-  for (const [key, value] of Object.entries(body["字段"] || {})) {
+  const pairs = Object.entries(body["字段"] || {});
+  const first = ["编号", "名称", "说明"];
+  pairs.sort((a, b) => (first.indexOf(a[0]) + 1 || 99) - (first.indexOf(b[0]) + 1 || 99));
+  for (const [key, value] of pairs) {
     const term = document.createElement("dt");
     term.className = "field-key";
     term.textContent = key;
@@ -343,6 +346,13 @@ el.query.addEventListener("keydown", (event) => {
 window.addEventListener("popstate", () => boot());
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") showList();
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const buttons = [...el.entries.querySelectorAll(".entry-button")];
+  if (!buttons.length) return;
+  const at = buttons.indexOf(document.activeElement);
+  const next = event.key === "ArrowDown" ? Math.min(buttons.length - 1, at + 1) : Math.max(0, at - 1);
+  event.preventDefault();
+  buttons[next].focus();
 });
 
 boot();
