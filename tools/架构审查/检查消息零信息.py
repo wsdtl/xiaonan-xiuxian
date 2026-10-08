@@ -209,6 +209,9 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                 user_id=user_id, request_id="消息判据", name="判据甲", gender="男"
             )
         )
+        # 深页那一套要干净的人物走到指定地点；宽参那一套要留在初始状态——
+        # 深页会把人物带进洞天或各城，之后采药/闭关这类本地命令就全报错了，
+        # 早先 42 个组件里有 15 个因此一条真页面都没有。两个人各管一套。
         for place, commands in DEEP:
             if place:
                 try:
@@ -367,6 +370,26 @@ def check_deep_pages_are_real() -> list[str]:
     return problems
 
 
+def check_badge_not_restated() -> list[str]:
+    """状态徽章后面又跟一句复述它的话，就是同一件事印两遍。
+
+    只看「第一个词 + 空格 + 其余」这种行（第一个词不含冒号），并且第一个词要真的
+    出现在其余文字里——例如「未同行 如今并未同行」。像「可结束 现在可以结束采药」
+    这种同义但不同字的复述抓不住，那一类只能靠人看。
+    """
+
+    problems: list[str] = []
+    pages, _ = _corpus()
+    for word, body in pages.items():
+        for line in _lines(body):
+            head, separator, rest = line.partition(" ")
+            if not separator or ":" in head or "：" in head or len(head) < 2:
+                continue
+            if head in rest:
+                problems.append(word + " 的正文里徽章被复述：" + line[:50])
+    return problems
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
@@ -377,6 +400,7 @@ CHECKS = (
     ("深页不是错误页", check_deep_pages_are_real),
     ("单页不报页码", check_no_single_page_marker),
     ("零计数不配空陈述", check_no_zero_count_with_empty_note),
+    ("徽章不被复述", check_badge_not_restated),
 )
 
 

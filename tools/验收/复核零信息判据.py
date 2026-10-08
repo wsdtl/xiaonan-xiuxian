@@ -180,7 +180,7 @@ SWAPS: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
         ),
     ),
     (
-        "道侣页：徽章不配复述句（语义重复，判据抓不住）",
+        "道侣页：徽章不配复述句",
         "game/cmd/专属/道侣结交/reply.py",
         (
             "        .line(",
@@ -207,9 +207,7 @@ SWAPS: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 #: 已知抓不住的修复：它们是真修复，但那一类零信息是**语义重复**（同一件事换句话
 #: 说），没法安全地泛化成检查——泛化就会误伤「标签: 值」这种正常写法。写在这里是
 #: 为了「只对新漏洞报警」：新加一条检查后跑本工具，冒出新漏洞才算问题。
-KNOWN_GAPS = frozenset({
-    "道侣页：徽章不配复述句（语义重复，判据抓不住）",
-})
+KNOWN_GAPS: frozenset[str] = frozenset()
 
 
 def _run_judge() -> int:

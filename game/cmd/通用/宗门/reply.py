@@ -60,7 +60,9 @@ def page(
     if value.page == "未加入":
         builder.section(
             _text(copy, "查看", "状态"), icon=_text(copy, "图标", "宗门")
-        ).line(M.status("未加入", tone="muted"), " ", _text(copy, "查看", "未加入"))
+        # 徽章「未加入」与文案「当前尚未加入宗门。」是同一件事；这句文案更长、
+        # 信息更多，留文案去徽章。
+        ).line(_text(copy, "查看", "未加入"))
     elif value.page == "待处理邀请":
         builder.section(
             _text(copy, "查看", "待处理邀请"), icon=_text(copy, "图标", "邀请")
