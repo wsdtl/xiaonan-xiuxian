@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
+from launch.paths import public_url
 
 from ...command import GameCommand
 from . import reply
@@ -42,7 +43,7 @@ async def browse_races(user_id: str, message: str, manager: Any) -> None:
     if race is None:
         await manager.send(reply.missing(copy, query))
         return
-    await manager.send(reply.detail(copy, race))
+    await manager.send(reply.detail(copy, race, public_url("baike")))
 
 
 __all__ = []

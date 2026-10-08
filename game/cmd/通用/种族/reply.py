@@ -54,7 +54,7 @@ def page(copy: ZhongzuCopy, overview: RaceOverview, index: int) -> DocumentMessa
     return builder.build()
 
 
-def detail(copy: ZhongzuCopy, race: RaceEntry) -> DocumentMessage:
+def detail(copy: ZhongzuCopy, race: RaceEntry, baike_url: str = "") -> DocumentMessage:
     """单个种族详情：基础事实 + 天生规则 + 说明，全部来自登记表。"""
 
     builder = M.document().header(
@@ -77,7 +77,18 @@ def detail(copy: ZhongzuCopy, race: RaceEntry) -> DocumentMessage:
         }))
     else:
         builder.line(race.flavor)
+    _append_baike(builder, baike_url, race.number)
     return builder.build()
+
+
+def _append_baike(builder, base_url: str, number: str) -> None:
+    """百科入口：无边框超链接 + 一个直接开链接的按钮，与「查看」回复同一套。"""
+
+    if not base_url or not number:
+        return
+    url = f"{base_url}?q={number}"
+    builder.line(M.link("在百科里打开", url))
+    builder.action(Action("baike.open", "打开百科", url, behavior="link"))
 
 
 def missing(copy: ZhongzuCopy, query: str) -> DocumentMessage:
