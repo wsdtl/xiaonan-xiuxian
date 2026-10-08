@@ -103,19 +103,19 @@ def page(
                 _text(copy, "查看", "距下级"),
                 str(value.next_level_contribution - value.total_contribution),
             )
-        builder.small(
-            "捐献换算：灵石 100 = 贡献 1；基础材料按参考价 ÷ 100 取整（在洞天里捐入灵藏）"
-        )
-        builder.row(
-            (
-                _text(copy, "查看", "资源增益"),
-                f"生产/采集 ×{value.production_multiplier:g}",
-            ),
-            (
-                _text(copy, "查看", "炼制消耗"),
-                f"灵石 ×{value.facility_cost_multiplier:g}",
-            ),
-        )
+        builder.small(_text(copy, "查看", "捐献换算"))
+        # 两个倍率都是 ×1 就是「没有任何加成」，印出来等于占一行什么都没说。
+        if value.production_multiplier != 1 or value.facility_cost_multiplier != 1:
+            builder.row(
+                (
+                    _text(copy, "查看", "资源增益"),
+                    f"生产/采集 ×{value.production_multiplier:g}",
+                ),
+                (
+                    _text(copy, "查看", "炼制消耗"),
+                    f"灵石 ×{value.facility_cost_multiplier:g}",
+                ),
+            )
     return builder.actions(message_actions(actions)).build()
 
 

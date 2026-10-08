@@ -40,15 +40,20 @@ if str(ROOT) not in sys.path:
 EMPTY_ENTRY = re.compile(r"(?<![0-9])0\s*(种|份|个|页|条|枚|座|项)")
 #: 整栏都是这些值，等于这一栏什么都没说。
 NEUTRAL = re.compile(r"^(无|空|未装备|未持有|未执掌|0|0[^0-9]*)$")
+#: 倍率写法：看起来是加成，×1 其实就是没加成。
+MULTIPLIER = re.compile(r"×\s*([0-9.]+)")
 LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 TEXT_FORMULA = re.compile(r"\$[^$]*?\\text\{([^}]*)\}[^$]*?\$")
 OTHER_FORMULA = re.compile(r"\$[^$]*\$")
 #: 通用参数：编号、名称、页码各来一份，让带参分支也进语料。
 ARGS = ("", "400001", "100001", "1")
 #: 有状态深页：走到地方 + 给对参数才出得来（丹师在云京城、器师在青岚城）。
+#: 有状态深页：走到地方 + 给对参数才出得来（丹师在云京城、器师在青岚城）；
+#: 地点留空表示不用走，直接发（立宗门这类）。
 DEEP = (
     ("云京城", ("炼丹 清心散", "阵法 530002 黄")),
     ("青岚城", ("炼器 太白惊鸿",)),
+    ("", ("宗门 创建 判据宗", "宗门", "山门", "藏经阁", "灵藏", "万珍殿", "宗门同行")),
 )
 
 _CORPUS: tuple[dict[str, str], dict[str, float]] | None = None
@@ -165,14 +170,15 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             )
         )
         for place, commands in DEEP:
-            try:
-                await services.features.xinglu.travel(
-                    TravelRequest(
-                        user_id=user_id, request_id="判据-" + place, destination=place
+            if place:
+                try:
+                    await services.features.xinglu.travel(
+                        TravelRequest(
+                            user_id=user_id, request_id="判据-" + place, destination=place
+                        )
                     )
-                )
-            except Exception:  # noqa: BLE001 - 走不到就跳过这一站
-                continue
+                except Exception:  # noqa: BLE001 - 走不到就跳过这一站
+                    continue
             for command in commands:
                 await send(command)
         words = sorted(
@@ -251,11 +257,30 @@ def check_no_duplicate_lines() -> list[str]:
     return problems
 
 
+def check_no_neutral_multipliers() -> list[str]:
+    """全是 ×1 的倍率行等于「没有加成」，别占地方。
+
+    只看带冒号的「标签: 值」行——兽宝 × 1 那种是数量，有用的。
+    """
+
+    problems: list[str] = []
+    pages, _ = _corpus()
+    for word, body in pages.items():
+        for line in _lines(body):
+            if ":" not in line and "：" not in line:
+                continue
+            found = MULTIPLIER.findall(line)
+            if found and all(float(value) == 1 for value in found):
+                problems.append(word + " 的正文里有中性倍率行：" + line[:60])
+    return problems
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
     ("没有整段基准", check_no_baseline_padding),
     ("没有重复行", check_no_duplicate_lines),
+    ("没有中性倍率", check_no_neutral_multipliers),
 )
 
 
