@@ -110,6 +110,7 @@ class CharacterService:
         self._five_element_rules: Mapping[str, object] = {}
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._races_by_tier: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+        self._races_by_id: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._initial_race = ""
 
     def initialize(self) -> CharacterStatus:
@@ -164,6 +165,9 @@ class CharacterService:
             medicine_auto.get("默认开启"), "服丹.自动用药.默认开启"
         )
         self._races = MappingProxyType(self._load_races())
+        self._races_by_id = MappingProxyType(
+            {str(entry["编号"]): entry for entry in self._races.values()}
+        )
         by_tier: dict[str, list[str]] = {}
         for race_name, entry in self._races.items():
             for tier_name in entry.get("出现档次") or ():
@@ -198,6 +202,7 @@ class CharacterService:
             self._data.dataset("种族").get("种族"), "角色/规则/种族/种族.json"
         )
         result: dict[str, Mapping[str, object]] = {}
+        numbers: dict[str, str] = {}
         for index, raw in enumerate(entries):
             where = f"种族[{index}]"
             entry = _mapping(raw, where)
@@ -223,6 +228,10 @@ class CharacterService:
                     raise JsonDataError(f"{where}.寿元系数必须是数字") from exc
                 if not factor > 0:
                     raise JsonDataError(f"{where}.寿元系数必须大于 0")
+            number = _text(entry.get("编号"), f"{where}.编号")
+            if number in numbers:
+                raise JsonDataError(f"{where}.编号重复：{number}")
+            numbers[number] = name
             result[name] = entry
         return result
 
@@ -231,6 +240,12 @@ class CharacterService:
 
         self._require_initialized()
         return self._races
+
+    def race_by_id(self) -> Mapping[str, Mapping[str, object]]:
+        """种族登记表（按编号索引，只读）。"""
+
+        self._require_initialized()
+        return self._races_by_id
 
     def races_by_tier(self) -> Mapping[str, tuple[str, ...]]:
         """敌方档次 → 这一档会抽到的种族（敌人核心也读这一份）。"""
