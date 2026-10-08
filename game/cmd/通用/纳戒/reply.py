@@ -110,11 +110,13 @@ def error(message: str) -> DocumentMessage:
 
 def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
     has_stable_id = entry.content_id.isdigit() and len(entry.content_id) == 6
+    command = f"查看 {entry.content_id}"
+    if entry.category == "道藏" and entry.grade_id:
+        # 同一条功法有两个动作、参数还不一样（查看只吃编号，装配要品类与器阶），
+        # 用「每条分支自带完整命令」的写法合成一个控件：点一次回选择菜单。
+        command = f"{command} | 人物装配 功法 {entry.content_id} {entry.grade_id}"
     name: object = (
-        M.command(
-            M.text(entry.name, tone=_entry_tone(entry.category)),
-            f"查看 {entry.content_id}",
-        )
+        M.command(M.text(entry.name, tone=_entry_tone(entry.category)), command)
         if has_stable_id
         else entry.name
     )
@@ -127,17 +129,7 @@ def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
         parts.extend((" · 已装", "、".join(entry.equipped_slots)))
     if entry.material_total is not None:
         parts.append(f" · 投入{entry.material_total}份")
-    if entry.category == "道藏" and entry.grade_name:
-        parts.extend(
-            (
-                " · ",
-                M.command(
-                    M.text("装配"),
-                    f"人物装配 功法 {entry.content_id} {entry.grade_id}",
-                    submit=False,
-                ),
-            )
-        )
+    # 装配已并进名字那条分支控件，不再单占一个按钮。
     return tuple(parts)
 
 

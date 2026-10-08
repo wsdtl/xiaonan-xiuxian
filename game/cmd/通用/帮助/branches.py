@@ -8,7 +8,9 @@
 确认。回菜单既不用动 launch/，又能让每条分支按自己登记的 usage 决定「点了直接发」
 还是「只填入」——还差参数的分支当然只能填。
 
-**共享尾巴是硬约束**：两个分支的参数必须一样。查看/人物装配（参数不同）套不上这条语法。
+**两种写法都行**：
+- 分支词 + 共享尾巴：`查看|借阅功法 400001`（只写命令词的段继承共享尾巴）
+- 每条分支自带完整命令：`查看 400001 | 人物装配 功法 400001 03`
 """
 from __future__ import annotations
 
@@ -21,25 +23,39 @@ from ...command import GameCommand
 from ...help_registry import help_registry
 
 
-BRANCH_PATTERN = re.compile(r"^(?P<branches>[^\s|]+(?:\|[^\s|]+)+)\s*(?P<tail>.*)$", re.DOTALL)
+# 只要整条消息里出现 | 就交给这里；命令词的合法性由注册表判，不靠正则。
+BRANCH_PATTERN = re.compile(r"^(?P<text>[^\n]*\|[^\n]*)$")
 
 
 def branches_of(value: object) -> tuple[tuple[str, str], ...]:
-    """把分支串解成 (命令词, 完整命令)；认不出的分支直接丢掉。"""
+    """把分支串解成 (命令词, 完整命令)；认不出的分支直接丢掉。
 
-    match = BRANCH_PATTERN.match(" ".join(str(value or "").split()))
-    if match is None:
+    两种写法：分支词 + 共享尾巴（`查看|借阅功法 400001`），或每条分支自带完整命令
+    （`查看 400001 | 人物装配 功法 400001 03`）。**只写命令词的段继承共享尾巴**——
+    共享尾巴取最后一个自带参数的段的参数。
+    """
+
+    text = " ".join(str(value or "").split())
+    if BRANCH_PATTERN.match(text) is None:
         return ()
-    tail = match.group("tail")
+    segments = [segment.strip() for segment in text.split("|")]
+    shared = ""
+    for segment in reversed(segments):
+        if " " in segment:
+            shared = segment.split(" ", 1)[1].strip()
+            break
     result: list[tuple[str, str]] = []
     seen: set[str] = set()
-    for word in match.group("branches").split("|"):
-        if not word or word in seen:
+    for segment in segments:
+        if not segment:
+            continue
+        word, _, tail = segment.partition(" ")
+        if word in seen:
             continue
         seen.add(word)
         if help_registry.find(word) is None:
             continue
-        result.append((word, (word + " " + tail).strip()))
+        result.append((word, (word + " " + (tail.strip() or shared)).strip()))
     return tuple(result)
 
 
@@ -55,6 +71,8 @@ def is_complete(command: str) -> bool:
 
 @GameCommand.regex(
     cmd=BRANCH_PATTERN,
+    priority=200,
+    block=True,
     metadata={"scope": "通用", "guard_rule": "始终可用", "hidden": True},
 )
 async def choose_branch(raw_message: str, manager: Any) -> None:

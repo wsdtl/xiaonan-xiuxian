@@ -108,7 +108,12 @@ def check_branches_resolve() -> list[str]:
     from game.cmd.通用.帮助.branches import branches_of, is_complete
 
     problems: list[str] = []
-    cases = {"查看|借阅功法 400001": 2, "查看|装配 400001": 1, "查看 400001": 0}
+    cases = {
+        "查看|借阅功法 400001": 2,
+        "查看 400001 | 人物装配 功法 400001 03": 2,
+        "查看|装配 400001": 1,
+        "查看 400001": 0,
+    }
     for text, expected in cases.items():
         found = branches_of(text)
         if len(found) != expected:
