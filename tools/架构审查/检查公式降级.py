@@ -10,6 +10,7 @@ r"""公式降级审查：后台网页的每个公式都得带一份玩家看得�
 
 - 公式 span **必须带非空的 `data-plain`**，取不到就说明前端只能吐 LaTeX；
 - `data-plain` 里**不许再留 LaTeX 痕迹**（反斜杠、美元号、花括号、# 颜色值）；
+- **QQ 出口必须是 markdown**，并保持协议说明第 98 行的引用层级（标题一层、正文二层）；驱动器认不出消息就会整条当纯文本发，`> ` 与公式会一起原样露出。
 - 前端兜底**必须优先用 `data-plain`**（静态查 `app.js`），改回直接印原文就红。
 
 语料不取某个角色的页面，而是**直接用消息构造器造公式**——公式的唯一来源就是
@@ -57,16 +58,23 @@ def _presentation():
     return module
 
 
-def sample_document() -> str:
-    """造一份带公式的正文：状态徽章、进度条、显式小字、可点击名称各来一个。"""
+def sample_message() -> object:
+    """造一条带公式的消息对象（业务层交给驱动器的东西）。"""
 
     builder = M.document()
     builder.section("身份", icon="status").line(M.status("空闲", tone="positive"), " 修士")
     builder.field("血气", M.progress(332, 332))
     builder.small("每五分钟完成一轮")
     builder.line(M.command("查看 400001", "查看 400001", submit=False))
+    return builder.build()
+
+
+def sample_document() -> str:
+    """造一份带公式的正文：状态徽章、进度条、显式小字、可点击名称各来一个。"""
+
     return render_markdown(
-        builder.build().document, command_renderer=lambda link, *_args: render_rich_markdown(link.label)
+
+        sample_message().document, command_renderer=lambda link, *_args: render_rich_markdown(link.label)
     )
 
 def check_plain_converter() -> list[str]:
@@ -129,10 +137,31 @@ def check_frontend_uses_plain() -> list[str]:
     return problems
 
 
+def check_qq_payload_shape() -> list[str]:
+    """QQ 出口必须是 markdown，并保持协议说明第 98 行的引用层级（标题一层、正文二层）。"""
+
+    from launch.adapter.qq_protocol.render import render_qq_message
+
+    payload = render_qq_message(sample_message())
+    problems: list[str] = []
+    if not isinstance(payload, dict):
+        # 走到 manager 的 else 分支就是整条当纯文本发，> 与 $ 都会原样露出。
+        return ["QQ 载荷不是驱动器协议对象，会被当纯文本发"]
+    if str(payload.get("kind")) != "markdown":
+        problems.append("QQ 载荷 kind 不是 markdown：" + str(payload.get("kind")))
+    content = str((payload.get("markdown") or {}).get("content") or "")
+    lines = [line for line in content.splitlines() if line.strip()]
+    if not any(line.startswith("> > ") for line in lines):
+        problems.append("正文没有二层引用")
+    if not any(line.startswith("> ") and not line.startswith("> > ") for line in lines):
+        problems.append("标题没有一层引用")
+    return problems
+
 CHECKS = (
     ("可读文本转换", check_plain_converter),
     ("公式都带可读文本", check_spans_carry_plain),
     ("前端优先用可读文本", check_frontend_uses_plain),
+    ("QQ 出口是 markdown 且保持引用层级", check_qq_payload_shape),
 )
 
 
