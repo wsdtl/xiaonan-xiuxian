@@ -94,6 +94,7 @@ class CharacterOverviewFeature:
             raise CharacterOverviewError(str(exc)) from exc
         return CharacterOverviewResult(
             character=character,
+            attribute_baselines=self._character.attribute_baselines(),
             xy=player_location.xy,
             location_name=location.location_name,
             region=location.region,

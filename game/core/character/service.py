@@ -314,6 +314,19 @@ class CharacterService:
             initial_item_count=len(initial_items),
         )
 
+    def attribute_baselines(self) -> tuple[tuple[str, float], ...]:
+        """每个属性的基准值：属性定义里的 默认值，也就是「不增不减」的那个数。
+
+        展示层靠它判断「这条属性有没有信息」——等于基准的属性不值得占玩家的屏幕
+        （见 data/战斗/定义/说明.md：默认值也是这个属性的基准值）。
+        """
+
+        self._require_initialized()
+        return tuple(
+            (name, float(_mapping(raw, f"属性.{name}").get("默认值") or 0.0))
+            for name, raw in self._attributes.items()
+        )
+
     async def profile(self, user_id: str) -> CharacterProfile:
         """读取一个人物的完整角色事实，不补造缺失状态。"""
 

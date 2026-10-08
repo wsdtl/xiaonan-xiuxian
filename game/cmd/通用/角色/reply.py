@@ -154,12 +154,15 @@ def overview(result: CharacterOverviewResult) -> DocumentMessage:
         builder,
         tuple((name, attributes[name]) for name in primary_names if name in attributes),
     )
+    # 等于基准的属性没有信息：加成类的基准是 100，没装备的新人一屏全是「100」，
+    # 占地方又不说明任何事。基准由角色核心从属性定义里取（默认值就是基准值）。
+    baselines = dict(result.attribute_baselines)
     secondary = tuple(
         item
         for item in character.attributes
         if item[0] not in primary
         and item[0] not in {"血气上限", "精神上限"}
-        and item[1] != 0
+        and item[1] != baselines.get(item[0], 0)
         and not (item[0] == "连击伤害" and attributes.get("连击率", 0) == 0)
     )
     if secondary:

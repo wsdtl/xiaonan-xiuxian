@@ -29,6 +29,8 @@ class CharacterOverviewResult:
     injuries: tuple[tuple[str, int], ...]
     innate_treasure: InnateTreasure | None
     innate_treasure_usage: tuple[int, int]
+    #: 每个属性的基准值；展示层用它滤掉「等于基准、没有信息」的属性。
+    attribute_baselines: tuple[tuple[str, float], ...] = ()
 
 
 __all__ = [
