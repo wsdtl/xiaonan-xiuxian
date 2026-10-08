@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
+from launch.paths import public_url
 
 from ...command import GameCommand
 from . import reply
@@ -31,7 +32,7 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
         return
 
     result = await current_game_services().features.chakan_wupin.inspect(query, user_id)
-    await manager.send(reply.inspection(result))
+    await manager.send(reply.inspection(result, public_url("baike")))
 
 
 __all__ = ["router"]

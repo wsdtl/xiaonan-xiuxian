@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 from game.features.chakan_wupin import ItemInspectionResult
-from message import DocumentMessage, M
+from message import Action, DocumentMessage, M
 
 from .items import (
     _build_description_lines,
@@ -25,7 +25,7 @@ def missing_query() -> DocumentMessage:
     )
 
 
-def inspection(result: ItemInspectionResult) -> DocumentMessage:
+def inspection(result: ItemInspectionResult, baike_url: str = "") -> DocumentMessage:
     if result.detail is None and result.candidates:
         reply = (
             M.document()
@@ -98,7 +98,18 @@ def inspection(result: ItemInspectionResult) -> DocumentMessage:
         reply.section("详情", icon=icon).line(
             M.status("暂无", tone="muted"), " 暂无更多记载。"
         )
+    _append_baike(reply, baike_url, detail.item_id)
     return reply.build()
+
+
+def _append_baike(reply, base_url: str, item_id: str) -> None:
+    """百科入口：无边框超链接 + 一个直接开链接的按钮（仓库两处先例都用过）。"""
+
+    if not base_url or not item_id:
+        return
+    url = f"{base_url}?q={item_id}"
+    reply.line(M.link("在百科里打开", url))
+    reply.action(Action("baike.open", "打开百科", url, behavior="link"))
 
 
 def _with_held_grade(

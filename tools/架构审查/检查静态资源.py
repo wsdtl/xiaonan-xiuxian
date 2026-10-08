@@ -1,6 +1,6 @@
 """静态资源审查：前端页面、样式与页面策略的形状。
 
-`static/` 一直是**判据的空白区**：`game/`、`data/`、`tools/` 都有对应的审查，而三个前端页面
+`static/` 一直是**判据的空白区**：`game/`、`data/`、`tools/` 都有对应的审查，而前端页面
 一条都没有。代价在第 85 轮盘点时露了出来：同一个页面的 CSS 挂着 `?v=2`、JS 挂着 `?v=20`，
 `?v=20` 还得在 `import "./ui.js?v=20"` 里再写一遍（五处手工同步，漏一处就是老模块配新模块）；
 一份样式里躺着三处没人建立的类；后台页面下发的脚本来源**完全没有内容安全策略**，
@@ -40,7 +40,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = PROJECT_ROOT / "static"
 
 #: 前端应用，与 `static/` 下的目录一一对应。
-APPS = ("battle-report", "game-console", "world-map", "zhuangpei")
+APPS = ("baike", "battle-report", "game-console", "world-map", "zhuangpei")
 
 #: 类名「活没活」的语料范围：服务端任何可能吐出类名的地方。
 CORPUS_ROOTS = ("game", "launch", "data")

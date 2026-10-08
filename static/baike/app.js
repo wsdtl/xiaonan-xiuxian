@@ -56,10 +56,41 @@ function 画前缀(表) {
   前缀表.append(片段);
 }
 
+async function 检索(词) {
+  状态.textContent = "正在载入…";
+  try {
+    画条目((await 取数据("?q=" + encodeURIComponent(词))).条目);
+  } catch (error) {
+    状态.textContent = String(error.message || error);
+  }
+}
+
+async function 看前缀(前缀) {
+  状态.textContent = "正在载入…";
+  try {
+    画条目((await 取数据("?prefix=" + encodeURIComponent(前缀))).条目);
+  } catch (error) {
+    状态.textContent = String(error.message || error);
+  }
+}
+
 async function 启动() {
   try {
     const 总表 = await 取数据();
     画前缀(总表.前缀表);
+    // 深链接：/baike?q=550001 或 /baike?prefix=55 —— 从「查看」回复点进来时用得上。
+    const 参数 = new URLSearchParams(location.search);
+    const 词 = (参数.get("q") || "").trim();
+    const 前缀 = (参数.get("prefix") || "").trim();
+    if (词) {
+      搜索框.value = 词;
+      await 检索(词);
+      return;
+    }
+    if (前缀) {
+      await 看前缀(前缀);
+      return;
+    }
     状态.textContent = "选一个前缀，或直接搜编号与名称";
   } catch (error) {
     状态.textContent = String(error.message || error);
