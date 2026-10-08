@@ -17,6 +17,7 @@
 4. **不许内联脚本与内联样式**：页面的 CSP 不含 `script-src 'unsafe-inline'`，
    内联 `<script>` 会被浏览器直接拒绝——那比报错更安静。
 5. **没有孤儿资源**：应用目录下的每个 `.css`/`.js` 都要被页面或模块引用到。
+5b. **自有资源必须用绝对路径**：页面里的 href/src 若指向本应用的资源，必须写成 /static/应用/... ；相对路径（style.css）在 /应用 这种不带斜杠结尾的地址下会解析到站点根，实测导致样式与脚本双双 404、页面停在骨架。
 6. **没有死样式**：`style.css` 里的每个类名都要在该应用的语料里出现过，
    或者由模板前缀拼出来（`tone-${…}`、`zoom-${…}`、`depth-${…}` 这类算活）。
 7. **下发页面的路由要有 CSP**：凡是 `HTMLResponse` 的 `site.py`，头部里必须有
@@ -231,6 +232,25 @@ def check_no_inline_code() -> list[Finding]:
     return findings
 
 
+def check_asset_paths() -> list[Finding]:
+    """页面引用的自有资源必须是 /static/应用/ 开头的绝对路径。"""
+
+    pattern = re.compile("(?:href|src)=" + chr(34) + "([^" + chr(34) + "]+)" + chr(34))
+    findings: list[Finding] = []
+    for app in APPS:
+        page = STATIC_DIR / app / "index.html"
+        if not page.is_file():
+            continue
+        text = page.read_text(encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), 1):
+            for ref in pattern.findall(line):
+                if ref.startswith(("http://", "https://", "data:")):
+                    continue
+                want = "/static/" + app + "/"
+                if not ref.startswith(want):
+                    findings.append(Finding("资源路径", "static/" + app + "/index.html", number, "资源引用 " + ref + " 不是绝对路径（应为 " + want + "开头）"))
+    return findings
+
 def check_orphan_assets() -> list[Finding]:
     """应用目录下的每个 js/css 都得有人引用。"""
 
@@ -334,6 +354,7 @@ CHECKS = (
     ("页面形状", check_page_shape),
     ("跨源资源无校验", check_external_integrity),
     ("内联脚本", check_no_inline_code),
+    ("资源路径", check_asset_paths),
     ("孤儿资源", check_orphan_assets),
     ("死样式", check_dead_css),
     ("页面无 CSP", check_page_routes_csp),
