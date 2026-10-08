@@ -9,8 +9,14 @@
   --line: #cfd5cf;
   --paper: #fbfaf5;
   --soft: #f2f3ed;
-  --jade: #1b6957;
-  --jade-deep: #143d33;
+  --jade: #1e6a55;
+  --jade-deep: #134235;
+  /* 圆角、缓动与另外三页共用同一套刻度。 */
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+  --t: 190ms cubic-bezier(.2, .7, .3, 1);
+  --sheen: 0 0 0 1px rgba(255, 255, 255, .5) inset;
   --red: #a24138;
   --red-soft: #f9efeb;
   --gold: #98752d;
@@ -1358,6 +1364,89 @@ details[open] > :not(summary) {
 @keyframes loading-wave {
   from { transform: scaleY(.35); opacity: .45; }
   to { transform: scaleY(1); opacity: 1; }
+}
+
+/* ------------------------------------------------------------------
+   精修：这页本来就有页面揭幕、内容切换、区域更新、详情展开四组关键帧与自定的
+   滚动条，底子最好，所以只做这几处——主视觉加深、控件统一刻度、血条平滑过渡、
+   时间线与参赛者卡片给出悬停反馈，并把玉色与另外三页对齐。只写 CSS。 */
+
+.report-header {
+  background: linear-gradient(160deg, #1c5346 0%, var(--jade-deep) 62%, #102f27 100%);
+  box-shadow: var(--shadow);
+}
+.report-header::before {
+  content: ;
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: .7;
+}
+.result-stamp {
+  border-radius: var(--r);
+  box-shadow: var(--sheen), 0 10px 26px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(6px) saturate(1.1);
+}
+
+/* 控件统一刻度与缓动；分段控件的激活态给一层柔和投影。 */
+.control-button, .segment-select, .segment-step {
+  border-radius: var(--r-sm);
+  transition: background var(--t), color var(--t), border-color var(--t),
+    box-shadow var(--t), transform var(--t);
+}
+.control-button:hover:not(:disabled), .segment-step:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.control-button:active:not(:disabled), .segment-step:active:not(:disabled) {
+  transform: translateY(0) scale(.985);
+}
+.control-button[aria-pressed="true"],
+.segment-scroll .control-button[aria-pressed="true"] {
+  box-shadow: 0 4px 12px rgba(19, 66, 53, .22);
+}
+.segment-tabs, .view-toolbar, .event-filters {
+  border-radius: var(--r);
+}
+
+/* 血条平滑过渡：切换战前/战后快照时看得见变化，而不是硬跳。 */
+.vital-fill {
+  transition: width 420ms cubic-bezier(.2, .7, .3, 1), background var(--t);
+}
+
+/* 时间线卡片与参赛者行：悬停轻抬 + 玉色描边。 */
+.action-card {
+  border-radius: var(--r);
+  transition: transform var(--t), box-shadow var(--t), border-color var(--t);
+}
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(29, 43, 35, .1);
+  border-color: var(--jade);
+}
+.roster-item, .participant-summary {
+  border-radius: var(--r-sm);
+  transition: background var(--t), border-color var(--t), transform var(--t);
+}
+.roster-item:hover {
+  background: var(--soft);
+  transform: translateY(-1px);
+}
+.participant-record > summary, .participant-details summary {
+  transition: color var(--t);
+}
+.participant-record > summary:hover, .participant-details summary:hover {
+  color: var(--jade);
+}
+
+.effect-chip {
+  border-radius: 999px;
+}
+.event, .snapshot {
+  border-radius: var(--r-sm);
+}
+.control-button.primary, .inline-status {
+  border-radius: var(--r-sm);
 }
 
 @media (min-width: 861px) {
