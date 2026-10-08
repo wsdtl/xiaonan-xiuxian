@@ -97,7 +97,7 @@ def test_inherent_rules_actually_intercept(combat) -> None:
     """写在参战者上的锁定技要和写在卡面上的一样管用。"""
 
     bare = _strike(combat, ())
-    armed = _strike(combat, ({"名称": "不可被指定", "来源": "敌方"},))
+    armed = _strike(combat, ({"名称": "不可被指定"},))
     assert bare > 0, "靶子没挨打，这条探针没有区分度"
     assert armed == 0, f"固有规则没拦住：挨了 {armed}"
 
@@ -110,7 +110,7 @@ def test_inherent_rules_duplicate_is_refused(combat) -> None:
     """
 
     with pytest.raises(ValueError, match="重复声明了同一条规则"):
-        _strike(combat, ({"名称": "不可被指定", "来源": "敌方"},) * 2)
+        _strike(combat, ({"名称": "不可被指定"},) * 2)
 
 
 def test_inherent_rules_reject_wrong_carrier(combat) -> None:

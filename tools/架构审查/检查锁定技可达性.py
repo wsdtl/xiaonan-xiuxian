@@ -10,7 +10,6 @@
 1. **登记规则自带的方向必须可达**：条件里写了具体 `来源关系`（自身/己方/敌方）的，该方向必须在该拦截点的可达集合里；
 2. **载体填的方向必须可达**：载体（卡面 `规则文本` / 被动技能行 / 状态定义 / 参战者固有规则）声明的方向必须可达——
    条件里是 `来源关系:$来源` 的规则，方向由载体填，所以这一项才是真正拦住「空转」的那道；
-3. **占位符规则必须有人填方向**：`$来源` 的规则，每个载体都要给出 `来源`，否则运行期拿不到参数；
 4. **登记但没人带的规则**：只报出来，不判失败（与 `检查规则层.py` 的「卡0/1·族0/1」口径一致）。
 
 口径与边界：拿不准的方向一律算可达，所以报出的违规是**下界**；引擎机能（`rules.INTERCEPTION_POINTS` 的 12 个点）
@@ -74,19 +73,6 @@ def check_carrier_directions() -> list[str]:
     return problems
 
 
-def check_placeholder_supplied() -> list[str]:
-    """检查 3：`$来源` 的规则，承载它的每一处都要给出方向。"""
-
-    layer = model.rules()
-    problems: list[str] = []
-    for name, used, where in model.carriers():
-        row = layer.get(name) or {}
-        tags = [str(t) for c in (row.get("条件") or []) for t in (c.get("标签") or [])]
-        if any("$来源" in tag for tag in tags) and not used:
-            problems.append("%s 带的 %s 需要方向，却没写「来源」" % (where, name))
-    return problems
-
-
 def unused_rules() -> list[str]:
     """检查 4：登记了但没有任何载体带着——只报出来。"""
 
@@ -97,7 +83,6 @@ def unused_rules() -> list[str]:
 CHECKS = (
     ("登记规则方向可达", check_rule_directions),
     ("载体方向可达", check_carrier_directions),
-    ("占位符有人填", check_placeholder_supplied),
 )
 
 

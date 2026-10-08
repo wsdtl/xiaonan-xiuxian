@@ -279,7 +279,7 @@ def _damage_taken(result, pid: str) -> float:
 def _direction(rule: dict) -> str:
     """这条规则的请求是**谁动谁**：敌方（敌人对你）／己方（同伴对你）／自身（你对自己）。
 
-    条件是 `来源关系:$来源` 时看参数取的是哪一项——**方向决定探针怎么摆**：敌人要站在对面，
+    方向取自规则自己的条件（2026-10 重构后方向不再走参数）——**方向决定探针怎么摆**：敌人要站在对面，
     同伴要站在同一侧，自己就是承受者本人。
     """
 
@@ -949,15 +949,6 @@ SCENES = {
 }
 
 
-def _params_for(definition: dict) -> dict:
-    """取一组能让条件成立、且探针场景能触发的参数。"""
-
-    params: dict[str, object] = {}
-    for field, spec in dict(definition.get("字段") or {}).items():
-        options = [str(item) for item in spec.get("选项") or []]
-        params[field] = options[0] if options else spec.get("默认", "")
-    return params
-
 
 class _载体:
     """只为 `_rules_deny` 造一个「身上带着规则」的东西（真身是参战者或技能行）。"""
@@ -1046,7 +1037,7 @@ def _carrier_check(engine, layer: dict[str, dict]) -> list[str]:
     状态带的那份**状态一走就失效**；固有规则与卡面**同一条写两遍当场报错**（不挑一张悄悄用）。
     """
 
-    entry = {"名称": "不可被指定", "来源": "敌方"}
+    entry = {"名称": "不可被指定"}
     if "不可被指定" not in layer:
         return []
     problems: list[str] = []
@@ -1108,9 +1099,9 @@ def main() -> int:
             if scene is None:
                 problems.append(f"{name} 的拦截点没有标准探针场景：{point}")
                 continue
-            params = _params_for(definition)
-            entry = {"名称": name, **params}
-            rule = expand_rule(name, params, layer)
+            entry = {"名称": name}
+            # 参数替换仍在引擎里（规则定义声明 `字段` 时生效），当前没有规则声明它。
+            rule = expand_rule(name, {}, layer)
             try:
                 label, plain, guarded, ok = scene(engine, entry, rule)
             except Exception as exc:  # noqa: BLE001
@@ -1120,30 +1111,7 @@ def main() -> int:
             if plain == guarded:
                 problems.append(f"{name}：声明前后完全一样，探针没有区分度")
             elif not ok:
-                # 「**按来源拒绝**」型规则（定义里声明了 `来源` 字段、且有多个选项，例如
-                # `计量不可被改` 的 敌方/己方/自身）：观测量（后果笔数）会被规则自身的副作用
-                # 污染——拒绝时它顺手加计量，"加满才落的那一刀"反而更多（实测 1 → 5），
-                # 所以"笔数变少"这条通用期望对这类规则方向是反的（见 `_scene_counter` 的注释）。
-                # 这里改判**来源判别**（比原判据更严）：同一条规则换来源跑，后果必须不同；
-                # 完全一样就说明**来源字段没生效**——那才是真问题。
-                来源选项 = [
-                    str(值)
-                    for 值 in (((definition.get("字段") or {}).get("来源") or {}).get("选项") or [])
-                ]
-                if len(来源选项) > 1:
-                    各: dict[str, object] = {}
-                    for 值 in 来源选项:
-                        参数 = {**params, "来源": 值}
-                        try:
-                            各[值] = scene(engine, {"名称": name, **参数}, expand_rule(name, 参数, layer))[2]
-                        except Exception as exc:  # noqa: BLE001
-                            各[值] = f"跑不起来（{type(exc).__name__}）"
-                    if len(set(map(str, 各.values()))) == 1:
-                        problems.append(f"{name}：来源字段没有起作用（{各}）")
-                    else:
-                        print(f"  {'':<16} 按来源判别通过：{各}")
-                else:
-                    problems.append(f"{name} 名不副实：{label} {plain:.0f} → {guarded:.0f}")
+                problems.append(f"{name} 名不副实：{label} {plain:.0f} → {guarded:.0f}")
             overreach = _overreach(engine, name, rule)
             if overreach is None:
                 print(f"  {'':<16} 条件里没有标签字面量：反方向探针跳过")
