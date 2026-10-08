@@ -9,12 +9,17 @@ r"""器律形状审查：按器阶设计强度这件事，能不能被判出来�
 1. **阶梯自洽**：`器则.器阶[].阶序` 必须是 1..5 连续、且与数组顺序一致；
 2. **倍率单调**：`器律能力倍率` 随阶序严格递增，且只允许出现在 `器则.json` 的 `器阶[]` 里
    （器律实体自带倍率即越界——倍率是档位事实，不是内容事实，同品级那条禁令）；
-3. **强度出口**：每条器律的展开树里至少一处可缩放字段（`威力倍率`）。
-   **当前先报不判**：现状 64 条里只有 4 条有，逐条重新设计完成后转硬；
+3. **强度出口**：每条器律的展开树里至少一处**可缩放字段**（`SCALABLE`：威力倍率/数值/层数/最高值）。
+   不含触发次数、概率、冷却、持续时间——那些是机制参数，缩放它们等于改机制。
+   白名单取这四个「量」字段而不是只取 `威力倍率`：实测只取威力倍率有 60/64 条没有落点，
+   而守御/行气/牵制这些本来就不该有伤害，强行给它们加伤害会毁掉定位；取「量」之后 0/64 缺，
+   档位倍率在每一条上都有落点。
 4. **计量闭环**：写入的计量（`方式=增加/设置`）必须在同一门器律里找得到裁定
    （`来源=构筑计量` 的读取，或 `方式=减少/清空`）。这条规则写在
    `game/startup/说明.md` 的构筑章节里，但此前**只有声明没有实现**；
 5. **计量不得指向他人**：器律硬边界是「不得越出持有者」，计量的目标必须落在自身；
+5b. **主辅口径**：层数只允许操作**本门自己 `添加状态` 出来的状态**（自有蓄势才用计量）。
+   实测现状 98 处层数节点全部操作本门自造状态，0 处越界；
 6. **层数语义一致**：`层数 ≥ 状态层数上限` 是渲染器承认的「消耗全部」写法
    （`card_text.py` 的 `_consumes_all`），但必须配 `不足时是否失败=false` 且 `方式=减少`；
    另外 `层数` 不得超过 1000（防手滑写成 10000）；
@@ -40,6 +45,10 @@ DATA = ROOT / "data"
 RECIPE = DATA / "物品" / "炼器" / "规则" / "器则.json"
 LAW_DIR = DATA / "物品" / "炼器" / "内容"
 TIERS = ("凡器", "灵器", "法器", "法宝", "后天灵宝")
+#: 可缩放字段（白名单）：档位倍率只允许落在这些「量」字段上。
+#: 不含 每次行动最多触发 / 概率 / 冷却 / 持续时间 —— 那些是机制参数，缩放它们等于改机制。
+SCALABLE = ("威力倍率", "数值", "层数", "最高值")
+
 #: 「消耗全部层数」的合法上界（防手滑）。
 STACK_CEILING = 1000
 
@@ -108,9 +117,9 @@ def check_law(laws: dict) -> tuple[list[str], list[str], list[str]]:
     for num, row in sorted(laws.items()):
         label = str(row["原始"].get("名称"))
         nodes = _nodes(row["展开"])
-        # 3 强度出口（先报不判）
-        if not any("威力倍率" in node for node in nodes):
-            warnings.append(f"{label} 没有可缩放字段（威力倍率）——逐条设计完成后必须补")
+        # 3 强度出口：至少一处「量」字段，器阶倍率才有落点
+        if not any(key in node for node in nodes for key in SCALABLE):
+            problems.append(f"{label} 没有任何可缩放字段（{SCALABLE}）——档位倍率无处落地")
         # 4 计量闭环
         written: set[str] = set()
         settled: set[str] = set()
@@ -134,6 +143,20 @@ def check_law(laws: dict) -> tuple[list[str], list[str], list[str]]:
             scope = str(target.get("范围")) if isinstance(target, Mapping) else ""
             if scope and scope != "自身":
                 problems.append(f"{label} 的计量[{_counter_name(node)}]指向 {scope}——器律不得越出持有者")
+        # 5b 主辅口径：层数只操作本门自己 添加状态 出来的状态（自有蓄势才用计量）
+        added = set()
+        for node in nodes:
+            if node.get("能力") != "添加状态":
+                continue
+            choice = node.get("状态")
+            added.add(str(choice.get("名称")) if isinstance(choice, Mapping) else str(choice))
+        for node in nodes:
+            if node.get("能力") != "修改状态层数":
+                continue
+            choice = node.get("状态")
+            name = str(choice.get("名称")) if isinstance(choice, Mapping) else str(choice)
+            if name not in added:
+                problems.append(f"{label} 直接改状态[{name}]的层数——器律只能操作自己添加的状态")
         # 6 层数语义
         for node in nodes:
             if node.get("能力") != "修改状态层数":
@@ -209,16 +232,15 @@ def main() -> int:
     laws = load_laws()
     scope = check_rate_scope(laws)
     print("  [" + ("干净" if not scope else str(len(scope)) + " 处") + "] 倍率只属于档位")
-    law_problems, warnings, _ = check_law(laws)
+    law_problems, _, _ = check_law(laws)
     distinct = check_distinct(laws)
-    print("  [" + ("干净" if not law_problems else str(len(law_problems)) + " 处") + "] 计量闭环 / 不越界 / 层数语义")
+    print("  [" + ("干净" if not law_problems else str(len(law_problems)) + " 处") + "] 强度出口 / 计量闭环 / 不越界 / 层数")
     for item in law_problems[:6]:
         print("     " + item)
     print("  [" + ("干净" if not distinct else str(len(distinct)) + " 处") + "] 两两不等（" + str(len(laws)) + " 条）")
     for item in distinct[:4]:
         print("     " + item)
-    if warnings:
-        print("  [先报不判] 强度出口：" + str(len(warnings)) + " 条待补（逐条设计完成后转硬）")
+    pass
     problems += scope + law_problems + distinct
     if problems:
         print(f"器律形状 {len(problems)} 处")
