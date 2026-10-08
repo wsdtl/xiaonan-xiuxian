@@ -72,15 +72,13 @@ def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction
             if value.has_relation
             else M.status(relation_text, tone="muted"),
         )
+        # 徽章已经写着「同行中 / 未同行」，后面再跟一句「正在与你同行 / 如今并未同行」
+        # 就是同一件事印两遍；只留带颜色的徽章。
         .line(
             M.status(
                 "同行中" if value.is_active else "未同行",
                 tone="positive" if value.is_active else "muted",
-            ),
-            " ",
-            text(copy, "查看", "同行中")
-            if value.is_active
-            else text(copy, "查看", "未同行"),
+            )
         )
         .actions(message_actions(actions))
         .build()
