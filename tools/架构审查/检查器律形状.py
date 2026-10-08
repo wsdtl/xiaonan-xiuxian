@@ -52,6 +52,8 @@ READ_SOURCES = frozenset()
 SCALABLE = ("威力倍率", "数值", "层数", "最高值")
 
 #: 产出类原子能力：判「同模板换参」时要三样全同才算——事件集合、消费方式、产出集合。
+#: 真正的「消费/改动方式」只出现在这些能力上；`计算数值`/`条件执行` 的 `方式` 是算法，不算消费口径。
+MUTATORS = ("修改状态层数", "修改构筑计量", "修改行动条", "修改技能冷却", "修改事件标签")
 VERBS = (
     "追加攻击", "造成伤害", "触发技能", "恢复资源", "添加状态", "移除状态",
     "修改行动条", "修改技能冷却", "复制技能", "修改事件标签",
@@ -222,7 +224,7 @@ def check_similar(laws: dict) -> list[str]:
     for num, row in sorted(laws.items()):
         nodes = _nodes(row["展开"])
         events = tuple(sorted({str(n.get("事件")) for n in nodes if n.get("能力") == "监听事件"}))
-        ways = tuple(sorted({str(n.get("方式")) for n in nodes if n.get("方式") is not None}))
+        ways = tuple(sorted({str(n.get("方式")) for n in nodes if n.get("能力") in MUTATORS and n.get("方式") is not None}))
         verbs = tuple(sorted({str(n.get("能力")) for n in nodes if n.get("能力") in VERBS}))
         groups[(row["用途"], events, ways, verbs)].append(f"{row['原始'].get('名称')}({num})")
     problems: list[str] = []
