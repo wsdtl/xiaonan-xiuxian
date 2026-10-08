@@ -120,6 +120,46 @@ def check_qq_payload() -> list[str]:
     return problems
 
 
+def _visible(text: str) -> str:
+    """剥掉各端的皮，只留玩家看到的正文。"""
+
+    import html as html_module
+
+    # 块级边界先变成换行，否则撕掉标签后整条会粘成一句。
+    stripped = re.sub("</(?:div|p|li|h[1-6])>|<br\\s*/?>", "\n", str(text or ""))
+    stripped = re.sub("<[^>]+>", "", stripped)
+    # Markdown 链接只留文字：QQ 那端是 [文字](mqqapi://…)，后台那端已是纯文字。
+    stripped = re.sub("\\[([^\\]]*)\\]\\([^)]*\\)", "\\1", stripped)
+    stripped = html_module.unescape(stripped).replace("**", "")
+    lines: list[str] = []
+    for line in stripped.splitlines():
+        # 引用层级各端表达不同：QQ 是任意层 `> `，后台是块级元素；这里一律剥掉。
+        line = re.sub("^(?:\\s*>\\s*)+", "", line).strip()
+        if line:
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def check_channels_agree() -> list[str]:
+    """后台页面与 QQ 载荷必须是同一份正文。"""
+
+    from launch.adapter.qq_protocol.render import render_qq_message
+
+    message = sample_message()
+    content = sample_document()
+    payload = render_qq_message(message)
+    qq = str((payload.get("markdown") or {}).get("content") or "")
+    html = _presentation().render_message_html(
+        SimpleNamespace(message_type="markdown", content=content, flow_id=1)
+    )
+    problems: list[str] = []
+    if _visible(qq) != _visible(html):
+        problems.append("两条通道正文不一致 QQ=" + repr(_visible(qq)[:70]) + " 页面=" + repr(_visible(html)[:70]))
+    if _visible("甲") == _visible("乙"):
+        problems.append("比较器分不出不同文本，判据等于没跑")
+    return problems
+
+
 def check_console_degrades() -> list[str]:
     """后台投影对合成公式仍能给出干净的可读文本。"""
 
@@ -170,6 +210,7 @@ CHECKS = (
     ("消息文本没有 LaTeX", check_text_has_no_latex),
     ("QQ 载荷是 markdown 且没有 LaTeX", check_qq_payload),
     ("后台投影仍能降级", check_console_degrades),
+    ("两条通道正文一致", check_channels_agree),
     ("前端优先用可读文本", check_frontend_uses_plain),
 )
 
