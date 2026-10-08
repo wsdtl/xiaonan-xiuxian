@@ -68,12 +68,12 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
 
 
 def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessage:
-    builder = (
-        M.document()
-        .header(feature.text("查看", "记录标题"))
-        .section("历史战录", icon="combat")
-        .field(feature.text("查看", "总数"), value.total)
+    builder = M.document().header(feature.text("查看", "记录标题")).section(
+        "历史战录", icon="combat"
     )
+    # 总数为 0 时下面那句「记录为空」已经把同一件事说过了，不必再说一遍。
+    if value.total:
+        builder.field(feature.text("查看", "总数"), value.total)
     if not value.entries:
         builder.line(
             M.status("空", tone="muted"), " ", feature.text("结果", "记录为空")
@@ -90,9 +90,12 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessa
             "：",
             M.command(M.text(entry.war_id), f"战况 {entry.war_id}"),
         )
-    return builder.small(
-        feature.text("格式", "页码", {"当前页": value.page, "总页数": value.page_count})
-    ).build()
+    # 只有一页就不报页码。
+    if value.page_count > 1:
+        builder.small(
+            feature.text("格式", "页码", {"当前页": value.page, "总页数": value.page_count})
+        )
+    return builder.build()
 
 
 def error(message: str) -> DocumentMessage:

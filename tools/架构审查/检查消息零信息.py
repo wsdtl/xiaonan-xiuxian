@@ -42,6 +42,10 @@ EMPTY_ENTRY = re.compile(r"(?<![0-9])0\s*(种|份|个|页|条|枚|座|项)")
 NEUTRAL = re.compile(r"^(无|空|未装备|未持有|未执掌|0|0[^0-9]*)$")
 #: 倍率写法：看起来是加成，×1 其实就是没加成。
 MULTIPLIER = re.compile(r"×\s*([0-9.]+)")
+#: 「第1/1页」——只有一页还报页码，等于什么都没说。
+SINGLE_PAGE = re.compile(r"第\s*(\d+)\s*/\s*(\d+)\s*页")
+#: 纯零计数：整行就是一个「标签: 0」。
+ZERO_FIELD = re.compile(r"^[^:：]+[:：]\s*0$")
 LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 TEXT_FORMULA = re.compile(r"\$[^$]*?\\text\{([^}]*)\}[^$]*?\$")
 OTHER_FORMULA = re.compile(r"\$[^$]*\$")
@@ -51,9 +55,8 @@ ARGS = ("", "400001", "100001", "1")
 #: 有状态深页：走到地方 + 给对参数才出得来（丹师在云京城、器师在青岚城）；
 #: 地点留空表示不用走，直接发（立宗门这类）。
 DEEP = (
-    ("云京城", ("炼丹 清心散", "阵法 530002 黄")),
-    ("青岚城", ("炼器 太白惊鸿",)),
-    ("丹霞城", ("查看道侣 谢若棠", "交谈 谢若棠")),
+    # 洞天这一站必须先跑：立宗门要在原地（山门入口），先跑过几站旅行之后地点就变了，
+    # 入山门会报「当前不在本宗山门入口」，洞天里的页面就全都进不了语料。出山门再去各城。
     (
         "",
         (
@@ -68,16 +71,27 @@ DEEP = (
             "百炼堂 宗门",
             "丹鼎阁",
             "丹鼎阁 宗门",
+            # 炉台的预览页必须在洞天里取，出山门之后就只剩错误页了；不带「开炉」的
+            # 编号写法就会落到预览页上（带开炉会因为没材料直接报错）。
+            "百炼堂 700001",
+            "丹鼎阁 100001",
+            "演阵台 1",
             "演阵台",
             "演阵台 宗门",
             "纳戒 基础物品 恢复丹",
+            "出山门",
         ),
     ),
+    ("云京城", ("炼丹 清心散", "阵法 530002 黄")),
+    ("青岚城", ("炼器 太白惊鸿",)),
+    ("丹霞城", ("查看道侣 谢若棠", "交谈 谢若棠")),
 )
 
 _CORPUS: tuple[dict[str, str], dict[str, float]] | None = None
 #: 精心挑的深页命令抛异常就记在这儿——那说明页面根本出不来。
 _DEEP_FAILURES: list[str] = []
+#: 深页命令：它们必须给出真页面，不能是错误页。
+_DEEP_COMMANDS: list[str] = []
 
 
 def _clean(content: str) -> str:
@@ -184,7 +198,9 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             if strict:
                 deep_failures.append(text + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:60])
             return
-        if result.replies:
+        if result.replies and text not in pages:
+            # 先到先得：宽参阶段会把「命令 + 空参数」拼成同一条命令，覆盖掉深页阶段
+            # 在正确状态下取到的页面——那一覆盖正是让洞天覆盖悄悄失效的原因。
             pages[text] = _clean(getattr(result.replies[0].message, "content", ""))
 
     async def run() -> None:
@@ -204,6 +220,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                 except Exception:  # noqa: BLE001 - 走不到就跳过这一站
                     continue
             for command in commands:
+                _DEEP_COMMANDS.append(command)
                 await send(command, strict=True)
         words = sorted(
             set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
@@ -254,17 +271,17 @@ def check_no_baseline_padding() -> list[str]:
     problems: list[str] = []
     pages, baselines = _corpus()
     for word, body in pages.items():
-        pairs: list[tuple[str, str]] = []
-        for line in _lines(body):
-            for part in line.split("|"):
-                label, separator, value = part.partition(":")
-                if separator and label.strip() in baselines:
-                    pairs.append((label.strip(), value.strip()))
-        if pairs and all(_number(value) == baselines[label] for label, value in pairs):
-            names = "、".join(label for label, _ in pairs[:4])
-            problems.append(word + " 的正文整段属性等于基准：" + names + "…")
+        for title, content in _sections(body):
+            pairs: list[tuple[str, str]] = []
+            for line in content:
+                for part in line.split('|'):
+                    label, separator, value = part.partition(":")
+                    if separator and label.strip() in baselines:
+                        pairs.append((label.strip(), value.strip()))
+            if pairs and all(_number(value) == baselines[label] for label, value in pairs):
+                names = "、".join(label for label, _ in pairs[:4])
+                problems.append(word + " 的栏目整段属性等于基准：" + title[:30] + "（" + names + "…）")
     return problems
-
 
 def check_no_duplicate_lines() -> list[str]:
     """同一条消息里两行一字不差，就是同一件事印了两遍。"""
@@ -307,6 +324,49 @@ def check_deep_pages_work() -> list[str]:
     return [item + "（深页出口坏了）" for item in _DEEP_FAILURES]
 
 
+def check_no_single_page_marker() -> list[str]:
+    """只有一页就不该报「第1/1页」——那是零信息。"""
+
+    problems: list[str] = []
+    pages, _ = _corpus()
+    for word, body in pages.items():
+        for line in _lines(body):
+            for current, total in SINGLE_PAGE.findall(line):
+                if current == total == "1":
+                    problems.append(word + " 的正文里给单页报了页码：" + line[:40])
+    return problems
+
+
+def check_no_zero_count_with_empty_note() -> list[str]:
+    """同一栏目里既印「计数: 0」又印「空」——同一件事说两遍。"""
+
+    problems: list[str] = []
+    pages, _ = _corpus()
+    for word, body in pages.items():
+        for title, content in _sections(body):
+            zero = [item for item in content if ZERO_FIELD.match(item)]
+            if zero and any(item.startswith("空") for item in content):
+                problems.append(word + " 的栏目同时印了零计数与空陈述：" + title[:30] + "（" + zero[0][:20] + "）")
+    return problems
+
+
+def check_deep_pages_are_real() -> list[str]:
+    """深页命令必须给出真页面：拿到错误页说明这一站的覆盖是假的。"""
+
+    pages, _ = _corpus()
+    problems: list[str] = []
+    for command in _DEEP_COMMANDS:
+        body = pages.get(command)
+        if body is None:
+            problems.append(command + " 没有页面（深页覆盖为假）")
+            continue
+        for marker in ("失败", "受阻", "尚未加入"):
+            if marker in body:
+                problems.append(command + " 拿到的是错误页：" + body.splitlines()[-1][:50])
+                break
+    return problems
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
@@ -314,6 +374,9 @@ CHECKS = (
     ("没有重复行", check_no_duplicate_lines),
     ("没有中性倍率", check_no_neutral_multipliers),
     ("深页能出页面", check_deep_pages_work),
+    ("深页不是错误页", check_deep_pages_are_real),
+    ("单页不报页码", check_no_single_page_marker),
+    ("零计数不配空陈述", check_no_zero_count_with_empty_note),
 )
 
 

@@ -44,9 +44,11 @@ def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[Forma
                 f"查看 {entry.formation.formation_id}",
             ),
         ).small(f"编号：{entry.formation.formation_id} · {entry.formation.core}")
-    builder.small(
-        text(copy, "列表", "页码", {"当前页": value.page, "总页数": value.page_count})
-    )
+    # 只有一页就不报页码，免得占一行什么都不说。
+    if value.page_count > 1:
+        builder.small(
+            text(copy, "列表", "页码", {"当前页": value.page, "总页数": value.page_count})
+        )
     return builder.actions(message_actions(actions)).build()
 
 
