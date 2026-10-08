@@ -2,8 +2,8 @@
 
 判据来自 `data/战斗/规则/说明.md -> 真意与器律的监听分工`，但落成可判形式时发现一件事：
 
-    按「角度四问」判，真意 95% 落在"器物"侧——**"真意=战场叙事"并不描述现有卡池**，
-    真意绝大多数写的是"自身状态的叙事"（读自己的状态、作用于自己）。
+    按「角度四问」判，真意**绝大多数（实测 526/600 = 87.7%）伸向战场**——也就是说
+    「真意=战场叙事」对现有卡池是成立的；反过来器律只有 6/64（9.4%）越界，两族差别在数字上是清楚的。
 
 于是判据改成**边界**，它既符合数据、也确实可判：
 
@@ -22,18 +22,25 @@
 那 5 个"语义上不属于器物"的时点（`战斗对象入场后/退场后`、`战场规则变化后`、`形态切换后`、
 `复活后`）**是这条边界的推论**（一把剑不该知道别人进场），不是枚举出来的现状。
 
-    .venv/Scripts/python.exe -X utf8 tools/判归属.py            # 总览
-    .venv/Scripts/python.exe -X utf8 tools/判归属.py --明细      # 列出越界的卡
+    .venv/Scripts/python.exe -X utf8 tools/报告与生成/判归属.py            # 总览
+    .venv/Scripts/python.exe -X utf8 tools/报告与生成/判归属.py --明细      # 列出越界的卡
 
 **退出码：0 = 无器律越界；1 = 有器律越界（可当检查用）。**
 """
 
 from __future__ import annotations
 
+import pathlib as _pathlib
+import sys as _sys
+
+# 共用库住在 tools/库/：脚本按文件运行时 sys.path[0] 是自己的目录，得手动加。
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[1] / "库"))
+
 import argparse
 import collections
-import json
 import pathlib
+
+from 构筑模板展开 import load_build_json
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SECTIONS = (
@@ -42,7 +49,7 @@ SECTIONS = (
 )
 SELF_SCOPE = {"自身", "主人"}
 #: 越界：伸向**战场**的目标范围。`当前目标` **不算**——武器打持有者选定的目标正是器物本职
-#: （攻伐类器律都这样），把它算成越界会把 40/64 张攻伐卡误判。
+#: （攻伐类器律都这样），把它算成越界会把 17/64 张器律误判。
 OTHER_SCOPE = {"事件来源", "事件承受者", "己方", "敌方", "全部",
                "全部己方", "全部敌方", "关联对象"}
 OTHER_CAMP = {"其他己方", "任意敌方", "任意"}
@@ -110,7 +117,8 @@ def main() -> int:
     for name, pattern in SECTIONS:
         rows: list[tuple[str, str, list[str], set[str]]] = []
         for path in sorted(ROOT.glob(pattern)):
-            for entry in json.loads(path.read_text(encoding="utf-8")):
+            # 必须走展开：真意仍是模板引用形态，直接 json.loads 会把 600 张全读成「无时点」。
+            for entry in load_build_json(path):
                 reasons, events = cross_reasons(entry)
                 rows.append((str(entry["编号"]), str(entry.get("名称") or ""), reasons, events))
         crossing = [row for row in rows if row[2]]
