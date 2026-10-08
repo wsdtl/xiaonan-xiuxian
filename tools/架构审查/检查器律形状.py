@@ -51,6 +51,12 @@ READ_SOURCES = frozenset()
 #: 不含 每次行动最多触发 / 概率 / 冷却 / 持续时间 —— 那些是机制参数，缩放它们等于改机制。
 SCALABLE = ("威力倍率", "数值", "层数", "最高值")
 
+#: 产出类原子能力：判「同模板换参」时要三样全同才算——事件集合、消费方式、产出集合。
+VERBS = (
+    "追加攻击", "造成伤害", "触发技能", "恢复资源", "添加状态", "移除状态",
+    "修改行动条", "修改技能冷却", "复制技能", "修改事件标签",
+)
+
 #: 「消耗全部层数」的合法上界（防手滑）。
 STACK_CEILING = 1000
 
@@ -203,6 +209,32 @@ def check_law(laws: dict) -> tuple[list[str], list[str], list[str]]:
     return problems, warnings, names
 
 
+def check_similar(laws: dict) -> list[str]:
+    """同一用途内，事件集合 + 消费方式 + 产出集合三样全同，就是同一模板换参数。
+
+    只比事件集合会误伤：共用「造成伤害后」的两条仍可因消费方式与产出不同而各成一派
+    （例如蓄锋引爆 / 冷却窃取 / 层数不清零）。三样全同才是用户说的「换名换参」。
+    """
+
+    import collections
+
+    groups: dict[tuple, list] = collections.defaultdict(list)
+    for num, row in sorted(laws.items()):
+        nodes = _nodes(row["展开"])
+        events = tuple(sorted({str(n.get("事件")) for n in nodes if n.get("能力") == "监听事件"}))
+        ways = tuple(sorted({str(n.get("方式")) for n in nodes if n.get("方式") is not None}))
+        verbs = tuple(sorted({str(n.get("能力")) for n in nodes if n.get("能力") in VERBS}))
+        groups[(row["用途"], events, ways, verbs)].append(f"{row['原始'].get('名称')}({num})")
+    problems: list[str] = []
+    for (use, events, ways, verbs), members in groups.items():
+        if len(members) > 1:
+            problems.append(
+                f"{use} 内同一模板换参数：{'、'.join(sorted(members))}"
+                f"（事件 {'+'.join(events) or '无'} · 方式 {'+'.join(ways) or '无'} · 产出 {'+'.join(verbs) or '无'}）"
+            )
+    return problems
+
+
 def check_distinct(laws: dict) -> list[str]:
     import collections
 
@@ -230,16 +262,18 @@ def load_laws() -> dict:
     import game.app as app
 
     raw = {}
+    use_of: dict[str, str] = {}
     for file in sorted(LAW_DIR.glob("器律-*.json")):
         for entry in json.loads(file.read_text(encoding="utf-8")):
             raw[str(entry["编号"])] = entry
+            use_of[str(entry["编号"])] = file.stem[3:]
     services = app.build_game_services()
     try:
         data = services.core.data
         laws = {}
         for num, entry in raw.items():
             tree = _plain(data.entity("器律", num))
-            laws[num] = {"原始": entry, "展开": tree}
+            laws[num] = {"原始": entry, "展开": tree, "用途": use_of[num]}
         return laws
     finally:
         services.core.database.close()
@@ -265,6 +299,7 @@ def main() -> int:
     print("  [" + ("干净" if not scope else str(len(scope)) + " 处") + "] 倍率只属于档位")
     law_problems, _, _ = check_law(laws)
     distinct = check_distinct(laws)
+    similar = check_similar(laws)
     print("  [" + ("干净" if not law_problems else str(len(law_problems)) + " 处") + "] 强度出口 / 计量闭环 / 不越界 / 层数")
     for item in law_problems[:6]:
         print("     " + item)
@@ -272,6 +307,14 @@ def main() -> int:
     for item in distinct[:4]:
         print("     " + item)
     pass
+    if similar:
+        print("  [" + str(len(similar)) + " 处] 同模板换参数（同用途内事件+方式+产出三样全同）")
+        for item in similar[:6]:
+            print("     " + item)
+    else:
+        print("  [干净] 同模板换参数")
+    # 同模板换参数：旧设计里还有若干组（同契/行气/时序），它们会在逐条重做时一并消掉，
+    # 所以先报不判；64 条全部重做完成后把 similar 并进 problems 转硬。
     problems += scope + law_problems + distinct
     if problems:
         print(f"器律形状 {len(problems)} 处")
