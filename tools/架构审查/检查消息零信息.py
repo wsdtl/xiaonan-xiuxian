@@ -185,6 +185,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     from dataclasses import replace
 
     from game.core.asset import InventoryAdjustment
+    from game.features.daolv_jiejiao import CompanionGiftRequest
     from game.core.database import TransactionCommand
     from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
     from game.features.xinglu.contracts import TravelRequest
@@ -351,6 +352,57 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         for command in ("人物服丹 100005",):
             _DEEP_COMMANDS.append(command)
             await send(command, user=pill_user, strict=True)
+        # 同行道侣是归元观与道侣培养的前置。好感靠赠礼正当涨：每株山谷灵植 +10，
+        # 邀约门槛是 100，所以授 12 株连送 12 次到 120 再邀约——这条路本身也是玩家
+        # 真要走的路。铜雀台还要道侣至少 2 级，那一步够不到，故不在这一站。
+        mate_user = "P:判据道侣"
+        await services.features.chuangjian_renwu.create(
+            CreateCharacterRequest(
+                user_id=mate_user, request_id="消息判据-道侣", name="判据侣", gender="男"
+            )
+        )
+        await services.features.xinglu.travel(
+            TravelRequest(user_id=mate_user, request_id="判据-丹霞城", destination="丹霞城")
+        )
+        flower_plan = await services.core.asset.plan_inventory_changes(
+            mate_user, (InventoryAdjustment("200023", "01", 12),)
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                mate_user,
+                "判据灵花",
+                "消息判据",
+                tuple(flower_plan.operations),
+                {"物品": "200023"},
+            )
+        )
+        for index in range(12):
+            await services.features.daolv_jiejiao.gift(
+                CompanionGiftRequest(
+                    mate_user, f"判据赠礼{index}", "谢若棠", "200023", "01", 1
+                )
+            )
+        for command in ("邀约 谢若棠", "道侣培养"):
+            _DEEP_COMMANDS.append(command)
+            await send(command, user=mate_user, strict=True)
+        yuan_plan = await services.core.asset.plan_inventory_changes(
+            mate_user, (InventoryAdjustment("160001", "01", 1),)
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                mate_user,
+                "判据归元丹",
+                "消息判据",
+                tuple(yuan_plan.operations),
+                {"物品": "160001"},
+            )
+        )
+        await services.features.xinglu.travel(
+            TravelRequest(user_id=mate_user, request_id="判据-归元观", destination="归元观")
+        )
+        for command in ("归元",):
+            _DEEP_COMMANDS.append(command)
+            await send(command, user=mate_user, strict=True)
         for label, commands in ACTIVITIES:
             activity_user = "P:判据行动" + label
             await services.features.chuangjian_renwu.create(
