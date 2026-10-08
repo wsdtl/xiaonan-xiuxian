@@ -6,15 +6,25 @@ from game.features.najie import NajieCategoryView, NajieEntry, NajieHome, NajieP
 from message import DocumentMessage, Action, M
 
 
+def _has_content(item: object) -> bool:
+    """这个分项里到底有没有东西——空分项不该做成可点条目。"""
+
+    return bool(item.entry_count or item.total_quantity)
+
+
 def home(view: NajieHome) -> DocumentMessage:
     builder = M.document().header("纳戒")
+    empty = 0
     for category in view.categories:
+        # 空分项不做成可点条目：点进去只有一页空清单，等于白翻一页。
+        filled = tuple(item for item in category.subcategories if _has_content(item))
+        empty += len(category.subcategories) - len(filled)
+        if not filled:
+            continue
         builder.section(category.name, icon=category.icon)
-        for start in range(0, len(category.subcategories), 3):
+        for start in range(0, len(filled), 3):
             parts: list[object] = []
-            for index, subcategory in enumerate(
-                category.subcategories[start : start + 3]
-            ):
+            for index, subcategory in enumerate(filled[start : start + 3]):
                 if index:
                     parts.append("　")
                 parts.append(
@@ -24,17 +34,22 @@ def home(view: NajieHome) -> DocumentMessage:
                     )
                 )
             builder.line(*parts)
+    if empty:
+        builder.small(f"另有 {empty} 个分项暂无内容，拿到后会出现在这里。")
     return builder.build()
 
 
 def category(view: NajieCategoryView) -> DocumentMessage:
     value = view.category
     builder = M.document().header(value.name).section("分项", icon=value.icon)
-    for subcategory in value.subcategories:
+    filled = tuple(item for item in value.subcategories if _has_content(item))
+    for subcategory in filled:
         builder.line(
             M.command(subcategory.name, f"纳戒 {value.name} {subcategory.name}"),
             _subcategory_total(subcategory.entry_count, subcategory.total_quantity),
         )
+    if len(filled) != len(value.subcategories):
+        builder.small("其余分项暂无内容。")
     return builder.action(_home_action()).build()
 
 
