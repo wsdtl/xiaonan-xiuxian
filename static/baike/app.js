@@ -16,6 +16,7 @@ let rows = [];
 let page = 1;
 let label = "";
 let activePrefix = "";
+let lastQuery = "";
 
 async function fetchData(params) {
   const response = await fetch("/baike/data" + (params || ""));
@@ -32,6 +33,10 @@ function setStatus(text, bad) {
   el.status.textContent = text;
   el.status.classList.toggle("status-error", Boolean(bad));
   show(el.status, Boolean(text));
+}
+
+function push(query) {
+  history.pushState(null, "", location.pathname + query);
 }
 
 function clear(list) {
@@ -73,6 +78,24 @@ function renderPrefixes(table) {
   el.prefixes.append(frag);
 }
 
+function mark(node, text, word) {
+  if (!word) {
+    node.textContent = text;
+    return;
+  }
+  const at = text.indexOf(word);
+  if (at < 0) {
+    node.textContent = text;
+    return;
+  }
+  node.textContent = "";
+  node.append(text.slice(0, at));
+  const hit = document.createElement("mark");
+  hit.className = "hit";
+  hit.textContent = text.slice(at, at + word.length);
+  node.append(hit, text.slice(at + word.length));
+}
+
 function renderRows() {
   clear(el.entries);
   const start = (page - 1) * PAGE_SIZE;
@@ -89,7 +112,7 @@ function renderRows() {
     code.textContent = row["编号"];
     const name = document.createElement("span");
     name.className = "name";
-    name.textContent = row["名称"];
+    mark(name, row["名称"], lastQuery);
     const source = document.createElement("span");
     source.className = "source";
     source.textContent = row["来源"];
@@ -125,6 +148,38 @@ function renderPager() {
   marker.textContent = page + " / " + pages;
   frag.append(make("上一页", Math.max(1, page - 1), page <= 1), marker, make("下一页", Math.min(pages, page + 1), page >= pages));
   el.pager.append(frag);
+}
+
+function renderOverview(table) {
+  clear(el.detail);
+  const head = document.createElement("header");
+  head.className = "overview-head";
+  const title = document.createElement("h2");
+  title.className = "overview-title";
+  title.textContent = "全部词条";
+  const meta = document.createElement("p");
+  meta.className = "overview-meta";
+  meta.textContent = table["总数"] + " 条 · " + table["前缀数"] + " 个前缀";
+  head.append(title, meta);
+  const cards = document.createElement("ul");
+  cards.className = "cards";
+  for (const row of table["主体表"] || []) {
+    const item = document.createElement("li");
+    item.className = "card";
+    const name = document.createElement("span");
+    name.className = "card-name";
+    name.textContent = row["主体"];
+    const count = document.createElement("span");
+    count.className = "card-count";
+    count.textContent = row["条数"] + " 条";
+    const sub = document.createElement("span");
+    sub.className = "card-sub";
+    sub.textContent = row["前缀数"] + " 个前缀";
+    item.append(name, count, sub);
+    cards.append(item);
+  }
+  el.detail.append(head, cards);
+  show(el.detail, true);
 }
 
 function renderDetail(body) {
@@ -204,6 +259,8 @@ async function openPrefix(prefix, category) {
     rows = body["条目"] || [];
     page = 1;
     label = prefix + " " + category + " · 共 " + rows.length + " 条";
+    lastQuery = "";
+    push("?prefix=" + prefix);
     el.crumb.textContent = prefix + " " + category;
     renderRows();
     setStatus(label, false);
@@ -221,6 +278,8 @@ async function search(word) {
     rows = body["条目"] || [];
     page = 1;
     label = "检索「" + word + "」 · 共 " + rows.length + " 条";
+    lastQuery = word;
+    push("?q=" + encodeURIComponent(word));
     el.crumb.textContent = "检索 " + word;
     renderRows();
     setStatus(rows.length ? label : "没有匹配的条目", !rows.length);
@@ -238,6 +297,7 @@ async function openDetail(id) {
     show(el.pager, false);
     setStatus("", false);
     renderDetail(body);
+    push("?id=" + id);
   } catch (error) {
     setStatus(String(error.message || error), true);
   }
@@ -267,7 +327,8 @@ async function boot() {
     }
     show(el.entries, false);
     show(el.pager, false);
-    setStatus("选一个前缀，或直接检索编号与名称", false);
+    setStatus("", false);
+    renderOverview(table);
   } catch (error) {
     setStatus(String(error.message || error), true);
   }
@@ -277,6 +338,11 @@ el.query.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   const word = el.query.value.trim();
   if (word) search(word);
+});
+
+window.addEventListener("popstate", () => boot());
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") showList();
 });
 
 boot();

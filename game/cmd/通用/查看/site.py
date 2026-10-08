@@ -47,7 +47,17 @@ async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONRespons
     if wanted:
         picked = [e for e in entries if e["编号"].startswith(wanted)]
         return JSONResponse({"模式": "前缀", "前缀": wanted, "条目": picked}, headers=_data_headers())
-    return JSONResponse({"模式": "总表", "前缀表": _prefix_rows(entries)}, headers=_data_headers())
+    table = _prefix_rows(entries)
+    return JSONResponse(
+        {
+            "模式": "总表",
+            "前缀表": table,
+            "总数": len(entries),
+            "前缀数": len(table),
+            "主体表": _group_rows(table),
+        },
+        headers=_data_headers(),
+    )
 
 
 def _references(services, entity_id: str, value: object) -> list[dict[str, str]]:
@@ -203,6 +213,24 @@ def _prefix_rows(entries: list[dict[str, str]]) -> list[dict[str, object]]:
             "条数": counted.get(str(row.get("前缀") or ""), 0),
         }
         for row in registry
+    ]
+
+
+def _group_rows(table: list[dict[str, object]]) -> list[dict[str, object]]:
+    """按登记表的 `主体` 汇总条数与前缀数——**汇总只能由后台给**（static/说明.md 的硬规矩）。"""
+
+    order: list[str] = []
+    counted: dict[str, list[int]] = {}
+    for row in table:
+        group = str(row.get("主体") or "")
+        if group not in counted:
+            counted[group] = [0, 0]
+            order.append(group)
+        counted[group][0] += int(row.get("条数") or 0)
+        counted[group][1] += 1
+    return [
+        {"主体": group, "条数": counted[group][0], "前缀数": counted[group][1]}
+        for group in order
     ]
 
 

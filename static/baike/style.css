@@ -219,3 +219,36 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+
+/* ── 落地页概览：主区不再空着 ─────────────────────────────── */
+
+.overview-head { display: grid; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.overview-title { margin: 0; font-size: 22px; letter-spacing: 4px; }
+.overview-meta { margin: 0; color: var(--muted); font-size: 13px; }
+
+.cards {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.card:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(19, 66, 53, 0.08); }
+.card-name { color: var(--muted); font-size: 13px; letter-spacing: 2px; }
+.card-count { font-size: 24px; font-variant-numeric: tabular-nums; }
+.card-sub { color: var(--muted); font-size: 12px; }
+
+.hit { background: var(--accent-soft); color: var(--accent); border-radius: 3px; padding: 0 2px; }
