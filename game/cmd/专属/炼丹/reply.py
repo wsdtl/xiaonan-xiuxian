@@ -115,15 +115,15 @@ def preview(
             (text(copy, "预览", "难度"), value.recipe.difficulty),
             (text(copy, "预览", "炉法"), value.recipe.method),
         )
-        .section(text(copy, "预览", "药引"), icon="material")
     )
-    if value.beast_material is None:
-        builder.line(M.status("无", tone="muted"))
-    else:
+    # 没有药引就整个栏目都不开：只印一个「无」不说明任何事，空栏目更是白占地方。
+    if value.beast_material is not None:
+        builder.section(text(copy, "预览", "药引"), icon="material")
         _material(builder, 1, value.beast_material)
-    builder.section(text(copy, "预览", "辅材"), icon="material")
-    for index, material in enumerate(value.herb_materials, start=1):
-        _material(builder, index, material)
+    if value.herb_materials:
+        builder.section(text(copy, "预览", "辅材"), icon="material")
+        for index, material in enumerate(value.herb_materials, start=1):
+            _material(builder, index, material)
     if value.missing_materials:
         builder.section(text(copy, "列表", "缺材"), icon="notice")
         for index, missing in enumerate(value.missing_materials, start=1):

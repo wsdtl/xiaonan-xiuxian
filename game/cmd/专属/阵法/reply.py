@@ -76,8 +76,10 @@ def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[Formati
         .field(
             text(copy, "预览", "节点"), f"{value.nodes}位 · 传导 {value.transmission:g}"
         )
-        .section(text(copy, "预览", "材料"), icon="material")
     )
+    # 没有材料项就整个栏目都不开：空栏目白占玩家的地方。
+    if value.requirements:
+        builder.section(text(copy, "预览", "材料"), icon="material")
     for index, requirement in enumerate(value.requirements, start=1):
         builder.item(
             index,

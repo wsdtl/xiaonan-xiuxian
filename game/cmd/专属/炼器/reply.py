@@ -99,11 +99,14 @@ def preview(
             (text(copy, "预览", "器阶"), value.law.stage),
         )
         .field(text(copy, "预览", "铸法"), value.law.method)
-        .section(text(copy, "预览", "兽引"), icon="material")
     )
-    _materials(builder, value.beast_materials, show_relation=False)
-    builder.section(text(copy, "预览", "矿材"), icon="item")
-    _materials(builder, value.mineral_materials, show_relation=True)
+    # 没有材料就整个栏目都不开：空栏目与只印一个「无」一样，白占玩家的地方。
+    if value.beast_materials:
+        builder.section(text(copy, "预览", "兽引"), icon="material")
+        _materials(builder, value.beast_materials, show_relation=False)
+    if value.mineral_materials:
+        builder.section(text(copy, "预览", "矿材"), icon="item")
+        _materials(builder, value.mineral_materials, show_relation=True)
     if value.missing_materials:
         builder.section(text(copy, "列表", "缺材"), icon="notice")
         for index, missing in enumerate(value.missing_materials, start=1):

@@ -1,14 +1,22 @@
 """消息零信息判据：命令返回的正文里不许出现「零信息」内容。
 
-零信息就是「占了地方、什么也没告诉玩家」的东西，三种：
+零信息就是「占了地方、什么也没告诉玩家」的东西，四种：
 
 1. **空条目**：战丹 0种 这种点进去只有空清单的条目——点一下是白翻一页；
-2. **整段等于基准**：一条属性等于它自己的 默认值（= 基准值）就没有信息。属性类的基准
+2. **空栏目**：栏目标题下面什么都没有，或整栏只有一个「无」；
+3. **整段等于基准**：一条属性等于它自己的 默认值（= 基准值）就没有信息。属性类的基准
    见 data/战斗/定义/说明.md：加成类必须 100，默认值就是这个属性的基准值；
-3. **重复行**：同一条消息里两行一字不差。
+4. **重复行**：同一条消息里两行一字不差。
 
-语料是**真实派发**出来的：建一份临时服务、建一个人物，把注册的每条命令都发一遍，
-取其第一条回复的正文。这样量到的是玩家真看到的东西，不是静态猜的。
+语料是**真实派发**出来的，两段：
+
+- 先把人物走到有丹师/器师/阵师的地点，带真实参数发一遍——预览这类深页只有走到地方、
+  给对参数才出得来，无参只会得到用法页；**这一段必须先跑**，因为带参派发里有些命令会把
+  人物移动或占住行动，跑完再走就走不过去了；
+- 再把每条注册命令按几组通用参数各发一遍。
+
+每次运行都用**新的临时库**：固定路径会被上一次运行留下的人物状态污染（派发过一轮之后
+血气耗尽，人物走不到丹师那儿，深页永远进不了语料）。
 
     .venv/Scripts/python.exe -X utf8 tools/架构审查/检查消息零信息.py
 
@@ -22,16 +30,26 @@ import io
 import pathlib
 import re
 import sys
+import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-#: 0种 / 0份 / 0个 / 0页 这类「空条目」。
-EMPTY_ENTRY = re.compile(r"0\s*(种|份|个|页|条|枚|座|项)")
+#: 只看独立的 0：270项 / 160种 里的 0项 不是空条目（前面不能是数字）。
+EMPTY_ENTRY = re.compile(r"(?<![0-9])0\s*(种|份|个|页|条|枚|座|项)")
+#: 整栏都是这些值，等于这一栏什么都没说。
+NEUTRAL = re.compile(r"^(无|空|未装备|未持有|未执掌|0|0[^0-9]*)$")
 LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 TEXT_FORMULA = re.compile(r"\$[^$]*?\\text\{([^}]*)\}[^$]*?\$")
 OTHER_FORMULA = re.compile(r"\$[^$]*\$")
+#: 通用参数：编号、名称、页码各来一份，让带参分支也进语料。
+ARGS = ("", "400001", "100001", "1")
+#: 有状态深页：走到地方 + 给对参数才出得来（丹师在云京城、器师在青岚城）。
+DEEP = (
+    ("云京城", ("炼丹 清心散", "阵法 530002 黄")),
+    ("青岚城", ("炼器 太白惊鸿",)),
+)
 
 _CORPUS: tuple[dict[str, str], dict[str, float]] | None = None
 
@@ -47,6 +65,45 @@ def _clean(content: str) -> str:
 
 def _lines(body: str) -> list[str]:
     return [line.lstrip("> ").strip() for line in body.splitlines() if line.strip()]
+
+
+def _depth_lines(body: str) -> list[tuple[int, str]]:
+    """每行的层数与文字。层数就是开头的 > 个数——别用 lstrip 数，它一次吃两个字符。"""
+
+    rows: list[tuple[int, str]] = []
+    for raw in body.splitlines():
+        if not raw.strip():
+            continue
+        depth = 0
+        for char in raw:
+            if char == ">":
+                depth += 1
+            elif char != " ":
+                break
+        rows.append((depth, raw.lstrip("> ").strip()))
+    return rows
+
+
+def _sections(body: str) -> list[tuple[str, list[str]]]:
+    """把正文切成「栏目标题 -> 它的内容行」。
+
+    渲染器在同一层上放三种东西：**栏目标题**（只有图标加名字）、**自带内容的行**（同一行
+    就有冒号，例如「伤势: 无」）和空行分隔符。只有第一种才是栏目；认错了会把自带内容的行
+    当成空栏目。
+    """
+
+    sections: list[tuple[str, list[str]]] = []
+    current: list[str] | None = None
+    for depth, item in _depth_lines(body):
+        if not item:
+            continue
+        if depth == 1:
+            current = None if (":" in item or "：" in item) else []
+            if current is not None:
+                sections.append((item, current))
+        elif depth >= 2 and current is not None:
+            current.append(item)
+    return sections
 
 
 def _number(value: str) -> float:
@@ -68,14 +125,16 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     from dataclasses import replace
 
     from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
+    from game.features.xinglu.contracts import TravelRequest
     from launch.adapter.local import dispatch
     from launch.adapter.local.handler import LocalEventHandler
 
     scratch = ROOT / "_输出" / "临时"
     scratch.mkdir(parents=True, exist_ok=True)
+    database = scratch / ("消息判据-" + uuid.uuid4().hex[:8] + ".db")
     app.game_config = replace(
         app.game_config,
-        database=replace(app.game_config.database, path=scratch / "消息判据.db"),
+        database=replace(app.game_config.database, path=database),
     )
     # 启动日志走 loguru，先摘掉，别把一屏噪声混进总账。
     from loguru import logger
@@ -89,29 +148,45 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     user_id = "P:消息判据"
     pages: dict[str, str] = {}
 
+    async def send(text: str) -> None:
+        try:
+            result = await dispatch(
+                user_id=user_id, raw_message=text, event_id="判据-" + text
+            )
+        except Exception:  # noqa: BLE001 - 参数不合适的命令本来就会报错
+            return
+        if result.replies:
+            pages[text] = _clean(getattr(result.replies[0].message, "content", ""))
+
     async def run() -> None:
         await services.features.chuangjian_renwu.create(
             CreateCharacterRequest(
                 user_id=user_id, request_id="消息判据", name="判据甲", gender="男"
             )
         )
+        for place, commands in DEEP:
+            try:
+                await services.features.xinglu.travel(
+                    TravelRequest(
+                        user_id=user_id, request_id="判据-" + place, destination=place
+                    )
+                )
+            except Exception:  # noqa: BLE001 - 走不到就跳过这一站
+                continue
+            for command in commands:
+                await send(command)
         words = sorted(
             set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
         )
         for word in words:
-            try:
-                result = await dispatch(
-                    user_id=user_id, raw_message=word, event_id="消息判据-" + word
-                )
-            except Exception:  # noqa: BLE001 - 最少参数派发本来就会有些命令报错
-                continue
-            if result.replies:
-                content = getattr(result.replies[0].message, "content", "")
-                pages[word] = _clean(content)
+            for arg in ARGS:
+                await send((word + " " + arg).strip())
 
     asyncio.run(run())
     baselines = dict(services.core.character.attribute_baselines())
     services.core.database.close()
+    for leftover in scratch.glob(database.name + "*"):
+        leftover.unlink(missing_ok=True)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -125,6 +200,20 @@ def check_no_empty_entries() -> list[str]:
         for line in _lines(body):
             if EMPTY_ENTRY.search(line):
                 problems.append(word + " 的正文里有空条目：" + line[:60])
+    return problems
+
+
+def check_no_empty_sections() -> list[str]:
+    """栏目要么别开，要么给出内容：标题下什么都没有、或整栏只有一个「无」，都是白占地方。"""
+
+    problems: list[str] = []
+    pages, _ = _corpus()
+    for word, body in pages.items():
+        for title, content in _sections(body):
+            if not content:
+                problems.append(word + " 的正文里有空栏目：" + title[:40])
+            elif all(NEUTRAL.match(item) for item in content):
+                problems.append(word + " 的栏目整栏都是中性值：" + title[:40])
     return problems
 
 
@@ -164,6 +253,7 @@ def check_no_duplicate_lines() -> list[str]:
 
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
+    ("没有空栏目", check_no_empty_sections),
     ("没有整段基准", check_no_baseline_padding),
     ("没有重复行", check_no_duplicate_lines),
 )
