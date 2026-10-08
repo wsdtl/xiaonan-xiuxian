@@ -243,6 +243,23 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             )
         )
         clash_name = "判据乙"
+        # 赠送只能送「基础物品」（灵植 / 灵矿 / 兽宝，共 582 件）——丹药不在那个
+        # 清单里，所以先授一株灵植再送；收礼的人就是上面那个人物，同处溪隐台。
+        gift_plan = await services.core.asset.plan_inventory_changes(
+            user_id, (InventoryAdjustment("200001", "01", 2),)
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                user_id,
+                "判据赠品",
+                "消息判据",
+                tuple(gift_plan.operations),
+                {"物品": "200001"},
+            )
+        )
+        for command in ("赠送 " + clash_name + " 岩露黄精 01 1",):
+            _DEEP_COMMANDS.append(command)
+            await send(command, strict=True)
         # 易形要纳戒里先有两仪易形丹（160004）；它不是派发命令能造的。
         pill_plan = await services.core.asset.plan_inventory_changes(
             user_id, (InventoryAdjustment("160004", "01", 1),)
