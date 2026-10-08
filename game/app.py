@@ -77,6 +77,7 @@ from .features.xinglu import TravelFeature
 from .features.yixing import YixingFeature
 from .features.zengsong import GiftFeature
 from .features.zhanbao import BattleReportFeature
+from .features.zhongzu import ZhongzuFeature
 from .features.zongmen import SectFeature
 from .features.zongmen_cangjing import CangjingFeature
 from .features.zongmen_lingcang import LingcangFeature
@@ -142,6 +143,7 @@ class FeatureServices:
     chakan_juese: CharacterOverviewFeature
     chakan_wupin: ItemInspectionFeature
     ditu: WorldMapFeature
+    zhongzu: ZhongzuFeature
     najie: NajieFeature
     weizhi: PositionFeature
     xinglu: TravelFeature
@@ -706,6 +708,8 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("roads", map_overview.road_count),
         )
     )
+    zhongzu = ZhongzuFeature(data, character)
+    zhongzu.initialize()
     najie = NajieFeature(asset)
     najie.initialize()
     jiaoyi = TradeFeature(data, trade)
@@ -876,6 +880,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         chakan_juese=chakan_juese,
         chakan_wupin=chakan_wupin,
         ditu=ditu,
+        zhongzu=zhongzu,
         najie=najie,
         weizhi=weizhi,
         xinglu=xinglu,

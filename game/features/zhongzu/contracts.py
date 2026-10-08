@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class RaceEntry:
-    """一个种族：编号是它的稳定标识，其余是登记表里的展示事实。"""
+    """一个种族：编号是稳定标识，其余是登记表里的展示事实。"""
 
     number: str
     name: str
     lineage: str
     tiers: tuple[str, ...]
     lifespan: float
+    rules: tuple[tuple[str, str], ...]
     summary: str
 
 
@@ -34,4 +36,11 @@ class RaceOverview:
     tiers: tuple[str, ...]
 
 
-__all__ = ["RaceEntry", "RaceLineage", "RaceOverview"]
+@dataclass(frozen=True)
+class ZhongzuCopy:
+    """种族展示文案（数据集的 展示/文本.json，不写死在代码里）。"""
+
+    text: Mapping[str, Mapping[str, str]]
+
+
+__all__ = ["RaceEntry", "RaceLineage", "RaceOverview", "ZhongzuCopy"]
