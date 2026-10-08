@@ -17,8 +17,10 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
         M.document()
         .header(_text(copy, "标题"))
         .section("本宗道藏", icon="cultivation")
-        .field("功法", M.text(value.total_entries, tone="mystic"))
     )
+    # 计数为 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
+    if value.total_entries:
+        builder.field("功法", M.text(value.total_entries, tone="mystic"))
     if not value.entries:
         builder.line(M.status("空", tone="muted"), " ", _text(copy, "空"))
     for index, entry in enumerate(value.entries, start=1):
@@ -31,7 +33,9 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
             " · ",
             entry.content_id,
         )
-    builder.small(_text(copy, "页码", {"当前页": value.page, "总页数": value.page_count}))
+    # 只有一页就不报页码——灵藏与万珍殿本来就是这个口径，藏经阁跟上。
+    if value.page_count > 1:
+        builder.small(_text(copy, "页码", {"当前页": value.page, "总页数": value.page_count}))
     builder.small(_text(copy, "说明"))
     return builder.actions(message_actions(actions)).build()
 

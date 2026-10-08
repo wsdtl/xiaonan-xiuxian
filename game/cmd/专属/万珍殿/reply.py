@@ -21,8 +21,10 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]
         M.document()
         .header(_text(copy, "标题"))
         .section(value.category, icon="inventory")
-        .field("珍物", value.total_entries)
     )
+    # 计数为 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
+    if value.total_entries:
+        builder.field("珍物", value.total_entries)
     if not value.entries:
         builder.line(M.status("空", tone="muted"), " ", _text(copy, "空"))
     for index, entry in enumerate(value.entries, start=1):

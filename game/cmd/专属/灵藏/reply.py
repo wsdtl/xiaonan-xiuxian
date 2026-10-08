@@ -15,15 +15,13 @@ from ...presentation import sentence
 
 
 def page(copy: LingcangCopy, value: LingcangPage, actions: Sequence[CommandAction]) -> DocumentMessage:
-    builder = (
-        M.document()
-        .header(_text(copy, "标题"))
-        .section(value.category, icon="inventory")
-        .row(
+    builder = M.document().header(_text(copy, "标题")).section(value.category, icon="inventory")
+    # 两个数都是 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
+    if value.spirit_stones or value.total_entries:
+        builder.row(
             (_text(copy, "灵石"), M.text(value.spirit_stones, tone="cultivation")),
             ("材料", M.text(value.total_entries, tone="emphasis")),
         )
-    )
     if not value.entries:
         builder.line(M.status("空", tone="muted"), " ", _text(copy, "空"))
     for index, entry in enumerate(value.entries, start=1):

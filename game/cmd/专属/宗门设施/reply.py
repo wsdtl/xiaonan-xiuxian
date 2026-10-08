@@ -107,7 +107,9 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
     )
     for label, content in rows:
         builder.field(label, content)
-    builder.section("材料", icon="material")
+    # 没有材料就整个栏目都不开：空栏目白占玩家的地方。
+    if materials:
+        builder.section("材料", icon="material")
     for index, material in enumerate(materials, start=1):
         if material is None:
             continue

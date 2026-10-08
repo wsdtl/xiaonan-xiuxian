@@ -53,10 +53,12 @@ ARGS = ("", "400001", "100001", "1")
 DEEP = (
     ("云京城", ("炼丹 清心散", "阵法 530002 黄")),
     ("青岚城", ("炼器 太白惊鸿",)),
-    ("", ("宗门 创建 判据宗", "宗门", "山门", "藏经阁", "灵藏", "万珍殿", "宗门同行")),
+    ("", ("宗门 创建 判据宗", "入山门", "藏经阁", "灵藏", "万珍殿", "宗门同行")),
 )
 
 _CORPUS: tuple[dict[str, str], dict[str, float]] | None = None
+#: 精心挑的深页命令抛异常就记在这儿——那说明页面根本出不来。
+_DEEP_FAILURES: list[str] = []
 
 
 def _clean(content: str) -> str:
@@ -152,13 +154,16 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     LocalEventHandler._build_command_index()
     user_id = "P:消息判据"
     pages: dict[str, str] = {}
+    deep_failures: list[str] = []
 
-    async def send(text: str) -> None:
+    async def send(text: str, *, strict: bool = False) -> None:
         try:
             result = await dispatch(
                 user_id=user_id, raw_message=text, event_id="判据-" + text
             )
-        except Exception:  # noqa: BLE001 - 参数不合适的命令本来就会报错
+        except Exception as exc:  # noqa: BLE001 - 参数不合适的命令本来就会报错
+            if strict:
+                deep_failures.append(text + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:60])
             return
         if result.replies:
             pages[text] = _clean(getattr(result.replies[0].message, "content", ""))
@@ -180,7 +185,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                 except Exception:  # noqa: BLE001 - 走不到就跳过这一站
                     continue
             for command in commands:
-                await send(command)
+                await send(command, strict=True)
         words = sorted(
             set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
         )
@@ -193,6 +198,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     services.core.database.close()
     for leftover in scratch.glob(database.name + "*"):
         leftover.unlink(missing_ok=True)
+    _DEEP_FAILURES.extend(deep_failures)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -275,12 +281,20 @@ def check_no_neutral_multipliers() -> list[str]:
     return problems
 
 
+def check_deep_pages_work() -> list[str]:
+    """深页命令是精心挑的，跑了就该出页面；抛异常说明这条出口是坏的。"""
+
+    _corpus()
+    return [item + "（深页出口坏了）" for item in _DEEP_FAILURES]
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
     ("没有整段基准", check_no_baseline_padding),
     ("没有重复行", check_no_duplicate_lines),
     ("没有中性倍率", check_no_neutral_multipliers),
+    ("深页能出页面", check_deep_pages_work),
 )
 
 

@@ -18,7 +18,11 @@ from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.sect_assets import SectAssetError, SectAssetService
-from game.features.presentation import project_unique_buttons, require_mapping
+from game.features.presentation import (
+    DUNGEON_BUTTON_KEYS,
+    project_unique_buttons,
+    require_mapping,
+)
 
 from .contracts import (
     WanzhenAction,
@@ -252,7 +256,7 @@ class WanzhenFeature:
 
 
 def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
-    return project_unique_buttons(value, label=label)
+    return project_unique_buttons(value, label=label, keys=DUNGEON_BUTTON_KEYS)
     return result
 
 
