@@ -6,6 +6,7 @@ from game.app import current_game_services
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from typing import Any
 
 
@@ -33,4 +34,4 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
     await manager.send(reply.inspection(result))
 
 
-__all__ = []
+__all__ = ["router"]
