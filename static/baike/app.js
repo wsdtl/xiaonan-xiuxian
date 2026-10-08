@@ -1,112 +1,250 @@
 "use strict";
 
-const 前缀表 = document.getElementById("prefixes");
-const 条目表 = document.getElementById("entries");
-const 状态 = document.getElementById("status");
-const 搜索框 = document.getElementById("query");
+const PAGE_SIZE = 100;
 
-async function 取数据(参数) {
-  const response = await fetch("/baike/data" + (参数 || ""));
-  if (!response.ok) throw new Error("取数失败：" + response.status);
-  return response.json();
+const el = {
+  prefixes: document.getElementById("prefixes"),
+  entries: document.getElementById("entries"),
+  pager: document.getElementById("pager"),
+  detail: document.getElementById("detail"),
+  status: document.getElementById("status"),
+  crumb: document.getElementById("crumb"),
+  query: document.getElementById("query"),
+};
+
+let rows = [];
+let page = 1;
+let label = "";
+let activePrefix = "";
+
+async function fetchData(params) {
+  const response = await fetch("/baike/data" + (params || ""));
+  const body = await response.json();
+  if (!response.ok) throw new Error(body["错误"] || "取数失败：" + response.status);
+  return body;
 }
 
-function 建行(左, 右) {
-  const item = document.createElement("li");
-  item.className = "entry";
-  const 编号 = document.createElement("span");
-  编号.className = "code";
-  编号.textContent = 左;
-  const 名称 = document.createElement("span");
-  名称.className = "name";
-  名称.textContent = 右;
-  item.append(编号, 名称);
-  return item;
+function show(node, on) {
+  node.hidden = !on;
 }
 
-function 画条目(条目) {
-  条目表.replaceChildren();
-  状态.textContent = 条目.length ? "共 " + 条目.length + " 条" : "没有条目";
-  const 片段 = document.createDocumentFragment();
-  for (const row of 条目) 片段.append(建行(row["编号"], row["名称"]));
-  条目表.append(片段);
+function setStatus(text, bad) {
+  el.status.textContent = text;
+  el.status.classList.toggle("status-error", Boolean(bad));
+  show(el.status, Boolean(text));
 }
 
-function 画前缀(表) {
-  前缀表.replaceChildren();
-  const 片段 = document.createDocumentFragment();
-  for (const row of 表) {
+function clear(list) {
+  while (list.firstChild) list.removeChild(list.firstChild);
+}
+
+function renderPrefixes(table) {
+  clear(el.prefixes);
+  const frag = document.createDocumentFragment();
+  for (const row of table) {
     const item = document.createElement("li");
-    item.className = "prefix";
-    const link = document.createElement("button");
-    link.className = "prefix-button";
-    link.type = "button";
-    link.textContent = row["前缀"] + " " + row["类别"];
-    const 计数 = document.createElement("span");
-    计数.className = "count";
-    计数.textContent = row["条数"] + " 条";
-    link.append(计数);
-    link.addEventListener("click", async () => {
-      状态.textContent = "正在载入…";
-      画条目((await 取数据("?prefix=" + row["前缀"])).条目);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "prefix-button";
+    const code = document.createElement("span");
+    code.className = "prefix-code";
+    code.textContent = row["前缀"];
+    const name = document.createElement("span");
+    name.className = "prefix-name";
+    name.textContent = row["类别"];
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = row["条数"];
+    button.append(code, name, count);
+    button.dataset.prefix = row["前缀"];
+    button.addEventListener("click", () => openPrefix(row["前缀"], row["类别"]));
+    item.append(button);
+    frag.append(item);
+  }
+  el.prefixes.append(frag);
+}
+
+function renderRows() {
+  clear(el.entries);
+  const start = (page - 1) * PAGE_SIZE;
+  const slice = rows.slice(start, start + PAGE_SIZE);
+  const frag = document.createDocumentFragment();
+  for (const row of slice) {
+    const item = document.createElement("li");
+    item.className = "entry";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "entry-button";
+    const code = document.createElement("span");
+    code.className = "code";
+    code.textContent = row["编号"];
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = row["名称"];
+    const source = document.createElement("span");
+    source.className = "source";
+    source.textContent = row["来源"];
+    button.append(code, name, source);
+    button.addEventListener("click", () => openDetail(row["编号"]));
+    item.append(button);
+    frag.append(item);
+  }
+  el.entries.append(frag);
+  renderPager();
+}
+
+function renderPager() {
+  clear(el.pager);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  if (pages <= 1) return;
+  const frag = document.createDocumentFragment();
+  const make = (text, target, disabled) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pager-button";
+    button.textContent = text;
+    button.disabled = disabled;
+    button.addEventListener("click", () => {
+      page = target;
+      renderRows();
+      window.scrollTo({ top: 0 });
     });
-    item.append(link);
-    片段.append(item);
-  }
-  前缀表.append(片段);
+    return button;
+  };
+  const marker = document.createElement("span");
+  marker.className = "pager-marker";
+  marker.textContent = page + " / " + pages;
+  frag.append(make("上一页", Math.max(1, page - 1), page <= 1), marker, make("下一页", Math.min(pages, page + 1), page >= pages));
+  el.pager.append(frag);
 }
 
-async function 检索(词) {
-  状态.textContent = "正在载入…";
+function renderDetail(body) {
+  clear(el.detail);
+  const head = document.createElement("header");
+  head.className = "detail-head";
+  const title = document.createElement("h2");
+  title.className = "detail-title";
+  title.textContent = body["名称"];
+  const meta = document.createElement("p");
+  meta.className = "detail-meta";
+  meta.textContent = body["来源"] + " · " + body["编号"] + (body["编号类别"] ? " · " + body["编号类别"] : "");
+  const back = document.createElement("button");
+  back.type = "button";
+  back.className = "back";
+  back.textContent = "返回列表";
+  back.addEventListener("click", () => showList());
+  head.append(title, meta, back);
+  const list = document.createElement("dl");
+  list.className = "fields";
+  for (const [key, value] of Object.entries(body["字段"] || {})) {
+    const term = document.createElement("dt");
+    term.className = "field-key";
+    term.textContent = key;
+    const desc = document.createElement("dd");
+    desc.className = "field-value";
+    desc.textContent = typeof value === "string" ? value : JSON.stringify(value);
+    list.append(term, desc);
+  }
+  el.detail.append(head, list);
+  show(el.detail, true);
+}
+
+function showList() {
+  show(el.detail, false);
+  show(el.entries, true);
+  show(el.pager, true);
+  setStatus(label, false);
+}
+
+function markActive(prefix) {
+  activePrefix = prefix;
+  for (const button of el.prefixes.querySelectorAll(".prefix-button")) {
+    button.classList.toggle("is-active", button.dataset.prefix === prefix);
+  }
+}
+
+async function openPrefix(prefix, category) {
+  markActive(prefix);
+  setStatus("正在载入…", false);
+  show(el.detail, false);
   try {
-    画条目((await 取数据("?q=" + encodeURIComponent(词))).条目);
+    const body = await fetchData("?prefix=" + encodeURIComponent(prefix));
+    rows = body["条目"] || [];
+    page = 1;
+    label = prefix + " " + category + " · 共 " + rows.length + " 条";
+    el.crumb.textContent = prefix + " " + category;
+    renderRows();
+    setStatus(label, false);
   } catch (error) {
-    状态.textContent = String(error.message || error);
+    setStatus(String(error.message || error), true);
   }
 }
 
-async function 看前缀(前缀) {
-  状态.textContent = "正在载入…";
+async function search(word) {
+  markActive("");
+  setStatus("正在载入…", false);
+  show(el.detail, false);
   try {
-    画条目((await 取数据("?prefix=" + encodeURIComponent(前缀))).条目);
+    const body = await fetchData("?q=" + encodeURIComponent(word));
+    rows = body["条目"] || [];
+    page = 1;
+    label = "检索「" + word + "」 · 共 " + rows.length + " 条";
+    el.crumb.textContent = "检索 " + word;
+    renderRows();
+    setStatus(rows.length ? label : "没有匹配的条目", !rows.length);
   } catch (error) {
-    状态.textContent = String(error.message || error);
+    setStatus(String(error.message || error), true);
   }
 }
 
-async function 启动() {
+async function openDetail(id) {
+  markActive("");
+  setStatus("正在载入…", false);
   try {
-    const 总表 = await 取数据();
-    画前缀(总表.前缀表);
-    // 深链接：/baike?q=550001 或 /baike?prefix=55 —— 从「查看」回复点进来时用得上。
-    const 参数 = new URLSearchParams(location.search);
-    const 词 = (参数.get("q") || "").trim();
-    const 前缀 = (参数.get("prefix") || "").trim();
-    if (词) {
-      搜索框.value = 词;
-      await 检索(词);
+    const body = await fetchData("?id=" + encodeURIComponent(id));
+    show(el.entries, false);
+    show(el.pager, false);
+    setStatus("", false);
+    renderDetail(body);
+  } catch (error) {
+    setStatus(String(error.message || error), true);
+  }
+}
+
+async function boot() {
+  try {
+    const table = await fetchData();
+    renderPrefixes(table["前缀表"] || []);
+    const params = new URLSearchParams(location.search);
+    const id = (params.get("id") || "").trim();
+    const word = (params.get("q") || "").trim();
+    const prefix = (params.get("prefix") || "").trim();
+    if (id) {
+      await openDetail(id);
       return;
     }
-    if (前缀) {
-      await 看前缀(前缀);
+    if (word) {
+      el.query.value = word;
+      await search(word);
       return;
     }
-    状态.textContent = "选一个前缀，或直接搜编号与名称";
+    if (prefix) {
+      const hit = (table["前缀表"] || []).find((row) => row["前缀"] === prefix);
+      await openPrefix(prefix, hit ? hit["类别"] : "");
+      return;
+    }
+    show(el.entries, false);
+    show(el.pager, false);
+    setStatus("选一个前缀，或直接检索编号与名称", false);
   } catch (error) {
-    状态.textContent = String(error.message || error);
+    setStatus(String(error.message || error), true);
   }
 }
 
-搜索框.addEventListener("keydown", async (event) => {
+el.query.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
-  const 词 = 搜索框.value.trim();
-  if (!词) return;
-  状态.textContent = "正在载入…";
-  try {
-    画条目((await 取数据("?q=" + encodeURIComponent(词))).条目);
-  } catch (error) {
-    状态.textContent = String(error.message || error);
-  }
+  const word = el.query.value.trim();
+  if (word) search(word);
 });
 
-启动();
+boot();

@@ -9,16 +9,25 @@
 </head>
 <body>
   <header class="topbar">
-    <h1 class="title">百科</h1>
-    <input id="query" class="search" type="search" placeholder="编号或名称">
+    <div class="brand">
+      <span class="brand-mark">晓楠</span>
+      <h1 class="brand-title">百科</h1>
+    </div>
+    <div class="search-wrap">
+      <input id="query" class="search" type="search" placeholder="输入编号或完整名称，回车检索">
+    </div>
   </header>
-  <main class="layout">
+  <main class="app">
     <nav class="sidebar">
+      <p class="sidebar-title">编号前缀</p>
       <ul id="prefixes" class="prefixes"></ul>
     </nav>
     <section class="content">
+      <div id="crumb" class="crumb"></div>
       <p id="status" class="status">正在载入…</p>
-      <ul id="entries" class="entries"></ul>
+      <ol id="entries" class="entries"></ol>
+      <nav id="pager" class="pager"></nav>
+      <article id="detail" class="detail"></article>
     </section>
   </main>
 </body>

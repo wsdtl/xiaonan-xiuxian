@@ -15,6 +15,7 @@ from pathlib import Path
 from collections.abc import Mapping
 
 from fastapi import APIRouter
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from game.app import current_game_services
@@ -30,10 +31,13 @@ async def baike_page() -> HTMLResponse:
 
 
 @router.get("/data", response_class=JSONResponse)
-async def baike_data(prefix: str = "", q: str = "") -> JSONResponse:
-    """不带参数给前缀总表；带 `prefix` 给该前缀的条目；带 `q` 按编号或名称检索。"""
+async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONResponse:
+    """`id` 给单个实体的详情；`q` 按编号或名称检索；`prefix` 给该前缀的条目；都不带给前缀总表。"""
 
     services = current_game_services()
+    wanted_id = id.strip()
+    if wanted_id:
+        return _detail(services, wanted_id)
     entries = _entries(services)
     query = q.strip()
     if query:
@@ -44,6 +48,61 @@ async def baike_data(prefix: str = "", q: str = "") -> JSONResponse:
         picked = [e for e in entries if e["编号"].startswith(wanted)]
         return JSONResponse({"模式": "前缀", "前缀": wanted, "条目": picked}, headers=_data_headers())
     return JSONResponse({"模式": "总表", "前缀表": _prefix_rows(entries)}, headers=_data_headers())
+
+
+def _detail(services, entity_id: str) -> JSONResponse:
+    """单个实体的详情。按前缀分派：数据索引实体走 `entity_record`，种族走角色核心的 `races()`。"""
+
+    headers = _data_headers()
+    if entity_id.startswith("55"):
+        race = services.core.character.races().get(entity_id) or _find_race(services, entity_id)
+        if race is None:
+            return JSONResponse(
+                {"模式": "详情", "编号": entity_id, "错误": "没有这个种族"},
+                status_code=404,
+                headers=headers,
+            )
+        return JSONResponse(
+            {
+                "模式": "详情",
+                "编号": entity_id,
+                "名称": str(race.get("种族") or ""),
+                "来源": "种族",
+                "字段": jsonable_encoder(race),
+            },
+            headers=headers,
+        )
+    record = None
+    for entity in services.core.data.numbered_entities():
+        if entity.entity_id == entity_id:
+            record = entity
+            break
+    if record is None:
+        return JSONResponse(
+            {"模式": "详情", "编号": entity_id, "错误": "没有这个编号"},
+            status_code=404,
+            headers=headers,
+        )
+    return JSONResponse(
+        {
+            "模式": "详情",
+            "编号": entity_id,
+            "名称": str(record.value.get("名称") or entity_id),
+            "来源": str(record.section),
+            "编号类别": str(record.number_category),
+            "字段": jsonable_encoder(record.value),
+        },
+        headers=headers,
+    )
+
+
+def _find_race(services, entity_id: str) -> Mapping | None:
+    """种族登记表按名字索引，详情按编号取，所以要按编号再找一遍。"""
+
+    for race in services.core.character.races().values():
+        if str(race.get("编号") or "") == entity_id:
+            return race
+    return None
 
 
 def _entries(services) -> list[dict[str, str]]:
