@@ -45,12 +45,23 @@ DATA = ROOT / "data"
 RECIPE = DATA / "物品" / "炼器" / "规则" / "器则.json"
 LAW_DIR = DATA / "物品" / "炼器" / "内容"
 TIERS = ("凡器", "灵器", "法器", "法宝", "后天灵宝")
+#: 读取数值 的登记来源，main 里装载（检查函数直接用）。
+READ_SOURCES = frozenset()
 #: 可缩放字段（白名单）：档位倍率只允许落在这些「量」字段上。
 #: 不含 每次行动最多触发 / 概率 / 冷却 / 持续时间 —— 那些是机制参数，缩放它们等于改机制。
 SCALABLE = ("威力倍率", "数值", "层数", "最高值")
 
 #: 「消耗全部层数」的合法上界（防手滑）。
 STACK_CEILING = 1000
+
+
+def _read_sources() -> frozenset:
+    """读取数值 允许的来源。未登记的名字会被引擎静默取 0，所以必须逐个核对。"""
+
+    data = json.loads((DATA / "战斗" / "定义" / "原子能力.json").read_text(encoding="utf-8"))
+    field = (data.get("读取数值") or {}).get("字段") or {}
+    options = (field.get("来源") or {}).get("选项") or []
+    return frozenset(str(item) for item in options)
 
 
 def _recipes() -> list[dict]:
@@ -157,6 +168,24 @@ def check_law(laws: dict) -> tuple[list[str], list[str], list[str]]:
             name = str(choice.get("名称")) if isinstance(choice, Mapping) else str(choice)
             if name not in added:
                 problems.append(f"{label} 直接改状态[{name}]的层数——器律只能操作自己添加的状态")
+        # 7 读取数值：来源必须登记过（注册表：未登记的名字会被静默取 0）
+        for node in nodes:
+            if node.get("能力") != "读取数值":
+                continue
+            source = str(node.get("来源") or "")
+            if source not in READ_SOURCES:
+                problems.append(f"{label} 读取数值的来源[{source}]不在注册表选项内——引擎会静默取 0")
+            elif source == "构筑计量":
+                name = str(node.get("计量") or "")
+                if not name:
+                    problems.append(f"{label} 读取构筑计量但没写计量名（会静默取 0）")
+                elif name not in written:
+                    # 只认 written：读取本身在闭环检查里算「有裁定」，不能拿它自证存在。
+                    problems.append(f"{label} 读取了本门没写过的计量[{name}]")
+            elif source == "状态层数":
+                name = str(node.get("状态") or node.get("名称") or "")
+                if name and name not in added:
+                    problems.append(f"{label} 读取了本门没添加过的状态[{name}]的层数")
         # 6 层数语义
         for node in nodes:
             if node.get("能力") != "修改状态层数":
@@ -225,6 +254,8 @@ def _plain(node):
 
 
 def main() -> int:
+    global READ_SOURCES
+    READ_SOURCES = _read_sources()
     problems = check_ladder()
     print("  [" + ("干净" if not problems else str(len(problems)) + " 处") + "] 器阶阶梯")
     for item in problems[:6]:
