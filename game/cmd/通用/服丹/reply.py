@@ -7,8 +7,18 @@ from game.features.fudan import MedicineFeature, AutoMedicineResult, MedicineUse
 from message import DocumentMessage, M
 
 
+#: 「人物／道侣」x「恢复／寄存」四种情形各自的展示键名。
+_USE_KEYS = {
+    ("人物", "恢复"): "人物恢复",
+    ("道侣", "恢复"): "道侣恢复",
+    ("人物", "寄存"): "人物寄存",
+    ("道侣", "寄存"): "道侣寄存",
+}
+
 def used(feature: MedicineFeature, result: MedicineUseResult) -> DocumentMessage:
-    key = f"{result.target}{'恢复' if result.effect == '恢复' else '寄存'}"
+    # 键名写成字面量：拼出来的键名判据看不见（数据驱动判据要求每个展示键都有人读），
+    # 而且写死了也更容易看出这四种情形各要一段文案。
+    key = _USE_KEYS[(result.target, result.effect)]
     line = feature.copy(
         "服丹",
         key, {"人物": result.target_name, "道侣": result.target_name, "品级": result.grade_name, "丹药": result.medicine_name, "资源": result.resource, "实际恢复": _number(result.recovered)},

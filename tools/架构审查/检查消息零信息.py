@@ -328,6 +328,29 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             for command in ("开始讨伐", "讨伐战况"):
                 _DEEP_COMMANDS.append(command)
                 await send(command, user=raid_user, strict=True)
+        # 服丹要人物有损耗，否则只会得到「血气已满」。用战后结算把血气精神压到 1——
+        # 那是游戏自己结算战果的接口，不是改写状态。
+        pill_user = "P:判据服丹"
+        await services.features.chuangjian_renwu.create(
+            CreateCharacterRequest(
+                user_id=pill_user, request_id="消息判据-服丹", name="判据丹", gender="男"
+            )
+        )
+        battle = await services.core.character.plan_battle_settlement(
+            pill_user, health=1.0, spirit=1.0
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                pill_user,
+                "判据损耗",
+                "消息判据",
+                tuple(battle.operations),
+                {"来源": "判据夹具"},
+            )
+        )
+        for command in ("人物服丹 100005",):
+            _DEEP_COMMANDS.append(command)
+            await send(command, user=pill_user, strict=True)
         for label, commands in ACTIVITIES:
             activity_user = "P:判据行动" + label
             await services.features.chuangjian_renwu.create(
