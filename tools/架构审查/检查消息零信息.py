@@ -54,6 +54,18 @@ ARGS = ("", "400001", "100001", "1")
 #: 有状态深页：走到地方 + 给对参数才出得来（丹师在云京城、器师在青岚城）。
 #: 有状态深页：走到地方 + 给对参数才出得来（丹师在云京城、器师在青岚城）；
 #: 地点留空表示不用走，直接发（立宗门这类）。
+#: 行动类组件各占一个人物：一次行动会占住全部行动（采药中就采不了矿、不能闭关、
+#: 不能服丹），所以同一人物跑不了第二个——每个行动用一份干净的人物。
+#: 服丹不在这里：它要求人物有损耗（血气或精神不满），新人物造不出那个状态。
+#: 宗门生产、宗门战、赠送、切磋、布阵、讨伐、太素坊、归元观、铜雀台、道侣培养同理，
+#: 各缺一种造不出来的状态；tools/报告与生成/消息覆盖对账.py 会把它们列出来。
+ACTIVITIES = (
+    ("采药", ("开始采药", "采药进度")),
+    ("采矿", ("开始采矿", "采矿进度")),
+    ("闭关", ("开始闭关", "闭关进度")),
+)
+
+
 DEEP = (
     # 洞天这一站必须先跑：立宗门要在原地（山门入口），先跑过几站旅行之后地点就变了，
     # 入山门会报「当前不在本宗山门入口」，洞天里的页面就全都进不了语料。出山门再去各城。
@@ -189,10 +201,10 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     pages: dict[str, str] = {}
     deep_failures: list[str] = []
 
-    async def send(text: str, *, strict: bool = False) -> None:
+    async def send(text: str, *, user: str = "", strict: bool = False) -> None:
         try:
             result = await dispatch(
-                user_id=user_id, raw_message=text, event_id="判据-" + text
+                user_id=user or user_id, raw_message=text, event_id="判据-" + text
             )
         except Exception as exc:  # noqa: BLE001 - 参数不合适的命令本来就会报错
             if strict:
@@ -228,6 +240,19 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         words = sorted(
             set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
         )
+        for label, commands in ACTIVITIES:
+            activity_user = "P:判据行动" + label
+            await services.features.chuangjian_renwu.create(
+                CreateCharacterRequest(
+                    user_id=activity_user,
+                    request_id="消息判据-" + label,
+                    name="判据" + label[:1],
+                    gender="男",
+                )
+            )
+            for command in commands:
+                _DEEP_COMMANDS.append(command)
+                await send(command, user=activity_user, strict=True)
         for word in words:
             for arg in ARGS:
                 await send((word + " " + arg).strip())
