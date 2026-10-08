@@ -1,13 +1,21 @@
 :root {
   color-scheme: light;
-  --page: #e2e9e5;
+  /* 页底与描边对齐装配台：暖纸 + 玉色，舆图那块冷调地形因此像铺在案上的图。 */
+  --page: #f7f5ef;
   --map-paper: #aec0b6;
-  --surface: rgba(248, 250, 247, 0.9);
-  --surface-strong: rgba(255, 255, 255, 0.96);
-  --ink: #202923;
-  --muted: #68736c;
-  --line: rgba(69, 81, 73, 0.32);
-  --line-strong: rgba(49, 64, 55, 0.58);
+  --surface: rgba(255, 255, 255, 0.94);
+  --surface-strong: #ffffff;
+  --ink: #1d2a25;
+  --muted: #5c6b64;
+  --line: rgba(19, 66, 53, 0.14);
+  --line-strong: rgba(19, 66, 53, 0.26);
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+  --sh-1: 0 1px 2px rgba(29, 42, 37, .06), 0 1px 3px rgba(29, 42, 37, .04);
+  --sh-2: 0 2px 6px rgba(29, 42, 37, .07), 0 8px 24px rgba(29, 42, 37, .09);
+  --sheen: 0 0 0 1px rgba(255, 255, 255, .6) inset;
+  --t: 190ms cubic-bezier(.2, .7, .3, 1);
   --category-0: #39745e;
   --category-1: #95573d;
   --category-2: #41697a;
@@ -966,6 +974,174 @@ select:focus-visible {
 #detailFunctions span[data-kind="boundary"] {
   color: #74391f;
   border-color: #c5a18f;
+}
+
+/* ------------------------------------------------------------------
+   外壳精修：舆图那一块（地形、道路、标签）一个字没动，只重做叠在上面的
+   框——页眉、控件、缩放、图例、详情面板。配色与圆角/阴影/缓动对齐装配台，
+   四个页面因此共用同一套视觉语言，但各自保留自己的骨架。 */
+
+/* 舆图那一片地形是冷调青绿，页底是暖纸：给图块收圆角加投影，
+   交界就从「没对齐」变成「一张图铺在案上」。 */
+.map-frame {
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-2);
+}
+
+.map-loading {
+  letter-spacing: .18em;
+  color: var(--muted);
+  font-size: 13px;
+}
+.map-loading::after {
+  content: ;
+  display: block;
+  width: 42px;
+  height: 2px;
+  margin: 14px auto 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--focus), transparent);
+  animation: loading-sweep 1.4s ease-in-out infinite;
+}
+
+.atlas-header,
+.atlas-controls,
+.zoom-controls,
+.map-key,
+.place-detail {
+  box-shadow: var(--sh-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  backdrop-filter: blur(10px) saturate(1.1);
+}
+
+.atlas-header {
+  padding: 16px 20px 15px;
+  background: var(--surface);
+}
+.atlas-title > span {
+  letter-spacing: .22em;
+  color: var(--muted);
+}
+.atlas-title h1 {
+  letter-spacing: .09em;
+  font-weight: 800;
+  color: var(--ink);
+}
+.atlas-facts {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.atlas-controls {
+  padding: 12px 14px;
+  background: var(--surface);
+}
+.search-control input,
+.select-control select {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-strong);
+  transition: border-color var(--t), box-shadow var(--t), background var(--t);
+}
+.search-control input:hover,
+.select-control select:hover {
+  border-color: var(--focus);
+}
+.search-control input:focus,
+.select-control select:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(30, 106, 85, .16);
+}
+.switch-control {
+  color: var(--muted);
+}
+.switch-control input {
+  accent-color: var(--focus);
+}
+
+.zoom-controls {
+  overflow: hidden;
+  background: var(--surface);
+}
+.zoom-controls button {
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  transition: background var(--t), color var(--t), transform var(--t);
+}
+.zoom-controls button:hover,
+.zoom-controls button:focus-visible {
+  color: var(--focus);
+  background: rgba(30, 106, 85, .1);
+}
+.zoom-controls button:active {
+  transform: scale(.94);
+}
+
+/* 页眉内边距加大之后卡片正好压住「北」字，把指南针让到卡片下面
+   （窄屏那两档的 top 在各自的媒体查询里，仍然优先）。 */
+.compass {
+  top: 126px;
+  color: var(--focus);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, .8);
+}
+
+.map-key {
+  padding: 10px 14px;
+  background: var(--surface);
+  color: var(--muted);
+  transition: opacity var(--t), transform var(--t);
+}
+.category-key i {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .7);
+}
+.altitude-key i {
+  border-radius: 999px;
+}
+
+.place-detail {
+  padding: 20px 20px 18px;
+  background: var(--surface);
+  animation: detail-in 260ms cubic-bezier(.2, .7, .3, 1) both;
+}
+.detail-close {
+  border-radius: 999px;
+  transition: background var(--t), color var(--t), transform var(--t);
+}
+.detail-close:hover,
+.detail-close:focus-visible {
+  background: rgba(30, 106, 85, .12);
+  transform: rotate(90deg);
+}
+.detail-heading h2 {
+  letter-spacing: .05em;
+  color: var(--ink);
+}
+.detail-heading > span {
+  letter-spacing: .18em;
+}
+.detail-facts > div {
+  border-bottom: 1px dashed var(--line);
+}
+.detail-facts dt {
+  color: var(--muted);
+}
+.detail-facts dd {
+  font-variant-numeric: tabular-nums;
+}
+#detailFunctions span {
+  border-radius: 999px;
+  transition: background var(--t), border-color var(--t);
+}
+
+@keyframes loading-sweep {
+  0%, 100% { opacity: .35; transform: translateX(-6px); }
+  50% { opacity: 1; transform: translateX(6px); }
+}
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(8px) scale(.994); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (max-width: 1080px) {
