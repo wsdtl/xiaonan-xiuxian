@@ -53,7 +53,7 @@ class ZhongzuFeature:
                 name=name,
                 lineage=str(entry.get("族系") or ""),
                 tiers=entry_tiers,
-                lifespan=float(str(entry.get("寿元系数") or 0)),
+                lifespan=float(str(entry.get("寿元系数") or 1.0)),
                 rules=rules,
                 summary=str(entry.get("说明") or ""),
             )
