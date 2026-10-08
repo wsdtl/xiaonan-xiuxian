@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.features.zhongzu import RaceEntry, RaceOverview, ZhongzuCopy
-from message import DocumentMessage, M
+from message import Action, DocumentMessage, M
 
 
 def _text(copy: ZhongzuCopy, section: str, key: str) -> str:
@@ -28,8 +28,29 @@ def page(copy: ZhongzuCopy, overview: RaceOverview, index: int) -> DocumentMessa
             {"总数": overview.total, "族系数": len(overview.lineages)}
         ))
     for race in lineage.races:
-        builder.line(M.text(race.name, tone="emphasis"), " · " + "/".join(race.tiers))
-    builder.small(_text(copy, "总览", "提示"))
+        # 名字本身即入口：与角色页的物件/构筑一致，标签保持正文（带 tone 会被推进公式，
+        # 而 QQ 不解析公式里的链接）。
+        builder.line(
+            M.command(race.name, f"种族 {race.number}"),
+            " · " + "/".join(race.tiers),
+        )
+    # 整句提示用正文行：一是 small 会被推进公式（不渲染公式的客户端会露出 LaTeX 源码），
+    # 二是 note 渲染成第 1 层无冒号的行，会被「空栏目」判据当成栏目标题。
+    builder.line(_text(copy, "总览", "提示"))
+    total = len(overview.lineages)
+    actions: list[Action] = []
+    if index > 1:
+        actions.append(
+            Action("zhongzu.previous", "上一页", f"种族 {index - 1}",
+                   behavior="callback", style="secondary")
+        )
+    if index < total:
+        actions.append(
+            Action("zhongzu.next", "下一页", f"种族 {index + 1}",
+                   behavior="callback", style="secondary")
+        )
+    if actions:
+        builder.actions(actions)
     return builder.build()
 
 
