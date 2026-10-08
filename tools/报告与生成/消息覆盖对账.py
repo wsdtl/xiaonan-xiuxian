@@ -69,11 +69,14 @@ def main() -> int:
         print("  %-24s %8d %8d%s" % (component, real, error, mark))
     print()
     total = len(table)
-    print(f"共 {total} 个二级组件，其中 {len(uncovered)} 个一条真页面都没有：")
-    for component in uncovered:
-        print("  " + component)
-    print()
-    print("真页面 0 的组件说明它的页面还没被真正看过——要补的是这些组件的状态夹具。")
+    if uncovered:
+        print(f"共 {total} 个二级组件，其中 {len(uncovered)} 个一条真页面都没有：")
+        for component in uncovered:
+            print("  " + component)
+        print()
+        print("真页面 0 的组件说明它的页面还没被真正看过——要补的是这些组件的状态夹具。")
+    else:
+        print(f"共 {total} 个二级组件，每个都至少有一条真页面：没有没被看过的组件。")
     return 0
 
 

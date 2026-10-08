@@ -403,6 +403,75 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         for command in ("归元",):
             _DEEP_COMMANDS.append(command)
             await send(command, user=mate_user, strict=True)
+        # 夺元要求同行道侣至少 2 级；道侣的等级用它的成长接口涨（和人物一样的正当路）。
+        mate_growth = await services.core.companion.plan_growth(
+            mate_user, experience=100000
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                mate_user,
+                "判据道侣经验",
+                "消息判据",
+                tuple(mate_growth.operations),
+                {"来源": "判据夹具"},
+            )
+        )
+        await services.features.xinglu.travel(
+            TravelRequest(user_id=mate_user, request_id="判据-铜雀台", destination="铜雀台")
+        )
+        for command in ("夺元",):
+            _DEEP_COMMANDS.append(command)
+            await send(command, user=mate_user, strict=True)
+        # 补天只作用于「已突破」的纯突破节点，而且灵动境压根没有单属性丹（单属性丹
+        # 从炼气 510002 才开始）。所以这条路得走完：灌经验 → 用纯突破丹突破到炼气 →
+        # 再补天；九霄补天丹 160002 是补天自己要的药。
+        butian_user = "P:判据补天"
+        await services.features.chuangjian_renwu.create(
+            CreateCharacterRequest(
+                user_id=butian_user, request_id="消息判据-补天", name="判据天", gender="男"
+            )
+        )
+        growth = await services.core.character.plan_growth(butian_user, experience=100000)
+        await services.core.database.commit(
+            TransactionCommand(
+                butian_user,
+                "判据经验",
+                "消息判据",
+                tuple(growth.operations),
+                {"来源": "判据夹具"},
+            )
+        )
+        for item_id in ("140001", "160002"):
+            grant = await services.core.asset.plan_inventory_changes(
+                butian_user, (InventoryAdjustment(item_id, "01", 1),)
+            )
+            await services.core.database.commit(
+                TransactionCommand(
+                    butian_user,
+                    "判据丹药" + item_id,
+                    "消息判据",
+                    tuple(grant.operations),
+                    {"物品": item_id},
+                )
+            )
+        breakthrough = await services.core.character.plan_breakthrough(
+            butian_user, medicine_id="140001"
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                butian_user,
+                "判据突破",
+                "消息判据",
+                (breakthrough.operation,),
+                {"丹药": "140001"},
+            )
+        )
+        await services.features.xinglu.travel(
+            TravelRequest(user_id=butian_user, request_id="判据-裂天原", destination="裂天原")
+        )
+        for command in ("补天 人物 炼气 140002",):
+            _DEEP_COMMANDS.append(command)
+            await send(command, user=butian_user, strict=True)
         for label, commands in ACTIVITIES:
             activity_user = "P:判据行动" + label
             await services.features.chuangjian_renwu.create(
