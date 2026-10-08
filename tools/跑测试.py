@@ -6,6 +6,9 @@
 
     .venv/Scripts/python.exe -X utf8 tools/跑测试.py
 
+某一组失败时会连 pytest 的 FAILED 行与 stderr 末行一起打出来——只留最后一行
+（1 failed, 73 passed）看不出是哪个用例，偶发失败就无从查起。
+
 **退出码：0 = 全部通过，1 = 有失败。**
 """
 from __future__ import annotations
@@ -119,7 +122,20 @@ def _run(job: tuple[int, list[str]]) -> tuple[bool, str, float]:
         if line.strip():
             tail = line.strip()
             break
-    return done.returncode == 0, tail[:120], time.perf_counter() - started
+    if done.returncode != 0:
+        # 失败时只留最后一行看不出是哪个用例——把 FAILED 行与 stderr 末行一起带上，
+        # 免得下一次偶发失败又只剩一句「1 failed, 73 passed」。
+        failed = [
+            line.strip()
+            for line in (done.stdout or "").splitlines()
+            if line.strip().startswith(("FAILED", "ERROR"))
+        ]
+        if failed:
+            tail = (tail + " ｜ " + "；".join(failed[:3]))
+        errors = [line.strip() for line in (done.stderr or "").splitlines() if line.strip()]
+        if errors:
+            tail = tail + " ｜ stderr: " + errors[-1]
+    return done.returncode == 0, tail[:300], time.perf_counter() - started
 
 
 def main() -> int:
