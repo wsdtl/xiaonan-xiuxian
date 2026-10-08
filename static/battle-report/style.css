@@ -1,16 +1,18 @@
 :root {
-  color: #202923;
-  background: #e9ede9;
+  color: #1d2a25;
+  background: #f7f5ef;
   font-family: system-ui, "Microsoft YaHei", sans-serif;
   font-synthesis: none;
   letter-spacing: 0;
-  --ink: #202923;
-  --muted: #68736c;
-  --line: #cfd5cf;
+  --ink: #1d2a25;
+  --muted: #5c6b64;
+  --line: #e3ded1;
   --paper: #fbfaf5;
   --soft: #f2f3ed;
   --jade: #1e6a55;
   --jade-deep: #134235;
+  --page: #f7f5ef;
+  --focus: #1e6a55;
   /* 圆角、缓动与另外三页共用同一套刻度。 */
   --r-sm: 8px;
   --r: 12px;
@@ -24,6 +26,9 @@
   --blue: #4b6789;
   --blue-soft: #edf1f5;
   --shadow: 0 18px 42px rgba(29, 43, 35, .08);
+  --line-strong: #cfc8b6;
+  --sh-1: 0 1px 2px rgba(29, 42, 37, .05), 0 1px 3px rgba(29, 42, 37, .04);
+  --sh-2: 0 2px 6px rgba(29, 42, 37, .06), 0 8px 24px rgba(29, 42, 37, .08);
 }
 
 * {

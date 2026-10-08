@@ -11,6 +11,8 @@
   color-scheme: light;
   font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   --paper: #f7f5ef;
+  --page: #f7f5ef;
+  --muted: #5c6b64;
   --paper-deep: #eeeae0;
   --surface: #ffffff;
   --surface-soft: #f3f1e9;
@@ -24,6 +26,7 @@
   --jade-soft: #e9f2ed;
   --gold: #b0883a;
   --gold-soft: #f7f0df;
+  --focus: #1e6a55;
   --danger: #a63a2a;
   --r-sm: 8px;
   --r: 12px;

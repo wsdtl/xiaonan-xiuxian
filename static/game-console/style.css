@@ -4,6 +4,7 @@
   /* 页底与描边对齐装配台/舆图的暖纸玉色；圆角与阴影三档、缓动曲线也在这一层
      定义一次，下面的精修块共用（先前这几项没定义，规则会静默失效）。 */
   --page: #f7f5ef;
+  --paper: #f7f5ef;
   --surface: #ffffff;
   --surface-soft: #f3f1e9;
   --surface-strong: #ffffff;
@@ -13,7 +14,8 @@
   --line-strong: #cfc8b6;
   --green: #176d58;
   --green-dark: #105343;
-  --focus: #176d58;
+  --focus: #1e6a55;
+  --jade: #1e6a55;
   --jade-deep: #134235;
   --r-sm: 8px;
   --r: 12px;

@@ -2,6 +2,7 @@
   color-scheme: light;
   /* 页底与描边对齐装配台：暖纸 + 玉色，舆图那块冷调地形因此像铺在案上的图。 */
   --page: #f7f5ef;
+  --paper: #f7f5ef;
   --map-paper: #aec0b6;
   --surface: rgba(255, 255, 255, 0.94);
   --surface-strong: #ffffff;
@@ -24,7 +25,9 @@
   --category-5: #447276;
   --accent: #95573d;
   --gold: #a77b31;
-  --focus: #1f6650;
+  --focus: #1e6a55;
+  --jade: #1e6a55;
+  --jade-deep: #134235;
   --danger: #963c35;
 }
 
