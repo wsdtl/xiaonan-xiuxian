@@ -91,6 +91,8 @@ DEEP = (
             "演阵台",
             "演阵台 宗门",
             "纳戒 基础物品 恢复丹",
+            # 多分支选择菜单：A|B 参数 不是命令词，宽参阶段扫不到它。
+            "查看|借阅功法 400001",
             "出山门",
         ),
     ),
@@ -176,6 +178,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     import game.cmd  # noqa: F401 - 注册全部命令组件
     from dataclasses import replace
 
+    from game.core.database import TransactionCommand
     from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
     from game.features.xinglu.contracts import TravelRequest
     from launch.adapter.local import dispatch
@@ -224,6 +227,34 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         # 深页那一套要干净的人物走到指定地点；宽参那一套要留在初始状态——
         # 深页会把人物带进洞天或各城，之后采药/闭关这类本地命令就全报错了，
         # 早先 42 个组件里有 15 个因此一条真页面都没有。两个人各管一套。
+        # 切磋要另一个人物，布阵要阵藏里先有一座阵法——这两件事不是派发命令能造的，
+        # 所以在这里直接建人物、直接授予，再把命令发出去。
+        partner = "P:判据乙"
+        await services.features.chuangjian_renwu.create(
+            CreateCharacterRequest(
+                user_id=partner, request_id="消息判据-乙", name="判据乙", gender="女"
+            )
+        )
+        clash_name = "判据乙"
+        formation_plan = await services.core.asset.plan_formation_reserve_acquisition(
+            user_id, "530002", "01"
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                user_id,
+                "判据阵藏",
+                "消息判据",
+                (formation_plan.operation,),
+                {"阵法": "530002"},
+            )
+        )
+        for command in ("布阵 诛仙剑阵 黄品",):
+            _DEEP_COMMANDS.append(command)
+            await send(command, strict=True)
+        for command in ("切磋 " + clash_name,):
+            _DEEP_COMMANDS.append(command)
+            await send(command, strict=True)
+
         for place, commands in DEEP:
             if place:
                 try:

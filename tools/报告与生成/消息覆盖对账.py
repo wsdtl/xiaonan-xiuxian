@@ -47,7 +47,9 @@ def coverage() -> tuple[dict[str, tuple[int, int]], list[str]]:
     real: collections.Counter[str] = collections.Counter()
     error: collections.Counter[str] = collections.Counter()
     for text, body in pages.items():
-        component = module_of.get(text.split(" ")[0], "(未知)")
+        word = text.split(" ")[0]
+        # 分支写法的第一个词是 A|B，不是注册过的命令词；它归多分支那一支。
+        component = "通用.帮助.branches" if "|" in word else module_of.get(word, "(未知)")
         if any(marker in body for marker in ERROR_MARKERS):
             error[component] += 1
         else:
