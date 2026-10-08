@@ -26,7 +26,7 @@
 
 用法：
 
-    .venv/Scripts/python.exe -X utf8 tools/构筑模板代码化.py --输出 game/core/combat/template_data.py
+    .venv/Scripts/python.exe -X utf8 tools/报告与生成/构筑模板代码化.py --输出 game/core/combat/template_data.py
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ from game.core.combat.templates import (  # noqa: E402
 
 HEADER = '''"""构筑模板库（自动生成，不要手改）。
 
-由 `tools/构筑模板代码化.py` 从**功法 / 真意 / 器律 / 战场环境 / 伤势 / 战丹**六个面的
+由 `tools/报告与生成/构筑模板代码化.py` 从**功法 / 真意 / 器律 / 战场环境 / 伤势 / 战丹**六个面的
 真实实例机械生成（六面共用一份库；见 `tools/构筑模板.py` 的 `SEGMENTS`）。
 
 ## 编号就是内容地址
@@ -230,7 +230,7 @@ def main() -> int:
             except Exception: pass
     if _引用数 and not args.展开:
         print(f"输入不是原文：数据里还有 {_引用数} 处模板引用，挖库只会得到残片（实测只能挖到 340 簇而非 1300+）。")
-        print("请先单独跑一步：python -X utf8 tools/构筑模板代码化.py --展开")
+        print("请先单独跑一步：python -X utf8 tools/报告与生成/构筑模板代码化.py --展开")
         print("落盘成原文之后，再跑挖库，不要合并成一条命令。")
         raise SystemExit(2)
     单元 = 模板._ranked_units(模板._collect_units())
