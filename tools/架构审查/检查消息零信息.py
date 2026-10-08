@@ -647,10 +647,41 @@ def check_badge_not_restated() -> list[str]:
     return problems
 
 
+NUMERIC = re.compile(r"^-?[0-9]+(?:\.[0-9]+)?$")
+
+
+def check_no_baseline_attribute() -> list[str]:
+    """单个属性等于基准值也不该显示——这是硬标准的第一条，按属性判。
+
+    比「整段基准」严：一屏里有一项是基准、其余不是，照样是零信息。数值去掉
+    百分号再比，基准取属性定义里的默认值（见 data/战斗/定义/说明.md）。
+    """
+
+    pages, baselines = _corpus()
+    problems: list[str] = []
+    for word, body in pages.items():
+        for line in _lines(body):
+            name, separator, raw = line.partition(":")
+            if not separator:
+                name, separator, raw = line.partition("：")
+            if not separator:
+                continue
+            name = name.strip()
+            if name not in baselines:
+                continue
+            value = raw.strip().rstrip("%").strip()
+            if not NUMERIC.match(value):
+                continue
+            if float(value) == float(baselines[name]):
+                problems.append(word + " 的正文里 " + name + " 等于基准值：" + line[:44])
+    return problems
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
     ("没有整段基准", check_no_baseline_padding),
+    ("没有等于基准的属性", check_no_baseline_attribute),
     ("没有重复行", check_no_duplicate_lines),
     ("没有中性倍率", check_no_neutral_multipliers),
     ("深页能出页面", check_deep_pages_work),

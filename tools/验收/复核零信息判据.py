@@ -180,6 +180,27 @@ SWAPS: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "角色页：等于基准的战斗属性不显示",
+        "game/cmd/通用/角色/reply.py",
+        (
+            "    primary_pairs = tuple(",
+            "        (name, attributes[name])",
+            "        for name in primary_names",
+            "        if name in attributes and attributes[name] != baselines.get(name, 0)",
+            "    )",
+            "    if primary_pairs:",
+            '        builder.section("战斗属性", icon="skill")',
+            "        _append_pairs(builder, primary_pairs)",
+        ),
+        (
+            '    builder.section("战斗属性", icon="skill")',
+            "    _append_pairs(",
+            "        builder,",
+            "        tuple((name, attributes[name]) for name in primary_names if name in attributes),",
+            "    )",
+        ),
+    ),
+    (
         "道侣页：徽章不配复述句",
         "game/cmd/专属/道侣结交/reply.py",
         (
