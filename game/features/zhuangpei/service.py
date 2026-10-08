@@ -1,4 +1,6 @@
 """公开装配工具：候选范围只筛选资料，聊天导入才修改执行者资产。"""
+import asyncio
+
 from collections.abc import Mapping
 
 from game.core.asset import AssetService, AssetStateError
@@ -34,6 +36,8 @@ class ZhuangpeiFeature:
         self._player_state = player_state
         self._combat = combat
         self._copy = materialize(data.dataset("培养展示")["装配台"])
+        #: 同一个 (人物, 请求编号) 的导入在进程内串行，见 import_code 的说明。
+        self._import_locks: dict[tuple[str, str], list] = {}
 
     def copy(self) -> dict:
         return self._copy
@@ -199,6 +203,24 @@ class ZhuangpeiFeature:
         return ZhuangpeiResult(value["code"], tuple(value["lines"]))
 
     async def import_code(self, user_id: str, request_id: str, code: str) -> ZhuangpeiResult:
+        # 同一个 (人物, 请求编号) 的两次并发导入必须串行：先到的落库之后，后到的才查得到回执。
+        # 否则后到的会在「库存刚被扣走、回执尚未可见」的那几毫秒里判成储备不足并直接报错——
+        # 下面 AssetStateError 分支假设「前一个已经落库」，这个假设在并发下不成立。
+        key = (user_id, request_id)
+        entry = self._import_locks.get(key)
+        if entry is None:
+            entry = self._import_locks[key] = [asyncio.Lock(), 0]
+        entry[1] += 1
+        try:
+            async with entry[0]:
+                return await self._import_once(user_id, request_id, code)
+        finally:
+            # 引用计数归零才回收：排队者手里那把锁不能被新请求换成另一把。
+            entry[1] -= 1
+            if entry[1] <= 0:
+                self._import_locks.pop(key, None)
+
+    async def _import_once(self, user_id: str, request_id: str, code: str) -> ZhuangpeiResult:
         # 先解析固定协议，再查回执；已经成功的请求不因库存消耗或目录变化重做。
         build = decode(code)
         canonical = encode(build)
