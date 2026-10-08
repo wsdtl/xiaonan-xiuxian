@@ -113,8 +113,3 @@ def test_inherent_rules_duplicate_is_refused(combat) -> None:
         _strike(combat, ({"名称": "不可被指定"},) * 2)
 
 
-def test_inherent_rules_reject_wrong_carrier(combat) -> None:
-    """行级规则（不可禁用）不能写在单位上。"""
-
-    with pytest.raises(ValueError, match="不能写在单位里"):
-        _strike(combat, ({"名称": "不可禁用"},))

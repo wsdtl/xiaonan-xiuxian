@@ -485,64 +485,6 @@ def _scene_event_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, f
     )
 
 
-def _scene_skill_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """技能被改写：这一行被改的时候，**所挡的那一种**要挡住，别的改写照旧生效。
-
-    标准探针能造三种改写：禁用（`字段:禁用` + `值:真`）、清空效果、冷却延长
-    （`字段:冷却行动` + `方式:增加`）。按规则自己的条件挑哪一种是主观测，另外两种
-    必须**照旧生效**——只验正方向的话，一条把整处请求都拦掉的规则会「两面都通过」。
-    """
-
-    tags = probe_tags(rule)
-    主看禁用 = "字段:禁用" in tags
-    banner = _fighter("R1", _card(_ban_passive("探针锁")))
-    plain = _run(engine, _fighter("L1", _card(_strike_skill("探针锁"))), banner)
-    guarded = _run(
-        engine,
-        _fighter("L1", _card(_strike_skill("探针锁", rules=[entry]))),
-        banner,
-    )
-    used_plain = _count(plain, kind="技能施放后", skill="探针锁")
-    used_guarded = _count(guarded, kind="技能施放后", skill="探针锁")
-    # 同行别的改写之一：对手把这一行的 `效果` 清空。没有规则时这一行打不出伤害，
-    # 规则放它过去就该一样打不出伤害；被误拦才会打回原样。
-    clearer = _fighter("R1", _card(_ban_passive("探针锁", field="效果", value=[])))
-    plain_other = _run(engine, _fighter("L1", _card(_strike_skill("探针锁"))), clearer)
-    guarded_other = _run(
-        engine,
-        _fighter("L1", _card(_strike_skill("探针锁", rules=[entry]))),
-        clearer,
-    )
-    same = _damage_taken(guarded_other, "R1") == _damage_taken(plain_other, "R1")
-    # 同行别的改写之二：把这一行的冷却**延长**（原值 0 → 3）。
-    cooler = _fighter("R1", _card(_ban_passive("探针锁", field="冷却行动", value=3, mode="增加")))
-    plain_cool = _run(engine, _fighter("L1", _card(_strike_skill("探针锁"))), cooler)
-    guarded_cool = _run(
-        engine,
-        _fighter("L1", _card(_strike_skill("探针锁", rules=[entry]))),
-        cooler,
-    )
-    cool_same = _count(guarded_cool, kind="技能施放后", skill="探针锁") == _count(
-        plain_cool, kind="技能施放后", skill="探针锁"
-    )
-    if 主看禁用:
-        return (
-            "探针锁施展次数（禁用方向；并核清空效果与冷却延长照旧）",
-            used_plain,
-            used_guarded,
-            used_guarded > used_plain and same and cool_same,
-        )
-    return (
-        "探针锁施展次数（冷却被延长后仍放得出来）",
-        _count(plain_cool, kind="技能施放后", skill="探针锁"),
-        _count(guarded_cool, kind="技能施放后", skill="探针锁"),
-        _count(guarded_cool, kind="技能施放后", skill="探针锁")
-        > _count(plain_cool, kind="技能施放后", skill="探针锁")
-        and same
-        and used_guarded == used_plain,
-    )
-
-
 def _scene_resource_consume(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
     """资源被消耗：按方向抽/花目标的精神，问**被扣的那个单位**。"""
 
@@ -748,47 +690,6 @@ def _scene_status_removed(engine, entry: dict, rule: dict) -> tuple[str, float, 
     )
 
 
-def _scene_summon(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
-    """造物被召唤：让目标自己召唤一个战斗对象，看它到底有没有出场。
-
-    这个拦截点问的是**召唤者自己**（对象还没生出来），所以规则只可能是「自己不许召唤」；
-    观测量取终局里有没有多出那个对象。
-    """
-
-    from game.core.combat.rules import probe_tags
-
-    tags = probe_tags(rule)
-    kind = "参战者" if "类型:参战者" in tags else "构造物"
-    summoner = _card(
-        _listener_passive(
-            "战斗开始",
-            [
-                {
-                    "能力": "创建战斗对象",
-                    "类型": kind,
-                    "阵营": "己方",
-                    "定义": {
-                        "编号": "探针造物",
-                        "名称": "探针造物",
-                        "身份": "召唤物",
-                        "属性": {"血气上限": 300, "攻击": 10, "速度": 100},
-                    },
-                }
-            ],
-            name="探针召唤",
-        )
-    )
-    left, right = _sides("自身", summoner, _card(_rules(entry)))
-    plain = _run(engine, *_sides("自身", summoner, None))
-    guarded = _run(engine, left, right)
-    return (
-        "终局时多出来的战斗对象",
-        float(_对象数(plain)),
-        float(_对象数(guarded)),
-        _对象数(guarded) < _对象数(plain),
-    )
-
-
 def _对象数(result) -> int:
     """终局里除双方参战者之外多出来的战斗对象数。"""
 
@@ -937,7 +838,6 @@ SCENES = {
     "被选为目标": _scene_targeted,
     "行动条被改写": _scene_action_bar,
     "事件被改写": _scene_event_rewrite,
-    "技能被改写": _scene_skill_rewrite,
     "状态被添加": _scene_status_added,
     "资源被消耗": _scene_resource_consume,
     "行动被限制": _scene_action_limit,
@@ -945,7 +845,6 @@ SCENES = {
     "形态被切换": _scene_form,
     "计量被修改": _scene_counter,
     "状态被移除": _scene_status_removed,
-    "造物被召唤": _scene_summon,
 }
 
 

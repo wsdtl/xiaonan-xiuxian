@@ -2894,16 +2894,6 @@ class AbilityRuntime(ChainRuntime):
                 field = str(effect.get("字段") or "")
                 mode = str(effect.get("方式") or "设置")
                 value = effect.get("值")
-                # 规则层：`技能被改写` 拦截点。规则写在**这一行技能**自己身上。
-                shown = "真" if value is True else "假" if value is False else str(value)
-                if self._rules_deny(
-                    context,
-                    skill,
-                    "技能被改写",
-                    owner=fighter,
-                    tags=(f"字段:{field}", f"方式:{mode}", f"值:{shown}"),
-                ):
-                    continue
                 attr = {"名称": "name", "精神消耗": "spirit_cost", "冷却行动": "cooldown_actions", "释放顺序": "release_order", "威力倍率": "multiplier", "禁用": "disabled", "目标标签": "tags", "效果": "effects"}.get(field)
                 if attr is None:
                     raise ValueError(f"技能字段不能修改：{field}")
@@ -3095,18 +3085,6 @@ class AbilityRuntime(ChainRuntime):
     def _ability_create_object(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         definition = copy.deepcopy(dict(effect.get("定义") or {}))
         kind = str(effect.get("类型") or "构造物")
-        # 锁定技：`造物被召唤` 拦截点——问**要召唤的那个单位自己**（对象还没生出来）。
-        if self._rules_deny(
-            context,
-            source,
-            "造物被召唤",
-            owner=source,
-            tags=(
-                f"类型:{'参战者' if kind == '参战者' else '构造物'}",
-                f"来源关系:{self._source_relation(context, source, source)}",
-            ),
-        ):
-            return False
         side = source.side if str(effect.get("阵营") or "己方") == "己方" else 1 - source.side
         if kind == "参战者":
             if sum(value.summoned and value.side == side and value.active for value in context.fighters) >= int(self.catalog.action_rules.get("每方召唤物上限", 6)):

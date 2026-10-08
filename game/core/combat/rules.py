@@ -113,13 +113,6 @@ INTERCEPTION_POINTS = MappingProxyType(
             #: 先扩 tools/行为验证/验证规则层.py 的对应场景，再把标签加到这里（判据会要求）。
             probe_tags=("改写:取消", "改写:转化", "改写:数值"),
         ),
-        "技能被改写": InterceptionPoint(
-            note="修改技能落到某个技能时问那个技能自己",
-            carriers=("行",),
-            #: 标准探针会造三种改写：禁用（`字段:禁用` + `值:真`）与冷却延长（`字段:冷却行动`
-            #: + `方式:增加`）；再加一种就先把 `tools/行为验证/验证规则层.py` 的对应场景补上。
-            probe_tags=("字段:禁用", "值:真", "字段:冷却行动", "方式:增加"),
-        ),
         "状态被添加": InterceptionPoint(
             note="给别人挂状态之前问**被打上的那个单位**",
             carriers=("单位",),
@@ -203,11 +196,6 @@ INTERCEPTION_POINTS = MappingProxyType(
                 "来源关系:己方",
                 "来源关系:自身",
             ),
-        ),
-        "造物被召唤": InterceptionPoint(
-            note="要造出一个战斗对象（召唤物 / 构造物）之前问**召唤者自己**",
-            carriers=("单位",),
-            probe_tags=("类型:参战者", "类型:构造物", "来源关系:自身"),
         ),
     }
 )
