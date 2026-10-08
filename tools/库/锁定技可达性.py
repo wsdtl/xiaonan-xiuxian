@@ -143,3 +143,51 @@ def races() -> list:
     return json.loads((DATA / "角色" / "规则" / "种族" / "种族.json").read_text(encoding="utf-8"))
 #: 载具自查：库只依赖 tools/库/ 与 data/，不 import 具体工具。
 
+
+
+def _rules_in(node: object, sink: list[tuple[str, str]]) -> None:
+    """从任意节点里捡「带了一条锁定技」的写法：`规则[]` 与 `规则文本` 的 `规则[]`。"""
+
+    if isinstance(node, dict):
+        for node_key in ("规则", "规则文本"):
+            raw = node.get(node_key)
+            items = raw if isinstance(raw, list) else [raw] if isinstance(raw, dict) else []
+            if node_key == "规则文本" and isinstance(raw, dict):
+                inner = raw.get("规则")
+                items = inner if isinstance(inner, list) else []
+            for item in items:
+                if isinstance(item, dict) and item.get("名称"):
+                    sink.append((str(item["名称"]), str(item.get("来源") or "")))
+        for value in node.values():
+            _rules_in(value, sink)
+    elif isinstance(node, list):
+        for value in node:
+            _rules_in(value, sink)
+
+
+def carriers() -> list[tuple[str, str, str]]:
+    """所有带锁定技的地方：四种写法都要扫——卡面根能力 `规则文本`、被动技能行、状态定义、参战者固有规则。
+
+    当前实际用到的只有第四种（种族），另外三种一条都没有；但判据要能拦住将来在卡上写死规则。
+    返回 (规则名, 载体填的方向, 出处)。
+    """
+
+    found: list[tuple[str, str, str]] = []
+    for race in races():
+        for entry in (race.get("天生规则") or []):
+            found.append((str(entry.get("名称")), str(entry.get("来源") or ""),
+                          "种族 %s" % race.get("编号")))
+    for name, folder in SECTIONS:
+        if not folder.exists():
+            continue
+        for path in sorted(folder.glob("*.json")):
+            try:
+                rows = load_build_json(path)
+            except Exception:
+                continue
+            for row in rows:
+                sink: list[tuple[str, str]] = []
+                _rules_in(row.get("能力"), sink)
+                for rule_name, direction in sink:
+                    found.append((rule_name, direction, "%s %s" % (name, path.name)))
+    return found
