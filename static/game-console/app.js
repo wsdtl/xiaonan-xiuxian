@@ -328,7 +328,7 @@
       const source = node.dataset.latex || "";
       if (!source) return;
       if (!window.katex) {
-        node.textContent = source;
+        node.textContent = node.dataset.plain || source;
         return;
       }
       try {
@@ -339,7 +339,7 @@
           trust: false,
         });
       } catch (_) {
-        node.textContent = source;
+        node.textContent = node.dataset.plain || source;
       }
     });
   }

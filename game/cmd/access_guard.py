@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from launch import C, logger
+
 from game.app import current_game_services
 from launch.adapter import (
     CommandGuardContext,
@@ -27,8 +29,18 @@ async def game_access_guard(context: CommandGuardContext) -> CommandGuardDecisio
         return CommandGuardDecision.block(_blocked_message(reason), reason=reason)
     user_id = context.message_context.user_id
     services = current_game_services()
+    # 「托管中」是**附加**准入：它要么读得到存档、要么就不生效。存档读不出来只该让这条
+    # 附加判断落空，不该把整条命令挡掉——准入本身由 authorize 按规则判，而「不需要看盘」
+    # 的规则（人物要求不限 + 无状态 + 无资源，例如「始终可用」）在那边根本不读存档。
+    # 所以修好这一步之后，帮助 / 查看 / 地图 / 装配台 这类命令在存档坏掉时仍然可用。
     try:
         snapshot = await services.core.player_state.current(user_id)
+    except Exception as error:  # noqa: BLE001 - 附加判断，读不到就跳过
+        logger.opt(colors=True, exception=error).warning(
+            C.warn("读取玩家状态失败，跳过托管检查") + f" user_id={user_id}"
+        )
+        snapshot = None
+    try:
         hosting_metadata = context.command_metadata.get("hosting")
         if (
             snapshot is not None
@@ -48,7 +60,13 @@ async def game_access_guard(context: CommandGuardContext) -> CommandGuardDecisio
                 )
             return CommandGuardDecision.allow()
         result = await services.core.player_state.authorize(user_id, rule_name)
-    except Exception:  # noqa: BLE001 - guard failures must fail closed
+    except Exception as error:  # noqa: BLE001 - guard failures must fail closed
+        # 失败即拒绝是对的，但不能像以前那样把异常吞掉：库里一旦读不出状态，服务端
+        # 日志里必须留下原文，否则只能看到一句「请稍后重试」而查不到真正原因。
+        logger.opt(colors=True, exception=error).warning(
+            C.warn("状态守卫失败，按失败即拒绝处理")
+            + f" user_id={user_id} rule={rule_name}"
+        )
         reason = "状态检查失败，请稍后重试"
         return CommandGuardDecision.block(_blocked_message(reason), reason=reason)
     if result.allowed:

@@ -200,10 +200,69 @@ def _is_escaped(value: str, index: int) -> bool:
     return slashes % 2 == 1
 
 
+#: 公式里的命令：字母命令（text/textcolor/small/large…）与单字符命令（\; \, \ ）。
+_FORMULA_COMMAND = re.compile(r"\\[A-Za-z]+|\\.")
+_FORMULA_SPACES = frozenset({"\\ ", "\\;", "\\,", "\\quad", "\\qquad"})
+
+
+def _formula_group(text: str, index: int) -> tuple[str, int]:
+    """从 text[index] 是左花括号开始，取出配对的括号内容。"""
+
+    if index >= len(text) or text[index] != "{":
+        return "", index
+    depth = 0
+    cursor = index
+    while cursor < len(text):
+        if text[cursor] == "{":
+            depth += 1
+        elif text[cursor] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[index + 1 : cursor], cursor + 1
+        cursor += 1
+    return text[index + 1 :], len(text)
+
+
+def _formula_plain(value: str) -> str:
+    """把公式还原成玩家看得懂的短文本：只留 text 里的字，丢掉字号与颜色。"""
+
+    text = str(value or "")
+    out: list[str] = []
+    cursor = 0
+    while cursor < len(text):
+        match = _FORMULA_COMMAND.match(text, cursor)
+        if match:
+            name = match.group(0)
+            cursor = match.end()
+            if cursor < len(text) and text[cursor] == "{":
+                if name == "\\text":
+                    content, cursor = _formula_group(text, cursor)
+                    out.append(_formula_plain(content))
+                elif name == "\\textcolor":
+                    _, cursor = _formula_group(text, cursor)
+                    if cursor < len(text) and text[cursor] == "{":
+                        content, cursor = _formula_group(text, cursor)
+                        out.append(_formula_plain(content))
+                else:
+                    content, cursor = _formula_group(text, cursor)
+                    out.append(_formula_plain(content))
+            elif name in _FORMULA_SPACES:
+                out.append(" ")
+            continue
+        char = text[cursor]
+        out.append(" " if char.isspace() else char)
+        cursor += 1
+    return " ".join("".join(out).split())
+
+
 def _formula_html(value: str, *, display: bool) -> str:
+    # data-plain 是给「KaTeX 没加载出来」时的降级：玩家该看到「空闲」，
+    # 而不是 $\small{\textcolor{...}{\text{空闲}}}$ 这一串。
     return (
         '<span class="message-formula" data-latex="'
         + html.escape(value, quote=True)
+        + '" data-plain="'
+        + html.escape(_formula_plain(value), quote=True)
         + '" data-display="'
         + ("true" if display else "false")
         + '"></span>'
