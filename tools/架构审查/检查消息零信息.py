@@ -88,6 +88,8 @@ DEEP = (
             "百炼堂 700001",
             "丹鼎阁 100001",
             "演阵台 1",
+            "灵脉",
+            "灵田",
             "演阵台",
             "演阵台 宗门",
             "纳戒 基础物品 恢复丹",
@@ -99,6 +101,8 @@ DEEP = (
     ("云京城", ("炼丹 清心散", "阵法 530002 黄")),
     ("青岚城", ("炼器 太白惊鸿",)),
     ("丹霞城", ("查看道侣 谢若棠", "交谈 谢若棠")),
+    ("太素坊", ("易形",)),
+
 )
 
 _CORPUS: tuple[dict[str, str], dict[str, float]] | None = None
@@ -178,6 +182,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     import game.cmd  # noqa: F401 - 注册全部命令组件
     from dataclasses import replace
 
+    from game.core.asset import InventoryAdjustment
     from game.core.database import TransactionCommand
     from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
     from game.features.xinglu.contracts import TravelRequest
@@ -236,6 +241,19 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             )
         )
         clash_name = "判据乙"
+        # 易形要纳戒里先有两仪易形丹（160004）；它不是派发命令能造的。
+        pill_plan = await services.core.asset.plan_inventory_changes(
+            user_id, (InventoryAdjustment("160004", "01", 1),)
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                user_id,
+                "判据易形丹",
+                "消息判据",
+                tuple(pill_plan.operations),
+                {"物品": "160004"},
+            )
+        )
         formation_plan = await services.core.asset.plan_formation_reserve_acquisition(
             user_id, "530002", "01"
         )
@@ -271,6 +289,26 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         words = sorted(
             set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
         )
+        # 讨伐一开就占住行动，跟宽参阶段共用人物会把探险那几条挤成错误页；
+        # 给它一份独立人物，和行动类同样的做法。
+        raid_user = "P:判据讨伐"
+        await services.features.chuangjian_renwu.create(
+            CreateCharacterRequest(
+                user_id=raid_user, request_id="消息判据-讨伐", name="判据讨", gender="男"
+            )
+        )
+        try:
+            await services.features.xinglu.travel(
+                TravelRequest(
+                    user_id=raid_user, request_id="判据-镇北军镇", destination="镇北军镇"
+                )
+            )
+        except Exception:  # noqa: BLE001 - 走不到就不跑这一段
+            pass
+        else:
+            for command in ("开始讨伐", "讨伐战况"):
+                _DEEP_COMMANDS.append(command)
+                await send(command, user=raid_user, strict=True)
         for label, commands in ACTIVITIES:
             activity_user = "P:判据行动" + label
             await services.features.chuangjian_renwu.create(
