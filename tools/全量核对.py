@@ -83,10 +83,18 @@ def run_one(item: tuple[str, tuple[str, ...]]) -> tuple[str, bool, str, float]:
         if line.strip():
             tail = line.strip()
             break
-    if done.returncode != 0 and (done.stderr or "").strip():
-        last_error = (done.stderr or "").strip().splitlines()[-1]
-        tail = f"{tail} ｜ {last_error}".strip(" ｜")
-    return name, done.returncode == 0, tail[:150], time.perf_counter() - started
+    if done.returncode != 0:
+        markers = [
+            line.strip()
+            for line in (done.stdout or "").splitlines()
+            if line.strip().startswith(("FAILED", "ERROR")) or "FAILED " in line
+        ]
+        if markers:
+            tail = " ｜ ".join([tail, *markers[:3]])
+        if (done.stderr or "").strip():
+            last_error = (done.stderr or "").strip().splitlines()[-1]
+            tail = f"{tail} ｜ stderr: {last_error}".strip(" ｜")
+    return name, done.returncode == 0, tail[:320], time.perf_counter() - started
 
 
 def main() -> int:
