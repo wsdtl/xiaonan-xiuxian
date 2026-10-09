@@ -67,12 +67,12 @@ def _laws() -> list[tuple[str, dict, list[dict]]]:
 
 def _ladder() -> list[str]:
     data = json.loads(RECIPE.read_text(encoding="utf-8"))
-    lines = ["器阶阶梯（声明处：data/物品/炼器/规则/器则.json）",
-             "  名称      阶序  器律能力倍率  等级范围   开放器律孔"]
+    lines = ["器阶阶梯（声明处：data/物品/炼器/规则/器则.json；强度来自解锁池，没有系数）",
+             "  名称      阶序  等级范围   开放器律孔"]
     for row in data["器阶"]:
         span = row["等级范围"]
-        lines.append("  %-6s  %4s  %10s  %4s-%-4s  %s" % (
-            row["名称"], row["阶序"], row["器律能力倍率"], span[0], span[1], row["开放器律孔"]))
+        lines.append("  %-6s  %4s  %4s-%-4s  %s" % (
+            row["名称"], row["阶序"], span[0], span[1], row["开放器律孔"]))
     return lines
 
 

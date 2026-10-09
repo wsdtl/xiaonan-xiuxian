@@ -7,13 +7,12 @@ r"""器律形状审查：按器阶设计强度这件事，能不能被判出来�
 七项检查：
 
 1. **阶梯自洽**：`器则.器阶[].阶序` 必须是 1..5 连续、且与数组顺序一致；
-2. **倍率单调**：`器律能力倍率` 随阶序严格递增，且只允许出现在 `器则.json` 的 `器阶[]` 里
-   （器律实体自带倍率即越界——倍率是档位事实，不是内容事实，同品级那条禁令）；
-3. **强度出口**：每条器律的展开树里至少一处**可缩放字段**（`SCALABLE`：威力倍率/数值/层数/最高值）。
-   不含触发次数、概率、冷却、持续时间——那些是机制参数，缩放它们等于改机制。
-   白名单取这四个「量」字段而不是只取 `威力倍率`：实测只取威力倍率有 60/64 条没有落点，
-   而守御/行气/牵制这些本来就不该有伤害，强行给它们加伤害会毁掉定位；取「量」之后 0/64 缺，
-   档位倍率在每一条上都有落点。
+2. **没有强度系数**：器律的强度来自**它所在的解锁池**（后天灵宝池的内容本身就更强），设计上刻意
+   不引入品阶/倍率——所以 `器律能力倍率` 这个字段**已废除**，任何器律数据里再出现它就是违规（反回归）。
+3. **强度出口**：每条器律的展开树里至少一处**量**字段（`SCALABLE`：威力倍率/数值/层数/最高值），
+   让内容自己把强度写出来——**不靠系数乘**。不含触发次数、概率、冷却、持续时间：那些是机制参数，
+   缩放它们等于改机制。白名单取这四个而不是只取 `威力倍率`：实测只取威力倍率有 60/64 条没有落点，
+   而守御/行气/牵制本就不该有伤害，强行加伤害会毁掉定位。
 4. **计量闭环**：写入的计量（`方式=增加/设置`）必须在同一门器律里找得到裁定
    （`来源=构筑计量` 的读取，或 `方式=减少/清空`）。这条规则写在
    `game/startup/说明.md` 的构筑章节里，但此前**只有声明没有实现**；
@@ -88,13 +87,9 @@ def check_ladder() -> list[str]:
     orders = [r.get("阶序") for r in rows]
     if orders != list(range(1, len(rows) + 1)):
         problems.append("阶序必须是 1..N 且与数组顺序一致，实际 " + str(orders))
-    rates = [r.get("器律能力倍率") for r in rows]
-    for index, rate in enumerate(rates):
-        if not isinstance(rate, (int, float)) or isinstance(rate, bool):
-            problems.append(f"器阶[{index}] 的器律能力倍率不是数字：{rate}")
-    numeric = [float(r) for r in rates if isinstance(r, (int, float)) and not isinstance(r, bool)]
-    if len(numeric) == len(rates) and any(numeric[i] >= numeric[i + 1] for i in range(len(numeric) - 1)):
-        problems.append("器律能力倍率不是严格递增：" + str(numeric))
+    for index, row in enumerate(rows):
+        if "器律能力倍率" in row:
+            problems.append(f"器阶[{index}] 又出现了器律能力倍率——该字段已废除（强度来自解锁池，不靠系数）")
     return problems
 
 
@@ -103,7 +98,7 @@ def check_rate_scope(laws: dict) -> list[str]:
     for num, row in laws.items():
         text = json.dumps(row["原始"], ensure_ascii=False)
         if "器律能力倍率" in text:
-            problems.append(f"{num} {row['原始'].get('名称')} 自带器律能力倍率——倍率属于档位，不属于内容")
+            problems.append(f"{num} {row['原始'].get('名称')} 自带器律能力倍率——该字段已废除（强度来自解锁池，不靠系数）")
     return problems
 
 
@@ -318,7 +313,7 @@ def main() -> int:
     if problems:
         print(f"器律形状 {len(problems)} 处")
         return 1
-    print("器律形状审查通过：阶梯 / 倍率归属 / 计量 / 层数 / 唯一性")
+    print("器律形状审查通过：阶梯 / 无强度系数 / 量落点 / 计量 / 层数 / 唯一性")
     return 0
 
 

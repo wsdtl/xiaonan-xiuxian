@@ -135,14 +135,13 @@ class ForgingService:
             for raw in _sequence(law_rule.get("器阶"), "器则.器阶")
         )
         self._stages = tuple(_weapon_stage(row) for row in rows)
-        # 器阶的阶梯（顺序与档位强度）在 器则.json 里声明，这里只校验、不另立一份：
+        # 器阶的阶梯（顺序与解锁范围）在 器则.json 里声明，这里只校验、不另立一份：
         # 与 品级.json 同一套做法——数据声明阶梯，代码读它。
+        # **没有强度系数**：器律的强度来自它所在的解锁池（后天灵宝池的内容本身就更强），
+        # 设计上刻意不引入品阶/倍率，所以这里只校验顺序与解锁范围。
         orders = tuple(_positive_int(row.get("阶序"), "器则.器阶[].阶序") for row in rows)
         if orders != tuple(range(1, len(rows) + 1)):
             raise JsonDataError("器阶阶序必须是 1..N 且与数组顺序一致")
-        rates = tuple(_number(row.get("器律能力倍率"), "器则.器阶[].器律能力倍率") for row in rows)
-        if any(rates[index] >= rates[index + 1] for index in range(len(rates) - 1)):
-            raise JsonDataError("器律能力倍率必须随阶序严格递增")
         self._law_stages = tuple(
             stage.name for stage, order in zip(self._stages, orders)
             if order >= _LAW_STAGE_FLOOR
