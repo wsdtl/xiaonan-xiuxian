@@ -60,6 +60,7 @@ from .contracts import (
     CharacterEquipPlan,
     CharacterGenderPlan,
     CharacterGrowthPlan,
+    CharacterIdentityPlan,
     CharacterInputError,
     CharacterLawPlan,
     CharacterMedicineSettingPlan,
@@ -768,6 +769,31 @@ class CharacterService:
             before,
             after,
             after - before,
+            StateMutation(user, "character", "main", character, snapshot.version),
+        )
+
+    async def plan_identity_change(
+        self, user_id: str, *, race: str
+    ) -> CharacterIdentityPlan:
+        """把人物换成另一个种族（换种族丹用）。
+
+        目标种族必须在登记表里，取不到就报错、不静默；已经长出来的属性**不回溯**（换种族不重算历史成长），
+        但天生规则、卡池来源、成长修正、寿元系数都是现算的派生值，改完立刻跟着换。
+        """
+
+        user, snapshot, character = await self._medicine_state(user_id)
+        wanted = str(race or "").strip()
+        if not wanted:
+            raise CharacterCultivationError("换种族丹没有指明目标种族")
+        if wanted not in self._races:
+            raise JsonDataError(f"未登记的种族：{wanted}")
+        before = _state_text(character.get("种族"), "人物.种族")
+        if before == wanted:
+            raise CharacterCultivationError(f"你已经就是{wanted}")
+        character["种族"] = wanted
+        return CharacterIdentityPlan(
+            before,
+            wanted,
             StateMutation(user, "character", "main", character, snapshot.version),
         )
 

@@ -135,6 +135,19 @@ class CharacterProfile:
 
 
 @dataclass(frozen=True)
+class CharacterIdentityPlan:
+    """改人物身份（种族）的一次计划：换种族丹走这条路。
+
+    只改 `种族` 这一个字段——天生规则、卡池来源、成长修正、寿元系数都是**按种族现算**的派生值，
+    所以改完自动跟着换；寿元上限也随新种族重算，年龄由 `_clamp_age` 保证不越界。
+    """
+
+    before_race: str
+    after_race: str
+    mutation: StateMutation
+
+
+@dataclass(frozen=True)
 class CharacterGrowthPlan:
     level_before: int
     level_after: int
