@@ -20,7 +20,7 @@
 | 启动顺序、组合根、依赖注入 | [game/startup/说明.md](game/startup/说明.md)、[系统架构.md](系统架构.md) |
 | 跨包边界（谁能依赖谁） | [微服务边界规范.md](微服务边界规范.md) |
 | 通信适配（Local / QQ / HTTP） | [launch/adapter/说明.md](launch/adapter/说明.md) |
-| 展示页（控制台 / 战报 / 舆图 / 装配台） | [static/说明.md](static/说明.md) |
+| 展示页（百科 / 控制台 / 战报 / 舆图 / 装配台） | [static/说明.md](static/说明.md) |
 | 判据、工具、验收通道 | [tools/说明.md](tools/说明.md)、[tools/架构审查/说明.md](tools/架构审查/说明.md)（规则与判据的唯一落差表在这里） |
 
 ## 当前基线
@@ -47,12 +47,12 @@ game/config.py              从框架自定义项中解释游戏配置
 game/app.py                 游戏微服务的唯一组合根
 launch/                     Local、QQ、HTTP 与生命周期适配
 message/                    通用消息协议
-static/                     四个展示页面：控制台、战报、全境舆图、装配台
+static/                     5 个展示页面：百科、控制台、战报、全境舆图、装配台
 tools/                      游戏外校核与维护脚本（判据、测量、验收通道）
 tests/                      行为与数据契约测试
 ```
 
-当前数据文件清点为 **1783 份 JSON**，其中 **29 份组件清单**；正式装载结果为 **1757 文档、3933 实体、1361 资源池**，注册 **160 条命令、10 条守卫规则**；`game/cmd` 下 **43 个二级命令组件（通用 25、专属 17、后台 1）**。这些数字由 `tools/架构审查/检查文档计数.py` 与现状逐项核对，漂了会红。
+当前数据文件清点为 **1787 份 JSON**，其中 **30 份组件清单**；正式装载结果为 **1757 文档、3933 实体、1361 资源池**，注册 **160 条命令、10 条守卫规则**；`game/cmd` 下 **43 个二级命令组件（通用 25、专属 17、后台 1）**。这些数字由 `tools/架构审查/检查文档计数.py` 与现状逐项核对，漂了会红。
 
 天道后台和公开地图是两个独立二级组件：前者只服务开发者管理台，后者通过 `game/features/ditu` 取得 `game/core/world` 提供的只读地图快照与文字概况。`game/core` 放跨玩法公共微服务，`game/features` 放具体玩法微服务，`game/cmd` 只负责命令、按钮和 HTTP 触发，`game/app.py` 是唯一组合根。完整清单与装配顺序见 [系统架构.md](系统架构.md)。
 
@@ -88,7 +88,7 @@ bash start.sh
 
 两个脚本都会在启动前建立并验证 `.venv`，依赖缺失时自动安装 `requirements.txt`；验证失败会重建，不使用已损坏的解释器。
 
-服务地址取自 `.env` 的 `SERVER_HOST` 与 `SERVER_PORT`（模板 `.env.example` 为 `0.0.0.0:8845`，本机 `.env` 为 `0.0.0.0:8080`，浏览器访问用 `http://127.0.0.1:<端口>`）。公开全境舆图为 `/world-map`，天道后台为 `/game-console`，战报页为 `/battle/<战报编号>`，装配台为 `/assembly`。地图只展示世界 JSON 解析结果，不触发 QQ 命令或游戏行为。玩家命令以运行时帮助注册表为唯一公开清单，状态守卫根据人物是否创建及当前行为、队伍、控制状态统一决定能否执行。天道后台命令保持隐藏，HTTP 登录密码由 `.env` 中的 `WEB_CONSOLE_PASSWORD` 单独提供。
+服务地址取自 `.env` 的 `SERVER_HOST` 与 `SERVER_PORT`（模板 `.env.example` 为 `0.0.0.0:8845`，本机 `.env` 为 `0.0.0.0:8443` 并配 `SERVER_SSL_CERTFILE` / `SERVER_SSL_KEYFILE`，所以浏览器访问用 `https://127.0.0.1:8443`；未配证书时才是 `http://127.0.0.1:<端口>`）。公开全境舆图为 `/world-map`，百科为 `/baike`，天道后台为 `/game-console`，战报页为 `/battle/<战报编号>`，装配台为 `/assembly`。地图只展示世界 JSON 解析结果，不触发 QQ 命令或游戏行为。玩家命令以运行时帮助注册表为唯一公开清单，状态守卫根据人物是否创建及当前行为、队伍、控制状态统一决定能否执行。天道后台命令保持隐藏，HTTP 登录密码由 `.env` 中的 `WEB_CONSOLE_PASSWORD` 单独提供。
 
 游戏进程不加载 `tools`，也不执行游戏外评分、校核和平衡脚本。
 
@@ -97,7 +97,7 @@ bash start.sh
 游戏本体只保留 `tests/` 中的行为与数据契约测试；一切架构审查、边界检查、目录与命名校核都属于维护工具，统一放在 `tools/`，不进入游戏进程。
 
 ```powershell
-.venv/Scripts/python.exe -X utf8 tools/全量核对.py        # 必过 22 项，并发跑（推荐入口）
+.venv/Scripts/python.exe -X utf8 tools/全量核对.py        # 必过 30 项，并发跑（推荐入口）
 .venv/Scripts/python.exe -X utf8 tools/验收/发布验收.py    # 慢通道，发布前手动
 ```
 

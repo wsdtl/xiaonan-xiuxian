@@ -236,14 +236,60 @@ def check_full_check_counts() -> list[str]:
     problems: list[str] = []
     for pattern, want, label in (
         (r"当前必过 (\d+) 项", (required,), "必过"),
+        (r"必过 (\d+) 项", (required,), "README 必过"),
     ):
-        match = re.search(pattern, text)
+        match = re.search(pattern, text, re.S if label == "README 必过" else 0)
         if match is None:
             problems.append(f"工具索引里找不到「{label}」的计数句")
             continue
         got = tuple(int(value) for value in match.groups())
         if got != want:
             problems.append(f"工具索引写「{'、'.join(str(v) for v in got)}」（{label}），实际 {want}")
+    return problems
+
+
+#: 展示页目录名 → README 里写的展示名。加一个页面，这里与 README 一起加。
+APP_NAMES = {
+    "baike": "百科",
+    "game-console": "控制台",
+    "battle-report": "战报",
+    "world-map": "全境舆图",
+    "zhuangpei": "装配台",
+}
+
+
+def check_readme_files() -> list[str]:
+    """README 里的文件与展示页计数：JSON 份数、组件清单份数、展示页面清单。
+
+    这三处当时都漏网过：README 写「1783 份 JSON、29 份组件清单」而实际是 1787 / 30，
+    写「四个展示页面：控制台、战报、全境舆图、装配台」——**百科整个没写进去**。
+    数得出来的东西就该由判据数，别等人偶然翻到。
+    """
+
+    text = README.read_text(encoding="utf-8")
+    problems: list[str] = []
+    jsons = list((ROOT / "data").rglob("*.json"))
+    manifests = list((ROOT / "data").rglob("组件.json"))
+    match = re.search(r"(\d+) 份 JSON[^0-9]*?(\d+) 份组件清单", text)
+    if match is None:
+        problems.append("README 里找不到 JSON 与组件清单的计数句")
+    else:
+        got = (int(match.group(1)), int(match.group(2)))
+        want = (len(jsons), len(manifests))
+        if got != want:
+            problems.append(f"README 写「{got[0]} 份 JSON、{got[1]} 份组件清单」，实际 {want}")
+
+    apps = [name for name in _directories("static") if name in APP_NAMES]
+    match = re.search(r"(\d+) 个展示页面：([^\n]+)", text)
+    if match is None:
+        problems.append("README 里找不到展示页面的计数句")
+    else:
+        line = match.group(2)
+        if int(match.group(1)) != len(apps):
+            problems.append(f"README 写「{match.group(1)} 个展示页面」，实际 {len(apps)}")
+        missing = [APP_NAMES[name] for name in apps if APP_NAMES[name] not in line]
+        if missing:
+            problems.append("README 的展示页面清单漏了：" + "、".join(missing))
     return problems
 
 
@@ -280,6 +326,7 @@ def check_no_duplicate_sections() -> list[str]:
 CHECKS = (
     ("README 结构计数", check_readme_structure),
     ("README 实测规模", check_readme_runtime),
+    ("README 文件与页面", check_readme_files),
     ("工具索引总数", check_tools_totals),
     ("工具索引点名", check_tools_listing),
     ("核对项数", check_full_check_counts),
