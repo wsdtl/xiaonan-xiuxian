@@ -45,6 +45,28 @@ def _pills() -> list[tuple[str, str, str]]:
     return out
 
 
+def _nested_medicine(node: object) -> list[tuple[str, Mapping[str, object]]]:
+    """递归找出块里所有的「丹药」声明。
+
+    关键：绑定**不一定在第一层**——铜雀台的夺元把守真定契丹写在 `服丹` 子块里
+    （`功能配置.夺元.服丹.丹药`）。我第一版只看第一层，于是把 160003 误报成「未绑定」，
+    所以这里必须递归。返回（字段路径, 所在块）。
+    """
+
+    out: list[tuple[str, Mapping[str, object]]] = []
+    if isinstance(node, Mapping):
+        生 = node.get("丹药")
+        if isinstance(生, str) and 生:
+            out.append(("", node))
+        for key, value in node.items():
+            for sub_path, block in _nested_medicine(value):
+                out.append((f"{key}.{sub_path}" if sub_path else str(key), block))
+    elif isinstance(node, list):
+        for value in node:
+            out.extend(_nested_medicine(value))
+    return out
+
+
 def _bindings() -> list[tuple[str, str, str, Mapping[str, object]]]:
     out: list[tuple[str, str, str, Mapping[str, object]]] = []
     for path in (DATA / "世界" / "内容").rglob("*.json"):
@@ -56,8 +78,10 @@ def _bindings() -> list[tuple[str, str, str, Mapping[str, object]]]:
         if not isinstance(cfg, Mapping):
             continue
         for fn, item in cfg.items():
-            if isinstance(item, Mapping) and item.get("丹药"):
-                out.append((path.parent.name, str(fn), str(item["丹药"]), item))
+            for sub_path, block in _nested_medicine(item):
+                code = block.get("丹药")
+                if isinstance(code, str) and code:
+                    out.append((path.parent.name, str(fn), str(code), block))
     return out
 
 
