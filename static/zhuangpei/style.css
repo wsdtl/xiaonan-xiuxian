@@ -386,3 +386,85 @@ input, select, textarea, button { max-width: 100%; }
     transition-duration: .001ms !important;
   }
 }
+
+/* ── 工作面骨架：页面本身不滚，两栏各自滚 ─────────────────────
+   与舆图、后台、百科同一套做法：html/body 撑满视口且不滚，
+   header 与 scope-bar 固定在上，.workspace 吃掉剩余高度，
+   左右两栏各自 overflow:auto。#candidates 原来写死 720px 上限，
+   这里去掉，让它跟着所在那一栏滚。（原文另有 100dvh 的 min-height，
+   与这里的 height:100% 不冲突，故不回头改原规则。） */
+
+html { height: 100%; }
+
+body { height: 100%; overflow: hidden; }
+
+#app {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#app > header,
+#app > .scope-bar,
+#app > footer { flex: 0 0 auto; }
+
+#app > .scope-bar { margin-bottom: 12px; }
+
+#app > .workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+  gap: 18px;
+}
+
+.workspace > .catalog,
+.workspace > .scheme {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 18px 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--sh-2);
+}
+
+#candidates { max-height: none; }
+
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  #app { height: auto; }
+  #app > .workspace { display: block; }
+  .workspace > .catalog,
+  .workspace > .scheme { overflow: visible; margin-bottom: 16px; }
+}
+
+/* 候选列表要吃掉左栏剩余高度，而不是被压成一条。 */
+.workspace > .catalog { display: flex; flex-direction: column; }
+.workspace > .catalog > #candidates { flex: 1 1 auto; min-height: 0; }
+
+/* 网格行也要吃掉剩余高度：否则行高按内容算，面板只有内容那么高，
+   里面 flex:1 的候选列表就没有富余高度可长。 */
+#app > .workspace { grid-template-rows: minmax(0, 1fr); }
+
+/* 面板本身不滚，滚动交给里面的列表：面板一旦 overflow:auto，
+   内部 flex 子项拿不到富余高度，列表就被压成一条。 */
+.workspace > .catalog,
+.workspace > .scheme { overflow: hidden; }
+
+.workspace > .catalog > #candidates {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
+}
+
+/* 头部太占地方：大标题加两段长说明吃掉差不多一半视口，
+   工作台只剩三百来像素。文字一字不动，只收字号与间距。 */
+#app > header { padding: 6px 0 4px; }
+#app > header h1 { margin: 4px 0 6px; font-size: clamp(22px, 2vw, 28px); letter-spacing: 5px; }
+#app > header p { margin: 3px 0; font-size: 13px; line-height: 1.6; }
+#app > .scope-bar { margin: 0 0 10px; padding: 10px 14px; }
+#app > .scope-bar p { font-size: 12px; line-height: 1.6; }
+#app > #status { min-height: 22px; margin: 4px 0 2px; }
+#app > footer { padding: 4px 0; font-size: 12px; }
