@@ -178,8 +178,53 @@ function renderOverview(table) {
     item.append(name, count, sub);
     cards.append(item);
   }
-  el.detail.append(head, cards);
+  // 只靠十来张卡片，主区下半截会空着；把前缀按条数排个序配上占比条，
+  // 空白就变成有用的信息（数据全来自同一份总表，不额外取数）。
+  const total = Number(table["总数"]) || 1;
+  const ranked = [...(table["前缀表"] || [])]
+    .sort((a, b) => Number(b["条数"]) - Number(a["条数"]))
+    .slice(0, 12);
+  const rankTitle = document.createElement("h3");
+  rankTitle.className = "refs-title";
+  rankTitle.textContent = "条数最多的前缀";
+  const rank = document.createElement("ul");
+  rank.className = "rank";
+  for (const row of ranked) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "rank-row";
+    const code = document.createElement("span");
+    code.className = "rank-code";
+    code.textContent = row["前缀"];
+    const name = document.createElement("span");
+    name.className = "rank-name";
+    name.textContent = row["类别"];
+    const bar = document.createElement("progress");
+    bar.className = "rank-bar";
+    bar.max = total;
+    bar.value = Number(row["条数"]) || 0;
+    const count = document.createElement("span");
+    count.className = "rank-count";
+    count.textContent = row["条数"] + " 条";
+    button.append(code, name, bar, count);
+    button.addEventListener("click", () => openPrefix(row["前缀"], row["类别"]));
+    item.append(button);
+    rank.append(item);
+  }
+  el.detail.append(head, cards, rankTitle, rank);
   show(el.detail, true);
+}
+
+// 字段值可能是对象或数组，直接 JSON.stringify 会甩出一堆引号花括号；
+// 一律展开成「键：值」多行，读起来才像册子。
+function formatValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value !== "object") return String(value);
+  if (Array.isArray(value)) return value.map(formatValue).join("、");
+  return Object.entries(value)
+    .map(([key, inner]) => key + "：" + formatValue(inner))
+    .join("\n");
 }
 
 function renderDetail(body) {
@@ -191,7 +236,8 @@ function renderDetail(body) {
   title.textContent = body["名称"];
   const meta = document.createElement("p");
   meta.className = "detail-meta";
-  meta.textContent = body["来源"] + " · " + body["编号"] + (body["编号类别"] ? " · " + body["编号类别"] : "");
+  const kind = body["编号类别"] && body["编号类别"] !== body["来源"] ? " · " + body["编号类别"] : "";
+  meta.textContent = body["来源"] + " · " + body["编号"] + kind;
   const back = document.createElement("button");
   back.type = "button";
   back.className = "back";
@@ -209,7 +255,7 @@ function renderDetail(body) {
     term.textContent = key;
     const desc = document.createElement("dd");
     desc.className = "field-value";
-    desc.textContent = typeof value === "string" ? value : JSON.stringify(value);
+    desc.textContent = formatValue(value);
     list.append(term, desc);
   }
   el.detail.append(head, list);
