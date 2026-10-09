@@ -94,5 +94,13 @@
     "命令": "易形",
     "行为": "callback",
     "样式": "secondary"
+  },
+  {
+    "功能": "返本",
+    "编号": "location.race-change",
+    "名称": "返本还元",
+    "命令": "返本",
+    "行为": "callback",
+    "样式": "secondary"
   }
 ]

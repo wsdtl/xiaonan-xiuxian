@@ -13,7 +13,6 @@ _USE_KEYS = {
     ("道侣", "恢复"): "道侣恢复",
     ("人物", "寄存"): "人物寄存",
     ("道侣", "寄存"): "道侣寄存",
-    ("人物", "转变种族"): "人物换种族",
 }
 
 def used(feature: MedicineFeature, result: MedicineUseResult) -> DocumentMessage:

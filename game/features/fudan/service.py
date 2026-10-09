@@ -179,19 +179,6 @@ class MedicineFeature:
                     ).name
                 effect, resource = "寄存战丹", ""
                 before = after = recovered = 0.0
-            elif self._effect_type(medicine_id) == "转变种族":
-                # 换种族丹：与恢复/战丹同类，都是「服下这枚丹」，所以就地处理，不走专属功能。
-                activation = None
-                if target != "人物":
-                    raise MedicineFeatureError("换种族丹只能对自己使用")
-                wanted = self._effect_target_race(medicine_id)
-                profile = await self._character.profile(user_id)
-                plan = await self._character.plan_identity_change(user_id, race=wanted)
-                operations = inventory.operations + (plan.mutation,)
-                target_name = profile.name
-                effect = "转变种族"
-                resource = plan.after_race
-                before = after = recovered = 0.0
             else:
                 raise MedicineFeatureError("该丹药必须通过对应的专属功能使用")
             payload = {
@@ -281,7 +268,7 @@ class MedicineFeature:
             raise MedicineFeatureError(str(exc)) from exc
         return AutoMedicineResult(target, target_name, request.enabled, receipt.replayed)
 
-    def _effect(self, medicine_id: str) -> Mapping[str, object]:
+    def _unused_effect(self, medicine_id: str) -> Mapping[str, object]:
         """丹药自己的 `使用效果` 块（特殊丹的机制类型与参数都写在这里）。"""
 
         entity = self._data.entity("丹药", medicine_id)

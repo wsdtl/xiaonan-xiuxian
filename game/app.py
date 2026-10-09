@@ -74,6 +74,7 @@ from .features.tuoguan import HostingFeature
 from .features.weizhi import PositionFeature
 from .features.xiantian_lingbao import InnateTreasureFeature
 from .features.xinglu import TravelFeature
+from .features.fanben import FanbenFeature
 from .features.yixing import YixingFeature
 from .features.zengsong import GiftFeature
 from .features.zhanbao import BattleReportFeature
@@ -165,6 +166,7 @@ class FeatureServices:
     tongquetai: TongquetaiFeature
     guiyuan: GuiyuanFeature
     butian: ButianFeature
+    fanben: FanbenFeature
     yixing: YixingFeature
     zongmen: SectFeature
     zongmen_lingcang: LingcangFeature
@@ -758,6 +760,10 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         data, medicine, character, asset, player_state, location, world, database
     )
     yixing.initialize()
+    fanben = FanbenFeature(
+        data, medicine, character, asset, player_state, location, world, database
+    )
+    fanben.initialize()
     zongmen = SectFeature(
         data,
         sect,
@@ -903,6 +909,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         guiyuan=guiyuan,
         butian=butian,
         yixing=yixing,
+        fanben=fanben,
         zongmen=zongmen,
         zongmen_lingcang=zongmen_lingcang,
         zongmen_wanzhen=zongmen_wanzhen,
