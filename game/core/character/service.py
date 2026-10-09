@@ -284,7 +284,11 @@ class CharacterService:
         return float(entry.get("寿元系数") or 1.0)
 
     def _age(self, character: Mapping[str, object], lifespan: int) -> int:
-        """年龄（展示用）：起点 + 经过天数 × 比例，钳在寿元上限内。"""
+        """**一生修行累计**的岁数（不设上限）：起点 + 修行日数 × 比例。
+
+        注意这里**不钳制**：累计是「活过多少年」，上限只是「这一生允许活多少年」。
+        钳制交给 `_clamp_age`——这样上限变化（换种族、换境界）时两边都能自洽。
+        """
 
         from datetime import datetime, timezone
 
@@ -306,7 +310,7 @@ class CharacterService:
         # 离开多久都只算回来的那一天，所以久未回归不会顶到上限。没盖过戳时退回现实天数。
         trained = int(character.get("修行日数") or 0)
         progress = trained if trained else days * ratio
-        return int(min(lifespan, base + progress))
+        return int(base + progress)
 
 
     def race_growth_factors(self, race: str) -> dict[str, float]:
@@ -406,7 +410,8 @@ class CharacterService:
         )
         # 年龄：展示用——以人物状态里的「诞生」时间戳为起点、按 `创建.年岁比例` 推进，钳在寿元上限内。
         # 没有衰老与寿终，所以「超过上限」这个情形不该出现，也不需要任何处理。
-        age = min(lifespan, self._age(character, lifespan))
+        lifetime = self._age(character, lifespan)
+        age, lifespan_full = _clamp_age(lifetime, lifespan)
         return CharacterProfile(
             user_id=normalized_user_id,
             name=_state_text(character.get("姓名"), "人物.姓名"),
@@ -432,6 +437,7 @@ class CharacterService:
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
             age=age,
+            lifespan_full=lifespan_full,
             race=race,
             lifespan=lifespan,
         )
@@ -1696,6 +1702,20 @@ class CharacterService:
 def _state_mapping(value: object, label: str) -> Mapping[str, object]:
     return mapping(value, label, error=CharacterStateError)
 
+
+def _clamp_age(lifetime: int, lifespan: int) -> tuple[int, bool]:
+    """把「一生累计岁数」钳进「寿元上限」——**边界只在这里处理**。
+
+    两个方向都要自洽：
+    · 累计 ≥ 上限（努力不够，或上限被换种族/换境界压低）：年龄 = 上限，标志为「已满」；
+    · 上限 ≥ 累计（换到长寿种族、突破抬高上限）：**把之前被上限盖住的年岁放回来**，年龄 = 累计。
+
+    所以「超过上限」永远不表现为越界数字，而是表现为「年龄 = 上限」；上限一变，年龄自动重算。
+    """
+
+    if lifespan <= 0:
+        return 0, True
+    return min(lifetime, lifespan), lifetime >= lifespan
 
 def _state_text(value: object, label: str) -> str:
     return strict_text(value, label, error=CharacterStateError)
