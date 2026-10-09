@@ -292,16 +292,21 @@ class CharacterService:
         base = int(creation.get("初始年龄") or 16)
         ratio = float(creation.get("年岁比例") or 1.0)
         born = character.get("诞生")
-        if not isinstance(born, str) or not born:
-            return base
-        try:
-            started = datetime.fromisoformat(born)
-        except ValueError:
-            return base
-        if started.tzinfo is None:
-            started = started.replace(tzinfo=timezone.utc)
-        days = (datetime.now(timezone.utc) - started).total_seconds() / 86400
-        return int(min(lifespan, base + days * ratio))
+        days = 0.0
+        if isinstance(born, str) and born:
+            try:
+                started = datetime.fromisoformat(born)
+            except ValueError:
+                started = None
+            if started is not None:
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+                days = (datetime.now(timezone.utc) - started).total_seconds() / 86400
+        # 真正驱动年龄的是**修行日数**（数据库提交时按天盖戳，见 database/service.py）：
+        # 离开多久都只算回来的那一天，所以久未回归不会顶到上限。没盖过戳时退回现实天数。
+        trained = int(character.get("修行日数") or 0)
+        progress = trained if trained else days * ratio
+        return int(min(lifespan, base + progress))
 
 
     def race_growth_factors(self, race: str) -> dict[str, float]:

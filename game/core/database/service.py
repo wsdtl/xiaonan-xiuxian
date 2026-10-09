@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from pathlib import Path
 
 from .contracts import (
     CommittedTransaction,
+    DatabaseMutation,
     DatabaseStatus,
     LocationRecord,
     NearbyLocationRecord,
@@ -14,11 +16,48 @@ from .contracts import (
     SharedLocationRecord,
     SharedMemberRecord,
     StateAddress,
+    StateMutation,
     StateSnapshot,
     TransactionCommand,
     TransactionReceipt,
 )
 from .storage import SQLiteStateStore
+
+
+#: 盖「修行日」的对象：人物主状态。写在数据库提交这一层，是因为全库只有这一个是玩家动作的公共出口
+#: ——命令派发器在 `launch/`（不许动），也没有每日/签到钩子。系统定时任务写的是别的状态，不会误盖。
+TRAINING_TARGET = ("character", "main")
+
+
+def _stamp_training_day(command: TransactionCommand) -> TransactionCommand:
+    """给写人物主状态的事务盖一个「今天修行过」的日戳。
+
+    年龄按**修行日数**走，不按现实天数：离开多久都只算回来的那一天，所以久未回归不会把年龄顶到寿元上限。
+    一天只盖一次（同一天重复写状态不会重复计数）。
+    """
+
+    from dataclasses import replace
+    from datetime import date
+
+    today = date.today().isoformat()
+    operations: list[DatabaseMutation] = []
+    stamped = False
+    for operation in command.operations:
+        if (
+            isinstance(operation, StateMutation)
+            and (operation.state_type, operation.state_key) == TRAINING_TARGET
+            and isinstance(operation.value, Mapping)
+        ):
+            value = dict(operation.value)
+            if value.get("最近修行日") != today:
+                value["最近修行日"] = today
+                value["修行日数"] = int(value.get("修行日数") or 0) + 1
+                operation = replace(operation, value=value)
+                stamped = True
+        operations.append(operation)
+    if not stamped:
+        return command
+    return replace(command, operations=tuple(operations))
 
 
 class DatabaseService:
@@ -176,7 +215,7 @@ class DatabaseService:
 
     async def commit(self, command: TransactionCommand) -> TransactionReceipt:
         self._require_initialized()
-        return await asyncio.to_thread(self._store.commit, command)
+        return await asyncio.to_thread(self._store.commit, _stamp_training_day(command))
 
     async def committed_transaction(
         self, user_id: str, request_id: str
