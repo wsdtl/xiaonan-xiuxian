@@ -102,5 +102,13 @@
     "命令": "化形",
     "行为": "callback",
     "样式": "secondary"
+  },
+  {
+    "功能": "洗根",
+    "编号": "location.linggen-reforge",
+    "名称": "灵根重铸",
+    "命令": "洗根",
+    "行为": "callback",
+    "样式": "secondary"
   }
 ]

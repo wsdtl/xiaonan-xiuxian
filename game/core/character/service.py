@@ -60,6 +60,7 @@ from .contracts import (
     CharacterEquipPlan,
     CharacterGenderPlan,
     CharacterGrowthPlan,
+    CharacterFiveElementsPlan,
     CharacterIdentityPlan,
     CharacterInputError,
     CharacterLawPlan,
@@ -794,6 +795,35 @@ class CharacterService:
         return CharacterIdentityPlan(
             before,
             wanted,
+            StateMutation(user, "character", "main", character, snapshot.version),
+        )
+
+    async def plan_five_elements_change(
+        self, user_id: str, *, seed: str
+    ) -> CharacterFiveElementsPlan:
+        """把五行根性整体重掷一次（洗根丹用）。
+
+        与建号时同一套生成规则（generate_five_elements：一条主、一条次、三条余，合计一百），
+        所以产出照样过得了入库校验。随机种子由调用方给——同一条请求重放必须掷出同一副，
+        换一条请求才是新的一掷。撞回原来那副就继续掷（洗根的意义就是换个样子），
+        掷到第几次也算得出来，重放因此仍然一致。
+        """
+
+        user, snapshot, character = await self._medicine_state(user_id)
+        before = _state_five_elements(character.get("五行根性"))
+        source = random.Random(seed)
+        after = before
+        repeated = 0
+        for _ in range(50):
+            after = generate_five_elements(self._five_element_rules, source)
+            if after != before:
+                break
+            repeated += 1
+        character["五行根性"] = after
+        return CharacterFiveElementsPlan(
+            before,
+            after,
+            repeated,
             StateMutation(user, "character", "main", character, snapshot.version),
         )
 

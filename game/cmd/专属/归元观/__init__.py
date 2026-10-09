@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from game.app import current_game_services
 from game.features.guiyuan import GuiyuanConflictError, GuiyuanError
+from game.features.xigen import XigenConflictError, XigenError
 
 from ...command import GameCommand
 from . import reply
@@ -38,6 +39,32 @@ async def reset_build(user_id: str, message: str, message_context: MessageContex
             )
     except (GuiyuanError, GuiyuanConflictError) as exc:
         await manager.send(reply.error(feature, str(exc)))
+
+
+@GameCommand.command(
+    cmd=('洗根', '归元观洗根'),
+    metadata={
+        'scope': '专属',
+        'guard_rule': '自主空闲或休息',
+        'help': {
+            'category': '炼制',
+            'summary': '在归元观重掷自己的五行根性',
+            'usage': ('洗根', '归元观洗根'),
+            'side_effect': '消耗一枚灵根重铸丹；修行、构筑、种族与道侣关系保持不变',
+            'order': 74,
+        },
+    },
+)
+async def reroll_elements(user_id: str, message_context: MessageContext, manager: Any) -> None:
+    feature = current_game_services().features.xigen
+    try:
+        await manager.send(
+            reply.xigen_result(
+                feature, await feature.change(user_id, message_context.request_id)
+            )
+        )
+    except (XigenError, XigenConflictError) as exc:
+        await manager.send(reply.xigen_error(feature, str(exc)))
 
 
 __all__ = []

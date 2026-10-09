@@ -148,6 +148,20 @@ class CharacterIdentityPlan:
 
 
 @dataclass(frozen=True)
+class CharacterFiveElementsPlan:
+    """一次五行根性重掷的结果（洗根丹用）。
+
+    repeated 记的是「掷出来跟原来一模一样、于是重掷了几次」——洗根的意义就是换个样子，
+    所以撞回同一副时要继续掷；同一条请求重放走同一个随机种子，掷出的序列也一致。
+    """
+
+    before: Mapping[str, float]
+    after: Mapping[str, float]
+    repeated: int
+    operation: StateMutation
+
+
+@dataclass(frozen=True)
 class CharacterGrowthPlan:
     level_before: int
     level_after: int
@@ -296,6 +310,7 @@ __all__ = [
     "CharacterCreationResult",
     "CharacterCultivationError",
     "CharacterEquipPlan",
+    "CharacterFiveElementsPlan",
     "CharacterGenderPlan",
     "CharacterGrowthPlan",
     "CharacterInputError",

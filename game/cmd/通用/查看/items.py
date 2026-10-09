@@ -387,6 +387,7 @@ def _item_effect_lines(
         "护持道契": "在铜雀台夺元时护持道契",
         "转变性别": "改变人物性别",
     "转变种族": "改变人物种族",
+    "重铸灵根": "重掷五行根性",
     }.get(kind, kind)
     lines = [f"用途：{purpose}"]
     if "恢复百分比" in effect:
