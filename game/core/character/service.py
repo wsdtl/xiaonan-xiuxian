@@ -283,6 +283,27 @@ class CharacterService:
             raise JsonDataError(f"未登记的种族：{name or '<空>'}")
         return float(entry.get("寿元系数") or 1.0)
 
+    def _age(self, character: Mapping[str, object], lifespan: int) -> int:
+        """年龄（展示用）：起点 + 经过天数 × 比例，钳在寿元上限内。"""
+
+        from datetime import datetime, timezone
+
+        creation = _mapping(self._role_rule.get("创建"), "人物.json.创建")
+        base = int(creation.get("初始年龄") or 16)
+        ratio = float(creation.get("年岁比例") or 1.0)
+        born = character.get("诞生")
+        if not isinstance(born, str) or not born:
+            return base
+        try:
+            started = datetime.fromisoformat(born)
+        except ValueError:
+            return base
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        days = (datetime.now(timezone.utc) - started).total_seconds() / 86400
+        return int(min(lifespan, base + days * ratio))
+
+
     def race_growth_factors(self, race: str) -> dict[str, float]:
         """种族的**成长修正**：属性 → 倍率（没写就是空表，等于不修正）。"""
 
@@ -378,6 +399,9 @@ class CharacterService:
         lifespan = int(
             round(self._growth.realm(realm_id).lifespan * self.race_lifespan_factor(race))
         )
+        # 年龄：展示用——以人物状态里的「诞生」时间戳为起点、按 `创建.年岁比例` 推进，钳在寿元上限内。
+        # 没有衰老与寿终，所以「超过上限」这个情形不该出现，也不需要任何处理。
+        age = min(lifespan, self._age(character, lifespan))
         return CharacterProfile(
             user_id=normalized_user_id,
             name=_state_text(character.get("姓名"), "人物.姓名"),
@@ -402,6 +426,7 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
+            age=age,
             race=race,
             lifespan=lifespan,
         )
@@ -1614,8 +1639,12 @@ class CharacterService:
         spirit = _number(attributes.get("精神上限"), "精神上限")
         source = random.Random(f"人物五行:{command.user_id}")
         five_elements = generate_five_elements(self._five_element_rules, source)
+        from datetime import datetime, timezone
+
         return {
             "姓名": command.name,
+            #: 诞生时间戳：年龄展示的锚点，只在创建时写一次，之后不再改动。
+            "诞生": datetime.now(timezone.utc).isoformat(),
             "性别": command.gender,
             "种族": command.race or self._initial_race,
             "角色类型": str(self._role_rule.get("角色类型") or "修士"),

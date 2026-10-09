@@ -90,7 +90,7 @@ def overview(result: CharacterOverviewResult) -> DocumentMessage:
             ("身份", character.character_type),
         )
         .row(("境界", character.realm_name), ("等级", character.level))
-        .row(("寿元", f"{character.lifespan} 岁"),)
+        .row(("寿元", f"{character.age} / {character.lifespan} 岁"),)
         .row(
             ("经验", M.text(character.experience, tone="cultivation")),
             ("灵石", M.text(character.spirit_stones, tone="emphasis")),
