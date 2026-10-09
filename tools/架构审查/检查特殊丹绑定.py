@@ -98,6 +98,8 @@ def check_bindings() -> list[str]:
         elif fn not in buttons:
             problems.append(f"{place}·{fn}：功能没有玩家入口（按钮表里没有）")
         for key, value in item.items():
+            if key == "候选来源" and str(value) != "种族登记表":
+                problems.append(f"{place}·{fn}：候选来源「{value}」不被支持（只认「种族登记表」，种族由玩家指定）")
             if key == "目标种族" and str(value) not in {
                 str(r.get("种族")) for r in _load(DATA / "角色" / "规则" / "种族" / "种族.json") if isinstance(r, Mapping)
             }:

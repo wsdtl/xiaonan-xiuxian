@@ -37,25 +37,30 @@ async def change_gender(user_id: str, message_context: MessageContext, manager: 
 
 
 @GameCommand.command(
-    cmd=("返本", "太素坊返本"),
+    cmd=("化形", "太素坊化形"),
     metadata={
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "炼制",
-            "summary": "在太素坊把人物种族转为人族",
-            "usage": ("返本", "太素坊返本"),
-            "side_effect": "消耗一枚返本还元丹；修行、构筑与道侣关系保持不变",
+            "summary": "在太素坊择一族重塑种族",
+            "usage": ("化形 <族名>", "太素坊化形 <族名>"),
+            "side_effect": "消耗一枚万化易形丹；修行、构筑与道侣关系保持不变",
             "order": 73,
         },
     },
 )
-async def restore_race(user_id: str, message_context: MessageContext, manager: Any) -> None:
+async def reshape_race(
+    user_id: str, message: str, message_context: MessageContext, manager: Any
+) -> None:
     feature = current_game_services().features.fanben
+    # 族名不含空格，整段去掉命令词后的文本就是目标种族。
+    wanted = " ".join(str(message or "").split())
     try:
         await manager.send(
             reply.fanben_result(
-                feature, await feature.change(user_id, message_context.request_id)
+                feature,
+                await feature.change(user_id, message_context.request_id, wanted),
             )
         )
     except (FanbenError, FanbenConflictError) as exc:

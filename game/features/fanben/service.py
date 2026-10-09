@@ -26,7 +26,7 @@ from game.core.world import LocationQuery, WorldService
 
 from .contracts import FanbenConflictError, FanbenError, FanbenResult
 
-FUNCTION = "返本"
+FUNCTION = "化形"
 
 
 class FanbenFeature:
@@ -45,7 +45,8 @@ class FanbenFeature:
         self._player_state, self._location, self._world, self._database = player_state, location, world, database
         self._copy: Mapping[str, object] | None = None
         self._medicine_id = ""
-        self._target_race = ""
+        self._candidates: tuple[str, ...] = ()
+        self._medicine_name = ""
         self._guard_rule = ""
 
     def initialize(self) -> None:
@@ -53,9 +54,15 @@ class FanbenFeature:
             raise RuntimeError("返本玩法已经初始化")
         rule = self._world.feature_config(FUNCTION)
         self._medicine_id = _text(rule.get("丹药"), "返本.丹药")
-        self._target_race = _text(rule.get("目标种族"), "返本.目标种族")
+        # 候选来自登记表（与「易形」的性别取值同构，只是这里整张表都可选）。
+        source = _text(rule.get("候选来源"), "化形.候选来源")
+        if source != "种族登记表":
+            raise JsonDataError(f"化形.候选来源 只支持「种族登记表」：{source}")
+        self._candidates = tuple(sorted(self._character.races()))
+        # 丹名从数据读，别在代码里硬编码——改名时这里要跟着走才对。
+        self._medicine_name = str(self._data.entity("丹药", self._medicine_id).get("名称") or "换种族丹")
         self._guard_rule = _text(rule.get("状态守卫"), "返本.状态守卫")
-        copy = self._data.dataset("返本展示").get("文本")
+        copy = self._data.dataset("化形展示").get("文本")
         if not isinstance(copy, Mapping):
             raise JsonDataError("返本展示缺少文本.json")
         self._copy = copy
@@ -69,7 +76,7 @@ class FanbenFeature:
             raise JsonDataError(f"返本展示缺少文本：{section}.{key}")
         return value.format_map(values or {})
 
-    async def change(self, user_id: str, request_id: str) -> FanbenResult:
+    async def change(self, user_id: str, request_id: str, race: str) -> FanbenResult:
         committed = await self._database.committed_transaction(user_id, request_id)
         if committed is not None:
             if committed.receipt.business_type != "返本还元":
@@ -80,12 +87,15 @@ class FanbenFeature:
             current = await self._location.current(user_id)
             place = self._world.locate(LocationQuery(xy=current.xy))
             if FUNCTION not in place.available_functions:
-                raise FanbenError("只有身在太素坊才能使用返本还元丹")
+                raise FanbenError(f"只有身在太素坊才能使用{self._medicine_name}")
             profile = await self._character.profile(user_id)
-            plan = await self._character.plan_identity_change(user_id, race=self._target_race)
+            wanted = str(race or "").strip()
+            if wanted not in self._candidates:
+                raise FanbenError(f"没有这一族：{wanted or '（空）'}")
+            plan = await self._character.plan_identity_change(user_id, race=wanted)
             stacks = await self._asset.inventory_stacks(user_id, self._medicine_id)
             if not stacks:
-                raise FanbenError("纳戒中没有返本还元丹")
+                raise FanbenError(f"纳戒中没有{self._medicine_name}")
             stack = min(stacks, key=lambda value: value.grade.order)
             inventory = await self._asset.plan_inventory_changes(
                 user_id, (InventoryAdjustment(self._medicine_id, stack.grade.grade_id, -1),)
@@ -94,7 +104,7 @@ class FanbenFeature:
                 "人物名称": profile.name,
                 "原种族": plan.before_race,
                 "新种族": plan.after_race,
-                "丹药名称": str(self._data.entity("丹药", self._medicine_id).get("名称") or "返本还元丹"),
+                "丹药名称": self._medicine_name,
             }
             receipt = await self._database.commit(
                 TransactionCommand(
