@@ -1,5 +1,6 @@
 from game.features.butian import ButianFeature, ButianResult
 from message import DocumentMessage, M
+from ...presentation import format_lines
 
 
 def result(feature: ButianFeature, value: ButianResult) -> DocumentMessage:

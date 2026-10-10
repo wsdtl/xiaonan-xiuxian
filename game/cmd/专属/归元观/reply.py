@@ -1,6 +1,7 @@
 from game.features.guiyuan import GuiyuanFeature, GuiyuanPreview, GuiyuanResult
 from game.features.xigen import XigenFeature, XigenResult
 from message import DocumentMessage, M
+from ...presentation import format_lines
 
 
 def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:

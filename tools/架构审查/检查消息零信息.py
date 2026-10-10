@@ -110,6 +110,7 @@ DEEP = (
 _CORPUS: tuple[dict[str, str], dict[str, float]] | None = None
 #: 精心挑的深页命令抛异常就记在这儿——那说明页面根本出不来。
 _DEEP_FAILURES: list[str] = []
+_SMOKE_FAILURES: list[str] = []
 #: 深页命令：它们必须给出真页面，不能是错误页。
 _DEEP_COMMANDS: list[str] = []
 
@@ -211,6 +212,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     user_id = "P:消息判据"
     pages: dict[str, str] = {}
     deep_failures: list[str] = []
+    smoke_failures: list[str] = []
 
     async def send(text: str, *, user: str = "", strict: bool = False) -> None:
         try:
@@ -219,7 +221,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             )
         except Exception as exc:  # noqa: BLE001 - 参数不合适的命令本来就会报错
             if strict:
-                deep_failures.append(text + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:60])
+                smoke_failures.append(text + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:60])
             return
         if result.replies and text not in pages:
             # 先到先得：宽参阶段会把「命令 + 空参数」拼成同一条命令，覆盖掉深页阶段
@@ -469,6 +471,28 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         await services.features.xinglu.travel(
             TravelRequest(user_id=butian_user, request_id="判据-裂天原", destination="裂天原")
         )
+        # 每条注册命令再拿一个乱写参数跑一遍：错误路径也必须给出回执，不能抛异常。
+        # 真出过事：批量改 error 回执时把四条命令的链尾切坏，判据全绿却一调用就炸。
+        from game.cmd.command import registered_command_routes
+
+        heads = []
+        for route in registered_command_routes():
+            # 路由表给的是 (命令词, 分类, 组件) 元组，不是字符串。
+            head = str(route[0] if isinstance(route, tuple) else route).split()[0].strip()
+            if not head or any(ch in head for ch in "<>[](){}|*?"):
+                continue
+            heads.append(head)
+        for head in sorted(set(heads)):
+            command = head + " 乱写参数"
+            try:
+                await dispatch(
+                    user_id=user_id, raw_message=command, event_id="烟囱-" + head
+                )
+            except Exception as exc:  # noqa: BLE001 - 乱写参数不该把命令打成异常
+                deep_failures.append(
+                    command + " 抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
+                )
+
         for command in ("补天 人物 炼气 140002",):
             _DEEP_COMMANDS.append(command)
             await send(command, user=butian_user, strict=True)
@@ -495,6 +519,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     for leftover in scratch.glob(database.name + "*"):
         leftover.unlink(missing_ok=True)
     _DEEP_FAILURES.extend(deep_failures)
+    _SMOKE_FAILURES.extend(smoke_failures)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -627,6 +652,12 @@ def check_deep_pages_are_real() -> list[str]:
     return problems
 
 
+def check_garbage_args_do_not_crash() -> list[str]:
+    """每条命令拿一个乱写参数跑一遍：错误路径也必须给出回执，不能抛异常。"""
+
+    return [item + "（乱写参数炸了）" for item in _SMOKE_FAILURES]
+
+
 def check_badge_not_restated() -> list[str]:
     """状态徽章后面又跟一句复述它的话，就是同一件事印两遍。
 
@@ -689,6 +720,7 @@ CHECKS = (
     ("单页不报页码", check_no_single_page_marker),
     ("零计数不配空陈述", check_no_zero_count_with_empty_note),
     ("徽章不被复述", check_badge_not_restated),
+    ("乱写参数不炸", check_garbage_args_do_not_crash),
 )
 
 

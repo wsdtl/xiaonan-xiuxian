@@ -1,6 +1,7 @@
 from game.features.fanben import FanbenFeature, FanbenResult
 from game.features.yixing import YixingFeature, YixingResult
 from message import DocumentMessage, M
+from ...presentation import format_lines
 
 
 def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
