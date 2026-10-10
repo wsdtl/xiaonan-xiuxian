@@ -14,6 +14,7 @@ from game.core.location import (
     SpaceChangeCommand,
 )
 from game.core.player_state import PlayerStateService
+from game.core.world import LocationQuery, WorldService
 from game.features.presentation import require_mapping
 
 from .contracts import GateAction, GateCopy, GateFeatureError, GateResult
@@ -28,15 +29,18 @@ class GateFeature:
         location: LocationService,
         player_state: PlayerStateService,
         action_group: ActionGroupService,
+        world: WorldService,
     ) -> None:
         self._data = data
         self._sect = sect
         self._location = location
         self._player_state = player_state
         self._action_group = action_group
+        self._world = world
         self._copy: GateCopy | None = None
         self._buttons: tuple[Mapping[str, str], ...] = ()
         self._space_type = ""
+        self._enter_guard = ""
 
     def initialize(self) -> None:
         if self._copy is not None:
@@ -47,8 +51,14 @@ class GateFeature:
             raise RuntimeError("位置核心必须先于山门玩法启动")
         if not self._action_group.status().initialized:
             raise RuntimeError("行动编排核心必须先于山门玩法启动")
+        if not self._world.status().initialized:
+            raise RuntimeError("世界核心必须先于山门玩法启动")
         rule = require_mapping(self._data.dataset("宗门规则").get("山门"), "山门.json")
         self._space_type = _text(rule.get("空间类型"), "山门.空间类型")
+        # 山门在哪由**数据**决定：世界核心保证「宗门」是唯一的地点专属功能，
+        # 这里读它的配置，顺便把守卫也取出来（声明有人读，不是摆设）。
+        gate = self._world.feature_config("宗门")
+        self._enter_guard = _text(gate.get("状态守卫"), "宗门.状态守卫")
         self._copy, self._buttons = load_presentation(self._data)
 
     def copy(self) -> GateCopy:
@@ -67,8 +77,8 @@ class GateFeature:
             return ()
         if current.space_type == self._space_type and current.space_id == sect.cave_id:
             return actions(self._buttons, "宗门洞天")
-        if current.space_type == "地表" and current.xy == sect.entrance_xy:
-            return actions(self._buttons, "山门入口")
+        if current.space_type == "地表" and self._at_gate(current.xy):
+            return actions(self._buttons, "宗门园区")
         return ()
 
     async def enter(self, user_id: str, request_id: str) -> GateResult:
@@ -80,7 +90,7 @@ class GateFeature:
         locations = await self._location.current_many(group.participant_user_ids)
         await self._require_mutable_group(group.participant_user_ids)
         if any(
-            value.space_type != "地表" or value.xy != sect.entrance_xy
+            value.space_type != "地表" or not self._at_gate(value.xy)
             for value in locations
         ):
             raise GateFeatureError("not_at_gate")
@@ -149,10 +159,17 @@ class GateFeature:
 
     async def _require_mutable_group(self, user_ids: tuple[str, ...]) -> None:
         # 同上：批量读一次，判定仍按原顺序，第一个不通过的当场报出来。
-        results = await self._player_state.authorize_many(user_ids, "自主空闲或休息")
+        results = await self._player_state.authorize_many(
+            user_ids, self._enter_guard or "自主空闲或休息"
+        )
         for result in results:
             if not result.allowed:
                 raise GateFeatureError("current_busy")
+
+    def _at_gate(self, xy: tuple[int, int]) -> bool:
+        """站在山门上吗——认的是地点功能，不是某一格坐标。"""
+
+        return "宗门" in self._world.locate(LocationQuery(xy=xy)).available_functions
 
     def _require_initialized(self) -> None:
         if self._copy is None:

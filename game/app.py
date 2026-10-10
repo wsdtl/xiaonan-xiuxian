@@ -795,7 +795,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         data, sect, character, location, player_state, team
     )
     zongmen_tongxing.initialize()
-    zongmen_shanmen = GateFeature(data, sect, location, player_state, action_group)
+    zongmen_shanmen = GateFeature(data, sect, location, player_state, action_group, world)
     zongmen_shanmen.initialize()
     zongmen_lingcang = LingcangFeature(
         data, sect_assets, item_catalog, sect, location, player_state

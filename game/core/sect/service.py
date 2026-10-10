@@ -17,7 +17,6 @@ from game.core.database import (
     IdempotencyConflictError,
     SharedConstraintError,
     SharedEntityMutation,
-    SharedLocationMutation,
     SharedMemberMutation,
     StateAddress,
     StateConflictError,
@@ -487,11 +486,6 @@ class SectService:
             is not None
         ):
             raise SectConflictError("name_occupied")
-        if (
-            await self._database.shared_location_at(ENTITY_TYPE, entrance_xy)
-            is not None
-        ):
-            raise SectConflictError("entrance_occupied")
         sect_id = _id("sect", user, request)
         cave_id = _id("cave", sect_id, normalized_name)
         value = {
@@ -513,14 +507,12 @@ class SectService:
                         SharedMemberMutation(
                             ENTITY_TYPE, user, sect_id, self._leader_role, 1, 0
                         ),
-                        SharedLocationMutation(ENTITY_TYPE, sect_id, entrance_xy, 0),
                     ),
                     {"宗门编号": sect_id, "名称": normalized_name},
                 )
             )
         except SharedConstraintError as exc:
-            code = "name_occupied" if "名称" in str(exc) else "entrance_occupied"
-            raise SectConflictError(code) from exc
+            raise SectConflictError("name_occupied") from exc
         except (StateConflictError, IdempotencyConflictError) as exc:
             raise SectConflictError("sect_changed") from exc
         return SectSnapshot(sect_id, normalized_name, user, cave_id, entrance_xy, 1)
@@ -825,15 +817,13 @@ class SectService:
         sect_record = await self._database.get_shared_entity(
             ENTITY_TYPE, member.sect_id
         )
-        location = await self._database.get_shared_location(ENTITY_TYPE, member.sect_id)
-        if sect_record is None or location is None:
+        if sect_record is None:
             raise SectConflictError("sect_changed")
         members = await self.members(member.sect_id)
         operations = [
             SharedEntityMutation(
                 ENTITY_TYPE, member.sect_id, None, sect_record.version
             ),
-            SharedLocationMutation(ENTITY_TYPE, member.sect_id, None, location.version),
         ] + [
             SharedMemberMutation(ENTITY_TYPE, value.user_id, None, "", 1, value.version)
             for value in members

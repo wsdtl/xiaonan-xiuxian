@@ -15,7 +15,7 @@ from game.features.presentation import (
 from .contracts import GateAction, GateCopy
 
 _TEXT_SECTIONS = frozenset({"图标", "结果", "错误"})
-_POSITIONS = frozenset({"山门入口", "宗门洞天"})
+_POSITIONS = frozenset({"宗门园区", "宗门洞天"})
 
 
 def load_presentation(
