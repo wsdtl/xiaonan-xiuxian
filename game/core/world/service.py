@@ -264,8 +264,14 @@ class WorldService:
             for function in functions
             for section in self._feature_contents[function]
         }
-        plant_pool = (f"灵植-{terrain}",)
-        mineral_pool = (f"灵矿-{terrain}",)
+        # 门面地点（例如宗门山门）可以在功能配置里写 `可采集: false`：池子照旧存在，
+        # 但不往地点面板上摆采药/采矿——世界不必认识是哪个功能，只认这个开关。
+        gatherable = all(
+            (config or {}).get("可采集", True) is not False
+            for config in (raw.get("功能配置") or {}).values()
+        )
+        plant_pool = (f"灵植-{terrain}",) if gatherable else ()
+        mineral_pool = (f"灵矿-{terrain}",) if gatherable else ()
         companion_pool = (
             (f"{location_key}道侣",)
             if location_key and "道侣" in content_sections
