@@ -1847,6 +1847,7 @@ class BattleEngine(AbilityRuntime):
         can_block: bool=True,
         tags: tuple[str, ...]=(),
         allow_reactions: bool=True,
+        element_facts: dict[str, object] | None=None,
     ) -> DamageResolution:
         effective_rule = (
             "无视防御" if ignore_defense and defense_rule == "普通" else defense_rule
@@ -1915,7 +1916,7 @@ class BattleEngine(AbilityRuntime):
                 kind="闪避后",
                 source=source,
                 target=target,
-                values=resolution.values(),
+                values={**resolution.values(), **(element_facts or {})},
                 tags=tags,
             )
             return resolution
@@ -1925,7 +1926,7 @@ class BattleEngine(AbilityRuntime):
             source=source,
             target=target,
             amount=resolution.breakdown.limited,
-            values=resolution.values(),
+            values={**resolution.values(), **(element_facts or {})},
             tags=tags,
         )
         pre = self._dispatch_event(

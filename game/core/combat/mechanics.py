@@ -1959,7 +1959,8 @@ class AbilityRuntime(ChainRuntime):
         success = False
         for destination in destinations:
             amount = self._resolve_value(context, effect.get("数值"), source, destination, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier
-            amount *= self._element_multiplier(context, source, destination, effect)
+            multiplier, relation = self._element_multiplier(context, source, destination, effect)
+            amount *= multiplier
             if source.current_skill and str(effect.get("伤害形式") or "直接") == "直接":
                 amount *= max(0.0, self._percent(source, "技能威力"))
             resolution = self._apply_damage(
@@ -1974,6 +1975,9 @@ class AbilityRuntime(ChainRuntime):
                 can_critical=bool(effect.get("能否暴击", True)),
                 can_block=bool(effect.get("能否格挡", True)),
                 tags=tuple(str(value) for value in effect.get("标签") or ()),
+                element_facts=(
+                    {"五行关系": relation, "五行倍率": multiplier} if relation else None
+                ),
             )
             success = resolution.actual_damage > 0 or success
             if resolution.actual_damage > 0:
@@ -2000,7 +2004,8 @@ class AbilityRuntime(ChainRuntime):
         attempted = False
         for destination in self._select_targets(context, source, target, effect.get("目标")):
             amount = max(0.0, self._resolve_value(context, effect.get("数值"), source, destination, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier)
-            amount *= self._element_multiplier(context, source, destination, effect)
+            multiplier, relation = self._element_multiplier(context, source, destination, effect)
+            amount *= multiplier
             baseline_attribute = str(definition.get("加成属性") or "")
             if baseline_attribute:
                 # 基准属性（`治疗效果` / `护盾强度`）：加成口径，基准 100 即 ×1.0。
@@ -2030,6 +2035,9 @@ class AbilityRuntime(ChainRuntime):
             self._set_resource(destination, requested_resource, before + applied)
             after_event = str(definition.get("恢复后事件") or "资源恢复后")
             values = {"资源": requested_resource, "变化前数值": before, "变化后数值": before + applied, "实际数值": applied, "溢出数值": max(0.0, received - applied)}
+            if relation:
+                values["五行关系"] = relation
+                values["五行倍率"] = multiplier
             event_tags = (*frame.tags, "恢复", requested_resource)
             self._dispatch_event(context, kind=after_event, source=source, target=destination, amount=applied, values=values, tags=event_tags)
             self._dispatch_event(context, kind="资源变化后", source=source, target=destination, amount=applied, values=values, tags=(*frame.tags, "增加", requested_resource))
@@ -2060,7 +2068,7 @@ class AbilityRuntime(ChainRuntime):
     def _element_multiplier(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any]) -> float:
         composition = effect.get("属性构成")
         if not composition:
-            return 1.0
+            return 1.0, ""
         # 属性构成会随继承来源被复制到临时效果节点。按效果身份缓存会保留每次
         # 临时节点及其整棵定义；按标量构成复用只需保留实际出现过的配比。
         composition_key = tuple(composition.items()) if type(composition) is dict else None
@@ -2076,14 +2084,15 @@ class AbilityRuntime(ChainRuntime):
                 context.element_composition_cache[composition_key] = cached
         values, composition_signature = cached
         if not values or "无相" in values and len(values) == 1:
-            return 1.0
+            # 无相不再是恒 1.0：它读规则里的「倍率.无相」（委托方口径）。
+            return float(self.catalog.five_elements.get("倍率", {}).get("无相", 1.0)), ""
         source_root = source.five_elements
         target_root = target.five_elements
         rules = self.catalog.five_elements
         signature = (composition_signature, tuple(source_root.items()), tuple(target_root.items()))
-        result = context.element_multiplier_cache.get(signature)
+        pair = context.element_multiplier_cache.get(signature)
         multipliers = rules.get("倍率", {})
-        if result is None:
+        if pair is None:
             generating = self._element_generating
             overcoming = self._element_overcoming
             root_rules = rules.get("根性倍率", {})
@@ -2102,31 +2111,38 @@ class AbilityRuntime(ChainRuntime):
                 ),
             )
             multipliers = rules.get("倍率", {})
-            relation = 0.0
-            total = 0.0
-            for element, weight in values.items():
-                if element == "无相":
-                    continue
-                for target_element, target_weight in target_root.items():
-                    if element == target_element:
-                        factor = 1.0
-                    elif generating.get(element) == target_element:
-                        factor = float(multipliers.get("相生", 1.03))
-                    elif overcoming.get(element) == target_element:
-                        factor = float(multipliers.get("相克", 1.15))
-                    elif overcoming.get(target_element) == element:
-                        factor = float(multipliers.get("被克", 0.85))
-                    else:
-                        factor = 1.0
-                    relation += weight * target_weight * factor
-                    total += weight * target_weight
-            result = root_multiplier * (relation / total if total else 1.0)
-            context.element_multiplier_cache[signature] = result
+            # 关系按「主元素 对 对方主属性」判一次：原先的全配对加权平均会把相生相克摊平
+            # （实测 48% 挤在 ±5% 里），等于没关系。
+            relation_factor = 1.0
+            relation_text = ""
+            source_main = max(values.items(), key=lambda item: item[1])[0] if values else ""
+            target_main = (
+                max(target_root.items(), key=lambda item: item[1])[0] if target_root else ""
+            )
+            if source_main and target_main and "无相" not in (source_main, target_main):
+                if source_main == target_main:
+                    relation_factor = float(multipliers.get("同属性", 1.0))
+                    relation_text = f"{source_main} 同属"
+                elif generating.get(source_main) == target_main:
+                    relation_factor = float(multipliers.get("相生", 1.03))
+                    relation_text = f"{source_main} 生 {target_main}"
+                elif overcoming.get(source_main) == target_main:
+                    relation_factor = float(multipliers.get("相克", 1.15))
+                    relation_text = f"{source_main} 克 {target_main}"
+                elif overcoming.get(target_main) == source_main:
+                    relation_factor = float(multipliers.get("被克", 0.85))
+                    relation_text = f"{source_main} 被{target_main}克"
+                else:
+                    relation_factor = float(multipliers.get("无关", 1.0))
+            result = root_multiplier * relation_factor
+            context.element_multiplier_cache[signature] = (result, relation_text)
+            pair = (result, relation_text)
+        result, relation_text = pair
         for element in values:
             if source.team_synergy.pop(element, 0):
                 result *= float(multipliers.get("团队相生", 1.08))
                 break
-        return result
+        return result, relation_text
 
     def _mark_team_synergy(self, context: BattleContext, source: Fighter, effect: Mapping[str, Any]) -> None:
         composition = effect.get("属性构成") or {}
