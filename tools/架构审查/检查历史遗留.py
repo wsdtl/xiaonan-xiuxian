@@ -151,6 +151,57 @@ def check_scripts_have_callers() -> list[str]:
     return problems
 
 
+def check_unused_definitions() -> list[str]:
+    """`game` 下不许有「定义了却全库无人引用」的函数、类与常量。
+
+    全库扫过一遍（排掉装饰器注册——命令与路由把函数挂在装饰器上，函数名
+    本来就不会在别处出现）：2189 个定义全部有人引用。这条判据把那份干净固定住，
+    新写一个没人调用的函数就会在这里红。
+    """
+
+    import ast
+
+    sources: dict[pathlib.Path, str] = {}
+    for path in GAME.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        sources[path] = path.read_text(encoding="utf-8", errors="replace")
+    others: list[str] = []
+    for path in ROOT.rglob("*.md"):
+        if "__pycache__" not in path.parts and ".venv" not in path.parts and "_输出" not in path.parts:
+            others.append(path.read_text(encoding="utf-8", errors="replace"))
+    for path in (ROOT / "data").rglob("*.json"):
+        others.append(path.read_text(encoding="utf-8", errors="replace"))
+    corpus = "\n".join(list(sources.values()) + others)
+
+    problems: list[str] = []
+    for path, text in sources.items():
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        for node in tree.body:
+            names: list[str] = []
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if node.decorator_list:
+                    continue
+                names.append(node.name)
+            elif isinstance(node, ast.Assign):
+                names += [
+                    target.id for target in node.targets
+                    if isinstance(target, ast.Name) and target.id.isupper()
+                ]
+            for name in names:
+                if name.startswith("__"):
+                    continue
+                if corpus.count(name) <= 1:
+                    problems.append(
+                        path.relative_to(ROOT).as_posix() + ":" + str(node.lineno)
+                        + " 定义了却无人引用：" + name
+                    )
+    return problems
+
+
 def check_unused_imports() -> list[str]:
     """导入了却没用，就是没清干净的残渣。
 
@@ -285,6 +336,7 @@ CHECKS = (
     ("自映射别名表", check_self_mapping_tables),
     ("弃用 API", check_deprecated_apis),
     ("未使用的导入", check_unused_imports),
+    ("未使用的定义", check_unused_definitions),
     ("临时件不入根", check_stray_temp_dirs),
 )
 

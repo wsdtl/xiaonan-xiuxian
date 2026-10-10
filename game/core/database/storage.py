@@ -294,8 +294,6 @@ def _unpack_json(stored: object) -> str:
 
 # 玩家存档折叠：每玩家一行（state_type='player', state_key='main'），行内为
 # { "类型/键": {"值": …, "版本": n, "时间": …} }；老形态（一个状态键一行）读写时现场合并。
-_BLOB_TYPE = "player"
-_BLOB_KEY = "main"
 _ENTRY_VALUE = "value"
 _ENTRY_VERSION = "version"
 _ENTRY_UPDATED = "updated_at"
