@@ -544,8 +544,36 @@ class CharacterService:
             for name, step in per_tier.items()
         )
         raw_listeners = row.get("质变监听") or {}
-        listener = raw_listeners.get(str(yijing.tier)) if isinstance(raw_listeners, Mapping) else None
-        listeners = (dict(listener),) if isinstance(listener, Mapping) else ()
+        picked = (
+            [value for key, value in raw_listeners.items() if key.isdigit() and int(key) <= yijing.tier]
+            if isinstance(raw_listeners, Mapping)
+            else []
+        )
+        listeners = [dict(value) for value in picked if isinstance(value, Mapping)]
+        if listeners:
+            # 动态档的计量由核心开：数据不知道玩家买到几阶，上限只能在这儿给。
+            listeners.append(
+                {
+                    "能力": "监听事件",
+                    "事件": "行动开始",
+                    "观察角色": "行动者",
+                    "阵营关系": "自身",
+                    "效果": [
+                        {
+                            "能力": "修改构筑计量",
+                            "计量": "意境档",
+                            "方式": "增加",
+                            "数值": 0,
+                            "初始值": 0,
+                            "最低值": 0,
+                            "最高值": yijing.tier,
+                            "目标": {"能力": "选择目标", "范围": "自身"},
+                        }
+                    ],
+                    "每次行动最多触发": 1,
+                }
+            )
+        listeners = tuple(listeners)
         limits: tuple[str, ...] = ()
         rule = row.get("戒律")
         if isinstance(rule, Mapping) and int(rule.get("阶") or 0) <= yijing.tier:
