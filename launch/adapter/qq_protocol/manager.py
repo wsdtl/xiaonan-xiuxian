@@ -23,6 +23,7 @@ from ..context import (
     MENTION_SENDER,
     SendOptions,
     SendRequest,
+    current_message_context,
     current_reply_target,
 )
 from .client import client
@@ -578,11 +579,9 @@ class QqReplyManager:
     def _apply_mention(payload: dict, target: QqSendTarget, options: SendOptions) -> dict:
         """按发送选项给群消息补 at。"""
 
-        mention_user_id = QqReplyManager._mention_user_id(target, options)
-        if not payload or not mention_user_id:
+        mention_text = QqReplyManager._mention_user_id(target, options)
+        if not payload or not mention_text:
             return payload
-
-        mention_text = f"<@{mention_user_id}>"
         result = dict(payload)
         msg_type = int(result.get("msg_type") or 0)
 
@@ -615,10 +614,16 @@ class QqReplyManager:
         if not value or value in {MENTION_DEFAULT, MENTION_NONE}:
             return ""
         if value == MENTION_SENDER:
-            return target.user_id
-        if value.startswith("<@") and value.endswith(">"):
-            value = value[2:-1]
-        return value.strip().lstrip("!")
+            # 用**平台昵称**做文本 @：QQ 照原样显示，不像 `<@id>` 芯片那样在卡片里多占一行。
+            # 拿不到昵称（例如非消息触发的主动推送）才回退芯片。
+            context = current_message_context()
+            name = str(getattr(context, "sender_name", "") or "").strip()
+            return f"@{name}" if name else f"<@{target.user_id}>"
+        if value.startswith("<@"):
+            return value
+        if value.startswith("@"):
+            return value
+        return f"<@{value.strip().lstrip('!')}>"
 
     @staticmethod
     def _prepend_mention(mention_text: str, content: str) -> str:
