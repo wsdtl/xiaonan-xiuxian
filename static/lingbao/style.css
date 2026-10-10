@@ -1,0 +1,33 @@
+/* 灵宝谱挑选台：沿用前面几页那套暖纸底与玉色主调，只写本页真正用到的类。 */
+
+* { box-sizing: border-box; }
+
+:root {
+  color-scheme: light;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --paper: #f7f5ef; --surface: #ffffff; --ink: #1d2a25; --ink-soft: #5c6b64;
+  --line: #e3ded1; --danger: #a63a2a;
+}
+
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); overflow: hidden; }
+#app { height: 100%; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 12px; padding: 20px 24px; }
+header h1 { margin: 4px 0; font-size: 28px; }
+.eyebrow { margin: 0; color: var(--ink-soft); font-size: 13px; letter-spacing: .12em; }
+#intro { margin: 0; color: var(--ink-soft); }
+#status { margin: 0; min-height: 20px; color: var(--danger); }
+.bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bar label { display: flex; align-items: center; gap: 6px; }
+#notice { margin: 0; color: var(--ink-soft); }
+select, button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: inherit; }
+.panel { overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; align-content: start; }
+.panel h2 { margin: 0; font-size: 16px; color: var(--ink-soft); }
+#active { margin: 0; }
+#owned { display: grid; gap: 6px; }
+.item { display: flex; width: 100%; justify-content: space-between; gap: 12px; cursor: pointer; }
+.item-name { font-weight: 600; }
+.item-meta { color: var(--ink-soft); }
+.cmd { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #f3f1e9; border-radius: 8px; }
+.cmd-text { flex: 1; font-family: Consolas, monospace; }
+.copy { cursor: pointer; }
+.empty { margin: 0; color: var(--ink-soft); }

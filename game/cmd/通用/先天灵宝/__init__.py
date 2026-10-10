@@ -11,6 +11,7 @@ from game.features.xiantian_lingbao import (
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -70,4 +71,4 @@ async def equip_innate_treasure(user_id: str, message: str, message_context: Mes
         await manager.send(reply.error(str(exc)))
 
 
-__all__ = []
+__all__ = ["router"]

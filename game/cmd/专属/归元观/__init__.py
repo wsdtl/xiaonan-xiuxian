@@ -6,6 +6,7 @@ from game.features.xigen import XigenConflictError, XigenError
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -67,4 +68,4 @@ async def reroll_elements(user_id: str, message_context: MessageContext, manager
         await manager.send(reply.xigen_error(feature, str(exc)))
 
 
-__all__ = []
+__all__ = ["router"]

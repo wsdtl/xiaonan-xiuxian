@@ -5,6 +5,7 @@ from game.features.zongmen_shengchan import SectProductionFeatureError
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -114,4 +115,4 @@ def _usage(kind: str) -> str:
     return f"{kind}、{kind} 开启 或 {kind} 收取"
 
 
-__all__ = []
+__all__ = ["router"]

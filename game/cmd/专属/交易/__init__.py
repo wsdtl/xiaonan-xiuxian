@@ -7,6 +7,7 @@ from game.features.jiaoyi import TradeFeatureError, TradePurchaseCommand
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -82,4 +83,4 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
         await manager.send(reply.error(feature, str(exc)))
 
 
-__all__ = []
+__all__ = ["router"]

@@ -66,6 +66,14 @@ class SectProductionFeature:
             raise RuntimeError("宗门资源生产玩法尚未初始化")
         return self._copy
 
+    def terrain_options(self, kind: str) -> tuple[str, ...]:
+        """该设施可选的地形（不需要宗门身份，页面据此把菜单摆出来）。"""
+
+        for facility in self._production.status().facilities:
+            if facility.kind == str(kind or '').strip():
+                return tuple(getattr(facility, 'terrain_options', ()) or ())
+        return ()
+
     def actions(self, view: SectProductionView) -> tuple[SectProductionAction, ...]:
         if not view.can_collect or (view.started and view.pending_cycles == 0):
             return ()
