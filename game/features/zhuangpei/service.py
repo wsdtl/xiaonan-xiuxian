@@ -79,6 +79,7 @@ class ZhuangpeiFeature:
             raise ZhuangpeiFeatureError("该清单未公开，请选择全池或其他公开用户")
         limits = self._character.assembly_limits()
         build: Build = {section: () for section in SECTIONS}
+        yijing = None
         entries: dict[tuple[str, str, str], dict] = {}
         if scope == "all":
             for section in SECTIONS:
@@ -95,6 +96,7 @@ class ZhuangpeiFeature:
             limits = dict(profile.cultivation_slots)
             limits["器律"] = profile.weapon.open_law_slots
             build = self._profile_build(profile)
+            yijing = profile.yijing
             snapshot = await self._asset.snapshot(user_id)
             for entry in snapshot.entries:
                 section = {"道藏": "功法", "器藏": "器律"}.get(entry.category, entry.subcategory)
@@ -116,6 +118,10 @@ class ZhuangpeiFeature:
             "scopes": scopes, "scope": scope, "limits": limits,
             "sections": list(SECTIONS), "entries": list(entries.values()),
             "current": build, "ui": self._copy,
+            # 意境：有值才给，前端据此决定整块显不显示（未开启不出空块）。
+            "yijing": None if yijing is None else {
+                "id": yijing.content_id, "tier": yijing.tier, "display": yijing.display,
+            },
         }
 
     def _entry(self, section: str, content_id: str, grade: str) -> dict:

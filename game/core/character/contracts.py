@@ -115,6 +115,13 @@ class YijingProfile:
     name: str
     tier: int
 
+    #: 展示串：名称 + 中文阶 + 「阶」，中间不加分隔点（不尽长江意境三阶）。面板与装配台共用。
+    DISPLAY_TIERS = ("一", "二", "三", "四", "五", "六", "七", "八", "九")
+
+    @property
+    def display(self) -> str:
+        return f"{self.name}{self.DISPLAY_TIERS[self.tier - 1]}阶"
+
 
 @dataclass(frozen=True)
 class CharacterProfile:

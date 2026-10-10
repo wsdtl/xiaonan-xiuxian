@@ -148,7 +148,7 @@ def overview(result: CharacterOverviewResult) -> DocumentMessage:
     # 意境：只存编号与阶，名称按编号现取；未开启就整段不显示（不许出现空栏目）。
     if character.yijing is not None:
         builder.section("意境", icon="status")
-        builder.row(("意境", _yijing_text(character.yijing)))
+        builder.row(("意境", character.yijing.display))
     primary_names = (
         "攻击",
         "防御",
@@ -247,16 +247,6 @@ def _append_pairs(builder: DocumentBuilder, values: tuple[tuple[str, int | float
                 for name, value in values[index : index + 2]
             )
         )
-
-
-#: 意境的阶用中文写（不尽长江意境三阶），与展示口径一致。
-_YIJING_TIERS = ("一", "二", "三", "四", "五", "六", "七", "八", "九")
-
-
-def _yijing_text(yijing) -> str:
-    """意境的展示串：名称 + 中文阶 + 阶，中间不加分隔点。"""
-
-    return f"{yijing.name}{_YIJING_TIERS[yijing.tier - 1]}阶"
 
 
 def _display_number(value: float) -> str:
