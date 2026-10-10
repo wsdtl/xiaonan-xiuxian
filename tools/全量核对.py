@@ -16,6 +16,7 @@ import os
 
 import concurrent.futures
 import pathlib
+import shutil
 import subprocess
 import sys
 import time
@@ -106,26 +107,43 @@ def run_one(item: tuple[str, tuple[str, ...]]) -> tuple[str, bool, str, float]:
 def main() -> int:
     started = time.perf_counter()
     failures: list[str] = []
+    # 先把上一次留下的临时件清掉：测试会往 _SCRATCH 写几万个小文件，
+    # 攒着不清会把之后每一次临时文件操作都拖慢（实测墙钟 130 秒涨到 280 秒）。
+    shutil.rmtree(_SCRATCH, ignore_errors=True)
+    _SCRATCH.mkdir(parents=True, exist_ok=True)
+    # 可点名跑：`全量核对.py 文档计数 静态资源` 只跑名字里含这些字的项。
+    # 平时改一处只验相关的几项，收口时再跑一次全量。
+    wanted = tuple(value for value in sys.argv[1:] if value.strip())
+    chosen = (
+        tuple(item for item in REQUIRED if any(word in item[0] for word in wanted))
+        if wanted
+        else REQUIRED
+    )
+    if not chosen:
+        print('总账：没有匹配的项 —— ' + '、'.join(wanted))
+        return 1
+    if wanted:
+        print(f'（点名跑 {len(chosen)}/{len(REQUIRED)} 项：' + '、'.join(item[0] for item in chosen) + '）')
     # 两阶段跑：单元测试自己会开分片，和别的项抢核只会互相拖（实测它内部墙钟从 23 秒
     # 涨到 46 秒），所以先让它独占跑完，其余项再并发。并发上限按核数取一半——全开满
     # 会超订，实测墙钟反而更慢。
     workers = max(1, (os.cpu_count() or 4) * 5 // 8)
-    heavies = tuple(item for item in REQUIRED if "单元测试" in item[0])
-    others = tuple(item for item in REQUIRED if item not in heavies)
+    heavies = tuple(item for item in chosen if "单元测试" in item[0])
+    others = tuple(item for item in chosen if item not in heavies)
     measured = {item[0]: run_one(item) for item in heavies}
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         for item, result in zip(others, pool.map(run_one, others)):
             measured[item[0]] = result
-    for item in REQUIRED:
+    for item in chosen:
         name, ok, tail, seconds = measured[item[0]]
         print(f"  [{'通过' if ok else '失败'}] {name:<28} {seconds:>6.1f}s  {tail}")
         if not ok:
             failures.append(name)
     wall = time.perf_counter() - started
     if failures:
-        print(f"总账：{len(REQUIRED)} 项，失败 {len(failures)} 项 —— {'、'.join(failures)}（墙钟 {wall:.1f}s）")
+        print(f"总账：{len(chosen)} 项，失败 {len(failures)} 项 —— {'、'.join(failures)}（墙钟 {wall:.1f}s）")
         return 1
-    print(f"总账：{len(REQUIRED)} 项全部通过（墙钟 {wall:.1f}s）")
+    print(f"总账：{len(chosen)} 项全部通过（墙钟 {wall:.1f}s）")
     return 0
 
 
