@@ -13,7 +13,6 @@ from .contracts import (
     LocationRecord,
     NearbyLocationRecord,
     SharedEntityRecord,
-    SharedLocationRecord,
     SharedMemberRecord,
     StateAddress,
     StateMutation,
@@ -87,7 +86,6 @@ class DatabaseService:
             transaction_count,
             shared_entity_count,
             shared_member_count,
-            shared_location_count,
         ) = (
             self._store.counts() if self._initialized else (0, 0, 0, 0, 0, 0)
         )
@@ -99,7 +97,6 @@ class DatabaseService:
             transaction_count=transaction_count,
             shared_entity_count=shared_entity_count,
             shared_member_count=shared_member_count,
-            shared_location_count=shared_location_count,
         )
 
     async def get(self, address: StateAddress) -> StateSnapshot | None:
@@ -172,22 +169,6 @@ class DatabaseService:
         self._require_initialized()
         return await asyncio.to_thread(
             self._store.list_shared_members, entity_type, entity_id
-        )
-
-    async def get_shared_location(
-        self, entity_type: str, entity_id: str
-    ) -> SharedLocationRecord | None:
-        self._require_initialized()
-        return await asyncio.to_thread(
-            self._store.get_shared_location, entity_type, entity_id
-        )
-
-    async def shared_location_at(
-        self, entity_type: str, xy: tuple[int, int]
-    ) -> SharedLocationRecord | None:
-        self._require_initialized()
-        return await asyncio.to_thread(
-            self._store.shared_location_at, entity_type, xy
         )
 
     async def nearby_locations(

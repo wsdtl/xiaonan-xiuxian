@@ -36,7 +36,6 @@ class DatabaseStatus:
     transaction_count: int
     shared_entity_count: int
     shared_member_count: int
-    shared_location_count: int
 
 
 @dataclass(frozen=True)
@@ -90,20 +89,11 @@ class SharedMemberMutation:
     expected_version: int
 
 
-@dataclass(frozen=True)
-class SharedLocationMutation:
-    entity_type: str
-    entity_id: str
-    xy: tuple[int, int] | None
-    expected_version: int
-
-
 DatabaseMutation = (
     StateMutation
     | LocationMutation
     | SharedEntityMutation
     | SharedMemberMutation
-    | SharedLocationMutation
 )
 
 
@@ -220,15 +210,6 @@ class SharedMemberRecord:
     updated_at: str
 
 
-@dataclass(frozen=True)
-class SharedLocationRecord:
-    entity_type: str
-    entity_id: str
-    xy: tuple[int, int]
-    version: int
-    updated_at: str
-
-
 __all__ = [
     "CommittedTransaction",
     "DatabaseError",
@@ -243,8 +224,6 @@ __all__ = [
     "SharedConstraintError",
     "SharedEntityMutation",
     "SharedEntityRecord",
-    "SharedLocationMutation",
-    "SharedLocationRecord",
     "SharedMemberMutation",
     "SharedMemberRecord",
     "StateAddress",

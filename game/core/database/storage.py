@@ -30,8 +30,6 @@ from .contracts import (
     SharedConstraintError,
     SharedEntityMutation,
     SharedEntityRecord,
-    SharedLocationMutation,
-    SharedLocationRecord,
     SharedMemberMutation,
     SharedMemberRecord,
     StateAddress,
@@ -385,20 +383,8 @@ class SQLiteStateStore:
                     PRIMARY KEY (entity_type, entity_id, user_id),
                     UNIQUE (entity_type, user_id)
                 );
-                CREATE TABLE IF NOT EXISTS shared_location (
-                    entity_type TEXT NOT NULL,
-                    entity_id TEXT NOT NULL,
-                    x INTEGER NOT NULL,
-                    y INTEGER NOT NULL,
-                    version INTEGER NOT NULL CHECK (version > 0),
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (entity_type, entity_id),
-                    UNIQUE (entity_type, x, y)
-                );
                 CREATE INDEX IF NOT EXISTS ix_shared_member_entity
                 ON shared_member(entity_type, entity_id, join_order, user_id);
-                CREATE INDEX IF NOT EXISTS ix_shared_location_xy
-                ON shared_location(entity_type, x, y);
                 """
             )
         self._initialized = True
@@ -431,16 +417,12 @@ class SQLiteStateStore:
             shared_member_count = int(
                 connection.execute("SELECT COUNT(*) FROM shared_member").fetchone()[0]
             )
-            shared_location_count = int(
-                connection.execute("SELECT COUNT(*) FROM shared_location").fetchone()[0]
-            )
         return (
             state_count,
             location_count,
             transaction_count,
             shared_entity_count,
             shared_member_count,
-            shared_location_count,
         )
 
     def get_shared_entity(
@@ -623,60 +605,6 @@ class SQLiteStateStore:
                 str(row[4]),
             )
             for row in rows
-        )
-
-    def get_shared_location(
-        self, entity_type: str, entity_id: str
-    ) -> SharedLocationRecord | None:
-        self._require_initialized()
-        _validate_text(entity_type, "entity_type")
-        _validate_text(entity_id, "entity_id")
-        with self._connect(reusable=True) as connection:
-            row = connection.execute(
-                """
-                SELECT x, y, version, updated_at
-                FROM shared_location
-                WHERE entity_type = ? AND entity_id = ?
-                """,
-                (entity_type, entity_id),
-            ).fetchone()
-        return (
-            SharedLocationRecord(
-                entity_type,
-                entity_id,
-                (int(row[0]), int(row[1])),
-                int(row[2]),
-                str(row[3]),
-            )
-            if row is not None
-            else None
-        )
-
-    def shared_location_at(
-        self, entity_type: str, xy: tuple[int, int]
-    ) -> SharedLocationRecord | None:
-        self._require_initialized()
-        _validate_text(entity_type, "entity_type")
-        x, y = _validate_xy(xy)
-        with self._connect(reusable=True) as connection:
-            row = connection.execute(
-                """
-                SELECT entity_id, x, y, version, updated_at
-                FROM shared_location
-                WHERE entity_type = ? AND x = ? AND y = ?
-                """,
-                (entity_type, x, y),
-            ).fetchone()
-        return (
-            SharedLocationRecord(
-                entity_type,
-                str(row[0]),
-                (int(row[1]), int(row[2])),
-                int(row[3]),
-                str(row[4]),
-            )
-            if row is not None
-            else None
         )
 
     def get(self, address: StateAddress) -> StateSnapshot | None:
@@ -946,11 +874,7 @@ class SQLiteStateStore:
                             )
                         )
                     else:
-                        changes.append(
-                            _apply_shared_location_mutation(
-                                connection, operation, committed_at
-                            )
-                        )
+                        raise ValueError("未知事务操作")
                 changes_json = {
                     "command": fingerprint,
                     "payload": _json_value(command.payload),
@@ -1340,83 +1264,6 @@ def _apply_shared_member_mutation(
     )
 
 
-def _apply_shared_location_mutation(
-    connection: sqlite3.Connection,
-    mutation: SharedLocationMutation,
-    committed_at: str,
-) -> MutationChange:
-    _validate_text(mutation.entity_type, "entity_type")
-    _validate_text(mutation.entity_id, "entity_id")
-    row = connection.execute(
-        """
-        SELECT x, y, version
-        FROM shared_location
-        WHERE entity_type = ? AND entity_id = ?
-        """,
-        (mutation.entity_type, mutation.entity_id),
-    ).fetchone()
-    current_version = int(row[2]) if row is not None else 0
-    if current_version != mutation.expected_version:
-        raise StateConflictError("共享位置版本冲突")
-    if mutation.xy is None:
-        if row is None:
-            raise StateConflictError("不能删除不存在的共享位置")
-        connection.execute(
-            "DELETE FROM shared_location WHERE entity_type = ? AND entity_id = ?",
-            (mutation.entity_type, mutation.entity_id),
-        )
-        return MutationChange(
-            "shared_location",
-            mutation.entity_id,
-            mutation.entity_type,
-            "main",
-            "delete",
-            current_version,
-            None,
-        )
-    x, y = _validate_xy(mutation.xy)
-    next_version = current_version + 1
-    try:
-        if row is None:
-            connection.execute(
-                """
-                INSERT INTO shared_location (
-                    entity_type, entity_id, x, y, version, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (mutation.entity_type, mutation.entity_id, x, y, next_version, committed_at),
-            )
-            operation = "insert"
-        else:
-            connection.execute(
-                """
-                UPDATE shared_location
-                SET x = ?, y = ?, version = ?, updated_at = ?
-                WHERE entity_type = ? AND entity_id = ?
-                """,
-                (
-                    x,
-                    y,
-                    next_version,
-                    committed_at,
-                    mutation.entity_type,
-                    mutation.entity_id,
-                ),
-            )
-            operation = "update"
-    except sqlite3.IntegrityError as exc:
-        raise SharedConstraintError("共享位置已经被其他实体占用") from exc
-    return MutationChange(
-        "shared_location",
-        mutation.entity_id,
-        mutation.entity_type,
-        "main",
-        operation,
-        current_version or None,
-        next_version,
-    )
-
-
 def _snapshot(
     address: StateAddress, row: sqlite3.Row | tuple[object, ...]
 ) -> StateSnapshot:
@@ -1493,9 +1340,7 @@ def _validate_command(command: TransactionCommand) -> None:
             if operation.entity_id is not None:
                 _validate_text(operation.entity_id, "entity_id")
         else:
-            _validate_text(operation.entity_type, "entity_type")
-            _validate_text(operation.entity_id, "entity_id")
-            address = ("shared_location", operation.entity_type, operation.entity_id)
+            raise ValueError("未知事务操作")
         if address in addresses:
             raise ValueError("同一事务不能重复修改同一状态")
         addresses.add(address)
@@ -1509,8 +1354,6 @@ def _validate_command(command: TransactionCommand) -> None:
             if not isinstance(operation.value, Mapping):
                 raise TypeError("共享实体 JSON 根值必须是对象")
             _encode(operation.value)
-        if isinstance(operation, SharedLocationMutation) and operation.xy is not None:
-            _validate_xy(operation.xy)
     if not isinstance(command.payload, Mapping):
         raise TypeError("事务 payload 根值必须是对象")
     _encode(command.payload)
@@ -1573,8 +1416,7 @@ def _operation_json(
     operation: StateMutation
     | LocationMutation
     | SharedEntityMutation
-    | SharedMemberMutation
-    | SharedLocationMutation,
+    | SharedMemberMutation,
     storages: dict[tuple[str, str], Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
     if isinstance(operation, StateMutation):
@@ -1628,13 +1470,7 @@ def _operation_json(
             "join_order": operation.join_order,
             "expected_version": operation.expected_version,
         }
-    return {
-        "kind": "shared_location",
-        "entity_type": operation.entity_type,
-        "entity_id": operation.entity_id,
-        "xy": list(operation.xy) if operation.xy is not None else None,
-        "expected_version": operation.expected_version,
-    }
+    raise ValueError("未知事务操作")
 
 
 def _validate_xy(value: object) -> tuple[int, int]:
