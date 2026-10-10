@@ -523,10 +523,15 @@ class CharacterService:
         row = self._data.entity("意境", yijing.content_id)
         carrier = _mapping(row.get("载体"), "意境.载体")
         basics = _mapping(_mapping(carrier.get("基础数值"), "意境.基础数值").get("每阶"), "意境.基础数值.每阶")
+        absolute = {str(name) for name in (_mapping(carrier.get("基础数值"), "意境.基础数值").get("绝对值") or ())}
         for name, step in basics.items():
             key = str(name)
-            if key == "器的量":
-                weapon_attack += float(step) * yijing.tier
+            if key in absolute:
+                if key == "器的量":
+                    weapon_attack += float(step) * yijing.tier
+                else:
+                    base = _number(attributes.get(key, 0), f"意境.{key}")
+                    attributes[key] = base + float(step) * yijing.tier
                 continue
             base = _number(attributes.get(key, 0), f"意境.{key}")
             attributes[key] = base + base * float(step) * yijing.tier / 100.0
@@ -537,6 +542,13 @@ class CharacterService:
             (str(name), float(baseline.get(name, 0)) + float(step) * yijing.tier)
             for name, step in per_tier.items()
         )
+        raw_listeners = row.get("质变监听") or {}
+        listener = raw_listeners.get(str(yijing.tier)) if isinstance(raw_listeners, Mapping) else None
+        listeners = (dict(listener),) if isinstance(listener, Mapping) else ()
+        limits: tuple[str, ...] = ()
+        rule = row.get("戒律")
+        if isinstance(rule, Mapping) and int(rule.get("阶") or 0) <= yijing.tier:
+            limits = tuple(str(value) for value in (rule.get("行动限制") or ()))
         status = CombatStatusSpec(
             name=f"意境·{yijing.name}·{yijing.tier}阶",
             category="增益",
@@ -544,6 +556,8 @@ class CharacterService:
             duration_unit="状态承受者行动",
             modifiers=modifiers,
             tags=("意境",),
+            listeners=listeners,
+            action_limits=limits,
             source=yijing.content_id,
             source_name=yijing.name,
         )
