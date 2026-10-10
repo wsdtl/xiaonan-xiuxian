@@ -10,7 +10,6 @@ import asyncio
 
 import pytest
 
-from game.app import build_game_services
 from game.core.asset import InventoryAdjustment
 from game.core.database import LocationMutation, TransactionCommand
 from game.core.world import LocationQuery
@@ -20,15 +19,6 @@ from game.features.xigen import XigenError
 归元观 = '归元观'
 灵根重铸丹 = '160006'
 五属性 = {'木', '火', '土', '金', '水'}
-
-
-@pytest.fixture
-def services():
-    value = build_game_services()
-    try:
-        yield value
-    finally:
-        value.core.database.close()
 
 
 def _创建(services, user_id: str, name: str) -> None:

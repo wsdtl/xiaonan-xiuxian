@@ -11,22 +11,12 @@ import asyncio
 
 import pytest
 
-from game.app import build_game_services
 from game.features.yijing import YijingError
 from game.core.database import StateAddress, StateMutation, TransactionCommand
 from game.features.chuangjian_renwu import CreateCharacterRequest
 
 长江 = '630001'
 山尘 = '630002'
-
-
-@pytest.fixture
-def services():
-    value = build_game_services()
-    try:
-        yield value
-    finally:
-        value.core.database.close()
 
 
 def _创建(services, user_id: str, name: str) -> None:

@@ -9,20 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from game.app import build_game_services
 from game.core.item_catalog import ItemNotFoundError
 from game.features.renwu_peiyang import CharacterCultivationFeatureError
 
 聚气丹 = "140001"
-
-
-@pytest.fixture
-def services():
-    value = build_game_services()
-    try:
-        yield value
-    finally:
-        value.core.database.close()
 
 
 def test_丹药只住在丹药核心(services) -> None:

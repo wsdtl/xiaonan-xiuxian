@@ -33,3 +33,13 @@ def _isolated_database(tmp_path_factory):
     battle_log.runtime_log_database_path = lambda: root / "runtime_log.db"
     yield
     battle_log.runtime_log_database_path = original
+
+@pytest.fixture
+def services():
+    """装配一次真实服务链；用完关掉数据库。"""
+
+    value = app.build_game_services()
+    try:
+        yield value
+    finally:
+        value.core.database.close()

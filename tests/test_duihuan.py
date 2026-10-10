@@ -10,22 +10,12 @@ import asyncio
 
 import pytest
 
-from game.app import build_game_services
 from game.core.database import StateAddress
 from game.features.chuangjian_renwu import CreateCharacterRequest
 from game.features.duihuan import DuihuanError
 
 开服码 = 'KAIFU2026'
 开服编号 = '640001'
-
-
-@pytest.fixture
-def services():
-    value = build_game_services()
-    try:
-        yield value
-    finally:
-        value.core.database.close()
 
 
 def _创建(services, user_id: str, name: str) -> None:

@@ -10,18 +10,8 @@ import asyncio
 
 import pytest
 
-from game.app import build_game_services
 from game.features.chuangjian_renwu import CreateCharacterRequest
 from game.features.wangye import WangyeError
-
-
-@pytest.fixture
-def services():
-    value = build_game_services()
-    try:
-        yield value
-    finally:
-        value.core.database.close()
 
 
 def _创建(services, user_id: str, name: str) -> None:

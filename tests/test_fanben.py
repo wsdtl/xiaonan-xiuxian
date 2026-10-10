@@ -13,7 +13,6 @@ import asyncio
 
 import pytest
 
-from game.app import build_game_services
 from game.core.asset import InventoryAdjustment
 from game.core.database import LocationMutation, TransactionCommand
 from game.features.chuangjian_renwu import CreateCharacterRequest
@@ -23,15 +22,6 @@ from game.features.fanben import FanbenError
 万化易形丹 = "160005"
 人族 = "人族"
 秤灵 = "秤灵"
-
-
-@pytest.fixture
-def services():
-    value = build_game_services()
-    try:
-        yield value
-    finally:
-        value.core.database.close()
 
 
 def _创建(services, user_id: str, name: str, race: str = "") -> None:

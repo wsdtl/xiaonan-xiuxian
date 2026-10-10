@@ -10,20 +10,9 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 
-from game.app import build_game_services
 from game.core.database import StateAddress, StateMutation, TransactionCommand
 from game.features.chuangjian_renwu import CreateCharacterRequest
-
-
-@pytest.fixture
-def services():
-    value = build_game_services()
-    try:
-        yield value
-    finally:
-        value.core.database.close()
 
 
 def _创建(services, user_id: str, name: str) -> None:
