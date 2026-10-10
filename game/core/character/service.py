@@ -68,6 +68,7 @@ from .contracts import (
     CharacterFiveElementsPlan,
     CharacterYijingPlan,
     YijingProfile,
+    CharacterRedemptionPlan,
     CharacterIdentityPlan,
     CharacterInputError,
     CharacterLawPlan,
@@ -986,6 +987,34 @@ class CharacterService:
             before,
             after,
             repeated,
+            StateMutation(user, "character", "main", character, snapshot.version),
+        )
+
+    async def plan_code_redemption(
+        self, user_id: str, *, code_id: str, limit: int, spirit_stones: int = 0
+    ) -> CharacterRedemptionPlan:
+        """兑换码的人物侧交割：记一次兑换，并可同时发放灵石。
+
+        每人限次只看状态里的「已兑换码」，**不看请求编号**——请求编号管的是同一条请求重放，
+    换一条请求就能再兑一次，那是两回事。灵石与兑换记录同址，所以合成一份变更。
+        """
+
+        user, snapshot, character = await self._medicine_state(user_id)
+        wanted = str(code_id or "").strip()
+        if len(wanted) != 6 or not wanted.isdigit():
+            raise CharacterCultivationError("兑换码编号必须是六位数字")
+        times = _nonnegative_request_int(limit, "每人限次") or 1
+        redeemed = _state_redeemed(character.get("已兑换码"))
+        used = sum(1 for item in redeemed if item == wanted)
+        if used >= times:
+            raise CharacterCultivationError("这个兑换码你已经用过了")
+        stones = _request_int(spirit_stones, "灵石发放")
+        before_stones = _state_nonnegative_int(character.get("灵石"), "人物.灵石")
+        after_stones = before_stones + stones
+        character["已兑换码"] = list(redeemed) + [wanted]
+        character["灵石"] = after_stones
+        return CharacterRedemptionPlan(
+            wanted, used, used + 1, before_stones, after_stones,
             StateMutation(user, "character", "main", character, snapshot.version),
         )
 
@@ -2115,6 +2144,22 @@ def _yijing_tier_cap(realm_order: int) -> int:
     """该境界允许的意境阶上限：二十个境界对应九阶，第 20 境界正好九阶。"""
 
     return max(1, min(9, -(-realm_order * 9 // 20)))
+
+
+def _state_redeemed(value: object) -> tuple[str, ...]:
+    """已兑换的码：一串六位编号，不许重复；没有这一格就是还没兑过。"""
+
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)):
+        raise CharacterStateError("人物.已兑换码必须是编号清单")
+    items = tuple(str(item) for item in value)
+    for item in items:
+        if len(item) != 6 or not item.isdigit():
+            raise CharacterStateError("人物.已兑换码每一项都必须是六位数字")
+    if len(set(items)) != len(items):
+        raise CharacterStateError("人物.已兑换码不许重复")
+    return items
 
 
 def _state_yijing(value: object) -> tuple[str, int, int] | None:

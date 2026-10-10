@@ -205,6 +205,22 @@ class CharacterFiveElementsPlan:
 
 
 @dataclass(frozen=True)
+class CharacterRedemptionPlan:
+    """一次兑换码交割的结果（人物侧那一半）。
+
+    灵石与「已兑换码」**都在 character/main 这一个地址上**，所以必须合成一份变更：
+    分两次计划会各带同一个 base version，放一条事务里会撞版本。纳戒那边地址不同，可以拼。
+    """
+
+    code_id: str
+    times_before: int
+    times_after: int
+    stones_before: int
+    stones_after: int
+    operation: StateMutation
+
+
+@dataclass(frozen=True)
 class CharacterGrowthPlan:
     level_before: int
     level_after: int
@@ -354,6 +370,7 @@ __all__ = [
     "CharacterCultivationError",
     "CharacterEquipPlan",
     "CharacterFiveElementsPlan",
+    "CharacterRedemptionPlan",
     "CharacterGenderPlan",
     "CharacterGrowthPlan",
     "CharacterInputError",
