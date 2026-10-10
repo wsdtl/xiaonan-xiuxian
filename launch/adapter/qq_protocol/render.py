@@ -57,7 +57,9 @@ def _inline_actions(actions: tuple[Action, ...]) -> str:
 
     parts: list[str] = []
     for action in actions:
-        label = render_rich_markdown(action.label)
+        # 标签就是普通字符串（键盘那条路用的也是 action.label 本身）；
+        # 走 render_rich_markdown 会把它当富文本解析，裸字符串会渲染成空标签。
+        label = str(action.label or "")
         command = str(action.data or "")
         if action.behavior == "link":
             parts.append(f"[{label}]({command})")
