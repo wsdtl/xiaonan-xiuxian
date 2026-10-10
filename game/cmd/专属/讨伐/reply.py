@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.taofa import RaidFeature, RaidProgress, RaidSettlement, RaidStarted
 from message import DocumentMessage, M
 
@@ -72,12 +74,10 @@ def settlement(feature: RaidFeature, value: RaidSettlement) -> DocumentMessage:
 
 
 def error(feature: RaidFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.text("错误", "标题"), icon="notice")
-        .line(M.status("讨伐失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(feature.text("错误", "标题"), icon="notice")
+    builder.line(M.status("讨伐失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 __all__ = ["error", "progress", "settlement", "started"]

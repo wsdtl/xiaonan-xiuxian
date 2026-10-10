@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.xiantian_lingbao import InnateTreasure
 
 from message import DocumentBuilder, DocumentMessage, M
@@ -61,12 +63,10 @@ def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult) 
 
 
 def error(message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section("先天灵宝", icon="notice")
-        .line(M.status("执掌失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section("先天灵宝", icon="notice")
+    builder.line(M.status("执掌失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 def _append_treasure(builder: DocumentBuilder, treasure: InnateTreasure) -> None:

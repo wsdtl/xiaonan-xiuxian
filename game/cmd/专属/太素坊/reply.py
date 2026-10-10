@@ -19,12 +19,10 @@ def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
 
 
 def error(feature: YixingFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.copy("错误", "标题"), icon="notice")
-        .line(M.status("易形失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder.line(M.status("易形失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 def fanben_result(feature: FanbenFeature, value: FanbenResult) -> DocumentMessage:

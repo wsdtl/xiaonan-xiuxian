@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.renwu_peiyang import (
     CharacterCultivationFeature,
     CharacterBreakthroughResult,
@@ -113,12 +115,10 @@ def forged(feature: CharacterCultivationFeature, result: CharacterLawResult) -> 
 
 
 def error(message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section("人物培养", icon="notice")
-        .line(M.status("培养失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section("人物培养", icon="notice")
+    builder.line(M.status("培养失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 def _progress(current: int, required: int, *, tone: str = "cultivation") -> Status | Progress:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.qiecuo import DuelChallenge, DuelFeature, DuelResult
 from launch.paths import public_url
 from message import DocumentMessage, M
@@ -76,12 +78,10 @@ def rejected() -> DocumentMessage:
 
 
 def error(feature: DuelFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.text("错误", "标题"), icon="notice")
-        .line(M.status("切磋失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(feature.text("错误", "标题"), icon="notice")
+    builder.line(M.status("切磋失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 __all__ = ["challenge", "error", "rejected", "report_id", "report_url", "result"]

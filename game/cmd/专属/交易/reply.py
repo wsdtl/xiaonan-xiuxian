@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.jiaoyi import TradeFeature, TradeOverview, TradePage, TradePurchaseResult
 
 from message import DocumentMessage, Action, M
@@ -103,13 +105,10 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult) -> DocumentMess
 
 
 def error(feature: TradeFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.copy("错误", "标题"), icon="notice")
-        .line(M.status("交易失败", tone="danger"), " ", sentence(message))
-        .small(feature.copy("错误", "格式"))
-        .build()
-    )
+    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder.line(M.status("交易失败", tone="danger"))
+    format_lines(builder, sentence(message)) .small(feature.copy("错误", "格式"))
+    return builder.build()
 
 
 __all__ = ["error", "overview", "page", "purchased"]

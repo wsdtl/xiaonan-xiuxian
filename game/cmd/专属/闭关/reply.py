@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from message import DocumentBuilder, DocumentMessage, M
 
 from collections.abc import Mapping
@@ -25,12 +27,10 @@ def text(copy: RetreatCopy, section: str, key: str, values: Mapping[str, object]
 
 
 def error(copy: RetreatCopy, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(text(copy, "错误", "标题"), icon="notice")
-        .line(M.status("闭关失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder.line(M.status("闭关失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 def started(

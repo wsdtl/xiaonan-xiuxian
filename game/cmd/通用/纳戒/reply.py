@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.najie import NajieCategoryView, NajieEntry, NajieHome, NajiePage
 from message import DocumentMessage, Action, M
 
@@ -114,13 +116,10 @@ def page(view: NajiePage) -> DocumentMessage:
 
 
 def error(message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section("纳戒", icon="notice")
-        .line(M.status("查询失败", tone="danger"), " ", message)
-        .action(_home_action())
-        .build()
-    )
+    builder = M.document() .section("纳戒", icon="notice")
+    builder.line(M.status("查询失败", tone="danger"))
+    format_lines(builder, message) .action(_home_action())
+    return builder.build()
 
 
 def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:

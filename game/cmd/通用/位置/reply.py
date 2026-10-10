@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from message import DocumentBuilder, DocumentMessage, M
 
 from game.features.weizhi import (
@@ -181,13 +183,10 @@ def error(
     message: str,
     actions: tuple[CommandAction, ...],
 ) -> DocumentMessage:
-    return (
-        M.document()
-        .section(title, icon=copy.error_icon)
-        .line(M.status("查询失败", tone="danger"), " ", message)
-        .actions(message_actions(actions))
-        .build()
-    )
+    builder = M.document() .section(title, icon=copy.error_icon)
+    builder.line(M.status("查询失败", tone="danger"))
+    format_lines(builder, message) .actions(message_actions(actions))
+    return builder.build()
 
 
 def _append_location(

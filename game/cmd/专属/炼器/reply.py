@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from collections.abc import Sequence, Mapping
 from game.features.lianqi import ForgingMaterial
 
@@ -151,12 +153,10 @@ def completed(
 
 
 def error(copy: ForgingCopy, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(text(copy, "错误", "标题"), icon="notice")
-        .line(M.status("炼器失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder.line(M.status("炼器失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 def _materials(builder: DocumentBuilder, materials: Sequence[ForgingMaterial], *, show_relation: bool) -> None:

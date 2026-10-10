@@ -39,12 +39,10 @@ def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
 
 
 def error(feature: GuiyuanFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.copy("错误", "标题"), icon="notice")
-        .line(M.status("归元失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder.line(M.status("归元失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 def xigen_result(feature: XigenFeature, value: XigenResult) -> DocumentMessage:

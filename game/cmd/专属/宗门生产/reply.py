@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from message.schema import RichText
 
 from collections.abc import Mapping
@@ -171,12 +173,10 @@ def terrains(
 
 
 def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(copy["通用"]["错误"], icon="notice")
-        .line(M.status("生产失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(copy["通用"]["错误"], icon="notice")
+    builder.line(M.status("生产失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 def _terrain_name(pool: str) -> str:

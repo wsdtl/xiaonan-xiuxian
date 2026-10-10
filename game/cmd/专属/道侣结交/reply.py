@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from collections.abc import Mapping
 
 from decimal import Decimal
@@ -24,12 +26,10 @@ def text(copy: CompanionCopy, section: str, key: str, values: Mapping[str, objec
 
 
 def error(copy: CompanionCopy, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(text(copy, "错误", "标题"), icon=copy.icons["错误"])
-        .line(M.status("交互失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section(text(copy, "错误", "标题"), icon=copy.icons["错误"])
+    builder.line(M.status("交互失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction, ...]) -> DocumentMessage:

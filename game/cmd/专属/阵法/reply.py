@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.lianzhen import FormationOverview, FormationPreview, FormationResult
 
 from message import DocumentMessage, M
@@ -133,12 +135,10 @@ def completed(copy: FormationCopy, value: FormationResult, actions: tuple[Format
 
 
 def error(copy: FormationCopy, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(text(copy, "错误", "标题"), icon="notice")
-        .line(M.status("炼阵失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder.line(M.status("炼阵失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 __all__ = ["completed", "error", "overview", "preview", "text"]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from collections.abc import Sequence, Mapping
 from ...actions import CommandAction, message_actions
 
@@ -60,12 +62,10 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMess
 
 
 def error(copy: WanzhenCopy, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(_text(copy, "错误"), icon="notice")
-        .line(M.status("操作失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(_text(copy, "错误"), icon="notice")
+    builder.line(M.status("操作失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 def _text(copy: WanzhenCopy, key: str, values: Mapping[str, object] | None = None) -> str:

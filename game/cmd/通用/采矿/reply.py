@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.caikuang import GatheredItem
 
 from message import DocumentBuilder, DocumentMessage, M
@@ -27,12 +29,10 @@ def text(copy: OreGatheringCopy, section: str, key: str, values: Mapping[str, ob
 
 
 def error(copy: OreGatheringCopy, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(text(copy, "错误", "标题"), icon="notice")
-        .line(M.status("采矿失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder.line(M.status("采矿失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 def started(

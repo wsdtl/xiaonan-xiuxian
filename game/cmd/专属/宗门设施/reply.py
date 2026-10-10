@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from collections.abc import Mapping
 from typing import Any
 
@@ -162,12 +164,10 @@ def completed(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMess
 
 
 def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(copy["错误"].get("标题", "宗门洞天"), icon="notice")
-        .line(M.status("炼制失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section(copy["错误"].get("标题", "宗门洞天"), icon="notice")
+    builder.line(M.status("炼制失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
 
 
 __all__ = ["completed", "error", "page", "preview"]

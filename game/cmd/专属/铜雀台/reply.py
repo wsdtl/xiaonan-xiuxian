@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.tongquetai import TongquetaiFeature, TongquetaiPreview, TongquetaiSettlement
 
 from message import DocumentMessage, Action, M
@@ -120,13 +122,10 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
 
 
 def error(feature: TongquetaiFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.copy("错误", "标题"), icon="notice")
-        .line(M.status("夺元失败", tone="danger"), " ", message)
-        .small(feature.copy("错误", "格式"))
-        .build()
-    )
+    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder.line(M.status("夺元失败", tone="danger"))
+    format_lines(builder, message) .small(feature.copy("错误", "格式"))
+    return builder.build()
 
 
 __all__ = ["error", "preview", "settled"]

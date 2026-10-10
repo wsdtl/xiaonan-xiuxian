@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from game.features.liandan import AlchemyMaterial
 
 from message import DocumentBuilder, DocumentMessage, M
@@ -173,12 +175,10 @@ def completed(
 
 
 def error(copy: AlchemyCopy, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(text(copy, "错误", "标题"), icon="notice")
-        .line(M.status("炼丹失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder.line(M.status("炼丹失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 def _material(builder: DocumentBuilder, index: int, material: AlchemyMaterial) -> None:

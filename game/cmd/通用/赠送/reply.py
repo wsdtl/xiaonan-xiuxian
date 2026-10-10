@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import format_lines
+
 from message import DocumentBuilder, DocumentMessage, M
 
 from game.features.zengsong import GiftFeature, GiftResult
@@ -40,12 +42,10 @@ def item(
 
 
 def error(feature: GiftFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.text("错误", "标题"), icon="notice")
-        .line(M.status("赠送失败", tone="danger"), " ", sentence(message))
-        .build()
-    )
+    builder = M.document() .section(feature.text("错误", "标题"), icon="notice")
+    builder.line(M.status("赠送失败", tone="danger"))
+    format_lines(builder, sentence(message))
+    return builder.build()
 
 
 def _result(feature: GiftFeature, target_name: str) -> DocumentBuilder:

@@ -16,9 +16,7 @@ def result(feature: ButianFeature, value: ButianResult) -> DocumentMessage:
 
 
 def error(feature: ButianFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.copy("错误", "标题"), icon="notice")
-        .line(M.status("补天失败", tone="danger"), " ", message)
-        .build()
-    )
+    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder.line(M.status("补天失败", tone="danger"))
+    format_lines(builder, message)
+    return builder.build()
