@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from game.core.character import CharacterCultivationError, CharacterService
+from collections.abc import Mapping
+
 from game.core.data import JsonDataService
-from game.core.database import DatabaseService, TransactionCommand
+from game.core.database import DatabaseService, StateAddress, TransactionCommand
 
 from .contracts import YijingError, YijingView
 
@@ -38,7 +40,7 @@ class YijingFeature:
         name = yijing.name if yijing else ""
         display = yijing.display if yijing else ""
         tier = yijing.tier if yijing else 0
-        points = yijing.daoxing if yijing else self._pending_points(profile)
+        points = yijing.daoxing if yijing else await self._pending_points(user_id)
         next_cost = self._character.yijing_cost(tier + 1) if tier < 9 else 0
         missing = max(0, next_cost - points) if next_cost else 0
         return YijingView(content_id, name, display, tier, points, cap, next_cost, missing, self._routes())
@@ -63,11 +65,20 @@ class YijingFeature:
         await self._commit(user_id, request_id, "意境升阶", plan.mutation, plan.content_id)
         return await self.inspect(user_id)
 
-    @staticmethod
-    def _pending_points(profile) -> int:
-        """还没选路时人物记录里是 None，点数在状态里；这一格由核心负责，命令层只显示 0。"""
+    async def _pending_points(self, user_id: str) -> int:
+        """还没选路时人物记录里是 None，道行仍在状态里——直接读那一格，别让玩家看不见自己攒的点。"""
 
-        return 0
+        snapshot = await self._database.get(StateAddress(user_id, "character", "main"))
+        if snapshot is None:
+            return 0
+        value = snapshot.value if isinstance(snapshot.value, Mapping) else {}
+        cell = value.get("意境")
+        if not isinstance(cell, Mapping):
+            return 0
+        try:
+            return int(cell.get("道行") or 0)
+        except (TypeError, ValueError):
+            return 0
 
     async def _commit(self, user_id, request_id, business_type, mutation, content_id) -> None:
         await self._database.commit(
