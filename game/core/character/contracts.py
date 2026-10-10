@@ -126,6 +126,21 @@ class YijingProfile:
 
 
 @dataclass(frozen=True)
+class CharacterYijingPlan:
+    """一次意境动作（选路或升阶）的结果。
+
+    状态里只写「编号 / 阶 / 道行」三个键；名称按编号现取，所以这里带编号不带名字。
+    """
+
+    content_id: str
+    tier_before: int
+    tier_after: int
+    cost: int
+    points_after: int
+    mutation: StateMutation
+
+
+@dataclass(frozen=True)
 class CharacterProfile:
     user_id: str
     name: str

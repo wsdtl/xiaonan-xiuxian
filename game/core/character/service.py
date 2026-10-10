@@ -66,6 +66,7 @@ from .contracts import (
     CharacterGenderPlan,
     CharacterGrowthPlan,
     CharacterFiveElementsPlan,
+    CharacterYijingPlan,
     YijingProfile,
     CharacterIdentityPlan,
     CharacterInputError,
@@ -838,6 +839,53 @@ class CharacterService:
             before,
             after,
             after - before,
+            StateMutation(user, "character", "main", character, snapshot.version),
+        )
+
+    async def plan_yijing_choose(
+        self, user_id: str, *, content_id: str
+    ) -> CharacterYijingPlan:
+        """选定一条意境的路。编号必须在册；改路会把已练的阶清零（锁认路）。"""
+
+        user, snapshot, character = await self._medicine_state(user_id)
+        self._data.entity("意境", str(content_id))
+        cell = dict(character.get("意境") or {})
+        before = int(cell.get("阶") or 0)
+        cell["编号"] = str(content_id)
+        cell["阶"] = 0
+        cell["道行"] = int(cell.get("道行") or 0)
+        character["意境"] = cell
+        return CharacterYijingPlan(
+            str(content_id), before, 0, 0, cell["道行"],
+            StateMutation(user, "character", "main", character, snapshot.version),
+        )
+
+    async def plan_yijing_upgrade(self, user_id: str) -> CharacterYijingPlan:
+        """用道行把意境的阶升一级，升到一阶就是激活。受境界给的阶上限约束。"""
+
+        user, snapshot, character = await self._medicine_state(user_id)
+        cell = dict(character.get("意境") or {})
+        content_id = str(cell.get("编号") or "")
+        if not content_id:
+            raise CharacterCultivationError("还没有选定意境，先挑一条路")
+        tier = int(cell.get("阶") or 0)
+        points = int(cell.get("道行") or 0)
+        realm_id = _state_text(character.get("境界"), "人物.境界")
+        cap = _yijing_tier_cap(
+            _realm_order(self._data.entity("境界", realm_id).get("等级下限"))
+        )
+        if tier >= 9:
+            raise CharacterCultivationError("意境已满九阶")
+        if tier >= cap:
+            raise CharacterCultivationError(f"当前境界只撑得到{cap}阶意境")
+        cost = _yijing_tier_cost(tier + 1)
+        if points < cost:
+            raise CharacterCultivationError(f"道行还差{cost - points}点")
+        cell["阶"] = tier + 1
+        cell["道行"] = points - cost
+        character["意境"] = cell
+        return CharacterYijingPlan(
+            content_id, tier, tier + 1, cost, points - cost,
             StateMutation(user, "character", "main", character, snapshot.version),
         )
 
