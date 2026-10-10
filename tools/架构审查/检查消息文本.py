@@ -161,11 +161,61 @@ def check_channels_agree() -> list[str]:
     return problems
 
 
+def check_mention_keeps_body() -> list[str]:
+    """补 @ 之后，正文必须与不补 @ 时**逐字相同**。
+
+    称呼是在 QQ 驱动层贴上去的（业务层看不到），所以别的判据都照不到它——
+    真出过事：称呼紧贴正文时，正文以 `>`／`#` 开头的卡（宗门那张）控制符不在行首，
+    整张卡版式散掉。这里对几种典型开头分别验一遍：去掉称呼必须还原成原文。
+    """
+
+    from launch.adapter.context import MENTION_SENDER, SendOptions
+    from launch.adapter.qq_protocol.manager import QqReplyManager as QM
+
+    class _Target:
+        is_group = True
+        user_id = "U1"
+
+    problems: list[str] = []
+    samples = (
+        ("以标题开头", "# 宗门\n> ✨ 宗门"),
+        ("以引用开头", "> 🗺️ 山河\n> > [1] 溪隐台"),
+        ("以加粗开头", "**晓楠修仙**\n> ✨ 帮助"),
+        ("以列表开头", "- 一\n- 二"),
+        ("多行普通文本", "第一行\n第二行"),
+    )
+    for label, body in samples:
+        message = {"kind": "markdown", "content": body, "image": None, "actions": ()}
+        plain = str((QM._markdown_payload(message).get("markdown") or {}).get("content"))
+        decorated = str(
+            (
+                QM._apply_mention(
+                    QM._markdown_payload(message),
+                    _Target(),
+                    SendOptions(mention=MENTION_SENDER),
+                ).get("markdown")
+                or {}
+            ).get("content")
+        )
+        # 称呼可能是紧贴（`<@U1>正文`）或单独一行（`<@U1>\n正文`），两种都要还原。
+        stripped = decorated
+        for prefix in ("<@U1>\n", "<@U1>"):
+            if stripped.startswith(prefix):
+                stripped = stripped[len(prefix):]
+                break
+        if stripped != plain:
+            problems.append(
+                f"{label}：补上称呼后正文被改动（{plain[:24]!r} → {stripped[:24]!r}）"
+            )
+    return problems
+
+
 CHECKS = (
     ("消息文本没有 LaTeX", check_text_has_no_latex),
     ("Markdown 标点已转义", check_markup_escaped),
     ("QQ 载荷是 markdown 且没有 LaTeX", check_qq_payload),
     ("两条通道正文一致", check_channels_agree),
+    ("补 @ 不改动正文", check_mention_keeps_body),
 )
 
 
