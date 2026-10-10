@@ -210,12 +210,53 @@ def check_mention_keeps_body() -> list[str]:
     return problems
 
 
+def check_format_lines_follow_rule() -> list[str]:
+    """「格式：」文案的多用法记法必须统一。
+
+    真出过事：一条命令七八种用法挤成一行斜杠串，读的人得自己数。约定：
+    ` / ` 分隔不同用法（渲染器会把换行拍平，只能一行一句地铺），
+    用法内部用 `|` 表示二选一、`[]` 表示可选，不要再写「，或：」这类口语连接，
+    单段不超过 40 字。
+    """
+
+    import json
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    problems: list[str] = []
+
+    def walk(node: object, path: str = ""):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(value, str) and "格式" in value:
+                    yield path + "/" + str(key), value
+                else:
+                    yield from walk(value, path + "/" + str(key))
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                yield from walk(value, f"{path}/{index}")
+
+    for path in sorted((root / "data").rglob("*.json")):
+        try:
+            body = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - 不是 JSON 的数据文件跳过
+            continue
+        for key, text in walk(body):
+            where = path.relative_to(root).as_posix() + key
+            if "，或：" in text:
+                problems.append(f"{where} 用了「，或：」连接：{text[:40]}")
+            for part in text.split(" / "):
+                if len(part) > 40:
+                    problems.append(f"{where} 单段过长（{len(part)} 字）：{part[:40]}")
+    return problems
+
+
 CHECKS = (
     ("消息文本没有 LaTeX", check_text_has_no_latex),
     ("Markdown 标点已转义", check_markup_escaped),
     ("QQ 载荷是 markdown 且没有 LaTeX", check_qq_payload),
     ("两条通道正文一致", check_channels_agree),
     ("补 @ 不改动正文", check_mention_keeps_body),
+    ("格式文案记法统一", check_format_lines_follow_rule),
 )
 
 
@@ -233,7 +274,7 @@ def main() -> int:
     if failed:
         print(f"消息文本审查失败：{failed} 项")
         return 1
-    print("消息文本审查通过：消息里没有 LaTeX，QQ 载荷是 markdown，两条通道正文一致")
+    print("消息文本审查通过：LaTeX/转义/载荷/通道/@/格式记法 全部干净")
     return 0
 
 
