@@ -35,4 +35,21 @@ def sentence(value: object) -> str:
     return text + "。"
 
 
-__all__ = ["duration", "natural_deadline", "sentence"]
+def format_lines(builder: object, text: object) -> str:
+    """把一个「多用法」的格式文案铺成多行，并返回首个用法。
+
+    渲染器会把单个字符串里的换行拍平，所以多用法**只能一行一句**地放；
+    数据里约定用 ` / ` 分隔不同用法（用法内部仍用 `|` 表示二选一、`[]` 表示可选）。
+    """
+
+    parts = [part.strip() for part in str(text or "").split(" / ") if part.strip()]
+    if not parts:
+        return ""
+    line = getattr(builder, "line")
+    line(parts[0])
+    for part in parts[1:]:
+        line("　" + part)
+    return parts[0]
+
+
+__all__ = ["duration", "format_lines", "natural_deadline", "sentence"]

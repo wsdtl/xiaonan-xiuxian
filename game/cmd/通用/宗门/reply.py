@@ -6,6 +6,7 @@ from game.features.zongmen import SectAction, SectCopy, SectOperationResult, Sec
 from message import DocumentMessage, M
 
 from ...actions import message_actions
+from ...presentation import format_lines
 
 _ERROR_KEYS = {
     "name_invalid": "名称无效",
@@ -142,12 +143,13 @@ def error(copy: SectCopy, code: str) -> DocumentMessage:
 
 
 def format_error(copy: SectCopy) -> DocumentMessage:
-    return (
-        M.document()
-        .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(M.status("格式有误", tone="warning"), " ", _text(copy, "错误", "格式"))
-        .build()
+    builder = M.document().section(
+        _text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果")
     )
+    # 多用法一行一句地铺开（渲染器会把字符串里的换行拍平，塞一行读不了）。
+    builder.line(M.status("格式有误", tone="warning"))
+    format_lines(builder, _text(copy, "错误", "格式"))
+    return builder.build()
 
 
 def _text(copy: SectCopy, section: str, key: str) -> str:
