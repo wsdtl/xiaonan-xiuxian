@@ -38,7 +38,7 @@ def _first_argument(text: str, open_paren: int) -> str:
             if ch == quote:
                 in_str = False
         else:
-            if ch in "\"'":
+            if ch in (chr(34) + chr(39)):
                 in_str, quote = True, ch
             elif ch in "([{":
                 depth += 1
@@ -67,6 +67,70 @@ def check_labels_have_no_tone() -> list[str]:
                     + ":" + str(line)
                     + " M.command 的标签带了 tone（公式标签在 QQ 上点不动）"
                 )
+    return problems
+
+
+def _argument(text: str, open_paren: int, index: int) -> str:
+    """取 M.command( 的第 index 个实参（从 0 数，深度与字符串都算准）。"""
+
+    i, depth, in_str, quote, seen = open_paren, 1, False, "", 0
+    start = open_paren
+    while i < len(text) and depth:
+        ch = text[i]
+        if in_str:
+            if ch == quote:
+                in_str = False
+        else:
+            if ch in (chr(34) + chr(39)):
+                in_str, quote = True, ch
+            elif ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif ch == "," and depth == 1:
+                seen += 1
+                start = i + 1
+                if seen > index:
+                    return text[start:i].strip()
+        i += 1
+    return text[start:i].strip()
+
+
+def check_commands_are_registered() -> list[str]:
+    """正文内联按钮指向的命令必须真的存在，否则玩家点了没反应。"""
+
+    from game.cmd.command import registered_command_routes
+
+    heads = set()
+    for route in registered_command_routes():
+        head = str(route[0] if isinstance(route, tuple) else route).strip()
+        if head:
+            heads.add(head)
+    problems: list[str] = []
+    for path in sorted(GAME.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in COMMAND_CALL.finditer(text):
+            target = _argument(text, match.end(), 1)
+            quote = chr(34) if chr(34) in target else chr(39)
+            if quote not in target:
+                continue
+            body = target.split(chr(123))[0].strip()
+            if body[:1] == chr(102):
+                body = body[1:]
+            body = body.strip().strip(chr(34)).strip(chr(39))
+            for part in body.split(chr(124)):
+                word = part.strip().split()[0] if part.strip() else chr(0)
+                if word and word != chr(0) and word not in heads:
+                    line = text[: match.start()].count(chr(10)) + 1
+                    problems.append(
+                        path.relative_to(ROOT).as_posix()
+                        + chr(58) + str(line)
+                        + chr(32) + word
+                    )
     return problems
 
 
@@ -129,6 +193,7 @@ CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
     ("多分支解析", check_branches_resolve),
+    ("按钮目标已注册", check_commands_are_registered),
 )
 
 
