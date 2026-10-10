@@ -78,6 +78,7 @@ from .features.fanben import FanbenFeature
 from .features.xigen import XigenFeature
 from .features.yijing import YijingFeature
 from .features.duihuan import DuihuanFeature
+from .features.wangye import WangyeFeature
 from .features.yixing import YixingFeature
 from .features.zengsong import GiftFeature
 from .features.zhanbao import BattleReportFeature
@@ -172,6 +173,7 @@ class FeatureServices:
     fanben: FanbenFeature
     xigen: XigenFeature
     duihuan: DuihuanFeature
+    wangye: WangyeFeature
     yijing: YijingFeature
     yixing: YixingFeature
     zongmen: SectFeature
@@ -864,7 +866,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     zengsong.initialize()
     zhanbao = BattleReportFeature(combat, sect_war, duel, battle_reports)
     zhanbao.initialize()
-    zhuangpei = ZhuangpeiFeature(data, asset, character, database, innate_treasure, player_state, combat)
+    wangye = WangyeFeature(data, character, database)
+    wangye.initialize()
+    zhuangpei = ZhuangpeiFeature(data, asset, character, database, innate_treasure, player_state, combat, wangye)
     daolv_peiyang = CompanionCultivationFeature(
         data,
         companion,
@@ -926,6 +930,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         fanben=fanben,
         xigen=xigen,
         duihuan=duihuan,
+        wangye=wangye,
         yijing=yijing,
         zongmen=zongmen,
         zongmen_lingcang=zongmen_lingcang,

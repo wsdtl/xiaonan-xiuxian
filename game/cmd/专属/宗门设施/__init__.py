@@ -7,6 +7,7 @@ from game.features.zongmen_sheshi import SectFacilityFeatureError
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -172,4 +173,4 @@ def _investments(values: list[str]) -> dict[str, int] | None:
     return {"兽宝": int(values[0]), "灵矿": int(values[1]), "灵植": int(values[2])}
 
 
-__all__ = []
+__all__ = ["router"]

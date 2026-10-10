@@ -8,18 +8,17 @@ from game.core.character import CharacterService, CharacterNotFoundError, Charac
 from game.core.combat import CombatService, render_body
 from game.core.data import JsonDataService, JsonDataError, materialize
 from game.core.database import (
-    DatabaseService, SharedEntityMutation, TransactionCommand,
+    DatabaseService, TransactionCommand,
     StateConflictError, IdempotencyConflictError,
 )
 from game.core.innate_treasure import InnateTreasureService, InnateTreasureError
+from game.features.wangye import WangyeFeature
 from game.core.player_state import PlayerStateService, PlayerStateError
 
 from .codec import SECTIONS, decode, encode, normalize
 from .contracts import Build, ZhuangpeiFeatureError, ZhuangpeiResult
 
-PUBLIC_ENTITY = "zhuangpei_public"
 IMPORT = "装配台整套导入"
-PUBLISH = "装配台公开池"
 
 
 class ZhuangpeiFeature:
@@ -27,6 +26,7 @@ class ZhuangpeiFeature:
         self, data: JsonDataService, asset: AssetService, character: CharacterService,
         database: DatabaseService, innate_treasure: InnateTreasureService,
         player_state: PlayerStateService, combat: CombatService,
+        web_public: WangyeFeature,
     ) -> None:
         self._data = data
         self._asset = asset
@@ -35,6 +35,7 @@ class ZhuangpeiFeature:
         self._treasure = innate_treasure
         self._player_state = player_state
         self._combat = combat
+        self._web_public = web_public
         self._copy = materialize(data.dataset("培养展示")["装配台"])
         #: 同一个 (人物, 请求编号) 的导入在进程内串行，见 import_code 的说明。
         self._import_locks: dict[tuple[str, str], list] = {}
@@ -42,35 +43,11 @@ class ZhuangpeiFeature:
     def copy(self) -> dict:
         return self._copy
 
-    async def toggle_public(self, user_id: str, request_id: str) -> bool:
-        replay = await self._replay(user_id, request_id, PUBLISH)
-        if replay is not None:
-            return bool(replay["公开"])
-        await self._character.profile(user_id)
-        record = await self._database.get_shared_entity(PUBLIC_ENTITY, user_id)
-        enabled = not (record is not None and record.value["公开"])
-        command = TransactionCommand(
-            user_id, request_id, PUBLISH,
-            (SharedEntityMutation(PUBLIC_ENTITY, user_id,
-                {"名称": user_id, "公开": enabled}, 0 if record is None else record.version),),
-            {"公开": enabled},
-        )
-        try:
-            await self._database.commit(command)
-        except (StateConflictError, IdempotencyConflictError) as exc:
-            replay = await self._replay(user_id, request_id, PUBLISH)
-            if replay is not None:
-                return bool(replay["公开"])
-            raise ZhuangpeiFeatureError("公开状态已经变化，请重试") from exc
-        return enabled
-
     async def scopes(self) -> list[dict[str, str]]:
-        records = await self._database.list_shared_entities(PUBLIC_ENTITY)
-        ids = tuple(record.entity_id for record in records if record.value["公开"])
-        profiles = await self._character.public_profiles(ids)
+        public = await self._web_public.scopes()
         return [{"id": "all", "name": "全池"}, *(
-            {"id": "user:" + profile.user_id, "name": profile.name}
-            for profile in profiles
+            {"id": "user:" + scope.user_id, "name": scope.name}
+            for scope in public
         )]
 
     async def page(self, scope: str = "all") -> dict:
@@ -92,7 +69,7 @@ class ZhuangpeiFeature:
             try:
                 profile = await self._character.profile(user_id)
             except CharacterNotFoundError as exc:
-                raise ZhuangpeiFeatureError("该用户没有公开池") from exc
+                raise ZhuangpeiFeatureError("该用户没有公开网页资源") from exc
             limits = dict(profile.cultivation_slots)
             limits["器律"] = profile.weapon.open_law_slots
             build = self._profile_build(profile)
@@ -111,9 +88,8 @@ class ZhuangpeiFeature:
                     entries[key] = self._entry(*key)
                     entries[key]["quantity"] = 0
                 entries[key]["equipped"].append(entry.slot)
-            record = await self._database.get_shared_entity(PUBLIC_ENTITY, user_id)
-            if record is None or not record.value["公开"]:
-                raise ZhuangpeiFeatureError("该用户已关闭公开池")
+            if not await self._web_public.is_public(user_id):
+                raise ZhuangpeiFeatureError("该用户没有公开网页资源")
         return {
             "scopes": scopes, "scope": scope, "limits": limits,
             "sections": list(SECTIONS), "entries": list(entries.values()),

@@ -7,6 +7,7 @@ from game.features.zongmen_wanzhen import WanzhenFeatureError
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -139,4 +140,4 @@ def _positive(value: str, label: str) -> int:
     return int(value)
 
 
-__all__ = []
+__all__ = ["router"]

@@ -38,14 +38,4 @@ async def import_assembly(user_id: str, message: str, message_context: MessageCo
         await manager.send(reply.error(str(exc), "可发送「我的装配」查看当前装配与最新装配码。"))
 
 
-@GameCommand.fullmatch(cmd="公开池", metadata={"scope": "通用", "guard_rule": "已创建", "help": {"category": "修行", "summary": "开关自己的拥有清单公开展示", "usage": ("公开池",), "side_effect": "切换清单公开状态，默认关闭", "order": 73}})
-async def toggle_public(user_id: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.zhuangpei
-    try:
-        enabled = await feature.toggle_public(user_id, message_context.request_id)
-        await manager.send(reply.notice(feature.copy()["已公开" if enabled else "已关闭"]))
-    except ZhuangpeiFeatureError as exc:
-        await manager.send(reply.error(str(exc)))
-
-
 __all__ = ["router"]

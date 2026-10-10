@@ -108,6 +108,98 @@ class ButianFeature:
             raise ButianConflictError("请求编号已经用于其他操作") from exc
         return _result(payload, receipt.replayed)
 
+    async def page(self, user_id: str) -> dict:
+        '''页面用的只读视图：当前可补正的节点、包里的候选丹、以及可直接复制的命令原文。
+
+        **不自己判规则**：可补正与否、哪枚丹合法，全部由核心的计划说话——计划不报错就是合法，
+        报错就把原话转给页面。页面只负责把核心的结论摆整齐。
+        '''
+
+        group = self._copy.get('页面') if isinstance(self._copy, Mapping) else None
+        if not isinstance(group, Mapping):
+            raise JsonDataError('补天展示缺少页面一组文案')
+        # 逐键字面取：页面用的键要在这里点名，判据才认得出谁在读这份文案。
+        pick = lambda key: str(group.get(key) or '')
+        copy = {
+            '标题': pick('标题'),
+            '说明': pick('说明'),
+            '挑人': pick('挑人'),
+            '没人公开': pick('没人公开'),
+            '当前境界': pick('当前境界'),
+            '可补正': pick('可补正'),
+            '不可补正': pick('不可补正'),
+            '候选丹': pick('候选丹'),
+            '没有丹': pick('没有丹'),
+            '命令': pick('命令'),
+            '道侣': pick('道侣'),
+            '没有道侣': pick('没有道侣'),
+        }
+        snapshot = await self._asset.snapshot(user_id)
+        candidates = tuple(
+            entry for entry in snapshot.entries if entry.subcategory == '突破丹'
+        )
+        profile = await self._character.profile(user_id)
+        targets = [await self._target('人物', profile.realm_name, user_id, candidates)]
+        try:
+            instance = await self._companion.active_instance(user_id)
+        except Exception:
+            instance = None
+        if instance is not None:
+            name = self._companion.definition(instance.instance.companion_id).name
+            realm_raw = self._data.entity('境界', instance.instance.realm_id)
+            realm_name = str(realm_raw.get('名称') or instance.instance.realm_id)
+            targets.append(
+                await self._target('道侣', realm_name, user_id, candidates, name=name)
+            )
+        return {
+            'ui': dict(copy),
+            'medicine_id': self._medicine_id,
+            'targets': targets,
+            'candidates': [
+                {
+                    'id': entry.content_id,
+                    'grade': entry.grade_id,
+                    'grade_name': entry.grade_name,
+                    'quantity': entry.quantity,
+                    'name': str(self._data.entity('丹药', entry.content_id).get('名称') or ''),
+                }
+                for entry in candidates
+            ],
+        }
+
+    async def _target(
+        self, kind: str, realm_name: str, user_id: str, candidates, name: str = ''
+    ) -> dict:
+        '''问核心：这个节点补不补得了；再逐枚丹问哪一枚合法。报错原话照转。'''
+
+        legal: list[dict[str, str]] = []
+        reason = ''
+        for entry in candidates:
+            try:
+                if kind == '人物':
+                    plan = await self._character.plan_breakthrough_correction(
+                        user_id, source_medicine_id=entry.content_id
+                    )
+                else:
+                    plan = await self._companion.plan_breakthrough_correction(
+                        user_id, source_medicine_id=entry.content_id
+                    )
+            except Exception as exc:
+                reason = str(exc)
+                continue
+            legal.append({'id': entry.content_id, 'grade': entry.grade_id})
+            if not reason:
+                reason = ''
+            del plan
+        return {
+            'kind': kind,
+            'name': name or '',
+            'realm': realm_name,
+            'correctable': bool(legal),
+            'legal': legal,
+            'reason': reason,
+        }
+
     async def _authorize(self, user_id: str) -> None:
         result = await self._player_state.authorize(user_id, self._guard_rule)
         if not result.allowed:

@@ -5,6 +5,7 @@ from game.features.butian import ButianConflictError, ButianError
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -41,4 +42,4 @@ async def correct_breakthrough(user_id: str, message: str, message_context: Mess
         await manager.send(reply.error(feature, str(exc)))
 
 
-__all__ = []
+__all__ = ["router"]

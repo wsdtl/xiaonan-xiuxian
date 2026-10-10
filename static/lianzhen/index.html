@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>演阵台 · 晓楠修仙</title>
+<link rel="stylesheet" href="/static/lianzhen/style.css">
+</head>
+<body>
+<main id="app">
+<header><p class="eyebrow">晓楠修仙 / 宗门洞天</p><h1 id="title">演阵台</h1><p id="intro">正在读取…</p></header>
+<p id="status" role="status" aria-live="polite"></p>
+<section class="bar" aria-label="挑自己">
+<label>挑自己<select id="scope"></select></label>
+<button id="refresh" type="button">刷新</button>
+<p id="notice"></p>
+</section>
+<section class="panel">
+<div class="row">
+<label><span id="label-formation">阵法</span><select id="formation"></select></label>
+<label><span id="label-grade">品级</span><select id="grade"></select></label>
+</div>
+<div class="row">
+<p id="label-triple" class="triple-label"></p>
+<input id="shoubao" type="number" min="0" step="1" value="0" aria-label="兽宝">
+<input id="lingkuang" type="number" min="0" step="1" value="0" aria-label="灵矿">
+<input id="lingzhi" type="number" min="0" step="1" value="0" aria-label="灵植">
+<button id="calc" type="button">算一算</button>
+</div>
+<div id="result"></div>
+</section>
+</main>
+<script src="/static/lianzhen/app.js" defer></script>
+</body>
+</html>

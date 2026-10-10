@@ -129,22 +129,23 @@ def test_full_pool_is_independent_and_scopes_are_flat(services):
         full = await f.page()
         assert len(full["entries"]) > 1000
         assert {e["section"] for e in full["entries"]} == set(blank())
+        w = services.features.wangye
         a, b = await player(services), await player(services)
         await acquire(services, a, "功法", "400001")
         await acquire(services, b, "功法", "400002")
         with pytest.raises(ZhuangpeiFeatureError):
             await f.page("user:" + a)
-        assert await f.toggle_public(a, "publish-a")
-        assert await f.toggle_public(a, "publish-a")
-        assert await f.toggle_public(b, "publish-b")
+        assert await w.set_public(a, "publish-a", True)
+        assert await w.set_public(a, "publish-a", True)
+        assert await w.set_public(b, "publish-b", True)
         assert [x["id"] for x in await f.scopes()] == ["all", "user:" + a, "user:" + b]
         assert {e["id"] for e in (await f.page("user:" + a))["entries"]} == {"400001"}
         assert len((await f.page())["entries"]) == len(full["entries"])
-        assert not await f.toggle_public(a, "close-a")
-        assert await f.toggle_public(a, "publish-a")  # 老回执不能重新开启
+        assert await w.set_public(a, "close-a", False) is False
+        assert await w.set_public(a, "publish-a", True)  # 老回执只是回放，不会把人重新打开
         with pytest.raises(ZhuangpeiFeatureError):
             await f.page("user:" + a)
-        assert not await f.toggle_public(b, "close-b")
+        assert await w.set_public(b, "close-b", False) is False
     asyncio.run(run())
 
 
@@ -167,7 +168,7 @@ def test_real_batch_import_replay_and_current(services):
         # 相同内容仍在原槽，不需要第二份库存。
         await f.import_code(uid, "same-build-new-request", code)
         assert (await f.current(uid)).code == code
-        await f.toggle_public(uid, "public")
+        await services.features.wangye.set_public(uid, "public", True)
         rows = (await f.page("user:" + uid))["entries"]
         assert next(e for e in rows if e["id"] == "410001")["equipped"] == [1]
         with pytest.raises(ZhuangpeiFeatureError, match="同一请求"):
@@ -427,9 +428,12 @@ def test_concurrent_public_toggle_same_request(services):
     async def run():
         uid = await player(services)
         f = services.features.zhuangpei
-        assert await asyncio.gather(f.toggle_public(uid, "same"), f.toggle_public(uid, "same")) == [True, True]
+        assert await asyncio.gather(
+            services.features.wangye.set_public(uid, "same", True),
+            services.features.wangye.set_public(uid, "same", True),
+        ) == [True, True]
         assert "user:" + uid in {s["id"] for s in await f.scopes()}
-        assert not await f.toggle_public(uid, "close")
+        assert await services.features.wangye.set_public(uid, "close", False) is False
         assert "user:" + uid not in {s["id"] for s in await f.scopes()}
         with pytest.raises(ZhuangpeiFeatureError):
             await f.import_code(uid, "same", encode(blank()))
@@ -440,13 +444,13 @@ def test_privacy_rechecked_during_read(services, monkeypatch):
     async def run():
         uid = await player(services)
         f = services.features.zhuangpei
-        await f.toggle_public(uid, "on")
+        await services.features.wangye.set_public(uid, "on", True)
         original = services.core.asset.snapshot
         async def close_while_reading(user_id):
-            await f.toggle_public(uid, "off")
+            await services.features.wangye.set_public(uid, "off", False)
             return await original(user_id)
         monkeypatch.setattr(services.core.asset, "snapshot", close_while_reading)
-        with pytest.raises(ZhuangpeiFeatureError, match="关闭"):
+        with pytest.raises(ZhuangpeiFeatureError, match="没有公开网页资源"):
             await f.page("user:" + uid)
     asyncio.run(run())
 
@@ -664,27 +668,7 @@ def test_import_command_format_hint_does_not_write(services, monkeypatch):
     asyncio.run(run())
 
 
-def test_public_toggle_command_cards(services, monkeypatch):
-    module = importlib.import_module("game.cmd.通用.装配台")
-    monkeypatch.setattr(module, "current_game_services", lambda: services)
-    sent: list = []
-
-    async def send(value):
-        sent.append(value)
-
-    manager = SimpleNamespace(send=send)
-
-    async def run():
-        uid = await player(services)
-        await module.toggle_public(user_id=uid, message_context=SimpleNamespace(request_id="pub-1"), manager=manager)
-        assert "已公开" in str(sent[-1])
-        await module.toggle_public(user_id=uid, message_context=SimpleNamespace(request_id="pub-2"), manager=manager)
-        assert "已关闭" in str(sent[-1])
-
-    asyncio.run(run())
-
-
-@pytest.mark.parametrize("text", ["ZP1.abc", "　", "ZP1.abc extra"])
+@pytest.mark.parametrize("text", ["ZP1.abc", chr(0x3000), "ZP1.abc extra"])
 def test_import_command_error_card_names_the_code(services, monkeypatch, text):
     """非法码一律落错误卡片，且提示里要认得出是"装配码"问题。"""
     module = importlib.import_module("game.cmd.通用.装配台")
@@ -712,14 +696,14 @@ def test_public_scope_lists_that_users_holdings(services, monkeypatch):
     async def run():
         uid = await player(services)
         await acquire(services, uid, "功法", "400001")
-        await services.features.zhuangpei.toggle_public(uid, "scope-open")
+        await services.features.wangye.set_public(uid, "scope-open", True)
         with HttpClient(_app(services, monkeypatch)) as client:
             data = client.get(f"/assembly/data?scope=user:{uid}").json()
             assert data["scope"] == f"user:{uid}"
             entry = next(e for e in data["entries"] if e["section"] == "功法" and e["id"] == "400001")
             assert entry["quantity"] == 1 and entry["equipped"] == []
             assert f"user:{uid}" in {value["id"] for value in client.get("/assembly/data").json()["scopes"]}
-            await services.features.zhuangpei.toggle_public(uid, "scope-close")
+            await services.features.wangye.set_public(uid, "scope-close", False)
             closed = client.get(f"/assembly/data?scope=user:{uid}")
             assert closed.status_code == 400 and "公开" in closed.json()["error"]
             assert f"user:{uid}" not in {value["id"] for value in client.get("/assembly/data").json()["scopes"]}
@@ -736,7 +720,7 @@ def test_public_scope_keeps_equipped_entry_without_stock(services, monkeypatch):
         await acquire(services, uid, "真意", content_id)
         code = encode({**blank(), "真意": [item(content_id)]})
         await services.features.zhuangpei.import_code(uid, "stock-import", code)
-        await services.features.zhuangpei.toggle_public(uid, "stock-open")
+        await services.features.wangye.set_public(uid, "stock-open", True)
         with HttpClient(_app(services, monkeypatch)) as client:
             entries = client.get(f"/assembly/data?scope=user:{uid}").json()["entries"]
             entry = next(e for e in entries if e["section"] == "真意" and e["id"] == content_id)
