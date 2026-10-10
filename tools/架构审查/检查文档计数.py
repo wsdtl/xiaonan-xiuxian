@@ -250,6 +250,14 @@ def check_full_check_counts() -> list[str]:
 
 #: 展示页目录名 → README 里写的展示名。加一个页面，这里与 README 一起加。
 APP_NAMES = {
+    "butian": "补天",
+    "lianzhen": "演阵台",
+    "wanzhen": "万珍殿",
+    "lingbao": "灵宝谱",
+    "lingtian": "灵田",
+    "guiyuan": "归元观",
+    "tongquetai": "铜雀台",
+    "jiaoyi": "货架",
     "baike": "百科",
     "game-console": "控制台",
     "battle-report": "战报",
