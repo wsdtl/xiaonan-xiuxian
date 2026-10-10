@@ -137,7 +137,7 @@ async function loadScope(scope = $("scope").value) {
     $("import-help").textContent = data.ui.导入说明;
     $("cost-help").textContent = data.ui.消耗说明;
     $("scope-info").textContent = scope === "all" ? "全池：完整构筑目录，用来研究与试配——它不表示你拥有这些真意、气机或器律。想在候选里只看到自己有的，先在聊天里发「公开池」，再回到上面把清单范围选成你自己。" :
-      "此人的当前槽位：" + sections.map(s => s + " " + data.limits[s]).join(" / ") + "。切换清单不会覆盖右侧方案。" + (data.yijing ? " 意境：" + data.yijing.display + "。" : "");
+      "此人的当前槽位：" + sections.map(s => s + " " + data.limits[s]).join(" / ") + "。切换清单不会覆盖右侧方案。" + (data.yijing ? " 意境：" + data.yijing.display + "，道行 " + data.yijing.points + (data.yijing.missing ? "，距下一阶还差 " + data.yijing.missing : "") + "。" : "");
     offset = 0; renderSlots(); renderCandidates(); status("清单已更新，方案保持不变。");
   } catch (error) {
     if (sequence !== scopeRequest) return;

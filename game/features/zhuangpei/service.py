@@ -121,6 +121,7 @@ class ZhuangpeiFeature:
             # 意境：有值才给，前端据此决定整块显不显示（未开启不出空块）。
             "yijing": None if yijing is None else {
                 "id": yijing.content_id, "tier": yijing.tier, "display": yijing.display,
+                "points": yijing.daoxing, "next_cost": yijing.next_cost, "missing": yijing.missing,
             },
         }
 
