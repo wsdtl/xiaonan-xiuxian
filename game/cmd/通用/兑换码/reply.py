@@ -1,5 +1,6 @@
 from game.features.duihuan import DuihuanFeature, DuihuanResult
 from message import DocumentMessage, M
+from ...presentation import error_document
 
 
 def result(feature: DuihuanFeature, value: DuihuanResult) -> DocumentMessage:
@@ -20,9 +21,7 @@ def result(feature: DuihuanFeature, value: DuihuanResult) -> DocumentMessage:
 
 
 def error(feature: DuihuanFeature, message: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(feature.copy('错误', '标题'), icon='notice')
-        .line(M.status('兑换失败', tone='danger'), ' ', message)
-        .build()
+    # 统一走 error_document：无 ` / ` 的文案渲染结果与原来相同。
+    return error_document(
+        feature.copy('错误', '标题'), 'notice', '兑换失败', message, tone='danger'
     )

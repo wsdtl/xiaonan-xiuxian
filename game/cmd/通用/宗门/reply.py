@@ -130,15 +130,10 @@ def operation(
 
 
 def error(copy: SectCopy, code: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(
-            M.status("操作失败", tone="danger"),
-            " ",
-            _text(copy, "错误", _ERROR_KEYS.get(code, "宗门变化")),
-        )
-        .build()
+    # 统一走 error_document：无 ` / ` 的文案渲染结果与原来相同。
+    return error_document(
+        _text(copy, "查看", "标题"), _text(copy, "图标", "结果"), "操作失败",
+        _text(copy, "错误", _ERROR_KEYS.get(code, "宗门变化")), tone="danger"
     )
 
 

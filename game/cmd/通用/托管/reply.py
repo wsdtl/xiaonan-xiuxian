@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import error_document
+
 from datetime import datetime
 
 from game.features.tuoguan import HostingCopy, HostingResult
@@ -102,15 +104,10 @@ def result(copy: HostingCopy, value: HostingResult) -> DocumentMessage:
 
 
 def error(copy: HostingCopy, code: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(_text(copy, "结果", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(
-            M.status("托管失败", tone="danger"),
-            " ",
-            _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")),
-        )
-        .build()
+    # 统一走 error_document：无 ` / ` 的文案渲染结果与原来相同。
+    return error_document(
+        _text(copy, "结果", "标题"), _text(copy, "图标", "结果"), "托管失败",
+        _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")), tone="danger"
     )
 
 

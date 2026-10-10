@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...presentation import error_document
+
 from game.features.zongmen_shanmen import GateCopy, GateResult
 from message import DocumentMessage, M
 
@@ -35,15 +37,10 @@ def result(copy: GateCopy, value: GateResult) -> DocumentMessage:
 
 
 def error(copy: GateCopy, code: str) -> DocumentMessage:
-    return (
-        M.document()
-        .section(_text(copy, "结果", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(
-            M.status("通行受阻", tone="danger"),
-            " ",
-            _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")),
-        )
-        .build()
+    # 统一走 error_document：无 ` / ` 的文案渲染结果与原来相同。
+    return error_document(
+        _text(copy, "结果", "标题"), _text(copy, "图标", "结果"), "通行受阻",
+        _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")), tone="danger"
     )
 
 
