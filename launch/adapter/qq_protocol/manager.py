@@ -634,10 +634,9 @@ class QqReplyManager:
             return mention_text
         if text.startswith(mention_text):
             return text
-        # `<@id>` 是 QQ 的 at 芯片，自己带内边距；再补一个空格就成了一个明显的洞。
-        # 只有写成 `@昵称` 的纯文本形式时才需要空格分词。
-        joiner = "" if mention_text.startswith("<") else " "
-        return f"{mention_text}{joiner}{text}".strip()
+        # **不补空格**：无论是 `<@id>` 芯片还是 `@昵称` 文本，都直接贴着正文。
+        # 委托方给的正例（帮助那张卡）就是「@邓晓楠晓楠修仙」——紧贴不带空格。
+        return f"{mention_text}{text}".strip()
 
     @staticmethod
     def _message_text(message: object) -> str:
