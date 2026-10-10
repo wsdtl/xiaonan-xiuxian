@@ -22,11 +22,10 @@ def render_qq_message(value: object) -> object:
     message = coerce_message(value)
     if isinstance(message, DocumentMessage):
         content = render_markdown(message.document, command_renderer=_command_link)
-        if message.document.actions:
-            # 动作写进正文（QQ 内联命令链接，帮助那张卡的可点命令用的就是它），**不挂键盘**：
-            # 带键盘的卡片，客户端会在卡片最上面留一行空白；没键盘就没有。
-            content = f"{content}\n{_inline_actions(message.document.actions)}"
-        return qq_payload.markdown(content)
+        keyboard = (
+            _keyboard(message.document.actions) if message.document.actions else None
+        )
+        return qq_payload.markdown(content, keyboard=keyboard)
     if isinstance(message, ImageMessage):
         return qq_payload.image(
             message.image, content=render_rich_text(message.caption) or " "
@@ -50,25 +49,6 @@ def _command_link(
     submit = "true" if command.submit else "false"
     reply = "true" if command.reply else "false"
     return f"[{label}](mqqapi://aio/inlinecmd?command={encoded}&enter={submit}&reply={reply})"
-
-
-def _inline_actions(actions: tuple[Action, ...]) -> str:
-    """把动作渲染成正文里的可点命令链接；链接型仍走原地址。"""
-
-    parts: list[str] = []
-    for action in actions:
-        # 标签就是普通字符串（键盘那条路用的也是 action.label 本身）；
-        # 走 render_rich_markdown 会把它当富文本解析，裸字符串会渲染成空标签。
-        label = str(action.label or "")
-        command = str(action.data or "")
-        if action.behavior == "link":
-            parts.append(f"[{label}]({command})")
-            continue
-        encoded = quote(command, safe="")
-        parts.append(
-            f"[{label}](mqqapi://aio/inlinecmd?command={encoded}&enter=true&reply=false)"
-        )
-    return "　".join(parts)
 
 
 def _keyboard(actions: tuple[Action, ...]) -> dict:
