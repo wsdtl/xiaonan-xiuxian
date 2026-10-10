@@ -1473,6 +1473,19 @@ class CharacterService:
                 "突破记录": records,
             }
         )
+        # 意境道行：这次突破把阶上限抬上去了才发（二十境界九阶，二十次里只发九次）。
+        cap_before = _yijing_tier_cap(
+            _realm_order(self._data.entity("境界", current_realm_id).get("等级下限"))
+        )
+        cap_after = _yijing_tier_cap(
+            _realm_order(self._data.entity("境界", next_realm.realm_id).get("等级下限"))
+        )
+        if cap_after > cap_before:
+            cell = dict(character.get("意境") or {})
+            cell["道行"] = int(cell.get("道行") or 0) + _yijing_tier_cost(cap_after)
+            cell.setdefault("编号", "")
+            cell.setdefault("阶", 0)
+            character["意境"] = cell
         return CharacterBreakthroughPlan(
             current_realm_id,
             next_realm.realm_id,
@@ -1992,21 +2005,47 @@ def _state_five_elements(value: object) -> dict[str, float]:
     return result
 
 
-def _state_yijing(value: object) -> tuple[str, int] | None:
+def _yijing_tier_cost(tier: int) -> int:
+    """升到第 N 阶要多少道行：一境界一阶那条线用的就是它。"""
+
+    return (0, 1, 2, 4, 6, 9, 13, 18, 25, 34)[tier]
+
+
+def _realm_order(lower_level: object) -> int:
+    """境界序号：每境界五级，用现成的等级下限推，不新增字段（1~20）。"""
+
+    return (_positive_int(lower_level, "境界.等级下限") - 1) // 5 + 1
+
+
+def _yijing_tier_cap(realm_order: int) -> int:
+    """该境界允许的意境阶上限：二十个境界对应九阶，第 20 境界正好九阶。"""
+
+    return max(1, min(9, -(-realm_order * 9 // 20)))
+
+
+def _state_yijing(value: object) -> tuple[str, int, int] | None:
     """意境：只在状态里存编号与阶，名称按编号现取（编号不可改、名称可改）。"""
 
     if value is None:
         return None
     row = _state_mapping(value, "人物.意境")
-    if set(row) != {"编号", "阶"}:
-        raise CharacterStateError("人物.意境只认「编号」与「阶」两个键")
-    content_id = _state_text(row.get("编号"), "人物.意境.编号")
-    if len(content_id) != 6 or not content_id.isdigit():
-        raise CharacterStateError("人物.意境.编号必须是六位数字")
-    tier = _positive_int(row.get("阶"), "人物.意境.阶")
-    if tier < 1 or tier > 9:
-        raise CharacterStateError("人物.意境.阶必须在1到9之间")
-    return content_id, tier
+    if set(row) - {"编号", "阶", "道行"}:
+        raise CharacterStateError("人物.意境只认「编号」「阶」「道行」三个键")
+    content_id = str(row.get("编号") or "")
+    tier = int(row.get("阶") or 0)
+    if not content_id:
+        # 还没选路：允许只攒道行（面板不显示，点不会丢）。
+        if tier:
+            raise CharacterStateError("人物.意境.没有编号时阶必须是0")
+    else:
+        if len(content_id) != 6 or not content_id.isdigit():
+            raise CharacterStateError("人物.意境.编号必须是六位数字")
+        if tier < 1 or tier > 9:
+            raise CharacterStateError("人物.意境.阶必须在1到9之间")
+    points = row.get("道行", 0)
+    if isinstance(points, bool) or not isinstance(points, int) or points < 0:
+        raise CharacterStateError("人物.意境.道行必须是不小于0的整数")
+    return content_id, tier, points
 
 
 def _yijing_profile(data: object, value: object) -> YijingProfile | None:
@@ -2015,10 +2054,12 @@ def _yijing_profile(data: object, value: object) -> YijingProfile | None:
     state = _state_yijing(value)
     if state is None:
         return None
-    content_id, tier = state
+    content_id, tier, points = state
+    if not content_id:
+        return None
     row = data.entity("意境", content_id)
     name = _state_text(row.get("名称"), "意境.名称")
-    return YijingProfile(content_id=content_id, name=name, tier=tier)
+    return YijingProfile(content_id=content_id, name=name, tier=tier, daoxing=points)
 
 
 def _inventory_summary(
