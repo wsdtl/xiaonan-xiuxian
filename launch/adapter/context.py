@@ -98,7 +98,10 @@ class SendOptions:
     某种展示形式，由驱动器自己的渲染器决定。
     """
 
-    mention: str = MENTION_DEFAULT
+    # 默认在群里 @ 正在对话的那个人：业务层不必每条都写一遍，平台自己渲染昵称。
+    # 私聊不 @（驱动层按 target.is_group 判定），要关闭或改成固定对象时，
+    # 在具体的 SendOptions 里显式写 MENTION_NONE / "<@用户>" 即可。
+    mention: str = MENTION_SENDER
     markdown: bool = True
     log: bool = True
 
