@@ -634,9 +634,13 @@ class QqReplyManager:
             return mention_text
         if text.startswith(mention_text):
             return text
-        # **不补空格**：无论是 `<@id>` 芯片还是 `@昵称` 文本，都直接贴着正文。
-        # 委托方给的正例（帮助那张卡）就是「@邓晓楠晓楠修仙」——紧贴不带空格。
-        return f"{mention_text}{text}".strip()
+        # 正文以 markdown 控制符开头时（`>` 引用、`#` 标题、`-`/`1.` 列表、`|` 表格），
+        # 称呼不能贴上去——一贴，控制符就不在行首了，整张卡的版式会散（宗门那张卡就是这样）。
+        # 这种时候称呼单独占一行；其余情况紧贴（帮助那张卡的正例样子）。
+        if text[0] in ">#|-`" or (text[0].isdigit() and "." in text[:3]):
+            return f"{mention_text}\n{text}"
+        # 其余情况紧贴（帮助那张卡的正例样子）。
+        return f"{mention_text}{text}"
 
     @staticmethod
     def _message_text(message: object) -> str:
