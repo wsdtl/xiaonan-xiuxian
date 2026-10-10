@@ -591,7 +591,9 @@ class QqReplyManager:
                 str(markdown.get("content") or ""),
             )
             result["markdown"] = markdown
-            result["content"] = mention_text
+            # 顶层 content 保持 `_markdown_payload` 给的那个占位空格（QQ 会吃掉它），
+            # **不要**改写成 @ 本身：那会在卡片外多渲染出一行孤零零的 @。
+            # @ 已经写在 markdown 正文开头，QQ 按 `<@id>` 认。
             return result
 
         result["content"] = QqReplyManager._prepend_mention(
