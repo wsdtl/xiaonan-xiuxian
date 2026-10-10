@@ -550,6 +550,8 @@ class CharacterService:
             else []
         )
         listeners = [dict(value) for value in picked if isinstance(value, Mapping)]
+        counter = _mapping(row.get("战斗档"), "意境.战斗档")
+        counter_name = _state_text(counter.get("计量"), "意境.战斗档.计量")
         if listeners:
             # 动态档的计量由核心开：数据不知道玩家买到几阶，上限只能在这儿给。
             listeners.append(
@@ -561,7 +563,7 @@ class CharacterService:
                     "效果": [
                         {
                             "能力": "修改构筑计量",
-                            "计量": "意境档",
+                            "计量": counter_name,
                             "方式": "增加",
                             "数值": 0,
                             "初始值": 0,
