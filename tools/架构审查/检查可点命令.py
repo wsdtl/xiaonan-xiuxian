@@ -134,6 +134,46 @@ def check_commands_are_registered() -> list[str]:
     return problems
 
 
+def check_button_data_commands_are_registered() -> list[str]:
+    """展示数据集里的按钮（data/**/按钮.json）命令必须已注册。
+
+    正文内联按钮与键盘按钮的目标，静态判据能守一半；按钮数据是纯 JSON，
+    打错一个字就是点了没反应的死按钮，这里逐个核一遍。
+    """
+
+    import json
+
+    from game.cmd.command import registered_command_routes
+
+    heads = set()
+    for route in registered_command_routes():
+        head = str(route[0] if isinstance(route, tuple) else route).strip()
+        if head:
+            heads.add(head)
+    problems: list[str] = []
+    root = pathlib.Path(__file__).resolve().parents[2]
+    for path in sorted((root / "data").rglob("按钮.json")):
+        try:
+            body = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - 不是 JSON 就跳过
+            continue
+        if not isinstance(body, list):
+            continue
+        for item in body:
+            if not isinstance(item, dict):
+                continue
+            command = str(item.get("命令") or "").strip()
+            if not command:
+                continue
+            word = command.split()[0]
+            if word not in heads:
+                problems.append(
+                    path.relative_to(root).as_posix()
+                    + " " + str(item.get("名称")) + " " + word
+                )
+    return problems
+
+
 def _render(message: object) -> str:
     from launch.adapter.qq_protocol.render import render_qq_message
 
@@ -194,6 +234,7 @@ CHECKS = (
     ("链接文本无公式", check_rendered_links_are_plain),
     ("多分支解析", check_branches_resolve),
     ("按钮目标已注册", check_commands_are_registered),
+    ("按钮数据命令已注册", check_button_data_commands_are_registered),
 )
 
 
