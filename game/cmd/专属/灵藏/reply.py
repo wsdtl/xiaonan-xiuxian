@@ -85,7 +85,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer)
 
 
 def error(copy: LingcangCopy, message: str) -> DocumentMessage:
-    builder = M.document() .section(_text(copy, "错误"), icon="notice")
+    builder = M.document().section(_text(copy, "错误"), icon="notice")
     builder.line(M.status("捐献失败", tone="danger"))
     format_lines(builder, sentence(message))
     return builder.build()

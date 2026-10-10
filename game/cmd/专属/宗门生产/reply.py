@@ -173,7 +173,7 @@ def terrains(
 
 
 def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
-    builder = M.document() .section(copy["通用"]["错误"], icon="notice")
+    builder = M.document().section(copy["通用"]["错误"], icon="notice")
     builder.line(M.status("生产失败", tone="danger"))
     format_lines(builder, sentence(message))
     return builder.build()

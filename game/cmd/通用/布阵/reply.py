@@ -26,7 +26,7 @@ def completed(copy: FormationArmCopy, value: FormationArmResult) -> DocumentMess
 
 
 def error(copy: FormationArmCopy, message: str) -> DocumentMessage:
-    builder = M.document() .section(copy.text["错误"]["标题"], icon="notice")
+    builder = M.document().section(copy.text["错误"]["标题"], icon="notice")
     builder.line(M.status("布阵失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

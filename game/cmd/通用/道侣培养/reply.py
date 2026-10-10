@@ -86,7 +86,7 @@ def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> 
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document() .section("道侣培养", icon="notice")
+    builder = M.document().section("道侣培养", icon="notice")
     builder.line(M.status("培养失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

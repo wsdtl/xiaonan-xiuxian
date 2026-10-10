@@ -116,9 +116,10 @@ def page(view: NajiePage) -> DocumentMessage:
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document() .section("纳戒", icon="notice")
+    builder = M.document().section("纳戒", icon="notice")
     builder.line(M.status("查询失败", tone="danger"))
-    format_lines(builder, message) .action(_home_action())
+    format_lines(builder, message)
+    builder.action(_home_action())
     return builder.build()
 
 

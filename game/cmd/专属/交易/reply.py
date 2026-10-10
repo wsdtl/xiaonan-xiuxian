@@ -105,9 +105,13 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult) -> DocumentMess
 
 
 def error(feature: TradeFeature, message: str) -> DocumentMessage:
-    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
     builder.line(M.status("交易失败", tone="danger"))
-    format_lines(builder, sentence(message)) .small(feature.copy("错误", "格式"))
+    format_lines(builder, sentence(message))
+    hint = feature.copy("错误", "格式")
+    # 正文已经是这句格式文案时别再补一遍：同一句话印两遍就是零信息。
+    if hint not in sentence(message):
+        builder.small(hint)
     return builder.build()
 
 

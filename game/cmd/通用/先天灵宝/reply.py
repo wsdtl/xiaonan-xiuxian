@@ -63,7 +63,7 @@ def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult) 
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document() .section("先天灵宝", icon="notice")
+    builder = M.document().section("先天灵宝", icon="notice")
     builder.line(M.status("执掌失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

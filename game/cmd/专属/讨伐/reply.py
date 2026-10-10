@@ -74,7 +74,7 @@ def settlement(feature: RaidFeature, value: RaidSettlement) -> DocumentMessage:
 
 
 def error(feature: RaidFeature, message: str) -> DocumentMessage:
-    builder = M.document() .section(feature.text("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.text("错误", "标题"), icon="notice")
     builder.line(M.status("讨伐失败", tone="danger"))
     format_lines(builder, sentence(message))
     return builder.build()

@@ -122,9 +122,13 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
 
 
 def error(feature: TongquetaiFeature, message: str) -> DocumentMessage:
-    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
     builder.line(M.status("夺元失败", tone="danger"))
-    format_lines(builder, message) .small(feature.copy("错误", "格式"))
+    format_lines(builder, message)
+    hint = feature.copy("错误", "格式")
+    # 正文已经是这句格式文案时别再补一遍：同一句话印两遍就是零信息。
+    if hint not in message:
+        builder.small(hint)
     return builder.build()
 
 

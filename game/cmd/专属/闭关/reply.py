@@ -27,7 +27,7 @@ def text(copy: RetreatCopy, section: str, key: str, values: Mapping[str, object]
 
 
 def error(copy: RetreatCopy, message: str) -> DocumentMessage:
-    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder = M.document().section(text(copy, "错误", "标题"), icon="notice")
     builder.line(M.status("闭关失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

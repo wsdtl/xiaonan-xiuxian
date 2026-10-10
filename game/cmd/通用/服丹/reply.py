@@ -56,7 +56,7 @@ def setting(feature: MedicineFeature, result: AutoMedicineResult) -> DocumentMes
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document() .section("服丹", icon="notice")
+    builder = M.document().section("服丹", icon="notice")
     builder.line(M.status("服丹失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

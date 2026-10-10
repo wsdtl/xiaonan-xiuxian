@@ -59,7 +59,7 @@ def borrowed(copy: CangjingCopy, value: CangjingPage) -> DocumentMessage:
 
 
 def error(copy: CangjingCopy, message: str) -> DocumentMessage:
-    builder = M.document() .section(_text(copy, "错误"), icon="notice")
+    builder = M.document().section(_text(copy, "错误"), icon="notice")
     builder.line(M.status("借阅失败", tone="danger"))
     format_lines(builder, sentence(message))
     return builder.build()

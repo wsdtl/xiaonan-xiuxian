@@ -183,9 +183,10 @@ def error(
     message: str,
     actions: tuple[CommandAction, ...],
 ) -> DocumentMessage:
-    builder = M.document() .section(title, icon=copy.error_icon)
+    builder = M.document().section(title, icon=copy.error_icon)
     builder.line(M.status("查询失败", tone="danger"))
-    format_lines(builder, message) .actions(message_actions(actions))
+    format_lines(builder, message)
+    builder.actions(message_actions(actions))
     return builder.build()
 
 

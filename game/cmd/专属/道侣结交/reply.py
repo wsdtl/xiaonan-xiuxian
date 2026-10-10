@@ -26,7 +26,7 @@ def text(copy: CompanionCopy, section: str, key: str, values: Mapping[str, objec
 
 
 def error(copy: CompanionCopy, message: str) -> DocumentMessage:
-    builder = M.document() .section(text(copy, "错误", "标题"), icon=copy.icons["错误"])
+    builder = M.document().section(text(copy, "错误", "标题"), icon=copy.icons["错误"])
     builder.line(M.status("交互失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

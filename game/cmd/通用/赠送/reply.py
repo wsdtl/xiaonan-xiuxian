@@ -42,7 +42,7 @@ def item(
 
 
 def error(feature: GiftFeature, message: str) -> DocumentMessage:
-    builder = M.document() .section(feature.text("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.text("错误", "标题"), icon="notice")
     builder.line(M.status("赠送失败", tone="danger"))
     format_lines(builder, sentence(message))
     return builder.build()

@@ -101,7 +101,7 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessa
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document() .section("宗门战", icon="notice")
+    builder = M.document().section("宗门战", icon="notice")
     builder.line(M.status("操作失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

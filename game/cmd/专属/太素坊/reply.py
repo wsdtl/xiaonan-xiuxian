@@ -19,7 +19,7 @@ def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
 
 
 def error(feature: YixingFeature, message: str) -> DocumentMessage:
-    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
     builder.line(M.status("易形失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

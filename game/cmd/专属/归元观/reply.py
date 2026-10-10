@@ -39,7 +39,7 @@ def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
 
 
 def error(feature: GuiyuanFeature, message: str) -> DocumentMessage:
-    builder = M.document() .section(feature.copy("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
     builder.line(M.status("归元失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

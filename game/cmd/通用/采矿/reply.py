@@ -29,7 +29,7 @@ def text(copy: OreGatheringCopy, section: str, key: str, values: Mapping[str, ob
 
 
 def error(copy: OreGatheringCopy, message: str) -> DocumentMessage:
-    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder = M.document().section(text(copy, "错误", "标题"), icon="notice")
     builder.line(M.status("采矿失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()

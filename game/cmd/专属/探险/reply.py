@@ -27,7 +27,7 @@ def text(copy: ExplorationCopy, section: str, key: str, values: Mapping[str, obj
 
 
 def error(copy: ExplorationCopy, message: str) -> DocumentMessage:
-    builder = M.document() .section(text(copy, "错误", "标题"), icon="notice")
+    builder = M.document().section(text(copy, "错误", "标题"), icon="notice")
     builder.line(M.status("探险失败", tone="danger"))
     format_lines(builder, message)
     return builder.build()
