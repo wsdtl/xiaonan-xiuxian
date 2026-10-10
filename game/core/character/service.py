@@ -20,7 +20,12 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
+from game.core.combat import (
+    CombatantSpec,
+    CombatBuildRef,
+    CombatStatusSpec,
+    generate_five_elements,
+)
 from game.core.data import (
     JsonDataError,
     JsonDataService,
@@ -502,6 +507,48 @@ class CharacterService:
             for user_id in normalized
         )
 
+    def _yijing_battle(
+        self, profile: CharacterProfile, attributes: dict[str, object], weapon_attack: float
+    ) -> tuple[float, tuple[CombatStatusSpec, ...]]:
+        """把人物身上的意境落进战斗快照。
+
+        基础数值并进属性（开局上限与初始值只认属性，状态修正改不了它们），
+        本路增幅写进状态修正（战斗中读数生效）。没升过阶就是没激活，两样都不加。
+        质变与戒律等激活方案定了再往这条路上接。
+        """
+
+        yijing = profile.yijing
+        if yijing is None:
+            return weapon_attack, ()
+        row = self._data.entity("意境", yijing.content_id)
+        carrier = _mapping(row.get("载体"), "意境.载体")
+        basics = _mapping(_mapping(carrier.get("基础数值"), "意境.基础数值").get("每阶"), "意境.基础数值.每阶")
+        for name, step in basics.items():
+            key = str(name)
+            if key == "器的量":
+                weapon_attack += float(step) * yijing.tier
+                continue
+            base = _number(attributes.get(key, 0), f"意境.{key}")
+            attributes[key] = base + base * float(step) * yijing.tier / 100.0
+        amp = _mapping(carrier.get("增幅"), "意境.载体.增幅")
+        per_tier = _mapping(amp.get("每阶"), "意境.增幅.每阶")
+        baseline = _mapping(amp.get("基准"), "意境.增幅.基准")
+        modifiers = tuple(
+            (str(name), float(baseline.get(name, 0)) + float(step) * yijing.tier)
+            for name, step in per_tier.items()
+        )
+        status = CombatStatusSpec(
+            name=f"意境·{yijing.name}·{yijing.tier}阶",
+            category="增益",
+            remaining_actions=999,
+            duration_unit="状态承受者行动",
+            modifiers=modifiers,
+            tags=("意境",),
+            source=yijing.content_id,
+            source_name=yijing.name,
+        )
+        return weapon_attack, (status,)
+
     async def combatant(
         self, user_id: str, *, profile: CharacterProfile | None = None
     ) -> CombatantSpec:
@@ -518,6 +565,10 @@ class CharacterService:
             profile = await self.profile(user_id)
         attributes = dict(profile.attributes)
         resources = dict(profile.resources)
+        # 意境：基础数值要先并进属性（开局上限与初始值只认属性），增幅走状态修正。
+        weapon_attack, yijing_statuses = self._yijing_battle(
+            profile, attributes, float(profile.weapon.attack)
+        )
         build = tuple(
             CombatBuildRef(
                 section=value.category,
@@ -538,7 +589,7 @@ class CharacterService:
             attributes=attributes,
             level=profile.level,
             combatant_type=profile.character_type,
-            weapon_attack=float(profile.weapon.attack),
+            weapon_attack=weapon_attack,
             build=build,
             health=float(resources.get("血气", attributes.get("血气上限", 0))),
             spirit=float(resources.get("精神", attributes.get("精神上限", 0))),
@@ -549,6 +600,7 @@ class CharacterService:
             gender=profile.gender,
             five_elements=dict(profile.five_elements),
             inherent_rules=self.inherent_rules(profile.race),
+            prepared_statuses=yijing_statuses,
         )
 
     async def create(self, command: CharacterCreateCommand) -> CharacterCreationResult:
