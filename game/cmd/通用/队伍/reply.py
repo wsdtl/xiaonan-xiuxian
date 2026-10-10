@@ -6,6 +6,7 @@ from game.features.duiwu import TeamAction, TeamCopy, TeamOperationResult, TeamP
 from message import DocumentMessage, M
 
 from ...actions import message_actions
+from ...presentation import format_lines
 
 _ERROR_KEYS = {
     "target_missing": "缺少目标",
@@ -103,12 +104,13 @@ def error(copy: TeamCopy, code: str) -> DocumentMessage:
 
 
 def format_error(copy: TeamCopy) -> DocumentMessage:
-    return (
-        M.document()
-        .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "邀请"))
-        .line(M.status("格式有误", tone="warning"), " ", _text(copy, "错误", "格式"))
-        .build()
+    builder = M.document().section(
+        _text(copy, "查看", "标题"), icon=_text(copy, "图标", "邀请")
     )
+    # 多用法一行一句地铺开：塞一行读不了，且渲染器会把字符串里的换行拍平。
+    builder.line(M.status("格式有误", tone="warning"))
+    format_lines(builder, _text(copy, "错误", "格式"))
+    return builder.build()
 
 
 def _text(copy: TeamCopy, section: str, key: str) -> str:

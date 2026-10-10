@@ -11,6 +11,7 @@ from game.features.zongmen_tongxing import (
 from message import DocumentMessage, M
 
 from ...actions import message_actions
+from ...presentation import format_lines
 
 _ERROR_KEYS = {
     "not_member": "未加入宗门",
@@ -100,12 +101,13 @@ def error(copy: SectFollowCopy, code: str) -> DocumentMessage:
 
 
 def format_error(copy: SectFollowCopy) -> DocumentMessage:
-    return (
-        M.document()
-        .section(_text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果"))
-        .line(M.status("格式有误", tone="warning"), " ", _text(copy, "错误", "格式"))
-        .build()
+    builder = M.document().section(
+        _text(copy, "查看", "标题"), icon=_text(copy, "图标", "结果")
     )
+    # 多用法一行一句地铺开：塞一行读不了，且渲染器会把字符串里的换行拍平。
+    builder.line(M.status("格式有误", tone="warning"))
+    format_lines(builder, _text(copy, "错误", "格式"))
+    return builder.build()
 
 
 def _text(copy: SectFollowCopy, section: str, key: str) -> str:
