@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from game.features.zongmen_zhan import SectWarFeature, SectWarHistoryPage, SectWarView
 from message import DocumentMessage, M
@@ -101,10 +101,9 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessa
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document().section("宗门战", icon="notice")
-    builder.line(M.status("操作失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        "宗门战", "notice", "操作失败", message, tone="danger"
+    )
 
 
 def _winner(feature: SectWarFeature, value: SectWarView) -> str:

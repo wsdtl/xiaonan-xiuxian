@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from game.features.zongmen_lingcang import SectAssetTransfer
 
@@ -85,10 +85,9 @@ def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer)
 
 
 def error(copy: LingcangCopy, message: str) -> DocumentMessage:
-    builder = M.document().section(_text(copy, "错误"), icon="notice")
-    builder.line(M.status("捐献失败", tone="danger"))
-    format_lines(builder, sentence(message))
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        _text(copy, "错误"), "notice", "捐献失败", sentence(message), tone="danger"
+    )
 
 
 def _text(copy: LingcangCopy, key: str, values: Mapping[str, object] | None = None) -> str:

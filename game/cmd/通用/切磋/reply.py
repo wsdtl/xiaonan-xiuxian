@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from game.features.qiecuo import DuelChallenge, DuelFeature, DuelResult
 from launch.paths import public_url
@@ -78,10 +78,9 @@ def rejected() -> DocumentMessage:
 
 
 def error(feature: DuelFeature, message: str) -> DocumentMessage:
-    builder = M.document().section(feature.text("错误", "标题"), icon="notice")
-    builder.line(M.status("切磋失败", tone="danger"))
-    format_lines(builder, sentence(message))
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        feature.text("错误", "标题"), "notice", "切磋失败", sentence(message), tone="danger"
+    )
 
 
 __all__ = ["challenge", "error", "rejected", "report_id", "report_url", "result"]

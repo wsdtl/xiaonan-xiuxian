@@ -1,6 +1,6 @@
 from game.features.butian import ButianFeature, ButianResult
 from message import DocumentMessage, M
-from ...presentation import format_lines
+from ...presentation import error_document
 
 
 def result(feature: ButianFeature, value: ButianResult) -> DocumentMessage:
@@ -17,7 +17,6 @@ def result(feature: ButianFeature, value: ButianResult) -> DocumentMessage:
 
 
 def error(feature: ButianFeature, message: str) -> DocumentMessage:
-    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
-    builder.line(M.status("补天失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        feature.copy("错误", "标题"), "notice", "补天失败", message, tone="danger"
+    )

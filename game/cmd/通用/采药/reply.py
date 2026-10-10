@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from game.features.caiyao import GatheredItem
 
@@ -29,10 +29,9 @@ def text(copy: HerbGatheringCopy, section: str, key: str, values: Mapping[str, o
 
 
 def error(copy: HerbGatheringCopy, message: str) -> DocumentMessage:
-    builder = M.document().section(text(copy, "错误", "标题"), icon="notice")
-    builder.line(M.status("采药失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        text(copy, "错误", "标题"), "notice", "采药失败", message, tone="danger"
+    )
 
 
 def started(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from message.schema import RichText
 
@@ -173,10 +173,9 @@ def terrains(
 
 
 def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
-    builder = M.document().section(copy["通用"]["错误"], icon="notice")
-    builder.line(M.status("生产失败", tone="danger"))
-    format_lines(builder, sentence(message))
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        copy["通用"]["错误"], "notice", "生产失败", sentence(message), tone="danger"
+    )
 
 
 def _terrain_name(pool: str) -> str:

@@ -1,7 +1,7 @@
 from game.features.fanben import FanbenFeature, FanbenResult
 from game.features.yixing import YixingFeature, YixingResult
 from message import DocumentMessage, M
-from ...presentation import format_lines
+from ...presentation import error_document
 
 
 def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
@@ -20,10 +20,9 @@ def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
 
 
 def error(feature: YixingFeature, message: str) -> DocumentMessage:
-    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
-    builder.line(M.status("易形失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        feature.copy("错误", "标题"), "notice", "易形失败", message, tone="danger"
+    )
 
 
 def fanben_result(feature: FanbenFeature, value: FanbenResult) -> DocumentMessage:

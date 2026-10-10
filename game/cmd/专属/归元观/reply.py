@@ -1,7 +1,7 @@
 from game.features.guiyuan import GuiyuanFeature, GuiyuanPreview, GuiyuanResult
 from game.features.xigen import XigenFeature, XigenResult
 from message import DocumentMessage, M
-from ...presentation import format_lines
+from ...presentation import error_document
 
 
 def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:
@@ -40,10 +40,9 @@ def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
 
 
 def error(feature: GuiyuanFeature, message: str) -> DocumentMessage:
-    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
-    builder.line(M.status("归元失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        feature.copy("错误", "标题"), "notice", "归元失败", message, tone="danger"
+    )
 
 
 def xigen_result(feature: XigenFeature, value: XigenResult) -> DocumentMessage:

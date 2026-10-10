@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from game.features.buzhen import FormationArmCopy, FormationArmResult
 
@@ -26,10 +26,9 @@ def completed(copy: FormationArmCopy, value: FormationArmResult) -> DocumentMess
 
 
 def error(copy: FormationArmCopy, message: str) -> DocumentMessage:
-    builder = M.document().section(copy.text["错误"]["标题"], icon="notice")
-    builder.line(M.status("布阵失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        copy.text["错误"]["标题"], "notice", "布阵失败", message, tone="danger"
+    )
 
 
 __all__ = ["completed", "error"]

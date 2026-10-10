@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from game.features.fudan import MedicineFeature, AutoMedicineResult, MedicineUseResult
 
@@ -56,10 +56,9 @@ def setting(feature: MedicineFeature, result: AutoMedicineResult) -> DocumentMes
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document().section("服丹", icon="notice")
-    builder.line(M.status("服丹失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        "服丹", "notice", "服丹失败", message, tone="danger"
+    )
 
 
 def _number(value: float) -> str:

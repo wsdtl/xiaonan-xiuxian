@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from collections.abc import Sequence, Mapping
 from ...actions import CommandAction, message_actions
@@ -59,10 +59,9 @@ def borrowed(copy: CangjingCopy, value: CangjingPage) -> DocumentMessage:
 
 
 def error(copy: CangjingCopy, message: str) -> DocumentMessage:
-    builder = M.document().section(_text(copy, "错误"), icon="notice")
-    builder.line(M.status("借阅失败", tone="danger"))
-    format_lines(builder, sentence(message))
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        _text(copy, "错误"), "notice", "借阅失败", sentence(message), tone="danger"
+    )
 
 
 def _text(copy: CangjingCopy, key: str, values: Mapping[str, object] | None = None) -> str:

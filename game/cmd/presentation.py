@@ -52,4 +52,26 @@ def format_lines(builder: object, text: object) -> str:
     return parts[0]
 
 
-__all__ = ["duration", "format_lines", "natural_deadline", "sentence"]
+def error_document(
+    title: str,
+    icon: str,
+    status: str,
+    message: object,
+    *,
+    tone: str = "danger",
+) -> object:
+    """失败回执的统一形状：一节标题 + 一行状态 + 逐行铺开的说明。
+
+    命令层三十多个 error 回执形状完全一样，只差标题/图标/状态词/说明四件东西；
+    收成一处后改一处即改全体（纯去重，行为不变）。`format_lines` 把多用法文案一行一句铺开。
+    """
+
+    from message import M
+
+    builder = M.document().section(title, icon=icon)
+    builder.line(M.status(status, tone=tone))
+    format_lines(builder, message)
+    return builder.build()
+
+
+__all__ = ["duration", "error_document", "format_lines", "natural_deadline", "sentence"]

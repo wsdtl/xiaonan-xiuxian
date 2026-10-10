@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import format_lines
+from ...presentation import error_document
 
 from game.features.daolv_peiyang import (
     CompanionCultivationFeature,
@@ -86,10 +86,9 @@ def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> 
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document().section("道侣培养", icon="notice")
-    builder.line(M.status("培养失败", tone="danger"))
-    format_lines(builder, message)
-    return builder.build()
+    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
+    return error_document(        "道侣培养", "notice", "培养失败", message, tone="danger"
+    )
 
 
 def _progress(current: int, required: int, *, tone: str = "cultivation") -> Status | Progress:
