@@ -43,5 +43,14 @@
     "命令": "位置",
     "行为": "callback",
     "样式": "secondary"
+  },
+  {
+    "页面": "总览",
+    "条件": "有上一页",
+    "编号": "formation.overview.back",
+    "名称": "返回",
+    "命令": "阵法",
+    "行为": "callback",
+    "样式": "secondary"
   }
 ]

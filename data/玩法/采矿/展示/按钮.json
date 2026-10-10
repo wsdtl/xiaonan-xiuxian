@@ -43,5 +43,14 @@
     "命令": "采矿结束 {下一页}",
     "行为": "callback",
     "样式": "secondary"
+  },
+  {
+    "页面": "总结",
+    "条件": "",
+    "编号": "mining.summary.position",
+    "名称": "返回位置",
+    "命令": "位置",
+    "行为": "callback",
+    "样式": "secondary"
   }
 ]

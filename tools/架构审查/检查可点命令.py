@@ -163,6 +163,41 @@ def check_location_panel_callers() -> list[str]:
     return problems
 
 
+def check_paged_pages_have_way_back() -> list[str]:
+    """带翻页的页面必须有一个「返回」类按钮，否则玩家点进去出不来。
+
+    依据委托方原话「无边框按钮 遇到多种情况下放返回」：一页里摆着上一页/下一页，
+    却没有回到本业务首页或地点面板的动作，玩家就只能靠手打命令。
+    """
+
+    import json
+
+    problems: list[str] = []
+    root = pathlib.Path(__file__).resolve().parents[2]
+    for path in sorted((root / "data").rglob("按钮.json")):
+        try:
+            body = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - 不是 JSON 就跳过
+            continue
+        if not isinstance(body, list):
+            continue
+        pages: dict[str, list[str]] = {}
+        for item in body:
+            if not isinstance(item, dict):
+                continue
+            page = str(item.get("页面") or "(未分组)")
+            pages.setdefault(page, []).append(str(item.get("名称") or ""))
+        for page, names in pages.items():
+            if not any("上一页" in n or "下一页" in n for n in names):
+                continue
+            if not any("返回" in n or n.endswith("回") for n in names):
+                problems.append(
+                    path.relative_to(root).as_posix() + " 页面「" + page
+                    + "」有翻页却没有返回：" + " / ".join(names)
+                )
+    return problems
+
+
 def check_button_data_commands_are_registered() -> list[str]:
     """展示数据集里的按钮（data/**/按钮.json）命令必须已注册。
 
@@ -265,6 +300,7 @@ CHECKS = (
     ("按钮目标已注册", check_commands_are_registered),
     ("按钮数据命令已注册", check_button_data_commands_are_registered),
     ("地点面板只许位置/行路取", check_location_panel_callers),
+    ("翻页页必须有返回", check_paged_pages_have_way_back),
 )
 
 
