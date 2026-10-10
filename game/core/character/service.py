@@ -61,6 +61,7 @@ from .contracts import (
     CharacterGenderPlan,
     CharacterGrowthPlan,
     CharacterFiveElementsPlan,
+    YijingProfile,
     CharacterIdentityPlan,
     CharacterInputError,
     CharacterLawPlan,
@@ -438,6 +439,7 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
+            yijing=_yijing_profile(self._data, character.get("意境")),
             age=age,
             lifespan_full=lifespan_full,
             race=race,
@@ -1922,6 +1924,35 @@ def _state_five_elements(value: object) -> dict[str, float]:
     ):
         raise CharacterStateError("人物.五行根性每项须在0到100且总和为100")
     return result
+
+
+def _state_yijing(value: object) -> tuple[str, int] | None:
+    """意境：只在状态里存编号与阶，名称按编号现取（编号不可改、名称可改）。"""
+
+    if value is None:
+        return None
+    row = _state_mapping(value, "人物.意境")
+    if set(row) != {"编号", "阶"}:
+        raise CharacterStateError("人物.意境只认「编号」与「阶」两个键")
+    content_id = _state_text(row.get("编号"), "人物.意境.编号")
+    if len(content_id) != 6 or not content_id.isdigit():
+        raise CharacterStateError("人物.意境.编号必须是六位数字")
+    tier = _positive_int(row.get("阶"), "人物.意境.阶")
+    if tier < 1 or tier > 9:
+        raise CharacterStateError("人物.意境.阶必须在1到9之间")
+    return content_id, tier
+
+
+def _yijing_profile(data: object, value: object) -> YijingProfile | None:
+    """把状态里的（编号、阶）补成带名称的意境档案；没有这一格就是未开启。"""
+
+    state = _state_yijing(value)
+    if state is None:
+        return None
+    content_id, tier = state
+    row = data.entity("意境", content_id)
+    name = _state_text(row.get("名称"), "意境.名称")
+    return YijingProfile(content_id=content_id, name=name, tier=tier)
 
 
 def _inventory_summary(

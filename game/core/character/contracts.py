@@ -103,6 +103,20 @@ class CharacterPublicProfile:
 
 
 @dataclass(frozen=True)
+class YijingProfile:
+    """意境：人物当前的意境方向与阶。
+
+    状态里只存**编号**（如 630003）与阶，名称按编号从 `data/玩法/意境/定义` 现取——
+    编号不可改、名称可改（`data/基础/定义/编号.json` 的编号作用），所以名字不进存档。
+    未开启时人物记录里是 `None`，人物面板整段不显示。
+    """
+
+    content_id: str
+    name: str
+    tier: int
+
+
+@dataclass(frozen=True)
 class CharacterProfile:
     user_id: str
     name: str
@@ -132,6 +146,8 @@ class CharacterProfile:
     age: int = 0
     #: 一生修行累计是否已把寿元上限用满（展示用）：换种族/换境界会改上限，这个标志跟着重算。
     lifespan_full: bool = False
+    #: 意境（战斗内的自身强化层）：未开启时为空，人物面板与装配台整段不显示。
+    yijing: YijingProfile | None = None
 
 
 @dataclass(frozen=True)
