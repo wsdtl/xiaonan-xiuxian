@@ -842,6 +842,20 @@ class CharacterService:
             StateMutation(user, "character", "main", character, snapshot.version),
         )
 
+    def yijing_cost(self, tier: int) -> int:
+        """升到第 N 阶要多少道行。
+
+        一处真源：突破发点与命令升阶都走它，免得两处各存一张表、日后漂移。
+        """
+
+        return _yijing_tier_cost(_positive_int(tier, "意境.阶"))
+
+    def yijing_cap(self, realm_id: str) -> int:
+        """该境界允许的意境阶上限（二十境界九阶，序号由等级下限推）。"""
+
+        realm = self._data.entity("境界", str(realm_id))
+        return _yijing_tier_cap(_realm_order(realm.get("等级下限")))
+
     async def plan_yijing_choose(
         self, user_id: str, *, content_id: str
     ) -> CharacterYijingPlan:
