@@ -358,8 +358,36 @@ def _generic_lines(fields: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
+    """意境：只讲人看得懂的——定位、主项轴、倾向来源、输出途径、七到九的质变与九阶戒律。
+
+    `载体` 与 `质变监听` 是实现用的内部字段，不上查看页。
+    """
+
+    fields = source.fields
+    lines = []
+    for label in ("定位", "主项轴", "倾向来源", "输出途径"):
+        value = fields.get(label)
+        if value:
+            lines.append(f"{label}：{value}")
+    tiers = fields.get("质变")
+    if isinstance(tiers, Mapping):
+        for tier in ("7", "8", "9"):
+            text = tiers.get(tier)
+            if text:
+                lines.append(f"{tier}阶：{text}")
+    law = fields.get("戒律")
+    if isinstance(law, Mapping):
+        limits = "、".join(str(value) for value in (law.get("行动限制") or ()))
+        note = str(law.get("说明") or "")
+        if limits:
+            lines.append("九阶戒律：" + limits + (f"（{note}）" if note else ""))
+    return tuple(lines) if lines else None
+
+
 #: 领域 → 自己的详情行构造。返回 `None` 表示不接管，交给 `_generic_lines` 兜底。
 _SECTION_LINES = {
+    "意境": _yijing_lines,
     "道侣": _daolv_lines,
     "先天灵宝": _innate_treasure_lines,
     "丹药": _medicine_lines,
