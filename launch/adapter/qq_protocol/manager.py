@@ -473,7 +473,9 @@ class QqReplyManager:
             return {}
 
         payload: dict[str, Any] = {
-            "content": " ",
+            # QQ 要求 msg_type=2 的 content 非空，但**普通空格会被它渲染成一行空行**；
+            # 用零宽空格占位：既满足非空，又什么都不占、什么都不显示。
+            "content": "\u200b",
             "msg_type": 2,
             "markdown": markdown,
         }

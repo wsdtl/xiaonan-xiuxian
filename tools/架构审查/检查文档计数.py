@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import sys
@@ -204,11 +205,40 @@ def check_tools_listing() -> list[str]:
         for name in _scripts(relative):
             if f"`{name}`" not in text:
                 problems.append(f"{relative}/说明没有点名 {name}")
+    known = _all_file_names()
     for text in (index, review_doc):
         for name in set(re.findall(r"`([^`/<>*]+\.py)`", text)):
-            if not any(path.is_file() for path in ROOT.rglob(name)):
+            if name not in known:
                 problems.append(f"文档点了不存在的脚本：{name}")
     return problems
+
+
+#: 全树遍历时要先剪掉的目录：索引与扫描都不该进这里。
+_WALK_SKIP = frozenset({".git", ".venv", "node_modules", "_输出", "__pycache__", ".history"})
+
+
+def _all_file_names() -> set[str]:
+    """全仓文件名索引（只建一次）。
+
+    以前这里是对**每个**文档点到的脚本名各调一次 `ROOT.rglob(name)`：
+    一次全树遍历几十毫秒，几十个名字叠起来就是一分多钟——文档计数曾是全量里最慢的一支。
+    """
+
+    names: set[str] = set()
+    for root, dirs, files in os.walk(ROOT):
+        dirs[:] = [value for value in dirs if value not in _WALK_SKIP]
+        names.update(files)
+    return names
+
+
+def _markdown_files() -> list[pathlib.Path]:
+    """全仓 markdown（走的时候就剪枝，别等 rglob 走完再筛）。"""
+
+    found: list[pathlib.Path] = []
+    for root, dirs, files in os.walk(ROOT):
+        dirs[:] = [value for value in dirs if value not in _WALK_SKIP]
+        found.extend(pathlib.Path(root) / name for name in files if name.endswith(".md"))
+    return sorted(found)
 
 
 def _check_count(source: str, name: str) -> int:
@@ -313,9 +343,7 @@ def check_no_duplicate_sections() -> list[str]:
     """
 
     problems: list[str] = []
-    for path in sorted(ROOT.rglob("*.md")):
-        if any(part in DOC_SKIP_PARTS for part in path.parts):
-            continue
+    for path in _markdown_files():
         headings = [
             line.strip()
             for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
