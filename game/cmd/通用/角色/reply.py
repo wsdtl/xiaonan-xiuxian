@@ -148,7 +148,9 @@ def overview(result: CharacterOverviewResult) -> DocumentMessage:
     # 意境：只存编号与阶，名称按编号现取；未开启就整段不显示（不许出现空栏目）。
     if character.yijing is not None:
         builder.section("意境", icon="status")
-        builder.row(("意境", character.yijing.display))
+        builder.row(("意境", character.yijing.display), ("道行", character.yijing.daoxing))
+        if character.yijing.missing:
+            builder.line(f"距{character.yijing.tier + 1}阶还差 {character.yijing.missing} 道行。")
     primary_names = (
         "攻击",
         "防御",

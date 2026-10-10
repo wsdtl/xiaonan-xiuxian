@@ -445,7 +445,9 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
-            yijing=_yijing_profile(self._data, character.get("意境")),
+            yijing=_yijing_profile(
+                self._data, character.get("意境"), character.get("境界")
+            ),
             age=age,
             lifespan_full=lifespan_full,
             race=race,
@@ -2140,7 +2142,9 @@ def _state_yijing(value: object) -> tuple[str, int, int] | None:
     return content_id, tier, points
 
 
-def _yijing_profile(data: object, value: object) -> YijingProfile | None:
+def _yijing_profile(
+    data: object, value: object, realm_id: object = None
+) -> YijingProfile | None:
     """把状态里的（编号、阶）补成带名称的意境档案；没有这一格就是未开启。"""
 
     state = _state_yijing(value)
@@ -2151,7 +2155,25 @@ def _yijing_profile(data: object, value: object) -> YijingProfile | None:
         return None
     row = data.entity("意境", content_id)
     name = _state_text(row.get("名称"), "意境.名称")
-    return YijingProfile(content_id=content_id, name=name, tier=tier, daoxing=points)
+    cap = yijing_tier_cap_for(data, realm_id)
+    cost = _yijing_tier_cost(tier + 1) if tier < min(9, cap) else 0
+    return YijingProfile(
+        content_id=content_id,
+        name=name,
+        tier=tier,
+        daoxing=points,
+        next_cost=cost,
+        missing=max(0, cost - points) if cost else 0,
+    )
+
+
+def yijing_tier_cap_for(data: object, realm_id: object) -> int:
+    """按境界算意境阶上限：给面板与命令共用，避免各处各算一遍。"""
+
+    if not realm_id:
+        return 9
+    realm = data.entity("境界", str(realm_id))
+    return _yijing_tier_cap(_realm_order(realm.get("等级下限")))
 
 
 def _inventory_summary(
