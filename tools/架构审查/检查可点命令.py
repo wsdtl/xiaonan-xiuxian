@@ -134,6 +134,35 @@ def check_commands_are_registered() -> list[str]:
     return problems
 
 
+def check_location_panel_callers() -> list[str]:
+    """「当前地点完整面板」只许 `位置` 与 `行路` 的组件去取。
+
+    依据 game/cmd/说明.md 的按钮归属一节：玩家回复只允许三类按钮，头两类都与
+    「当前地点完整操作面板」有关——位置/去 成功抵达时展示它，地点专属业务结束时
+    复现它。三类之外不得附加按钮，所以构造这个面板的函数只能在上述组件里被调用。
+    """
+
+    panel_functions = ("position_actions", "current_location_actions", "gate_actions")
+    allowed = ("通用/位置", "通用/行路")
+    problems: list[str] = []
+    for path in sorted((ROOT / "game" / "cmd").rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        relative = path.relative_to(ROOT).as_posix()
+        if any(part in relative for part in allowed):
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "def " in line:
+                continue
+            for name in panel_functions:
+                if name + "(" in line and "features." in line:
+                    problems.append(
+                        relative + ":" + str(number)
+                        + " 三类之外的组件取了当前地点面板：" + name
+                    )
+    return problems
+
+
 def check_button_data_commands_are_registered() -> list[str]:
     """展示数据集里的按钮（data/**/按钮.json）命令必须已注册。
 
@@ -235,6 +264,7 @@ CHECKS = (
     ("多分支解析", check_branches_resolve),
     ("按钮目标已注册", check_commands_are_registered),
     ("按钮数据命令已注册", check_button_data_commands_are_registered),
+    ("地点面板只许位置/行路取", check_location_panel_callers),
 )
 
 
