@@ -2134,8 +2134,11 @@ def _state_yijing(value: object) -> tuple[str, int, int] | None:
     else:
         if len(content_id) != 6 or not content_id.isdigit():
             raise CharacterStateError("人物.意境.编号必须是六位数字")
-        if tier < 1 or tier > 9:
-            raise CharacterStateError("人物.意境.阶必须在1到9之间")
+        # 阶 0 是合法状态：选了路但还没花道行激活（选路把已练的阶清零，见 plan_yijing_choose）。
+        # 早先这里是 1..9，于是选路会当场写出一个自己校验不过的状态，下一次读人物就抛错——
+        # 这条线一个测试都没有，所以谁也没发现。
+        if tier < 0 or tier > 9:
+            raise CharacterStateError("人物.意境.阶必须在0到9之间")
     points = row.get("道行", 0)
     if isinstance(points, bool) or not isinstance(points, int) or points < 0:
         raise CharacterStateError("人物.意境.道行必须是不小于0的整数")

@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from game.core.data import JsonDataService
 from game.core.database import DatabaseService, StateAddress, TransactionCommand
 
-from .contracts import YijingError, YijingView
+from .contracts import YijingConflictError, YijingError, YijingView
 
 
 class YijingFeature:
@@ -46,8 +46,17 @@ class YijingFeature:
         return YijingView(content_id, name, display, tier, points, cap, next_cost, missing, self._routes())
 
     async def choose(self, user_id: str, request_id: str, content_id: str) -> YijingView:
-        """选修一条意境的路：编号必须在册；改路把已练的阶清零。"""
+        """选修一条意境的路：编号必须在册；改路把已练的阶清零。
 
+        幂等排在最前：同一条请求编号重放时**不再算计划**（状态已经改过，再算会得到另一份计划，
+        甚至撞上境界上限直接报错），直接回看改完之后的现状。
+        """
+
+        committed = await self._database.committed_transaction(user_id, request_id)
+        if committed is not None:
+            if committed.receipt.business_type != "意境选路":
+                raise YijingConflictError("请求编号已经用于其他操作")
+            return await self.inspect(user_id)
         try:
             plan = await self._character.plan_yijing_choose(user_id, content_id=content_id)
         except CharacterCultivationError as exc:
@@ -56,8 +65,16 @@ class YijingFeature:
         return await self.inspect(user_id)
 
     async def upgrade(self, user_id: str, request_id: str) -> YijingView:
-        """花道行升一阶；升到一阶就是激活。受境界给的阶上限约束。"""
+        """花道行升一阶；升到一阶就是激活。受境界给的阶上限约束。
 
+        与选路同理：幂等排在最前，重放直接回看现状，不重算计划。
+        """
+
+        committed = await self._database.committed_transaction(user_id, request_id)
+        if committed is not None:
+            if committed.receipt.business_type != "意境升阶":
+                raise YijingConflictError("请求编号已经用于其他操作")
+            return await self.inspect(user_id)
         try:
             plan = await self._character.plan_yijing_upgrade(user_id)
         except CharacterCultivationError as exc:

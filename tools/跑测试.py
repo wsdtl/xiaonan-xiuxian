@@ -34,6 +34,7 @@ WEIGHTS: dict[str, float] = {
     "test_data_contract.py": 10.2,
     "test_fanben.py": 0.5,
     "test_xigen.py": 0.6,
+    "test_yijing.py": 0.6,
     "test_zhuangpei.py": 7.1,
     "test_battle_report.py": 4.0,
     "test_prepared_status.py": 6.7,
