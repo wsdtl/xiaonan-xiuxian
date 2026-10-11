@@ -117,6 +117,8 @@ _DUPLICATE_BUTTONS: list[str] = []
 _DEEP_COMMANDS: list[str] = []
 #: 每条命令自报的**具体例子**（不含占位词）被自己拒掉的记录。
 _USAGE_EXAMPLE_FAILURES: list[str] = []
+#: 名字/编号槽位填「中文假名」与「数字假编号」时收到用法错或崩溃的记录。
+_NAME_ID_FAILURES: list[str] = []
 
 
 def _clean(content: str) -> str:
@@ -218,6 +220,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     LocalEventHandler._build_command_index()
     user_id = "P:消息判据"
     usage_failures: list[str] = []
+    name_id_failures: list[str] = []
     pages: dict[str, str] = {}
     deep_failures: list[str] = []
     smoke_failures: list[str] = []
@@ -610,6 +613,67 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                         phrase + " 被自己的命令当成用法错：" + " / ".join(lines[:3])[:50]
                     )
 
+        # 「字符类别即界限」全量检验：名字/编号槽位填中文假名与数字假编号各跑一遍，
+        # 任何一侧收到「光秃秃的格式卡」或崩溃都算缺陷（守卫与「找不到」不算）。
+        name_slots = ("编号或名称", "名称或编号", "阵法名", "珍物名", "角色名或编号", "宗门名或编号",
+                       "丹药编号或名称", "丹药编号或丹药名称", "器律编号或名称", "器具编号或名称",
+                       "功法编号或名称", "编号", "名称", "角色名", "宗门名")
+        other_slots = (("品级", "黄品"), ("数量", "1"), ("页码", "1"), ("槽位", "1"), ("孔位", "1"),
+                       ("类别", "功法"), ("兽宝数", "1"), ("灵矿数", "1"), ("灵植数", "1"), ("开或关", "开"))
+        slash_slots = (("丹药/真意/气机", "丹药"), ("灵植/灵矿/兽宝", "灵植"), ("真意/气机", "真意"))
+        compound_slots = (("灵石数量", "1"),)
+
+        def fill_slot(usage: str, dummy: str) -> str:
+            text = usage
+            for slot, value in sorted(compound_slots, key=lambda pair: -len(pair[0])):
+                text = text.replace(slot, value)
+            for slot, value in sorted(slash_slots, key=lambda pair: -len(pair[0])):
+                text = text.replace(slot, value)
+            for slot in sorted(name_slots, key=len, reverse=True):
+                text = text.replace(slot, dummy)
+            for slot, value in sorted(other_slots, key=lambda pair: -len(pair[0])):
+                text = text.replace(slot, value)
+            return " ".join(text.split())
+
+        for head in heads:
+            entry = help_registry.find(head)
+            if entry is None:
+                continue
+            for usage in getattr(entry.spec, "usage", ()) or ():
+                usage = str(usage)
+                if not any(slot in usage for slot in name_slots):
+                    continue
+                for label, dummy in (("中文名", "测试之物"), ("数字编号", "999999")):
+                    filled = fill_slot(usage, dummy)
+                    if not filled or filled == usage:
+                        continue
+                    try:
+                        result = await dispatch(
+                            user_id=user_id, raw_message=filled, event_id="名字判据-" + filled
+                        )
+                    except Exception as exc:  # noqa: BLE001 - 崩溃也是缺陷
+                        name_id_failures.append(
+                            filled + " 填【" + label + "】时抛了 " + type(exc).__name__ + "：" + str(exc)[:40]
+                        )
+                        continue
+                    if not result.replies:
+                        name_id_failures.append(filled + " 填【" + label + "】时没有任何回执")
+                        continue
+                    body = str(getattr(result.replies[0].message, "content", ""))
+                    body_lines = [line.strip(" >") for line in body.split("\n") if line.strip(" >")]
+                    explained_lines = [
+                        line
+                        for line in body_lines
+                        if ("用法见下方" not in line)
+                        and ("格式：" not in line)
+                        and ("失败" not in line)
+                        and len(line) > 6
+                    ]
+                    if (("用法见下方" in body) or ("格式：" in body)) and not explained_lines:
+                        name_id_failures.append(
+                            filled + " 填【" + label + "】时被当成用法错：" + " / ".join(body_lines[:3])[:50]
+                        )
+
     asyncio.run(run())
     baselines = dict(services.core.character.attribute_baselines())
     services.core.database.close()
@@ -621,6 +685,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     _SMOKE_FAILURES.extend(smoke_failures)
     _DUPLICATE_BUTTONS.extend(duplicate_buttons)
     _USAGE_EXAMPLE_FAILURES.extend(usage_failures)
+    _NAME_ID_FAILURES.extend(name_id_failures)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -826,6 +891,18 @@ def check_usage_examples_are_accepted() -> list[str]:
     return list(_USAGE_EXAMPLE_FAILURES)
 
 
+def check_name_and_id_forms_are_accepted() -> list[str]:
+    """「字符类别即界限」：中文写法与 id 写法都必须被受理。
+
+    含中文=名字写法、只有数字与冒号=id 写法。任何命令收到纯中文词或纯数字词，
+    都不许回「用法错」（可以说「没这件东西」）。真出过事：炼阵写死单字品级表，
+    全项目页面都在显示的「黄品」反被判成用法错。
+    """
+
+    _corpus()
+    return list(_NAME_ID_FAILURES)
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
@@ -841,6 +918,7 @@ CHECKS = (
     ("命令不炸", check_garbage_args_do_not_crash),
     ("按钮不重复", check_buttons_not_duplicated),
     ("用法例子能被自己受理", check_usage_examples_are_accepted),
+    ("中文写法与 id 写法都受理", check_name_and_id_forms_are_accepted),
 )
 
 
