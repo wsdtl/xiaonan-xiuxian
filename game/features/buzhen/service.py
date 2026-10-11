@@ -39,7 +39,7 @@ class FormationArmFeature:
                 if isinstance(values, Mapping)
             }
         )
-        if set(text.get("布阵", {})) != {"标题", "过程", "结果", "话语"}:
+        if set(text.get("布阵", {})) != {"标题", "过程", "结果", "话语", "灵宝"}:
             raise JsonDataError("阵法布阵文本字段不完整")
         self._copy = FormationArmCopy(text)
 

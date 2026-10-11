@@ -14,6 +14,20 @@ from typing import Any
 _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
 
 
+def _entry_label(entry: object, services: object) -> str:
+    """一句话说清这条是哪一座：品级名 · 灵宝名（没有灵宝就只说品级）。"""
+    grade = str(getattr(entry, 'grade_name', '') or '')
+    key = str(getattr(entry, 'instance_key', '') or '')
+    treasure_id = key.split(':')[2] if key.count(':') >= 2 else ''
+    if not treasure_id or treasure_id == '无灵宝':
+        return grade
+    try:
+        raw = dict(services.core.data.entity('先天灵宝', treasure_id))
+        name = str(raw.get('名称') or treasure_id)
+    except Exception:
+        name = treasure_id
+    return (grade + '·' + name) if grade else name
+
 async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str) -> str:
     """把玩家写的阵法名翻成阵藏条目的状态键。
 
@@ -59,18 +73,10 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
         )
     if len(matched) > 1:
         raise WanzhenFeatureError(
-            str(text.get('阵法说不清') or '阵藏里有多条同名阵法，请补品级').format(
+            str(text.get('阵法说不清') or '阵藏里有多条同名阵法，请补品级或灵宝名').format(
                 name=query,
                 count=len(matched),
-                entries='、'.join(
-                    '%s·%s' % (
-                        str(getattr(item, 'grade_name', '')),
-                        '无灵宝' if str(getattr(item, 'instance_key', '')).endswith('无灵宝') else str(
-                            getattr(item, 'instance_key', '')
-                        ).split(':')[-1],
-                    )
-                    for item in matched[:4]
-                ),
+                entries='、'.join(_entry_label(item, services) for item in matched[:4]),
             )
         )
     return str(getattr(matched[0], 'instance_key', ''))

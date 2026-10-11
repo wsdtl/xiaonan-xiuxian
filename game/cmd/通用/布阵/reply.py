@@ -9,17 +9,25 @@ from game.features.buzhen import FormationArmCopy, FormationArmResult
 from message import DocumentMessage, M
 
 
-def completed(copy: FormationArmCopy, value: FormationArmResult) -> DocumentMessage:
+def completed(
+    copy: FormationArmCopy, value: FormationArmResult, treasure: str = ""
+) -> DocumentMessage:
     text = copy.text["布阵"]
     prepared = value.prepared
-    return (
+    builder = (
         M.document()
         .header(text["标题"])
         .section(f"{prepared.grade_name}{prepared.name}", icon="combat")
         .line(M.status("布阵完成", tone="positive"))
         .line(text["过程"])
         .field(text["结果"], "下一场正式战斗")
-        .field("阵藏条目", prepared.reserve_key)
+    )
+    # 阵藏条目是代码内部的键（阵法编号:品级:灵宝编号），不给玩家看；
+    # 有没有灵宝加成也不写「无灵宝」三个字——没有就不显示这一段。
+    if treasure:
+        builder = builder.field(text["灵宝"], treasure)
+    return (
+        builder
         .small(text["话语"])
         .build()
     )
