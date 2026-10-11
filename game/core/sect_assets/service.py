@@ -934,7 +934,9 @@ def _material_contribution(
 
 
 def _entity_name(data: JsonDataService, category: str, content_id: str) -> str:
-    section = "基础物品" if category in {"丹药", "灵植", "灵矿", "兽宝"} else category
+    # 灵植/灵矿/兽宝住在「基础物品」实体表里；**丹药有自己的表**（见 `_product_take` 的
+    # `entity_record("丹药", …)`），原先把它一起并进基础物品，导致丹药查不到实体。
+    section = "基础物品" if category in {"灵植", "灵矿", "兽宝"} else category
     value = data.entity(section, content_id)
     name = str(value.get("名称") or "").strip()
     if not name:

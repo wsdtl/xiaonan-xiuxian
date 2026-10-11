@@ -13,7 +13,7 @@ from game.core.data import (
     nonempty_text as _text,
     positive_int as _positive_int,
 )
-from game.core.item_catalog import ItemCatalogError, ItemCatalogService
+from game.core.item_catalog import ItemCatalogService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
@@ -296,10 +296,21 @@ class WanzhenFeature:
         normalized_category = str(category or "").strip()
         query = str(identifier or "").strip()
         if normalized_category == "丹药":
-            try:
-                return self._items.inspect(query).item_id
-            except ItemCatalogError as exc:
-                raise WanzhenFeatureError(str(exc)) from exc
+            # 丹药不在基础物品目录里（那份只收灵植/灵矿/兽宝），它有自己的实体表。
+            entities = self._data.entities("丹药")
+            if query in entities:
+                return query
+            matches = tuple(
+                content_id
+                for content_id, value in entities.items()
+                if str(value.get("名称") or "").strip() == query
+            )
+            if len(matches) != 1:
+                template = str(self.copy().text.get("丹药找不到") or "").strip()
+                if not template:
+                    raise WanzhenFeatureError(f"纳戒里没有「{query}」这味丹药")
+                raise WanzhenFeatureError(template.format(name=query))
+            return matches[0]
         if normalized_category == "阵法":
             return ""
         if normalized_category not in {"真意", "气机", "器律"}:
