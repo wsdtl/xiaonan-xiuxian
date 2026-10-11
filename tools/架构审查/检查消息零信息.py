@@ -119,6 +119,22 @@ _DEEP_COMMANDS: list[str] = []
 _USAGE_EXAMPLE_FAILURES: list[str] = []
 #: 名字/编号槽位填「中文假名」与「数字假编号」时收到用法错或崩溃的记录。
 _NAME_ID_FAILURES: list[str] = []
+#: 回执的判定词冒出了**别的**命令词、但确实不是歧义的：缩写别名，或那句其实是权柄说明。
+_VERDICT_ALLOWED = frozenset({
+    ("出关", "闭关失败"),   # 出关与闭关是同一件事的两种叫法
+    ("探结", "探险失败"),   # 探结是探险结束的缩写
+    ("收矿", "采矿失败"),
+    ("收药", "采药失败"),
+    ("矿况", "采矿失败"),
+    ("药况", "采药失败"),
+    ("讨况", "讨伐失败"),
+    ("讨结", "讨伐失败"),
+    ("闭况", "闭关失败"),
+    ("灵宝谱", "炼丹成功"),  # 先天灵宝谱里那行是权柄说明，不是判定
+    ("灵宝谱", "炼器成功"),
+})
+#: 判定词冒出别的命令词的记录（命令词与它实际干的事对不上）。
+_VERDICT_FAILURES: list[str] = []
 
 
 def _clean(content: str) -> str:
@@ -221,6 +237,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     user_id = "P:消息判据"
     usage_failures: list[str] = []
     name_id_failures: list[str] = []
+    verdict_failures: list[str] = []
     pages: dict[str, str] = {}
     deep_failures: list[str] = []
     smoke_failures: list[str] = []
@@ -584,7 +601,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                 continue
             for usage in getattr(entry.spec, "usage", ()) or ():
                 phrase = str(usage).strip()
-                if not phrase or any(word in phrase for word in placeholder):
+                if not phrase:
                     continue
                 try:
                     result = await dispatch(
@@ -599,7 +616,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                     usage_failures.append(phrase + " 没有任何回执")
                     continue
                 body = str(getattr(result.replies[0].message, "content", ""))
-                lines = [line.strip(" >") for line in body.split("\n") if line.strip(" >")]
+                lines = [line.lstrip("> ").strip() for line in body.split("\n") if line.lstrip("> ").strip()]
                 explained = [
                     line
                     for line in lines
@@ -608,11 +625,31 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                     and ("失败" not in line)
                     and len(line) > 6
                 ]
+                # 判定词必须说这条命令自己的事：冒出别的命令词就算歧义。
+                for other in heads:
+                    if other == head or len(other) < 2:
+                        continue
+                    if (other in head) or (head in other):
+                        continue          # 互为子串＝同一件事的别名，不算歧义
+                    for verdict in ("失败", "完成", "成功"):
+                        verdict_word = other + verdict
+                        if verdict_word not in body:
+                            continue
+                        if (head, verdict_word) in _VERDICT_ALLOWED:
+                            continue
+                        _VERDICT_FAILURES.append(
+                            phrase + " 的判定词冒出「" + verdict_word + "」（命令是「" + head + "」）"
+                        )
+
+
+                if any(word in phrase for word in placeholder):
+                    continue
+
                 if (("用法见下方" in body) or ("格式：" in body)) and not explained:
                     usage_failures.append(
                         phrase + " 被自己的命令当成用法错：" + " / ".join(lines[:3])[:50]
                     )
-
+                # 用法例子检查只认具体例子（含占位词的是写法说明）。
         # 「字符类别即界限」全量检验：名字/编号槽位填中文假名与数字假编号各跑一遍，
         # 任何一侧收到「光秃秃的格式卡」或崩溃都算缺陷（守卫与「找不到」不算）。
         name_slots = ("编号或名称", "名称或编号", "阵法名", "珍物名", "角色名或编号", "宗门名或编号",
@@ -660,7 +697,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                         name_id_failures.append(filled + " 填【" + label + "】时没有任何回执")
                         continue
                     body = str(getattr(result.replies[0].message, "content", ""))
-                    body_lines = [line.strip(" >") for line in body.split("\n") if line.strip(" >")]
+                    body_lines = [line.lstrip("> ").strip() for line in body.split("\n") if line.lstrip("> ").strip()]
                     explained_lines = [
                         line
                         for line in body_lines
@@ -686,6 +723,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     _DUPLICATE_BUTTONS.extend(duplicate_buttons)
     _USAGE_EXAMPLE_FAILURES.extend(usage_failures)
     _NAME_ID_FAILURES.extend(name_id_failures)
+    _VERDICT_FAILURES.extend(verdict_failures)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -903,6 +941,18 @@ def check_name_and_id_forms_are_accepted() -> list[str]:
     return list(_NAME_ID_FAILURES)
 
 
+def check_verdict_names_match_command() -> list[str]:
+    """回执的判定词必须是这条命令自己的词。
+
+    真出过事：`阵法 …` 的判定词写「炼阵失败」、`购买 …` 写「交易失败」、
+    `开丹炉 …` 写「炼丹失败」、`开炉 …` 写「炼器失败」——玩家看不出自己敲的到底是哪条命令。
+    「阵法」后来改名「阵法审查」，四处判定词也改成各自从展示数据取。
+    """
+
+    _corpus()
+    return list(_VERDICT_FAILURES)
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
@@ -919,6 +969,7 @@ CHECKS = (
     ("按钮不重复", check_buttons_not_duplicated),
     ("用法例子能被自己受理", check_usage_examples_are_accepted),
     ("中文写法与 id 写法都受理", check_name_and_id_forms_are_accepted),
+    ("判定词说自己的事", check_verdict_names_match_command),
 )
 
 
