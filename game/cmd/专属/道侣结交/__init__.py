@@ -99,7 +99,11 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
     try:
-        companion, item, grade, quantity = command_input.gift_arguments(message)
+        companion, item, grade, quantity = command_input.gift_arguments(
+            message,
+            reply.text(copy, "命令", "赠予格式"),
+            reply.text(copy, "命令", "赠礼数量"),
+        )
         result = await feature.gift(
             CompanionGiftRequest(
                 user_id, message_context.request_id, companion, item, grade, quantity

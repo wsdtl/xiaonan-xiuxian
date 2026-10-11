@@ -5,10 +5,12 @@ from __future__ import annotations
 from game.features.daolv_jiejiao import CompanionQueryError
 
 
-def gift_arguments(message: str) -> tuple[str, str, str, int]:
+def gift_arguments(
+    message: str, usage: str, quantity_hint: str
+) -> tuple[str, str, str, int]:
     parts = str(message or "").split()
     if len(parts) < 2 or len(parts) > 4:
-        raise CompanionQueryError("格式：赠予 道侣 灵植 [品级] [数量]")
+        raise CompanionQueryError(usage)
     companion, item = parts[:2]
     grade = ""
     quantity = 1
@@ -21,10 +23,10 @@ def gift_arguments(message: str) -> tuple[str, str, str, int]:
     elif len(rest) == 2:
         grade = rest[0]
         if not rest[1].isdecimal():
-            raise CompanionQueryError("赠礼数量必须是正整数")
+            raise CompanionQueryError(quantity_hint)
         quantity = int(rest[1])
     if quantity < 1:
-        raise CompanionQueryError("赠礼数量必须是正整数")
+        raise CompanionQueryError(quantity_hint)
     return companion, item, grade, quantity
 
 
