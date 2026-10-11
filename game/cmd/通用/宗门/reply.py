@@ -142,7 +142,7 @@ def error(copy: SectCopy, code: str) -> DocumentMessage:
 def format_error(
     copy: SectCopy, actions: Sequence[CommandAction]
 ) -> DocumentMessage:
-    """格式错误：文案只给一句提示，完整用法交给「查看帮助」按钮（按钮由玩法层给）。"""
+    """格式错误：说清这次该写什么（按命令的用法），并给「查看帮助」按钮。"""
 
     return error_document(
         _text(copy, "查看", "标题"),

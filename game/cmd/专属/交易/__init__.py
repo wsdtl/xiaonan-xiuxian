@@ -66,7 +66,7 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
     parts = str(message or "").split()
     if len(parts) not in {2, 3} or (len(parts) == 3 and not parts[2].isdecimal()):
         await manager.send(reply.error(
-                feature, feature.copy("错误", "格式"), feature.format_actions(), command="购买"
+                feature, feature.copy("错误", "购买写法"), feature.format_actions(), command="购买"
             ))
         return
     quantity = int(parts[2]) if len(parts) == 3 else 1
