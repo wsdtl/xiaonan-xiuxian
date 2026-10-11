@@ -715,19 +715,65 @@ class FormationService:
         direct = next((entry for entry in entries if entry.instance_key == query), None)
         if direct is not None:
             return direct.instance_key
-        parts = query.rsplit(" ", 1)
-        matches = [
-            entry
-            for entry in entries
-            if entry.name == parts[0]
-            and (
-                len(parts) == 1
-                or _formation_grade_name(entry.grade_id) == _grade_name(parts[1])
-            )
-        ]
+        # 玩家写法与网页一致：`阵法名[灵宝名]`（品级可另给）。
+        # 状态键只是内部身份，绝不回给玩家当输入格式。
+        name_part = query
+        qualifier = ""
+        if name_part.endswith("]") and "[" in name_part:
+            name_part, _, qualifier = name_part[:-1].partition("[")
+            name_part = name_part.strip()
+            qualifier = qualifier.strip()
+        elif " " in query:
+            name_part, _, qualifier = query.rpartition(" ")
+            name_part = name_part.strip()
+            qualifier = qualifier.strip()
+        matches = []
+        for entry in entries:
+            if entry.name != name_part:
+                continue
+            if qualifier:
+                treasure_name = self._treasure_name(getattr(entry, "treasure_id", ""))
+                # 品级有短名（黄）与长名（黄品）两种写法，玩家写哪个都认；
+                # 比对用双向前缀，免得「黄品」被「黄」挡住。
+                words = {
+                    _formation_grade_name(entry.grade_id),
+                    str(getattr(entry, "grade_name", "") or ""),
+                    treasure_name,
+                }
+                if not any(
+                    word and (word.startswith(qualifier) or qualifier.startswith(word))
+                    for word in words
+                ):
+                    continue
+            matches.append(entry)
         if len(matches) != 1:
-            raise FormationError("未找到唯一阵藏条目，请使用阵藏条目编号")
+            raise FormationError(
+                "阵藏里有多条「"
+                + name_part
+                + "」，请补上[灵宝名]或品级："
+                + "、".join(
+                    _formation_grade_name(entry.grade_id)
+                    + " "
+                    + entry.name
+                    + (
+                        "[" + self._treasure_name(entry.treasure_id) + "]"
+                        if getattr(entry, "treasure_id", "")
+                        else ""
+                    )
+                    for entry in matches[:4]
+                )
+            )
         return matches[0].instance_key
+
+    def _treasure_name(self, treasure_id: str) -> str:
+        """先天灵宝的名字（给玩家看的那份）；没有就返回空串。"""
+        identifier = str(treasure_id or "").strip()
+        if not identifier:
+            return ""
+        try:
+            return self._innate_treasure.resolve(identifier).name
+        except Exception:
+            return identifier
 
     def _resolve_formation(self, identifier: str) -> FormationDefinition:
         self._require_initialized()

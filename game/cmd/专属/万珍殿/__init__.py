@@ -18,14 +18,16 @@ def _entry_label(entry: object, services: object) -> str:
     """一句话说清这条是哪一座：品级名 · 灵宝名（没有灵宝就只说品级）。"""
     grade = str(getattr(entry, 'grade_name', '') or '')
     treasure_id = str(getattr(entry, 'treasure_id', '') or '')
-    if not treasure_id:
-        return grade
-    try:
-        raw = dict(services.core.data.entity('先天灵宝', treasure_id))
-        name = str(raw.get('名称') or treasure_id)
-    except Exception:
-        name = treasure_id
-    return (grade + '·' + name) if grade else name
+    # 委托方口径：物品[灵宝]，品级只做前缀。
+    shown = str(getattr(entry, 'name', '') or '')
+    if treasure_id:
+        try:
+            raw = dict(services.core.data.entity('先天灵宝', treasure_id))
+            name = str(raw.get('名称') or treasure_id)
+        except Exception:
+            name = treasure_id
+        shown = shown + '[' + name + ']'
+    return (grade + ' ' + shown).strip() if grade else shown
 
 async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str) -> str:
     """把玩家写的阵法名翻成阵藏条目的状态键。

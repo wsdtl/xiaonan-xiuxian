@@ -18,6 +18,18 @@ from message import DocumentMessage, M
 from ...presentation import sentence
 
 
+def _treasure_name(entry: object) -> str:
+    """条目上记的先天灵宝名；没有（或查不到）返回空串——不写「无灵宝」这种话。"""
+    identifier = str(getattr(entry, 'treasure_id', '') or '').strip()
+    if not identifier:
+        return ""
+    try:
+        from game.app import current_game_services
+
+        return current_game_services().core.innate_treasure.resolve(identifier).name
+    except Exception:
+        return identifier
+
 def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]) -> DocumentMessage:
     builder = (
         M.document()
@@ -31,10 +43,12 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]
         builder.line(M.status("空", tone="muted"), " ", _text(copy, "空"))
     for index, entry in enumerate(value.entries, start=1):
         grade = entry.grade_name or ""
+        # 玩家口径：物品[灵宝]，品级只做前缀；没有灵宝就只写物品名。
+        shown = entry.name + ("[" + _treasure_name(entry) + "]" if _treasure_name(entry) else "")
         builder.item(
             index,
             f"{grade}",
-            M.command(M.text(entry.name), f"查看 {entry.content_id}"),
+            M.command(M.text(shown), f"查看 {entry.content_id}"),
             f" × {entry.quantity} · ",
             M.command(entry.content_id, f"查看 {entry.content_id}"),
         )
