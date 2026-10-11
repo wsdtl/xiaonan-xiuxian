@@ -10,7 +10,7 @@ from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import ForgingAction, ForgingCopy
 
-_PAGES = frozenset({"总览", "预览", "完成"})
+_PAGES = frozenset({"总览", "预览", "完成", "格式"})
 _REQUIRED_TEXT = {
     "总览": frozenset({"标题", "工匠", "流派", "引言", "器阶"}),
     "列表": frozenset({"标题", "工匠", "可炼", "缺材", "页码"}),

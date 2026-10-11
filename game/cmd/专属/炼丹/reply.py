@@ -19,7 +19,7 @@ from game.features.liandan import (
     AlchemyResult,
 )
 
-from ...actions import message_actions
+from ...actions import CommandAction, message_actions
 from ...presentation import sentence
 
 
@@ -174,9 +174,12 @@ def completed(
     return builder.actions(message_actions(actions)).build()
 
 
-def error(copy: AlchemyCopy, message: str) -> DocumentMessage:
+def error(
+    copy: AlchemyCopy, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", "炼丹失败", sentence(message), tone="danger"
+    return error_document(        text(copy, "错误", "标题"), "notice", "炼丹失败", sentence(message), tone="danger",
+        actions=actions,
     )
 
 

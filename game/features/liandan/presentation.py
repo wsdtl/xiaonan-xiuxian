@@ -10,7 +10,7 @@ from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import AlchemyAction, AlchemyCopy
 
-_PAGES = frozenset({"总览", "列表", "预览", "完成"})
+_PAGES = frozenset({"总览", "列表", "预览", "完成", "格式"})
 _REQUIRED_TEXT = {
     "总览": frozenset({"标题", "丹师", "丹门", "引言", "分类"}),
     "列表": frozenset({"标题", "丹师", "可炼", "缺材", "页码"}),

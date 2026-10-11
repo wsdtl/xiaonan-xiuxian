@@ -58,6 +58,11 @@ class ForgingFeature:
     ) -> ForgingResult:
         return await self._call(self._forging.forge(user_id, request_id, identifier))
 
+
+    def format_actions(self) -> tuple[object, ...]:
+        """格式错误页的动作：只有「查看帮助」——完整用法在帮助组件里，不在错误里铺。"""
+
+        return actions(self._buttons, "格式", set())
     def overview_actions(self) -> tuple[ForgingAction, ...]:
         return actions(self._buttons, "总览", set())
 
