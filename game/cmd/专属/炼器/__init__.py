@@ -45,7 +45,7 @@ async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
                 reply.preview(feature.copy(), value, feature.preview_actions(value))
             )
     except ForgingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -78,7 +78,7 @@ async def commit_forging(user_id: str, message: str, message_context: MessageCon
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except ForgingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 __all__ = []

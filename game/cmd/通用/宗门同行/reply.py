@@ -87,11 +87,14 @@ def operation(
     return page(copy, value.page, actions, notice=notice)
 
 
-def error(copy: SectFollowCopy, code: str) -> DocumentMessage:
+def error(
+    copy: SectFollowCopy, code: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     # 统一走 error_document：无 ` / ` 的文案渲染结果与原来相同。
     return error_document(
         _text(copy, "查看", "标题"), _text(copy, "图标", "结果"), "同行失败",
-        _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")), tone="danger"
+        _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")), tone="danger",
+        actions=actions,
     )
 
 

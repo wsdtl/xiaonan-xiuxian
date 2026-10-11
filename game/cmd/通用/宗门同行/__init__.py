@@ -64,7 +64,7 @@ async def sect_follow_command(user_id: str, message: str, message_context: Messa
             )
         )
     except SectFollowFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code))
+        await manager.send(reply.error(feature.copy(), exc.code, feature.page_actions("格式")))
 
 
 __all__ = []
