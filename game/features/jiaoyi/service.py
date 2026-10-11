@@ -16,7 +16,7 @@ from game.core.trade import (
     TradeService,
 )
 
-from .contracts import TradeFeatureError
+from .contracts import TradeFeatureError, TradeAction
 
 
 _Result = TypeVar("_Result")
@@ -29,6 +29,7 @@ class TradeFeature:
         self._data = data
         self._trade = trade
         self._copy: Mapping[str, object] | None = None
+        self._format_actions: tuple[TradeAction, ...] = ()
 
     def initialize(self) -> None:
         if self._copy is not None:
@@ -42,6 +43,21 @@ class TradeFeature:
             if not isinstance(copy.get(section), Mapping):
                 raise JsonDataError(f"交易展示缺少文本.{section}")
         self._copy = copy
+        buttons = copy.get("按钮") or ()
+        self._format_actions = tuple(
+            TradeAction(
+                str(row["编号"]), str(row["名称"]), str(row["命令"]),
+                str(row["行为"]), str(row["样式"]),
+            )
+            for row in buttons
+            if isinstance(row, Mapping)
+        )
+
+    def format_actions(self) -> tuple[TradeAction, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」。"""
+
+        return self._format_actions
+
 
     def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:

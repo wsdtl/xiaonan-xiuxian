@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from ...actions import CommandAction, message_actions
 from ...presentation import format_lines
+
+from typing import Sequence
 
 from game.features.jiaoyi import TradeFeature, TradeOverview, TradePage, TradePurchaseResult
 
@@ -104,7 +107,9 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult) -> DocumentMess
     )
 
 
-def error(feature: TradeFeature, message: str) -> DocumentMessage:
+def error(
+    feature: TradeFeature, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
     builder.line(M.status("交易失败", tone="danger"))
     format_lines(builder, sentence(message))
@@ -112,6 +117,8 @@ def error(feature: TradeFeature, message: str) -> DocumentMessage:
     # 正文已经是这句格式文案时别再补一遍：同一句话印两遍就是零信息。
     if hint not in sentence(message):
         builder.small(hint)
+    if actions:
+        builder.actions(message_actions(actions))
     return builder.build()
 
 

@@ -44,7 +44,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
         value = await feature.page(user_id, parts[0], page_number)
         await manager.send(reply.page(feature, value))
     except TradeFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -65,7 +65,9 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
     feature = current_game_services().features.jiaoyi
     parts = str(message or "").split()
     if len(parts) not in {2, 3} or (len(parts) == 3 and not parts[2].isdecimal()):
-        await manager.send(reply.error(feature, "格式：购买 编号或名称 品级 [数量]"))
+        await manager.send(reply.error(
+                feature, feature.copy("错误", "格式"), feature.format_actions()
+            ))
         return
     quantity = int(parts[2]) if len(parts) == 3 else 1
     try:
@@ -80,7 +82,7 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
         )
         await manager.send(reply.purchased(feature, value))
     except TradeFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = ["router"]
