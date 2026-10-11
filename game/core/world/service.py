@@ -123,42 +123,8 @@ class WorldService:
             )
         self._location_regions = {}
         self._locations_by_xy = {}
-        for location_name, raw in self._locations.items():
-            xy = _xy(raw.get("坐标"), f"地点 {location_name}.坐标")
-            if xy in self._locations_by_xy:
-                raise JsonDataError(f"地点坐标重复：{xy}")
-            directory_region = self._data.entity_record(
-                "地点", location_name
-            ).directory_owner
-            coordinate_region = self._region_at(xy)
-            if directory_region != coordinate_region:
-                raise JsonDataError(
-                    f"地点 {location_name} 的目录区域与坐标区域不一致："
-                    f"{directory_region or '<空>'} != {coordinate_region}"
-                )
-            self._location_regions[location_name] = directory_region
-            self._locations_by_xy[xy] = (location_name, raw)
-        for location_name, raw in self._locations.items():
-            xy = _xy(raw.get("坐标"), f"地点 {location_name}.坐标")
-            terrain_name = self._terrain_at(xy)
-            self._require_pool(f"灵植-{terrain_name}", "基础物品")
-            self._require_pool(f"灵矿-{terrain_name}", "基础物品")
-            for function in _strings(raw.get("可用功能")):
-                sections = self._feature_contents.get(function)
-                if sections is None:
-                    raise JsonDataError(
-                        f"地点 {location_name} 使用未登记功能：{function}"
-                    )
-                for section in sections:
-                    if section == "商店":
-                        self._require_location_shop(location_name)
-                    elif section in {
-                        "炼器工匠", "炼丹师", "阵师", "讨伐", "讨伐首领",
-                        "讨伐辅助", "讨伐属从",
-                    }:
-                        self._require_location_entity(location_name, section)
-                    else:
-                        self._require_location_pool(location_name, section)
+        self._index_locations()
+        self._require_location_contents()
         birthplace = str(world.get("出生地") or "").strip()
         if birthplace not in self._locations:
             raise JsonDataError(f"世界出生地不存在：{birthplace or '<空>'}")
@@ -193,6 +159,50 @@ class WorldService:
         )
         self._initialized = True
         return self.status()
+
+    def _index_locations(self) -> None:
+        """把每个地点登记进区域表与坐标表，顺带查坐标重复与区域不一致。"""
+        for location_name, raw in self._locations.items():
+            xy = _xy(raw.get("坐标"), f"地点 {location_name}.坐标")
+            if xy in self._locations_by_xy:
+                raise JsonDataError(f"地点坐标重复：{xy}")
+            directory_region = self._data.entity_record(
+                "地点", location_name
+            ).directory_owner
+            coordinate_region = self._region_at(xy)
+            if directory_region != coordinate_region:
+                raise JsonDataError(
+                    f"地点 {location_name} 的目录区域与坐标区域不一致："
+                    f"{directory_region or '<空>'} != {coordinate_region}"
+                )
+            self._location_regions[location_name] = directory_region
+            self._locations_by_xy[xy] = (location_name, raw)
+
+
+    def _require_location_contents(self) -> None:
+        """查每个地点的地形池与可用功能是否都登记齐全。"""
+        for location_name, raw in self._locations.items():
+            xy = _xy(raw.get("坐标"), f"地点 {location_name}.坐标")
+            terrain_name = self._terrain_at(xy)
+            self._require_pool(f"灵植-{terrain_name}", "基础物品")
+            self._require_pool(f"灵矿-{terrain_name}", "基础物品")
+            for function in _strings(raw.get("可用功能")):
+                sections = self._feature_contents.get(function)
+                if sections is None:
+                    raise JsonDataError(
+                        f"地点 {location_name} 使用未登记功能：{function}"
+                    )
+                for section in sections:
+                    if section == "商店":
+                        self._require_location_shop(location_name)
+                    elif section in {
+                        "炼器工匠", "炼丹师", "阵师", "讨伐", "讨伐首领",
+                        "讨伐辅助", "讨伐属从",
+                    }:
+                        self._require_location_entity(location_name, section)
+                    else:
+                        self._require_location_pool(location_name, section)
+
 
     @property
     def altitude_unit(self) -> str:
