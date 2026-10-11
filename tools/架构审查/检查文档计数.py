@@ -258,23 +258,29 @@ def _check_count(source: str, name: str) -> int:
 
 
 def check_full_check_counts() -> list[str]:
-    """工具索引里的「必过 N 项」与全量核对的实际条数。"""
+    """三处**当前状态**文档里的「必过 N 项」都要与全量核对的条数一致。
+
+    台账（`tools/基准/说明.md`）与各类审查记录是**史册**：里面的旧数字是当时的史实，不管。
+    这里只管会随判据增减而必须同步的三处——README、工具索引、基线。
+
+    真出过事：基线的小标题「36 项必过项里」在加成 37 项之后没人改，
+    因为原先只覆盖了工具索引一处，而且那处的标签还错写着 README。
+    """
 
     source = (ROOT / "tools" / "全量核对.py").read_text(encoding="utf-8")
     required = _check_count(source, "REQUIRED")
-    text = TOOLS_DOC.read_text(encoding="utf-8")
     problems: list[str] = []
-    for pattern, want, label in (
-        (r"当前必过 (\d+) 项", (required,), "必过"),
-        (r"必过 (\d+) 项", (required,), "README 必过"),
+    for doc, pattern, label in (
+        (TOOLS_DOC, r"当前必过 (\d+) 项", "工具索引"),
+        (ROOT / "README.md", r"必过 (\d+) 项", "README"),
+        (ROOT / "tools" / "基准" / "基线.md", r"\| 必过项 \| \*\*(\d+)\*\*", "基线"),
     ):
-        match = re.search(pattern, text, re.S if label == "README 必过" else 0)
+        match = re.search(pattern, doc.read_text(encoding="utf-8"))
         if match is None:
-            problems.append(f"工具索引里找不到「{label}」的计数句")
+            problems.append(f"{label}里找不到必过项计数句")
             continue
-        got = tuple(int(value) for value in match.groups())
-        if got != want:
-            problems.append(f"工具索引写「{'、'.join(str(v) for v in got)}」（{label}），实际 {want}")
+        if int(match.group(1)) != required:
+            problems.append(f"{label}写「{match.group(1)} 项」，实际 {required} 项")
     return problems
 
 
