@@ -13,7 +13,7 @@
 地点名从 `data/世界/内容/<区域>/<地点>/<地点>.json` 推出（目录名等于文件名的那一层才是地点主体）。
 这样「位置: 功法槽」「地点: map」这类同名字段不会被误判。
 
-    .venv/Scripts/python.exe -X utf8 tools/架构审查/检查规则存地点.py
+    .venv/Scripts/python.exe -X utf8 tools/架构审查/检查规则硬编码.py
 
 **退出码：0 = 干净，1 = 有违规。**
 """
