@@ -205,15 +205,15 @@ def check_unused_definitions() -> list[str]:
 def check_unused_imports() -> list[str]:
     """导入了却没用，就是没清干净的残渣。
 
-    __init__.py 不算：那里的导入是**故意转出**的公开 API，本就不该在本文件里使用。
-    冻结层（launch/ 与 message/）当前也是 0 处，所以一并纳入检查。
+    __init__.py 也查，但只认**显式记号**：`# noqa: F401`（如 `帮助/__init__.py` 的副作用导入）
+    与 `import X as X`（显式再导出，如 `天道后台/__init__.py`）。没有记号又不用的，一并算残渣——
+    真出过事：`角色/__init__.py` 从「意境」那次提交里捡到一句 `from game.features.yijing import YijingError`，
+    用它的命令却落在 `通用/意境/`，于是这条死 import 靠 `__init__.py` 的整体豁免躲过了判据。
     """
 
     problems: list[str] = []
     for path in sorted(ROOT.rglob("*.py")):
         if {".venv", ".git", "_输出", "__pycache__"} & set(path.parts):
-            continue
-        if path.name == "__init__.py":
             continue
         source = path.read_text(encoding="utf-8")
         try:
@@ -244,8 +244,15 @@ def check_unused_imports() -> list[str]:
             for line in source.splitlines()
             if not line.strip().startswith(("import ", "from "))
         )
+        source_lines = source.splitlines()
         for name, line in imported.items():
             if name == "annotations" or name in used or name in body:
+                continue
+            raw = source_lines[line - 1] if 0 < line <= len(source_lines) else ""
+            # 显式记号：`# noqa` 或 `import X as X`（再导出）——项目里"故意的"都留这两种记号。
+            if "noqa" in raw or f" as {name}" in raw:
+                continue
+            if f'"{name}"' in source:
                 continue
             problems.append(
                 f"{path.relative_to(ROOT).as_posix()}:{line} 导入了 {name} 却没用"

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.features.yijing import YijingError
 from game.features.chakan_juese import CharacterOverviewError
 from game.features.chuangjian_renwu import (
     CharacterExistsError,
