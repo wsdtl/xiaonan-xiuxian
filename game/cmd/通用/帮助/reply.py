@@ -48,7 +48,7 @@ def _shown(text: str, id_converter: object) -> str:
 def _home_message(*, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
-        .header(GAME_NAME)
+
         .section("帮助", icon="system")
         .small("按分类查看当前已经开放的命令。")
     )
@@ -126,7 +126,7 @@ def _detail_message(entry: CommandHelpEntry, *, id_converter=None, nav: str = "�
 def _not_found_message(query: str, *, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
-        .header(GAME_NAME)
+
         .section("没有找到帮助", icon="notice")
         .line(M.status("未找到", tone="warning"), " ", query)
         .section("可用分类")

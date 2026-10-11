@@ -328,6 +328,75 @@ def check_usages_have_no_machine_words() -> list[str]:
     return problems
 
 
+
+#: 用法里的占位词。一条命令的用法**全是**这些词，玩家就没有能照抄的例子。
+USAGE_PLACEHOLDERS = (
+    "编号", "名称", "品级", "数量", "页码", "槽位", "孔位",
+    "角色名", "宗门名", "玩家", "目标", "或", "…", "<", ">",
+)
+
+#: 玩家可见文案（说明/结果）里的内部行话。
+PLAYER_JARGON = ("原子", "事务", "幂等", "回滚", "序列化", "落库", "写库")
+
+
+def check_usages_have_concrete_example() -> list[str]:
+    """每条命令至少要有一个**能照抄的例子**。
+
+    委托方 2026-10 指着帮助卡说：「炼阵 的说明写的不行」「下面的炼丹就写得很好」——
+    `炼丹` 给了四个能照抄的例子（炼丹 / 炼丹 恢复丹 / 炼丹 战丹 2 / 炼丹 100005），
+    而 `炼阵` 当时只有一行占位符，玩家照着敲一无所获。本判据就钉这一条：
+    **整条命令的用法不能全是占位写法**（这与「用法例子能被自己受理」互补：那条只跑不带占位词的例子，
+    全是占位词时它会整条跳过，于是这类命令长期没人管）。
+    """
+
+    problems: list[str] = []
+    for path in sorted(GAME.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in USAGE_BLOCK.finditer(text):
+            block = match.group(1)
+            usages = re.findall(r'\"([^\"]+)\"|\'([^\']+)\'', block)
+            items = [a or b for a, b in usages]
+            if not items:
+                continue
+            concrete = [u for u in items if not any(p in u for p in USAGE_PLACEHOLDERS)]
+            if concrete:
+                continue
+            line = text[: match.start()].count("\n") + 1
+            where = path.relative_to(ROOT).as_posix() + ":" + str(line)
+            problems.append(
+                where + " 的用法全是占位写法，没有能照抄的例子：" + items[0].strip()[:60]
+            )
+    return problems
+
+
+def check_player_copy_has_no_jargon() -> list[str]:
+    """玩家可见的说明与结果不许出现内部行话。
+
+    委托方 2026-10：帮助卡上「结果: 原子消耗兽宝、灵矿和灵植…」——「原子」是事务术语，玩家看不懂。
+    同类真出过的还有「在同一事务中转移资产」。参考项目 `xiuxian3` 的富文本规则也写着：
+    「不把数据库字段、内部 ID、配置名、异常栈写给普通玩家」。
+    """
+
+    problems: list[str] = []
+    pattern = re.compile(r'\"(summary|side_effect)\"\s*:\s*\"([^\"]*)\"')
+    for path in sorted(GAME.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in pattern.finditer(text):
+            field, value = match.group(1), match.group(2)
+            for word in PLAYER_JARGON:
+                if word in value:
+                    line = text[: match.start()].count("\n") + 1
+                    where = path.relative_to(ROOT).as_posix() + ":" + str(line)
+                    problems.append(
+                        where + " 的 " + field + " 出现内部行话「" + word + "」：" + value[:50]
+                    )
+    return problems
+
+
 CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
@@ -337,6 +406,8 @@ CHECKS = (
     ("地点面板只许位置/行路取", check_location_panel_callers),
     ("翻页页必须有返回", check_paged_pages_have_way_back),
     ("用法不露机器词", check_usages_have_no_machine_words),
+    ("用法要有能照抄的例子", check_usages_have_concrete_example),
+    ("玩家文案不露行话", check_player_copy_has_no_jargon),
 )
 
 

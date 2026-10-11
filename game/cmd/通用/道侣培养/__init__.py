@@ -47,7 +47,7 @@ async def show_companion_cultivation(user_id: str, manager: Any) -> None:
         "help": {
             "category": "修行",
             "summary": "消耗突破丹为当前同行道侣独立突破",
-            "usage": ("道侣突破 丹药编号或名称",),
+            "usage": ("道侣突破 小还丹", "道侣突破 丹药编号或名称",),
             "side_effect": "消耗共享纳戒中最低品级的一枚对应突破丹",
             "order": 60,
         },
@@ -74,7 +74,7 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
         "help": {
             "category": "修行",
             "summary": "把器藏中的器律覆入当前同行道侣本命武器",
-            "usage": ("道侣覆炼 器律编号或名称 孔位",),
+            "usage": ("道侣覆炼 太白惊鸿 1", "道侣覆炼 器律编号或名称 孔位",),
             "side_effect": "消耗器藏中的一份器律并覆盖道侣武器指定孔位",
             "order": 70,
         },

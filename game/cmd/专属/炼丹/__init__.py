@@ -61,8 +61,8 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地丹师按验药结果炼成一枚丹药",
-            "usage": ("开丹炉 丹药编号或丹药名称",),
-            "side_effect": "原子消耗一件兽宝和所需灵植，并把丹药收入纳戒",
+            "usage": ("开丹炉 小还丹", "开丹炉 丹药编号或丹药名称",),
+            "side_effect": "消耗一件兽宝和所需灵植，把丹药收入纳戒",
             "order": 64,
         },
     },

@@ -52,10 +52,10 @@ async def show_lingcang(user_id: str, message: str, manager: Any) -> None:
             "category": "行动",
             "summary": "向本宗灵藏捐献基础材料或灵石",
             "usage": (
-                "捐入灵藏 灵石 数量",
+                "捐入灵藏 灵石 100", "捐入灵藏 灵石 数量",
                 "捐入灵藏 灵植/灵矿/兽宝 编号或名称 品级 数量",
             ),
-            "side_effect": "原子扣除个人资源并计入宗门灵藏；灵藏只捐入不取用，成品由万珍殿发放",
+            "side_effect": "扣除个人资源，计入宗门灵藏；灵藏只捐入不取用，成品由万珍殿发放",
             "order": 81,
         },
     },

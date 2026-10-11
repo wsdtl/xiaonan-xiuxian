@@ -49,7 +49,7 @@ async def _use(
         "help": {
             "category": "修行",
             "summary": "为人物服用恢复丹或寄存一枚战丹",
-            "usage": ("人物服丹 丹药编号或名称 [品级]",),
+            "usage": ("人物服丹 小还丹", "人物服丹 丹药编号或名称 [品级]",),
             "side_effect": "消耗共享纳戒中的一枚丹药",
             "order": 80,
         },
@@ -73,7 +73,7 @@ async def use_for_character(user_id: str, message: str, message_context: Message
         "help": {
             "category": "修行",
             "summary": "为当前同行道侣服用恢复丹或寄存一枚战丹",
-            "usage": ("道侣服丹 丹药编号或名称 [品级]",),
+            "usage": ("道侣服丹 小还丹", "道侣服丹 丹药编号或名称 [品级]",),
             "side_effect": "消耗共享纳戒中的一枚丹药",
             "order": 90,
         },
@@ -119,7 +119,7 @@ async def _setting(
         "help": {
             "category": "修行",
             "summary": "单独设置人物的战斗自动用药开关",
-            "usage": ("人物自动用药 开或关",),
+            "usage": ("人物自动用药 开", "人物自动用药 开或关",),
             "side_effect": "只改变人物开关，不影响道侣",
             "order": 100,
         },
@@ -143,7 +143,7 @@ async def set_character_automatic(user_id: str, message: str, message_context: M
         "help": {
             "category": "修行",
             "summary": "单独设置当前同行道侣的战斗自动用药开关",
-            "usage": ("道侣自动用药 开或关",),
+            "usage": ("道侣自动用药 开", "道侣自动用药 开或关",),
             "side_effect": "只改变当前同行道侣开关，不影响人物",
             "order": 110,
         },

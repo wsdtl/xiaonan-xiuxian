@@ -80,7 +80,7 @@ async def show_innate_treasure_catalog(user_id: str, message: str, manager: Any)
         "help": {
             "category": "修行",
             "summary": "从个人灵宝谱中选择一件先天灵宝执掌",
-            "usage": ("执掌灵宝 编号或名称",),
+            "usage": ("执掌灵宝 斩仙飞刀", "执掌灵宝 编号或名称",),
             "side_effect": "替换唯一先天灵宝槽，不消耗灵宝",
             "order": 60,
         },

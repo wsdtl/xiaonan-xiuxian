@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from contextvars import ContextVar
 from dataclasses import replace
 from typing import Any, Literal
 
@@ -49,6 +50,22 @@ def _rich(*parts: object) -> RichText:
             _assert_semantic_text(text)
             result.append(Text(text))
     return tuple(result)
+
+
+#: 本次回复的人物头（昵称 境界 等级）。由命令层统一设置，业务函数不得手写。
+_IDENTITY: ContextVar[tuple[object, ...] | None] = ContextVar(
+    "message_identity", default=None
+)
+
+
+def set_identity(*parts: object):
+    """设置本次回复的人物头，返回可还原的 token。"""
+    return _IDENTITY.set(tuple(parts) if parts else None)
+
+
+def reset_identity(token: object) -> None:
+    """还原人物头设置。"""
+    _IDENTITY.reset(token)  # type: ignore[arg-type]
 
 
 class DocumentBuilder:
@@ -178,7 +195,14 @@ class DocumentBuilder:
             raise ValueError(
                 "正文联动不能与底部按钮重复：" + "、".join(sorted(overlap))
             )
-        return DocumentMessage(Document(tuple(self._blocks), tuple(self._actions)))
+        identity = _IDENTITY.get()
+        return DocumentMessage(
+            Document(
+                tuple(self._blocks),
+                tuple(self._actions),
+                _rich(*identity) if identity else (),
+            )
+        )
 
     def _append_section_line(self, line: ContentLine) -> None:
         if self._section_index is None:

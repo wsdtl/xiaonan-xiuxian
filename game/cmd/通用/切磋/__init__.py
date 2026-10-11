@@ -19,7 +19,7 @@ from typing import Any
         "help": {
             "category": "战斗",
             "summary": "向附近玩家及其同行编组发起切磋",
-            "usage": ("切磋 玩家编号或姓名",),
+            "usage": ("切磋 云中鹤", "切磋 玩家编号或姓名",),
             "side_effect": "发送切磋邀约，不立即改变正式资源",
             "order": 80,
         },

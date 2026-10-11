@@ -228,6 +228,8 @@ class Document:
 
     blocks: tuple[DocumentBlock, ...] = ()
     actions: tuple[Action, ...] = ()
+    #: 人物头（昵称 境界 等级）。由命令层统一注入，业务不得手写。
+    identity: RichText = ()
 
 
 @dataclass(frozen=True)

@@ -78,7 +78,13 @@ def test_registration_keeps_aliases_regex_order_and_reload_semantics(monkeypatch
     command.GameCommand.regex(patterns, metadata=metadata)(handler)
     assert [r[0] for r in command.registered_command_routes()] == ['甲', '丙', '丁.*', '戊.*']
     assert [row[1]['cmd'] for row in registered[-2:]] == list(patterns)
-    assert all(row[2] is handler for row in registered)
+    # 统一回复层会给每个命令套一层人物头包装（见 game/cmd/command.py 的 _with_identity）：
+    # 注册进去的可以是被包装过的函数，但**包装必须保留原函数**（__wrapped__）**且签名一致**——
+    # 依赖注入正是按签名解析参数的，签名一变命令就调不起来。这里把这两条都钉住。
+    import inspect
+
+    assert all(getattr(row[2], '__wrapped__', row[2]) is handler for row in registered)
+    assert all(inspect.signature(row[2]) == inspect.signature(handler) for row in registered)
     assert not helps
     with pytest.raises(TypeError, match='正则命令'):
         command.GameCommand.regex('not a pattern', metadata=metadata)

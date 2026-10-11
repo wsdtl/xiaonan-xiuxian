@@ -86,7 +86,7 @@ def overview(
     attributes = dict(character.attributes)
     builder = (
         M.document()
-        .header(character.name)
+
         .section("身份", icon="status")
         .row(
             ("性别", character.gender),

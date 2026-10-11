@@ -17,7 +17,7 @@ from typing import Any
         'help': {
             'category': '角色',
             'summary': '用一个兑换码换回数据里写好的发放',
-            'usage': ('兑换 <码>',),
+            'usage': ('兑换 XN2026', '兑换 <码>',),
             'side_effect': '每个码每人限次（数据里定）；码不区分大小写，允许首尾空白',
             'order': 80,
         },

@@ -56,8 +56,8 @@ async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地工匠按审材结果炼成一份器律",
-            "usage": ("开炉 器律编号或名称",),
-            "side_effect": "原子消耗兽宝和灵矿，并把一份器律收入器藏",
+            "usage": ("开炉 太白惊鸿", "开炉 器律编号或名称",),
+            "side_effect": "消耗兽宝和灵矿，把一份器律收入器藏",
             "order": 62,
         },
     },

@@ -89,8 +89,8 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地阵师把三相材料炼成一份一次性阵法",
-            "usage": ("炼阵 阵法编号或名称 品级 [圣品兽宝数 灵矿数 灵植数]",),
-            "side_effect": "原子消耗兽宝、灵矿和灵植，并把阵法收入阵藏",
+            "usage": ("炼阵 周天星斗大阵 圣 1944 5832 3888", "炼阵 阵法编号或名称 品级 [圣品兽宝数 灵矿数 灵植数]",),
+            "side_effect": "消耗兽宝、灵矿和灵植，把阵法收入阵藏",
             "order": 66,
         },
     },

@@ -23,6 +23,9 @@ from ..schema import (
 
 def render_plain_text(document: Document) -> str:
     lines: list[str] = []
+    if document.identity:
+        lines.append(_render_rich(document.identity))
+        lines.append("")
     previous_block = None
     for block in document.blocks:
         if lines and _needs_block_separator(previous_block, block):

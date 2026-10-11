@@ -185,7 +185,9 @@ def _sections(body: str) -> list[tuple[str, list[str]]]:
         if not item:
             continue
         if depth == 1:
-            current = None if (":" in item or "：" in item) else []
+            # 主标题（整行加粗，如「> **晓楠修仙**」）和自带内容的行都不是栏目标题。
+            is_title_line = item.startswith("**") and item.endswith("**") and len(item) > 4
+            current = None if (":" in item or "：" in item or is_title_line) else []
             if current is not None:
                 sections.append((item, current))
         elif depth >= 2 and current is not None:

@@ -44,7 +44,7 @@ async def change_gender(user_id: str, message_context: MessageContext, manager: 
         "help": {
             "category": "炼制",
             "summary": "在太素坊择一族重塑种族",
-            "usage": ("化形 <族名>", "太素坊化形 <族名>"),
+            "usage": ("化形 人族", "化形 <族名>", "太素坊化形 <族名>"),
             "side_effect": "消耗一枚万化易形丹；修行、构筑与道侣关系保持不变",
             "order": 73,
         },

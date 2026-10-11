@@ -46,6 +46,10 @@ def render_markdown(
     """按统一标题、正文和附加区边界渲染 Markdown。"""
 
     lines: list[str] = []
+    # 人物头（昵称 境界 等级）：统一回复层印在第一行，业务不写。
+    if document.identity:
+        lines.append(f"**{_render_rich(document.identity, command_renderer)}**")
+        lines.append("")
     previous_block = None
     for block in document.blocks:
         if isinstance(block, HeaderBlock):
@@ -171,8 +175,13 @@ def _progress_text(value: Progress) -> str:
 
 
 def _render_header(block: HeaderBlock) -> str:
+    """业务主标题走引用层。
+
+    整条消息**唯一**不套引用、**唯一**整行加粗的位置留给人物头（昵称 境界 等级）——
+    它由统一回复层生成（见 Document.identity）。业务标题跟正文同层，避免两条加粗行顶在一起。
+    """
     text = "".join(span.value for span in block.content if isinstance(span, Text))
-    return f"**{_escape(text)}**"
+    return f"> **{_escape(text)}**"
 
 
 def _escape(value: object) -> str:

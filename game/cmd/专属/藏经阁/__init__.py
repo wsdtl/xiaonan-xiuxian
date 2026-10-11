@@ -46,7 +46,7 @@ async def show_cangjing(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "行动",
             "summary": "把藏经阁功法借入人物指定功法槽",
-            "usage": ("借阅功法 编号或名称 槽位",),
+            "usage": ("借阅功法 五岳镇界镇岳诀 1", "借阅功法 编号或名称 槽位",),
             "side_effect": "替换指定人物功法槽；离开洞天后仍生效，离宗时恢复原功法",
             "order": 86,
         },
