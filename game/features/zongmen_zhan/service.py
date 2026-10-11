@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
+from game.core.sect_assets import SectAssetError
 from game.core.sect_war import (
     SectWarError,
     SectWarHistoryPage,
@@ -72,37 +73,37 @@ class SectWarFeature:
         self._buttons = buttons
 
     async def challenge(self, user_id: str, target: str, wager: int, request_id: str) -> SectWarView:
-        return await self._war.challenge(user_id, target, wager, request_id)
+        return await self._pass(self._war.challenge(user_id, target, wager, request_id))
 
     async def accept(self, user_id: str, request_id: str) -> SectWarView:
-        return await self._war.accept(user_id, request_id)
+        return await self._pass(self._war.accept(user_id, request_id))
 
     async def reject(self, user_id: str, request_id: str) -> SectWarView:
-        return await self._war.reject(user_id, request_id)
+        return await self._pass(self._war.reject(user_id, request_id))
 
     async def withdraw(self, user_id: str, request_id: str) -> SectWarView:
-        return await self._war.withdraw(user_id, request_id)
+        return await self._pass(self._war.withdraw(user_id, request_id))
 
     async def cancel(self, user_id: str, request_id: str) -> SectWarView:
-        return await self._war.cancel(user_id, request_id)
+        return await self._pass(self._war.cancel(user_id, request_id))
 
     async def lock(self, user_id: str, request_id: str, formation_entry: str="") -> SectWarView:
-        return await self._war.lock(user_id, request_id, formation_entry)
+        return await self._pass(self._war.lock(user_id, request_id, formation_entry))
 
     async def unlock(self, user_id: str, request_id: str) -> SectWarView:
-        return await self._war.unlock(user_id, request_id)
+        return await self._pass(self._war.unlock(user_id, request_id))
 
     async def start(self, user_id: str, request_id: str) -> SectWarView:
-        return await self._war.start(user_id, request_id)
+        return await self._pass(self._war.start(user_id, request_id))
 
     async def current(self, user_id: str, request_id: str="") -> SectWarView:
-        return await self._war.current(user_id, request_id)
+        return await self._pass(self._war.current(user_id, request_id))
 
     async def history(self, user_id: str, page: int=1) -> SectWarHistoryPage:
-        return await self._war.history(user_id, page)
+        return await self._pass(self._war.history(user_id, page))
 
     async def view(self, user_id: str, war_id: str) -> SectWarView:
-        return await self._war.view(user_id, war_id)
+        return await self._pass(self._war.view(user_id, war_id))
 
     def text(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._text is None:
@@ -112,6 +113,17 @@ class SectWarFeature:
         except KeyError as exc:
             raise RuntimeError(f"宗门战展示缺少文本：{section}.{key}") from exc
         return template.format_map(values or {})
+
+    async def _pass(self, awaitable: Awaitable[Any]) -> Any:
+        """宗门公共资产的异常（如「宗门灵石不足」）在这一层翻译成宗门战自己的错误类型。
+
+        分层规定：命令层不得导入 `game.core.*`，所以核心的异常必须在玩法层收口；
+        `error()` 落不到展示键时会直接用异常自己的话，提示文案因此原样保留。
+        """
+        try:
+            return await awaitable
+        except SectAssetError as exc:
+            raise SectWarError(str(exc)) from exc
 
     def error(self, error: SectWarError) -> str:
         if self._text is not None and error.code in self._text["错误"]:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from game.core.sect_assets import SectAssetError
 from game.features.zongmen_zhan import SectWarView, SectWarFeature, SectWarError
 
 
@@ -44,14 +43,8 @@ async def challenge(user_id: str, message: str, message_context: MessageContext,
         await manager.send(reply.view(_feature(), value))
     except ValueError:
         await manager.send(reply.error(_feature(), _feature().text("错误", "challenge_format"), _feature().format_actions("约战格式")))
-    except (SectAssetError, SectWarError) as exc:
-        # 宗门战异常带 code，走玩法层的 error()；资产异常（如宗门灵石不足）只带一句人话，直接用它自己那句。
-        message = _feature().error(exc) if isinstance(exc, SectWarError) else str(exc)
-        await manager.send(
-            reply.error(
-                _feature(), message, _feature().format_actions("约战格式")
-            )
-        )
+    except SectWarError as exc:
+        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 @GameCommand.command(
@@ -207,14 +200,8 @@ async def current(user_id: str, message: str, message_context: MessageContext, m
             else await _feature().current(user_id, message_context.request_id)
         )
         await manager.send(reply.view(_feature(), value))
-    except (SectAssetError, SectWarError) as exc:
-        # 宗门战异常带 code，走玩法层的 error()；资产异常（如宗门灵石不足）只带一句人话，直接用它自己那句。
-        message = _feature().error(exc) if isinstance(exc, SectWarError) else str(exc)
-        await manager.send(
-            reply.error(
-                _feature(), message, _feature().format_actions("约战格式")
-            )
-        )
+    except SectWarError as exc:
+        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 @GameCommand.command(
@@ -240,27 +227,15 @@ async def history(user_id: str, message: str, manager: Any) -> None:
         )
     except ValueError:
         await manager.send(reply.error(_feature(), _feature().text("错误", "history_format"), _feature().format_actions("战录格式")))
-    except (SectAssetError, SectWarError) as exc:
-        # 宗门战异常带 code，走玩法层的 error()；资产异常（如宗门灵石不足）只带一句人话，直接用它自己那句。
-        message = _feature().error(exc) if isinstance(exc, SectWarError) else str(exc)
-        await manager.send(
-            reply.error(
-                _feature(), message, _feature().format_actions("约战格式")
-            )
-        )
+    except SectWarError as exc:
+        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 async def _run(manager: Any, operation: Awaitable[SectWarView]) -> None:
     try:
         await manager.send(reply.view(_feature(), await operation))
-    except (SectAssetError, SectWarError) as exc:
-        # 宗门战异常带 code，走玩法层的 error()；资产异常（如宗门灵石不足）只带一句人话，直接用它自己那句。
-        message = _feature().error(exc) if isinstance(exc, SectWarError) else str(exc)
-        await manager.send(
-            reply.error(
-                _feature(), message, _feature().format_actions("约战格式")
-            )
-        )
+    except SectWarError as exc:
+        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 __all__ = []

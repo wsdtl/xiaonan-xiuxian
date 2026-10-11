@@ -28,7 +28,7 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
     for entry in snapshot.entries:
         if '阵法' not in str(getattr(entry, 'subcategory', '')):
             continue
-        if str(getattr(entry, 'name', '')) != query:
+        if query not in {str(getattr(entry, 'name', '')), str(getattr(entry, 'content_id', ''))}:
             continue
         if qualifier:
             treasure_id = str(getattr(entry, 'instance_key', '')).split(':')[2] if str(
