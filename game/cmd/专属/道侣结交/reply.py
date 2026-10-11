@@ -33,6 +33,7 @@ def error(
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
     return error_document(        text(copy, "错误", "标题"), copy.icons["错误"], "交互失败", message, tone="danger",
         actions=actions,
+        hint=text(copy, "命令", "格式"),
     )
 
 

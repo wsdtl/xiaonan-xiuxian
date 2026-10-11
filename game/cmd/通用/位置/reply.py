@@ -186,6 +186,9 @@ def error(
     builder = M.document().section(title, icon=copy.error_icon)
     builder.line(M.status("查询失败", tone="danger"))
     format_lines(builder, message)
+    # 尾注：撞墙时补一句「要查写法就发查看帮助」。正文已经是这句就别印两遍。
+    if copy.error_hint and copy.error_hint not in message:
+        builder.small(copy.error_hint)
     builder.actions(message_actions(actions))
     return builder.build()
 

@@ -95,6 +95,7 @@ def error(
         _text(copy, "查看", "标题"), _text(copy, "图标", "结果"), "同行失败",
         _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")), tone="danger",
         actions=actions,
+        hint=_text(copy, "错误", "格式"),
     )
 
 
@@ -110,6 +111,7 @@ def format_error(
         _text(copy, "错误", "写法"),
         tone="warning",
         actions=actions,
+        hint=_text(copy, "错误", "格式"),
     )
 
 

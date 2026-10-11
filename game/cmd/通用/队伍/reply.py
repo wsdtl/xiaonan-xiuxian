@@ -112,9 +112,10 @@ def format_error(
         _text(copy, "查看", "标题"),
         _text(copy, "图标", "邀请"),
         "格式有误",
-        _text(copy, "错误", "格式"),
+        _text(copy, "错误", "写法"),
         tone="warning",
         actions=actions,
+        hint=_text(copy, "错误", "格式"),
     )
 
 

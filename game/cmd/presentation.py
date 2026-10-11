@@ -59,6 +59,7 @@ def error_document(
     message: object,
     *,
     tone: str = "danger",
+    hint: object = "",
     actions: object = (),
 ) -> object:
     """失败回执的统一形状：一节标题 + 一行状态 + 逐行铺开的说明。
@@ -72,6 +73,9 @@ def error_document(
     builder = M.document().section(title, icon=icon)
     builder.line(M.status(status, tone=tone))
     format_lines(builder, message)
+    # 尾注：撞墙时补一句「要查写法就发查看帮助」。正文已经是这句就别印两遍（同一句话印两遍就是零信息）。
+    if hint and str(hint) not in str(message):
+        builder.small(hint)
     if actions:
         from game.cmd.actions import message_actions
 

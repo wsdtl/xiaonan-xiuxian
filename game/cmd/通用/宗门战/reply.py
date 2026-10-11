@@ -114,6 +114,7 @@ def error(
         message,
         tone="danger",
         actions=actions,
+        hint=feature.text("错误", "格式"),
     )
 
 

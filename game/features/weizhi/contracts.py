@@ -71,6 +71,7 @@ class PositionCopy:
     locations_section: str
     locations_empty: str
     invalid_command: str
+    error_hint: str
 
 
 @dataclass(frozen=True)
