@@ -365,6 +365,37 @@ def check_no_duplicate_sections() -> list[str]:
     return problems
 
 
+LEDGER = ROOT / "tools" / "基准" / "说明.md"
+
+
+def check_ledger_index() -> list[str]:
+    """台账三千多行、30 多个大节，靠「## 目录」那一节导航：每个大节都要在目录里。
+
+    真出过事：这份史册长到没人能翻，加完目录又没人保证以后加节时补行——
+    所以让判据点数，而不是靠自觉。
+    """
+
+    text = LEDGER.read_text(encoding="utf-8")
+    start = text.find("\n## 目录")
+    if start < 0:
+        return ["台账里找不到「## 目录」那一节"]
+    rest = text[start:]
+    nxt = rest.find("\n## ", 1)
+    if nxt < 0:
+        nxt = len(rest)
+    toc, body = rest[:nxt], rest[nxt:]
+    problems: list[str] = []
+    for line in body.split("\n"):
+        if not line.startswith("## "):
+            continue
+        title = line[3:].strip()
+        if title == "目录":
+            continue
+        if ("- " + title) not in toc:
+            problems.append(f"台账大节「{title[:24]}」不在目录里")
+    return problems
+
+
 CHECKS = (
     ("README 结构计数", check_readme_structure),
     ("README 实测规模", check_readme_runtime),
@@ -373,6 +404,7 @@ CHECKS = (
     ("工具索引点名", check_tools_listing),
     ("核对项数", check_full_check_counts),
     ("无重复章节", check_no_duplicate_sections),
+    ("台账目录", check_ledger_index),
 )
 
 
