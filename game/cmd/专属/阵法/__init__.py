@@ -41,7 +41,7 @@ def _request(
 
 
 @GameCommand.command(
-    cmd="阵法",
+    cmd="阵法审查",
     metadata={
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
@@ -49,10 +49,10 @@ def _request(
             "category": "炼制",
             "summary": "查看此地阵师开放的阵法，或审看一座阵法的三相投入",
             "usage": (
-                "阵法",
-                "阵法 2",
-                "阵法 周天星斗大阵 黄",
-                "阵法 周天星斗大阵 圣 1944 5832 3888",
+                "阵法审查",
+                "阵法审查 2",
+                "阵法审查 周天星斗大阵 黄",
+                "阵法审查 周天星斗大阵 圣 1944 5832 3888",
             ),
             "side_effect": "只审材，不消耗材料",
             "order": 65,
@@ -78,7 +78,7 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
             reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
     except (FormationCraftFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="阵法审查"))
 
 
 @GameCommand.command(
@@ -108,7 +108,7 @@ async def commit_formation(user_id: str, message: str, message_context: MessageC
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except (FormationCraftFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼阵"))
 
 
 __all__ = []

@@ -45,7 +45,7 @@ async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
                 reply.preview(feature.copy(), value, feature.preview_actions(value))
             )
     except ForgingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼器"))
 
 
 @GameCommand.command(
@@ -68,7 +68,7 @@ async def commit_forging(user_id: str, message: str, message_context: MessageCon
     if not query:
         await manager.send(
             reply.error(
-      feature.copy(), reply.text(feature.copy(), "错误", "格式"), feature.format_actions()
+      feature.copy(), reply.text(feature.copy(), "错误", "格式"), feature.format_actions(), command="开炉"
   )
         )
         return
@@ -78,7 +78,7 @@ async def commit_forging(user_id: str, message: str, message_context: MessageCon
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except ForgingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开炉"))
 
 
 __all__ = []

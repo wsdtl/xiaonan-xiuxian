@@ -50,7 +50,7 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
             reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
     except (AlchemyFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼丹"))
 
 
 @GameCommand.command(
@@ -73,7 +73,7 @@ async def commit_alchemy(user_id: str, message: str, message_context: MessageCon
     if not query:
         await manager.send(
             reply.error(
-      feature.copy(), reply.text(feature.copy(), "错误", "格式"), feature.format_actions()
+      feature.copy(), reply.text(feature.copy(), "错误", "格式"), feature.format_actions(), command="开丹炉"
   )
         )
         return
@@ -83,7 +83,7 @@ async def commit_alchemy(user_id: str, message: str, message_context: MessageCon
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except AlchemyFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开丹炉"))
 
 
 __all__ = []
