@@ -42,8 +42,8 @@
     "已取消": "宗门战已取消"
   },
   "错误": {
-    "challenge_format": "用法见下方「查看帮助」。",
-    "history_format": "用法见下方「查看帮助」。",
+    "challenge_format": "要查这条命令的写法，发「查看帮助」。",
+    "history_format": "要查这条命令的写法，发「查看帮助」。",
     "target_invalid": "没有找到这个敌对宗门，或不能向本宗约战。",
     "active_exists": "其中一方已有尚未结束的宗门战。",
     "surface_required": "宗门战只能在地表发起。",
