@@ -76,6 +76,9 @@ async def yanzhantai(user_id: str, message: str, message_context: MessageContext
     )
 
 
+_FACILITY_PAGE = {"炼器": "百炼堂", "炼丹": "丹鼎阁", "炼阵": "演阵台"}
+
+
 async def _dispatch(
     facility: str, user_id: str, query: str, request_id: str, manager: Any
 ) -> None:
@@ -155,7 +158,13 @@ async def _dispatch(
         )
         await manager.send(reply.preview(feature.copy(), value))
     except (SectFacilityFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(
+            reply.error(
+                feature.copy(),
+                str(exc),
+                feature.format_actions(_FACILITY_PAGE[facility]),
+            )
+        )
 
 
 def _source(query: str) -> tuple[str, list[str]]:

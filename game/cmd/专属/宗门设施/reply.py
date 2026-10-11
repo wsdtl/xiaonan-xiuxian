@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from ...actions import CommandAction
 from ...presentation import error_document
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Sequence
 
 from message import DocumentMessage, M
 
@@ -163,9 +164,19 @@ def completed(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMess
     )
 
 
-def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
+def error(
+    copy: Mapping[str, Mapping[str, str]],
+    message: str,
+    actions: Sequence[CommandAction] = (),
+) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        copy["错误"].get("标题", "宗门洞天"), "notice", "炼制失败", message, tone="danger"
+    return error_document(
+        copy["错误"].get("标题", "宗门洞天"),
+        "notice",
+        "炼制失败",
+        message,
+        tone="danger",
+        actions=actions,
     )
 
 

@@ -2,6 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class _SheshiAction:
+    """宗门设施回执上的动作，字段名与 CommandAction 契约一致。"""
+
+    action_id: str
+    label: str
+    command: str
+    behavior: str
+    style: str
+
 from game.core.sect_facilities import (
     SectForgingPreview,
     SectAlchemyPreview,
@@ -33,9 +46,24 @@ class SectFacilityFeature:
         if self._copy is not None:
             raise RuntimeError("宗门设施玩法已经初始化")
         raw = self._data.dataset("宗门设施展示").get("文本")
+        self._format_buttons = tuple(
+            (str(row["页面"]), str(row["编号"]), str(row["名称"]), str(row["命令"]), str(row["行为"]), str(row["样式"]))
+            for row in (self._data.dataset("宗门设施按钮").get("按钮") or ())
+            if isinstance(row, Mapping)
+        )
         if not isinstance(raw, Mapping):
             raise JsonDataError("宗门设施展示缺少文本.json")
         self._copy = raw
+
+    def format_actions(self, page: str) -> tuple[object, ...]:
+        """格式与提示类回执的动作：只给该设施页面的「查看帮助」。"""
+
+        return tuple(
+            _SheshiAction(编号, 名称, 命令, 行为, 样式)
+            for (页面, 编号, 名称, 命令, 行为, 样式) in self._format_buttons
+            if 页面 == page
+        )
+
 
     def copy(self) -> Mapping[str, Mapping[str, str]]:
         if self._copy is None:
