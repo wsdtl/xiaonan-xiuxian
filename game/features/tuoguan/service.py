@@ -23,6 +23,12 @@ class HostingFeature:
             raise RuntimeError("托管核心必须先于托管玩法启动")
         self._copy = load_presentation(self._data)
 
+    def format_actions(self) -> tuple[object, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」。"""
+
+        return self.copy().format_actions
+
+
     def copy(self) -> HostingCopy:
         if self._copy is None:
             raise RuntimeError("托管玩法微服务尚未初始化")

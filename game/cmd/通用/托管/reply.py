@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from ...actions import CommandAction
 from ...presentation import error_document
 
 from datetime import datetime
+
+from typing import Sequence
 
 from game.features.tuoguan import HostingCopy, HostingResult
 from message import DocumentMessage, M
@@ -103,16 +106,21 @@ def result(copy: HostingCopy, value: HostingResult) -> DocumentMessage:
     return document.build()
 
 
-def error(copy: HostingCopy, code: str) -> DocumentMessage:
+def error(
+    copy: HostingCopy, code: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     # 统一走 error_document：无 ` / ` 的文案渲染结果与原来相同。
     return error_document(
         _text(copy, "结果", "标题"), _text(copy, "图标", "结果"), "托管失败",
-        _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")), tone="danger"
+        _text(copy, "错误", _ERROR_KEYS.get(code, "同行变化")), tone="danger",
+        actions=actions,
     )
 
 
-def format_error(copy: HostingCopy) -> DocumentMessage:
-    return error(copy, "format")
+def format_error(
+    copy: HostingCopy, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
+    return error(copy, "format", actions)
 
 
 def _time(value: datetime) -> str:

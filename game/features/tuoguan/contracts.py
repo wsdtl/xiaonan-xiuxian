@@ -15,8 +15,20 @@ class HostingFeatureError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class HostingAction:
+    """托管回执上的动作，字段名与 CommandAction 契约一致。"""
+
+    action_id: str
+    label: str
+    command: str
+    behavior: str
+    style: str
+
+
+@dataclass(frozen=True)
 class HostingCopy:
     text: Mapping[str, Mapping[str, str]]
+    format_actions: tuple[HostingAction, ...] = ()
 
 
 @dataclass(frozen=True)

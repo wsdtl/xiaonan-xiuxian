@@ -38,7 +38,7 @@ async def hosting_command(user_id: str, message: str, message_context: MessageCo
             runtime.schedule_plan(value.session)
         await manager.send(reply.result(feature.copy(), value))
     except HostingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code))
+        await manager.send(reply.error(feature.copy(), exc.code, feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -63,7 +63,7 @@ async def resume_hosting(user_id: str, message_context: MessageContext, manager:
             runtime.schedule_plan(value.session)
         await manager.send(reply.result(feature.copy(), value))
     except HostingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code))
+        await manager.send(reply.error(feature.copy(), exc.code, feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -88,7 +88,7 @@ async def cancel_hosting(user_id: str, message_context: MessageContext, manager:
             runtime.cancel_plan(value.session.session_id)
         await manager.send(reply.result(feature.copy(), value))
     except HostingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code))
+        await manager.send(reply.error(feature.copy(), exc.code, feature.format_actions()))
 
 
 __all__ = []
