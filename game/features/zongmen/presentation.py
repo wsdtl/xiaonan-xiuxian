@@ -15,7 +15,7 @@ from game.features.presentation import (
 from .contracts import SectAction, SectCopy
 
 _TEXT_SECTIONS = frozenset({"图标", "格式", "查看", "结果", "错误"})
-_PAGES = frozenset({"未加入", "待处理邀请", "宗主", "长老", "弟子"})
+_PAGES = frozenset({"未加入", "待处理邀请", "宗主", "长老", "弟子", "格式"})
 
 
 def load_presentation(
