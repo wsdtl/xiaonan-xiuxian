@@ -195,9 +195,12 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     from launch.adapter.local import dispatch
     from launch.adapter.local.handler import LocalEventHandler
 
-    scratch = ROOT / "_输出" / "临时"
+    # 判据是**并行**跑的（`tools/全量核对.py` 用线程池），若与别的判据共用同一个临时目录，
+    # 对方的清理动作会把本判据正在用的库删掉——SQLite 随后把它当空库重开，
+    # 症状是「no such table: player_state」这种莫名其妙的偶发。所以本判据独占一个子目录。
+    scratch = ROOT / "_输出" / "临时" / ("消息判据-" + uuid.uuid4().hex[:8])
     scratch.mkdir(parents=True, exist_ok=True)
-    database = scratch / ("消息判据-" + uuid.uuid4().hex[:8] + ".db")
+    database = scratch / "game.db"
     app.game_config = replace(
         app.game_config,
         database=replace(app.game_config.database, path=database),
@@ -562,8 +565,10 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     asyncio.run(run())
     baselines = dict(services.core.character.attribute_baselines())
     services.core.database.close()
-    for leftover in scratch.glob(database.name + "*"):
+    service_temp = scratch
+    for leftover in service_temp.glob("*"):
         leftover.unlink(missing_ok=True)
+    service_temp.rmdir()
     _DEEP_FAILURES.extend(deep_failures)
     _SMOKE_FAILURES.extend(smoke_failures)
     _DUPLICATE_BUTTONS.extend(duplicate_buttons)

@@ -23,12 +23,18 @@ def _static_problems() -> list[str]:
     script = ROOT / 'static' / 'wanzhen' / 'app.js'
     text = script.read_text(encoding='utf-8')
     for number, line in enumerate(text.splitlines(), start=1):
-        if '捐入万珍殿 阵法' in line and 'item.key' not in line:
+        if '捐入万珍殿 阵法' not in line:
+            continue
+        # 阵法只报名字：状态键（阵法编号:品级:灵宝编号）与纯阵法编号都是代码内部的东西，玩家不该见。
+        if 'item.key' in line or 'item.id' in line:
             problems.append(
-                'static/wanzhen/app.js:%d 阵法命令没用条目键（会用阵法编号，后端必然回「阵藏中没有该阵法」）' % number
+                'static/wanzhen/app.js:%d 阵法命令用了条目键/编号，玩家看到的是机器键' % number
+            )
+        elif 'item.name' not in line:
+            problems.append(
+                'static/wanzhen/app.js:%d 阵法命令既没用阵法名，也没报出条目键/编号' % number
             )
     return problems
-
 
 async def _runtime_problems() -> list[str]:
     import game.app as app
@@ -83,11 +89,9 @@ async def _runtime_problems() -> list[str]:
         problems.append('网页条目里没有阵法，判据本身失效')
         return problems
     for row in formations:
-        if not str(row.get('key') or '').count(':'):
-            problems.append(
-                '网页条目 %s 没带条目标识，页面会拼出不能用的阵法命令' % row.get('id')
-            )
-    command = '捐入万珍殿 阵法 ' + str(formations[0]['key'])
+        if not str(row.get('name') or ''):
+            problems.append('网页条目 %s 没带阵法名，页面拼不出命令' % row.get('id'))
+    command = '捐入万珍殿 阵法 ' + str(formations[0]['name'])
     result = await dispatch(user_id=user_id, raw_message=command, event_id='网页判据-捐')
     text = str(getattr(result.replies[0].message, 'content', '')) if result.replies else ''
     if '存入' not in text:

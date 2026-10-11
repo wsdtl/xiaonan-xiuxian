@@ -14,31 +14,41 @@ from typing import Any
 _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
 
 
-async def _formation_key(feature: Any, user_id: str, wanted: str, grade: str) -> str:
-    """把玩家写的阵法（名字或编号，可带品级）翻成阵藏条目的状态键。
+async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str) -> str:
+    """把玩家写的阵法名翻成阵藏条目的状态键。
 
-    阵藏条目在库里是一条状态键（阵法编号:品级:灵宝编号）——玩家不该背它。
-    已经是状态键就原样放行；否则在自己的阵藏里按名字找：唯一一条就用它，
-    找不到或多条，就用展示数据里的话回绝（多条时把候选条目摆出来让他补品级）。
+    条目在库里是一条状态键（阵法编号:品级:灵宝编号），但**那是代码内部的东西，玩家永远不该见到**。
+    这里只认阵法名；同名多条（同阵法同品级、不同灵宝）时可以补一个词：品级名或灵宝名。
+    找不到或多条，就用展示数据里的话回绝，并把候选摆出来。
     """
     query = str(wanted or '').strip()
-    if query.count(':') >= 2:
-        return query
     services = current_game_services()
     snapshot = await services.core.asset.snapshot(user_id)
     matched = []
     for entry in snapshot.entries:
         if '阵法' not in str(getattr(entry, 'subcategory', '')):
             continue
-        names = {str(getattr(entry, 'name', '')), str(getattr(entry, 'content_id', ''))}
-        if query not in names:
+        if str(getattr(entry, 'name', '')) != query:
             continue
-        if grade:
-            grades = {
+        if qualifier:
+            treasure_id = str(getattr(entry, 'instance_key', '')).split(':')[2] if str(
+                getattr(entry, 'instance_key', '')
+            ).count(':') >= 2 else ''
+            treasure_name = ''
+            if treasure_id and treasure_id != '无灵宝':
+                try:
+                    treasure_name = str(
+                        dict(services.core.data.entity('先天灵宝', treasure_id)).get('名称') or ''
+                    )
+                except Exception:
+                    treasure_name = ''
+            words = {
                 str(getattr(entry, 'grade_id', '')),
                 str(getattr(entry, 'grade_name', '')),
+                treasure_name,
+                '' if treasure_id == '无灵宝' else '无灵宝',
             }
-            if not any(value and value.startswith(grade) for value in grades):
+            if not any(word and word.startswith(qualifier) for word in words):
                 continue
         matched.append(entry)
     copy = feature.copy()
@@ -52,11 +62,18 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, grade: str) ->
             str(text.get('阵法说不清') or '阵藏里有多条同名阵法，请补品级').format(
                 名称=query,
                 数量=len(matched),
-                条目='、'.join(str(getattr(item, 'instance_key', '')) for item in matched[:4]),
+                条目='、'.join(
+                    '%s·%s' % (
+                        str(getattr(item, 'grade_name', '')),
+                        '无灵宝' if str(getattr(item, 'instance_key', '')).endswith('无灵宝') else str(
+                            getattr(item, 'instance_key', '')
+                        ).split(':')[-1],
+                    )
+                    for item in matched[:4]
+                ),
             )
         )
     return str(getattr(matched[0], 'instance_key', ''))
-
 
 @GameCommand.command(
     cmd="万珍殿",
@@ -99,8 +116,7 @@ async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
             "usage": (
                 "捐入万珍殿 丹药/真意/气机 编号或名称 品级 数量",
                 "捐入万珍殿 器律 编号或名称 数量",
-                "捐入万珍殿 阵法 阵法名 [品级]",
-            "捐入万珍殿 阵法 阵藏条目编号",
+                "捐入万珍殿 阵法 阵法名 [品级或灵宝名]",
             ),
             "side_effect": "原子扣除个人成品并计入万珍殿；阵法每次存入一座",
             "order": 83,

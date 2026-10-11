@@ -51,8 +51,11 @@ async function load(scope) {
 
 function commandFor(item, quantity) {
   const qty = Math.max(1, parseInt(quantity, 10) || 1);
-  // 阵法条目的身份是状态键「阵法编号:品级:灵宝编号」，只给阵法编号后端会回「阵藏中没有该阵法」。
-  if (item.category === '阵法') return '捐入万珍殿 阵法 ' + (item.key || item.id);
+  // 阵法只报名字：状态键是代码内部的东西，玩家不该见；同名多条时带上灵宝名做区分。
+  if (item.category === '阵法') {
+    const tail = item.treasure_name ? ' ' + item.treasure_name : '';
+    return '捐入万珍殿 阵法 ' + item.name + tail;
+  }
   if (item.category === '器律') return '捐入万珍殿 器律 ' + item.id + ' ' + qty;
   return '捐入万珍殿 ' + item.category + ' ' + item.id + ' ' + (item.grade || '01') + ' ' + qty;
 }
