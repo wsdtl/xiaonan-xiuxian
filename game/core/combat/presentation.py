@@ -30,6 +30,15 @@ def build_battle_report_presentation(
     return header
 
 
+def _altitude_line(catalog: BattleReportCatalog, xy: Mapping[str, Any], altitude: object) -> str:
+    """战场海拔那一行：整行格式住在 `战报.json` 的 `文案.海拔行`，单位不许写死在代码里。"""
+
+    template = str(catalog.presentation.get("文案", {}).get("海拔行") or "")
+    if not template:
+        raise ValueError("战报展示缺少 文案.海拔行")
+    return template.format(x=xy["x"], y=xy["y"], **{"海拔": altitude})
+
+
 def build_battle_report_view(
     report: Mapping[str, Any],
     catalog: BattleReportCatalog,
@@ -264,7 +273,7 @@ def build_battle_report_view(
         if isinstance(xy, Mapping):
             field_lines.insert(
                 1,
-                f"xy: ({xy['x']}, {xy['y']}) · 海拔 {field['altitude']} 米",
+                _altitude_line(catalog, xy, field["altitude"]),
             )
     formation_lines = (
         [_formation_summary_line(value) for value in report.get("formations") or ()]
