@@ -240,7 +240,11 @@ class WanzhenFeature:
 
         发放与宗门战锁阵共用这一份——它们看的都是本宗万珍殿。
         """
-        vault = await self._assets.wanzhen(user_id)
+        try:
+            vault = await self._assets.wanzhen(user_id)
+        except SectAssetError as exc:
+            # 未入宗之类的核心异常别让它冒到派发层；翻成本层的话，文案保持核心那句。
+            raise WanzhenFeatureError(str(exc)) from exc
         entry = self.match_entry(vault.entries, query)
         return entry.entry_key if entry is not None else str(query or '').strip()
 
