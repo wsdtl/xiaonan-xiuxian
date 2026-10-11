@@ -398,6 +398,7 @@ def _button_templates(
             "修士",
             "地点",
             "地点条目",
+            "格式",
         }:
             raise JsonDataError(f"{label}[{index}].页面无效：{page}")
         if condition not in {"", "有上一页", "有下一页", "地表"}:

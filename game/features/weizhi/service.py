@@ -180,6 +180,12 @@ class PositionFeature:
             "概览", surface=surface
         )
 
+    def format_actions(self) -> tuple[PositionAction, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」。"""
+
+        return self._actions_for("格式")
+
+
     def nearby_cultivator_actions(
         self, page: int, has_next: bool, *, surface: bool = True
     ) -> tuple[PositionAction, ...]:

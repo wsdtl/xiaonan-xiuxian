@@ -114,7 +114,7 @@ async def show_nearby(user_id: str, message: str, manager: Any) -> None:
             copy,
             copy.overview_title.format_map({"地点": "附近"}),
             copy.invalid_command,
-            feature.nearby_overview_actions(),
+            feature.format_actions(),
         )
     )
 
