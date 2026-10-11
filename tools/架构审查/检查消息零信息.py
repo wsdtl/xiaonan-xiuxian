@@ -220,7 +220,7 @@ def _number(value: str) -> float:
 
 
 
-async def _造场景(send, services, user_id) -> tuple[str, list[str]]:
+async def _场景_切磋与深页(send, services, user_id) -> list[str]:
     await services.features.chuangjian_renwu.create(
         CreateCharacterRequest(
             user_id=user_id, request_id="消息判据", name="判据甲", gender="男"
@@ -303,6 +303,10 @@ async def _造场景(send, services, user_id) -> tuple[str, list[str]]:
     words = sorted(
         set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
     )
+    return words
+
+
+async def _场景_讨伐(send, services, user_id) -> None:
     # 讨伐一开就占住行动，跟宽参阶段共用人物会把探险那几条挤成错误页；
     # 给它一份独立人物，和行动类同样的做法。
     raid_user = "P:判据讨伐"
@@ -323,6 +327,9 @@ async def _造场景(send, services, user_id) -> tuple[str, list[str]]:
         for command in ("开始讨伐", "讨伐战况"):
             _DEEP_COMMANDS.append(command)
             await send(command, user=raid_user, strict=True)
+
+
+async def _场景_服丹(send, services, user_id) -> None:
     # 服丹要人物有损耗，否则只会得到「血气已满」。用战后结算把血气精神压到 1——
     # 那是游戏自己结算战果的接口，不是改写状态。
     pill_user = "P:判据服丹"
@@ -346,6 +353,9 @@ async def _造场景(send, services, user_id) -> tuple[str, list[str]]:
     for command in ("人物服丹 100005",):
         _DEEP_COMMANDS.append(command)
         await send(command, user=pill_user, strict=True)
+
+
+async def _场景_道侣(send, services, user_id) -> None:
     # 同行道侣是归元观与道侣培养的前置。好感靠赠礼正当涨：每株山谷灵植 +10，
     # 邀约门槛是 100，所以授 12 株连送 12 次到 120 再邀约——这条路本身也是玩家
     # 真要走的路。铜雀台还要道侣至少 2 级，那一步够不到，故不在这一站。
@@ -416,6 +426,9 @@ async def _造场景(send, services, user_id) -> tuple[str, list[str]]:
     for command in ("夺元",):
         _DEEP_COMMANDS.append(command)
         await send(command, user=mate_user, strict=True)
+
+
+async def _场景_补天(services, user_id) -> list[str]:
     # 补天只作用于「已突破」的纯突破节点，而且灵动境压根没有单属性丹（单属性丹
     # 从炼气 510002 才开始）。所以这条路得走完：灌经验 → 用纯突破丹突破到炼气 →
     # 再补天；九霄补天丹 160002 是补天自己要的药。
@@ -466,7 +479,22 @@ async def _造场景(send, services, user_id) -> tuple[str, list[str]]:
     # 每条注册命令再拿一个乱写参数跑一遍：错误路径也必须给出回执，不能抛异常。
     # 真出过事：批量改 error 回执时把四条命令的链尾切坏，判据全绿却一调用就炸。
 
-    heads = []
+
+    return butian_user
+
+
+async def _造场景(services, send, user_id) -> tuple[str, list[str]]:
+    """建出后面几轮扫要用的场景人物：切磋与深页、讨伐、服丹、道侣、补天各一个。
+
+    每个场景各自独立（各自建人物、各自走到地点），所以拆成五个函数；
+    只有深页算出的 `words` 与补天用的人物要交给调用方。
+    """
+
+    words = await _场景_切磋与深页(send, services, user_id)
+    await _场景_讨伐(send, services, user_id)
+    await _场景_服丹(send, services, user_id)
+    await _场景_道侣(send, services, user_id)
+    butian_user = await _场景_补天(services, user_id)
     return butian_user, words
 
 
@@ -786,7 +814,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             pages[text] = _clean(getattr(result.replies[0].message, "content", ""))
 
     async def run() -> None:
-        butian_user, words = await _造场景(send, services, user_id)
+        butian_user, words = await _造场景(services, send, user_id)
         heads = await _命令词()
         await _扫裸命令(deep_failures, heads, user_id)
         await _扫无参(deep_failures, heads, user_id)
