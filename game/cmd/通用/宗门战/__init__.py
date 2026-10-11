@@ -98,6 +98,85 @@ async def withdraw(user_id: str, message_context: MessageContext, manager: Any) 
     await _run(manager, _feature().withdraw(user_id, message_context.request_id))
 
 
+def _has_cjk(value: str) -> bool:
+    """含中文就是「名字写法」；只有数字与冒号就是「id 写法」（原汁原味）。"""
+
+    return any('\u4e00' <= ch <= '\u9fff' for ch in value)
+
+
+async def _formation_key(user_id: str, wanted: str) -> str:
+    """把玩家写的阵法换成万珍殿条目的机器键。
+
+    写法与《阵法说明》第五节一致：id 写法原汁原味直接放行；名字写法支持
+    `阵法名`、`品级 阵法名`、`阵法名[灵宝名]`（品级只做前缀，方括号只给名字用）。
+    找不到或多条说不清时抛 `SectWarError`，文案取自宗门战展示数据集。
+    """
+    feature = _feature()
+    query = str(wanted or '').strip()
+    if not query:
+        return query
+    if ':' in query:
+        return query          # 整条条目键：原汁原味
+    mode = 'name' if _has_cjk(query) else ('id' if query.isdecimal() else 'raw')
+    if mode == 'raw':
+        return query
+    grade_hint = ''
+    parts = query.split(None, 1)
+    if len(parts) == 2 and not _has_cjk(parts[0]) and parts[0].endswith(('品', '阶')):
+        grade_hint, query = parts[0], parts[1].strip()
+    bare = ''
+    if query.endswith(']') and '[' in query:
+        head, _, bare = query[:-1].partition('[')
+        head, bare = head.strip(), bare.strip()
+        if head.isdecimal():
+            raise SectWarError(feature.text('错误', 'formation_missing'))
+        query = head
+    services = current_game_services()
+    try:
+        vault = await services.core.sect_assets.wanzhen(user_id)
+    except Exception as exc:  # noqa: BLE001 - 命令层不认核心异常类型，翻成自己这层的话再往上抛
+        raise SectWarError(str(exc)) from exc
+    matched = []
+    for entry in vault.entries:
+        if '阵法' not in str(getattr(entry, 'category', '') or ''):
+            continue
+        if mode == 'id':
+            if str(getattr(entry, 'content_id', '')) != query:
+                continue
+        elif str(getattr(entry, 'name', '')) != query:
+            continue
+        if grade_hint and str(getattr(entry, 'grade_name', '')) not in grade_hint:
+            continue
+        if bare:
+            treasure_id = str(getattr(entry, 'treasure_id', '') or '')
+            if not treasure_id:
+                continue
+            try:
+                treasure_name = services.core.innate_treasure.resolve(treasure_id).name
+            except Exception:  # noqa: BLE001 - 名字只是判据，查不到就不算命中
+                continue
+            if treasure_name != bare:
+                continue
+        matched.append(entry)
+    if len(matched) == 1:
+        return matched[0].entry_key
+    if len(matched) > 1:
+        raise SectWarError(
+            feature.text(
+                '错误',
+                'formation_ambiguous',
+                {
+                    '数量': len(matched),
+                    '阵法': query,
+                    '候选': '、'.join(
+                        entry.grade_name + ' ' + entry.entry_key for entry in matched[:4]
+                    ),
+                },
+            )
+        )
+    raise SectWarError(feature.text('错误', 'formation_missing'))
+
+
 @GameCommand.command(
     cmd=("锁阵", "锁定宗门战阵容"),
     metadata={
@@ -108,8 +187,8 @@ async def withdraw(user_id: str, message_context: MessageContext, manager: Any) 
             "summary": "锁定宗门同行和可选宗门阵法",
             "usage": (
                 "锁定宗门战阵容",
-                "锁定宗门战阵容 万珍殿阵法条目",
-                "锁阵 万珍殿阵法条目",
+                "锁定宗门战阵容 阵法名[灵宝名]",
+                "锁阵 阵法名[灵宝名]",
             ),
             "side_effect": "所选宗门阵法在正式开战时消耗",
             "order": 5,
@@ -117,11 +196,18 @@ async def withdraw(user_id: str, message_context: MessageContext, manager: Any) 
     },
 )
 async def lock(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+    services = current_game_services()
+    raw = str(message or "").strip()
+    try:
+        key = await _formation_key(user_id, raw) if raw else ""
+    except SectWarError as exc:
+        await manager.send(
+            reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式"))
+        )
+        return
     await _run(
         manager,
-        _feature().lock(
-            user_id, message_context.request_id, str(message or "").strip()
-        ),
+        _feature().lock(user_id, message_context.request_id, key),
     )
 
 
