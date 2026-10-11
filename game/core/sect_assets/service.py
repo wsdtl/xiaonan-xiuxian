@@ -681,7 +681,9 @@ class SectAssetService:
                 stack.formation_id,
                 stack.grade_id,
                 materials,
-                stack.state_key if ":" not in stack.state_key else "",
+                (stack.treasure_id or stack.state_key)
+                if (stack.grade_id == "05" or stack.treasure_id)
+                else "",
                 stack.treasure_id,
                 tuple(stack.modifiers),
             )

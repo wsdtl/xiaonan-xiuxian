@@ -746,7 +746,9 @@ class FormationService:
                 ):
                     continue
             matches.append(entry)
-        if len(matches) != 1:
+        if not matches:
+            raise FormationError("阵藏里没有「" + name_part + "」这座阵法。")
+        if len(matches) > 1:
             raise FormationError(
                 "阵藏里有多条「"
                 + name_part
