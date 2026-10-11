@@ -139,45 +139,7 @@ class SectProductionService:
         entity_type = _ENTITY_TYPES[facility.kind]
         record = await self._database.get_shared_entity(entity_type, member.sect_id)
         if record is None:
-            baseline = _state_value(
-                member.sect_id, facility.kind, current, self._rule_version
-            )
-            try:
-                receipt = await self._database.commit(
-                    TransactionCommand(
-                        user_id,
-                        _request(request_id),
-                        f"{facility.kind}初始化",
-                        (
-                            SharedEntityMutation(
-                                entity_type, member.sect_id, baseline, 0
-                            ),
-                        ),
-                        {
-                            "宗门编号": member.sect_id,
-                            "设施": facility.kind,
-                            "初始化": True,
-                        },
-                    )
-                )
-            except (
-                SharedConstraintError,
-                StateConflictError,
-                IdempotencyConflictError,
-            ) as exc:
-                raise SectProductionError(
-                    "宗门资源生产状态刚刚发生变化，请重试"
-                ) from exc
-            view = SectProductionView(
-                facility,
-                member.role,
-                self._sect.is_officer(member.role),
-                True,
-                current,
-                0,
-                facility.period_seconds,
-            )
-            return SectProductionResult(view, True, 0, (), 0, 0, receipt.replayed)
+            return await self._initialize_shared_entity(user_id, request_id, current, entity_type, facility, member)
         value = _mapping(record.value, entity_type)
         last = _time(value.get("上次结算时间"), f"{entity_type}.上次结算时间")
         sequence = _nonnegative_int(value.get("结算序号"), f"{entity_type}.结算序号")
@@ -264,6 +226,58 @@ class SectProductionService:
             gain.spirit_stones_after,
             receipt.replayed,
         )
+
+    async def _initialize_shared_entity(
+        self,
+        user_id: str,
+        request_id: str,
+        current: datetime,
+        entity_type: str,
+        facility: object,
+        member: object,
+    ) -> SectProductionResult:
+        """首次采集：先把宗门资源生产状态建出来，再返回这一格的结果。"""
+
+        baseline = _state_value(
+            member.sect_id, facility.kind, current, self._rule_version
+        )
+        try:
+            receipt = await self._database.commit(
+                TransactionCommand(
+                    user_id,
+                    _request(request_id),
+                    f"{facility.kind}初始化",
+                    (
+                        SharedEntityMutation(
+                            entity_type, member.sect_id, baseline, 0
+                        ),
+                    ),
+                    {
+                        "宗门编号": member.sect_id,
+                        "设施": facility.kind,
+                        "初始化": True,
+                    },
+                )
+            )
+        except (
+            SharedConstraintError,
+            StateConflictError,
+            IdempotencyConflictError,
+        ) as exc:
+            raise SectProductionError(
+                "宗门资源生产状态刚刚发生变化，请重试"
+            ) from exc
+        view = SectProductionView(
+            facility,
+            member.role,
+            self._sect.is_officer(member.role),
+            True,
+            current,
+            0,
+            facility.period_seconds,
+        )
+        return SectProductionResult(view, True, 0, (), 0, 0, receipt.replayed)
+
 
     async def select_terrain(
         self,
