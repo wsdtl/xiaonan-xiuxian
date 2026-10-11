@@ -762,6 +762,55 @@ class ExplorationService:
             raise ExplorationNotFinishedError("探险尚未结束")
         user_values = _mapping(session.get("用户结果"), "探险.用户结果")
         participants = _texts(session.get("参与用户"), "探险.参与用户")
+        (
+            result_operations,
+            reward_operations,
+            release_operations,
+            summaries,
+        ) = await self._plan_participant_settlements(user_values, participants)
+        settlement_value = {
+            "地点": session["地点"],
+            "场数": session["场数"],
+            "战败敌人": session["战败敌人"],
+            "参与用户": list(participants),
+            "用户结果": summaries,
+            "结算时间": settled_at.isoformat(),
+        }
+        plan = SettlementTransactionPlan(
+            result_operations=tuple(result_operations),
+            reward_operations=tuple(reward_operations),
+            release_operations=tuple(release_operations),
+            record_operations=(
+                StateMutation(owner, SETTLEMENT_STATE, session_id, settlement_value, 0),
+            ),
+        )
+        try:
+            receipt = await self._database.commit(
+                plan.command(
+                    user_id=owner,
+                    request_id=request_id,
+                    business_type="普通探险结算",
+                    payload={"探险编号": session_id},
+                )
+            )
+        except StateConflictError as exc:
+            raise ExplorationConflictError(str(exc)) from exc
+        return self._settlement(
+            session_id, settlement_value, replayed=receipt.replayed
+        )
+
+    async def _plan_participant_settlements(
+        self,
+        user_values: Mapping[str, object],
+        participants: tuple[str, ...],
+    ) -> tuple[
+        list[StateMutation],
+        list[StateMutation],
+        list[StateMutation],
+        list[dict[str, object]],
+]:
+        """逐位参与者算结果与奖励：只往四个清单里追加，不改别处。""",
+
         result_operations: list[StateMutation] = []
         reward_operations: list[StateMutation] = []
         release_operations: list[StateMutation] = []
@@ -847,36 +896,9 @@ class ExplorationService:
                 (await self._player_state.plan_finish_behavior(participant)).mutation
             )
             summaries.append(materialize(value))
-        settlement_value = {
-            "地点": session["地点"],
-            "场数": session["场数"],
-            "战败敌人": session["战败敌人"],
-            "参与用户": list(participants),
-            "用户结果": summaries,
-            "结算时间": settled_at.isoformat(),
-        }
-        plan = SettlementTransactionPlan(
-            result_operations=tuple(result_operations),
-            reward_operations=tuple(reward_operations),
-            release_operations=tuple(release_operations),
-            record_operations=(
-                StateMutation(owner, SETTLEMENT_STATE, session_id, settlement_value, 0),
-            ),
-        )
-        try:
-            receipt = await self._database.commit(
-                plan.command(
-                    user_id=owner,
-                    request_id=request_id,
-                    business_type="普通探险结算",
-                    payload={"探险编号": session_id},
-                )
-            )
-        except StateConflictError as exc:
-            raise ExplorationConflictError(str(exc)) from exc
-        return self._settlement(
-            session_id, settlement_value, replayed=receipt.replayed
-        )
+
+        return result_operations, reward_operations, release_operations, summaries
+
 
     async def latest_settlement(self, user_id: str) -> ExplorationSettlement | None:
         owner, session_id = await self._latest(user_id)
