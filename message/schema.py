@@ -97,7 +97,7 @@ class CommandLink:
 
     label: RichText
     command: str
-    submit: bool = True
+    submit: bool = False
     reply: bool = False
 
 

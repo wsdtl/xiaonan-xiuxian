@@ -428,6 +428,34 @@ def check_help_has_side_effect() -> list[str]:
     return problems
 
 
+def check_inline_commands_do_not_submit() -> list[str]:
+    """行内命令链接（无边框按钮）一律只填入，不直接发。
+
+    委托方 2026-10 纠正我的实现：「所有的无边框按钮都是点击之后**不发**的，有的需要补充参数，有的需要删改」，
+    点了就发容易出错。所以 `M.command` 的默认值必须是「只填入」，玩家侧也不许出现 `submit=True`。
+    注意区分：底部结构化按钮（`Action`）该发就发，不受这条管。
+    """
+
+    problems: list[str] = []
+    for rel, label in (
+        ("message/builder.py", "M.command"),
+        ("message/schema.py", "CommandLink"),
+    ):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        if "submit: bool = False" not in text:
+            problems.append(rel + " 的 " + label + " 默认不是「只填入」（submit 必须默认 False）")
+    for path in sorted(GAME.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").replace(chr(13), "").split(chr(10)), start=1):
+            if line.lstrip().startswith("#"):
+                continue
+            if "submit=True" in line or "submit=is_complete" in line:
+                where = path.relative_to(ROOT).as_posix() + ":" + str(number)
+                problems.append(where + " 行内按钮点击即发：" + line.strip()[:56])
+    return problems
+
+
 CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
@@ -440,6 +468,7 @@ CHECKS = (
     ("用法要有能照抄的例子", check_usages_have_concrete_example),
     ("玩家文案不露行话", check_player_copy_has_no_jargon),
     ("帮助要有结果", check_help_has_side_effect),
+    ("行内按钮只填入", check_inline_commands_do_not_submit),
 )
 
 

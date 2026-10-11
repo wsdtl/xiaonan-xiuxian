@@ -300,9 +300,15 @@ class M:
         label: object,
         command: object,
         *,
-        submit: bool = True,
+        submit: bool = False,
         reply: bool = False,
     ) -> CommandLink:
+        """行内命令链接（无边框按钮）。
+
+        **默认只把命令填进输入框、不直接发**——委托方 2026-10 的口径：
+        「所有的无边框按钮都是点击之后不发的，有的需要补充参数，有的需要删改」，
+        点了就发容易出错。要「一点即发」得显式传 submit=True，但**玩家侧不该有这种按钮**。
+        """
         return CommandLink(
             _command_label(label), str(command or "").strip(), submit=submit, reply=reply
         )

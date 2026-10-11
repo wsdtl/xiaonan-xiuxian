@@ -8,8 +8,6 @@ from message import DocumentBuilder, Action, DocumentMessage, M
 
 from game.cmd.help_registry import CommandHelpEntry, help_registry
 
-from .branches import is_complete
-
 GAME_NAME = "晓楠修仙"
 
 
@@ -95,9 +93,9 @@ def _detail_message(entry: CommandHelpEntry, *, id_converter=None, nav: str = "�
         # 裸用法交给底部「发送命令」按钮，正文里再放一条就是联动与按钮重复（build 会拒绝）。
         if usage == entry.command:
             continue
-        # 能照抄、可点击：写完就发的用法直接发，还差参数的只填入。
+        # 可点击但不直接发：点一下只把命令填进输入框，玩家自己补参数或改。
         label = _shown(usage, id_converter)
-        builder.line(M.command(label, label, submit=is_complete(usage)))
+        builder.line(M.command(label, label))
     if entry.aliases:
         builder.field("也可发送", "、".join(entry.aliases))
     if entry.spec.side_effect:

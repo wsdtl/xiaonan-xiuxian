@@ -60,7 +60,7 @@ def branches_of(value: object) -> tuple[tuple[str, str], ...]:
 
 
 def is_complete(command: str) -> bool:
-    """按当前参数这条命令是否已经完整——完整就直接发，不完整只填入。"""
+    """按当前参数这条命令是否已经完整——**一律只填入、不直接发**（委托方 2026-10：点了就发容易出错）。"""
 
     parts = command.split(" ")
     entry = help_registry.find(parts[0])
@@ -87,7 +87,7 @@ async def choose_branch(raw_message: str, manager: Any) -> None:
         await manager.send(builder.build())
         return
     for word, command in options:
-        builder.line(M.command(word, command, submit=is_complete(command)))
+        builder.line(M.command(word, command))
     await manager.send(builder.build())
 
 
