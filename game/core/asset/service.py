@@ -653,42 +653,15 @@ class AssetService:
         if bool(normalized_treasure_id) != bool(normalized_modifiers):
             raise AssetStateError("阵法灵宝编号和效果必须同时存在或同时为空")
         if grade.grade_id == "05":
-            values = {
-                key: _required_text(value, f"圣品阵法.投入.{key}")
-                for key, value in (materials or {}).items()
-            }
-            if set(values) != {"兽宝", "灵矿", "灵植"}:
-                raise AssetStateError("圣品阵法必须完整保存兽宝、灵矿和灵植投入")
-            state_key = uuid4().hex
-            stack = FormationReserveStack(
-                state_key,
+            return self._holy_formation_plan(
+                normalized_user_id,
                 normalized_formation_id,
                 name,
                 grade.grade_id,
                 grade.name,
-                1,
-                tuple((key, values[key]) for key in ("兽宝", "灵矿", "灵植")),
+                materials,
                 normalized_treasure_id,
-                tuple(sorted(normalized_modifiers.items())),
-                0,
-            )
-            return FormationReserveAcquisitionPlan(
-                stack,
-                0,
-                1,
-                StateMutation(
-                    normalized_user_id,
-                    "formation_reserve",
-                    state_key,
-                    {
-                        "阵法编号": normalized_formation_id,
-                        "品级": grade.grade_id,
-                        "投入": values,
-                        "灵宝编号": normalized_treasure_id,
-                        "灵宝效果": normalized_modifiers,
-                    },
-                    0,
-                ),
+                normalized_modifiers,
             )
         if materials:
             raise AssetStateError("天地玄黄阵法不能保存额外材料投入")
@@ -750,6 +723,58 @@ class AssetService:
                 version,
             ),
         )
+    def _holy_formation_plan(
+        self,
+        user_id: str,
+        formation_id: str,
+        name: str,
+        grade_id: str,
+        grade_name: str,
+        materials: Mapping[str, str] | None,
+        treasure_id: str,
+        modifiers: Mapping[str, str],
+    ) -> FormationReserveAcquisitionPlan:
+        """圣品（05）走独立实例：每次一件、身份用一次性键，投入三项必须齐。""",
+
+        values = {
+            key: _required_text(value, f"圣品阵法.投入.{key}")
+            for key, value in (materials or {}).items()
+        }
+        if set(values) != {"兽宝", "灵矿", "灵植"}:
+            raise AssetStateError("圣品阵法必须完整保存兽宝、灵矿和灵植投入")
+        state_key = uuid4().hex
+        stack = FormationReserveStack(
+            state_key,
+            normalized_formation_id,
+            name,
+            grade.grade_id,
+            grade.name,
+            1,
+            tuple((key, values[key]) for key in ("兽宝", "灵矿", "灵植")),
+            normalized_treasure_id,
+            tuple(sorted(normalized_modifiers.items())),
+            0,
+        )
+        return FormationReserveAcquisitionPlan(
+            stack,
+            0,
+            1,
+            StateMutation(
+                normalized_user_id,
+                "formation_reserve",
+                state_key,
+                {
+                    "阵法编号": normalized_formation_id,
+                    "品级": grade.grade_id,
+                    "投入": values,
+                    "灵宝编号": normalized_treasure_id,
+                    "灵宝效果": normalized_modifiers,
+                },
+                0,
+            ),
+        )
+
+
 
     async def formation_reserve_stack(
         self, user_id: str, state_key: str
