@@ -56,8 +56,7 @@ async def _entries(services, user_id: str) -> list[dict[str, object]]:
         # 阵法条目的身份是「阵法编号:品级:灵宝编号」这个状态键，不是阵法编号——
         # 捐入命令要的是整串键，而灵宝决定了加成方向，两样都得交给页面。
         key = str(getattr(entry, 'instance_key', ''))
-        treasure_id = key.split(':')[2] if key.count(':') >= 2 else ''
-        treasure = '' if not treasure_id or treasure_id == '无灵宝' else treasure_id
+        treasure = str(getattr(entry, 'treasure_id', '') or '')
         treasure_name = ''
         treasure_effect = ''
         if treasure:

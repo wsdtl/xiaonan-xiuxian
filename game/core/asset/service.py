@@ -688,8 +688,40 @@ class AssetService:
             )
         if materials:
             raise AssetStateError("天地玄黄阵法不能保存额外材料投入")
-        variant = normalized_treasure_id or "无灵宝"
-        state_key = f"{normalized_formation_id}:{grade.grade_id}:{variant}"
+        if normalized_treasure_id:
+            # 带先天灵宝的固定品阵法按独立实例存（与圣品同一套读法）：一座一实例，
+            # 各自带着自己的灵宝效果，键里不必再塞「无灵宝」这种占位，也不会与同款互相覆盖。
+            state_key = uuid4().hex
+            stack = FormationReserveStack(
+                state_key,
+                normalized_formation_id,
+                name,
+                grade.grade_id,
+                grade.name,
+                1,
+                (),
+                normalized_treasure_id,
+                tuple(sorted(normalized_modifiers.items())),
+                0,
+            )
+            return FormationReserveAcquisitionPlan(
+                stack,
+                0,
+                1,
+                StateMutation(
+                    normalized_user_id,
+                    "formation_reserve",
+                    state_key,
+                    {
+                        "阵法编号": normalized_formation_id,
+                        "品级": grade.grade_id,
+                        "灵宝编号": normalized_treasure_id,
+                        "灵宝效果": normalized_modifiers,
+                    },
+                    0,
+                ),
+            )
+        state_key = f"{normalized_formation_id}:{grade.grade_id}"
         snapshot = await self._database.get(
             StateAddress(normalized_user_id, "formation_reserve", state_key)
         )
@@ -784,9 +816,12 @@ class AssetService:
                 for key in ("兽宝", "灵矿", "灵植")
             )
             quantity = 1
+        elif ":" not in normalized_key:
+            # 带灵宝的固定品是独立实例：键是随机编号，数量恒为 1，灵宝就在这份值里。
+            materials = ()
+            quantity = 1
         else:
-            variant = treasure_id or "无灵宝"
-            if normalized_key != f"{formation_id}:{grade.grade_id}:{variant}":
+            if normalized_key != f"{formation_id}:{grade.grade_id}":
                 raise AssetStateError("固定品阵藏状态键与内容不一致")
             materials = ()
             quantity = _positive_int(value.get("数量"), "阵藏.数量")
@@ -983,9 +1018,12 @@ class AssetService:
             )
             quantity = 1
         else:
-            treasure_id = str(value.get("灵宝编号") or "").strip()
-            _expect_key(snapshot, f"{content_id}:{grade_id}:{treasure_id or '无灵宝'}")
-            quantity = _positive_int(value.get("数量"), "阵藏.数量")
+            if ":" in snapshot.address.state_key:
+                _expect_key(snapshot, f"{content_id}:{grade_id}")
+                quantity = _positive_int(value.get("数量"), "阵藏.数量")
+            else:
+                # 带灵宝的独立实例：键是随机编号，不按形状校验，数量恒为 1。
+                quantity = 1
         return AssetEntry(
             category,
             subcategory,
@@ -997,6 +1035,11 @@ class AssetService:
             quantity,
             material_total=material_total,
             updated_at=snapshot.updated_at,
+            treasure_id=str(value.get("灵宝编号") or ""),
+            modifiers=tuple(
+                (str(field), str(raw))
+                for field, raw in _mapping(value.get("灵宝效果", {}), "阵藏.灵宝效果").items()
+            ),
         )
 
     def _knowledge_entry(

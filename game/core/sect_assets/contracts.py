@@ -33,6 +33,9 @@ class SectAssetEntry:
     grade_name: str
     quantity: int
     materials: tuple[tuple[str, int], ...] = ()
+    #: 带先天灵宝的阵法是独立实例：灵宝编号与效果必须跟着条目走，否则发放回去就丢了加成。
+    treasure_id: str = ""
+    modifiers: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)

@@ -17,9 +17,8 @@ _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
 def _entry_label(entry: object, services: object) -> str:
     """一句话说清这条是哪一座：品级名 · 灵宝名（没有灵宝就只说品级）。"""
     grade = str(getattr(entry, 'grade_name', '') or '')
-    key = str(getattr(entry, 'instance_key', '') or '')
-    treasure_id = key.split(':')[2] if key.count(':') >= 2 else ''
-    if not treasure_id or treasure_id == '无灵宝':
+    treasure_id = str(getattr(entry, 'treasure_id', '') or '')
+    if not treasure_id:
         return grade
     try:
         raw = dict(services.core.data.entity('先天灵宝', treasure_id))
@@ -45,9 +44,7 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
         if query not in {str(getattr(entry, 'name', '')), str(getattr(entry, 'content_id', ''))}:
             continue
         if qualifier:
-            treasure_id = str(getattr(entry, 'instance_key', '')).split(':')[2] if str(
-                getattr(entry, 'instance_key', '')
-            ).count(':') >= 2 else ''
+            treasure_id = str(getattr(entry, 'treasure_id', '') or '')
             treasure_name = ''
             if treasure_id and treasure_id != '无灵宝':
                 try:
@@ -60,7 +57,6 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
                 str(getattr(entry, 'grade_id', '')),
                 str(getattr(entry, 'grade_name', '')),
                 treasure_name,
-                '' if treasure_id == '无灵宝' else '无灵宝',
             }
             if not any(word and word.startswith(qualifier) for word in words):
                 continue

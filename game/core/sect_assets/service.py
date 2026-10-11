@@ -281,6 +281,8 @@ class SectAssetService:
                 grade_id,
                 materials,
                 instance_key,
+                treasure_id,
+                modifiers,
             ) = await self._product_take(
                 user_id,
                 normalized_category,
@@ -300,6 +302,8 @@ class SectAssetService:
             quantity_delta=normalized_quantity,
             materials=materials,
             instance_key=instance_key,
+            treasure_id=treasure_id,
+            modifiers=modifiers,
         )
         receipt = await self._commit(
             user_id,
@@ -340,8 +344,8 @@ class SectAssetService:
         entry = self._entry(entry_key, raw)
         if entry.quantity < normalized_quantity:
             raise SectAssetError("万珍殿中的数量不足")
-        if entry.grade_id == "05" and normalized_quantity != 1:
-            raise SectAssetError("圣品阵法必须按独立实例发放")
+        if (entry.grade_id == "05" or entry.treasure_id) and normalized_quantity != 1:
+            raise SectAssetError("阵法实例必须按独立实例发放")
         try:
             personal = await self._product_give(
                 target_user_id, entry, normalized_quantity
@@ -622,7 +626,7 @@ class SectAssetService:
         content_id: str,
         grade_or_key: str,
         quantity: int,
-    ) -> tuple[StateMutation, str, str, tuple[tuple[str, int], ...], str]:
+    ) -> tuple[StateMutation, str, str, tuple[tuple[str, int], ...], str, str, tuple[tuple[str, str], ...]]:
         if category == "丹药":
             record = self._data.entity_record("丹药", content_id)
             if record.number_category != "丹药":
@@ -631,7 +635,7 @@ class SectAssetService:
             plan = await self._asset.plan_inventory_changes(
                 user_id, (InventoryAdjustment(content_id, grade.grade_id, -quantity),)
             )
-            return plan.operations[0], content_id, grade.grade_id, (), ""
+            return plan.operations[0], content_id, grade.grade_id, (), "", "", ()
         if category in {"真意", "气机"}:
             grade = self._asset.grade(grade_or_key)
             plan = await self._asset.plan_cultivation_reserve_change(
@@ -641,7 +645,7 @@ class SectAssetService:
                 grade_id=grade.grade_id,
                 quantity_delta=-quantity,
             )
-            return plan.operation, content_id, grade.grade_id, (), ""
+            return plan.operation, content_id, grade.grade_id, (), "", "", ()
         if category == "器律":
             stack = await self._asset.law_reserve_stack(user_id, content_id)
             if stack.quantity < quantity:
@@ -659,6 +663,8 @@ class SectAssetService:
                 "",
                 (),
                 "",
+                "",
+                (),
             )
         if category == "阵法":
             if quantity != 1:
@@ -675,7 +681,9 @@ class SectAssetService:
                 stack.formation_id,
                 stack.grade_id,
                 materials,
-                stack.state_key if stack.grade_id == "05" else "",
+                stack.state_key if ":" not in stack.state_key else "",
+                stack.treasure_id,
+                tuple(stack.modifiers),
             )
         raise SectAssetError("万珍殿不支持该成品类别")
 
@@ -712,6 +720,8 @@ class SectAssetService:
                 materials={key: str(value) for key, value in entry.materials}
                 if entry.grade_id == "05"
                 else None,
+                treasure_id=entry.treasure_id,
+                modifiers=dict(entry.modifiers) or None,
             )
             return plan.operation
         raise SectAssetError("万珍殿条目类别无效")
@@ -728,6 +738,8 @@ class SectAssetService:
         quantity_delta: int,
         materials: tuple[tuple[str, int], ...] = (),
         instance_key: str = "",
+        treasure_id: str = "",
+        modifiers: tuple[tuple[str, str], ...] = (),
     ) -> tuple[SharedEntityMutation, SectAssetEntry]:
         record = await self._database.get_shared_entity(entity_type, sect_id)
         value = (
@@ -742,12 +754,16 @@ class SectAssetService:
         )
         entries = dict(_mapping(value.get("条目", {}), f"{name}.条目"))
         grade = self._asset.grade(grade_id) if grade_id else None
-        sacred = category == "阵法" and grade_id == "05"
-        if sacred and not str(instance_key or "").strip():
+        # 阵法里「圣品」与「带先天灵宝的固定品」都是独立实例：一份实例一个条目，
+        # 不能按品级并成一条——否则两座不同灵宝的阵法会互相盖住，发放回去也就丢了加成。
+        instanced = category == "阵法" and (
+            grade_id == "05" or bool(str(instance_key or "").strip())
+        )
+        if category == "阵法" and grade_id == "05" and not str(instance_key or "").strip():
             raise SectAssetError("圣品阵法产出必须具有独立实例编号")
         key = (
             f"{category}:{content_id}:{grade_id}:{instance_key}"
-            if sacred
+            if instanced
             else f"{category}:{content_id}:{grade_id or '-'}"
         )
         before_raw = entries.get(key)
@@ -762,6 +778,8 @@ class SectAssetService:
             "品级": grade_id,
             "数量": after,
             "实际投入": dict(materials),
+            "灵宝编号": treasure_id,
+            "灵宝效果": dict(modifiers),
         }
         entries[key] = entry_value
         value["条目"] = entries
@@ -774,6 +792,8 @@ class SectAssetService:
             grade.name if grade is not None else "",
             after,
             materials,
+            treasure_id,
+            modifiers,
         )
         return (
             SharedEntityMutation(
@@ -843,6 +863,11 @@ class SectAssetService:
             grade_name,
             int(value.get("数量") or 0),
             materials,
+            str(value.get("灵宝编号") or ""),
+            tuple(
+                (str(field), str(raw))
+                for field, raw in _mapping(value.get("灵宝效果", {}), "灵宝效果").items()
+            ),
         )
 
     async def _member(self, user_id: str) -> SectMember:

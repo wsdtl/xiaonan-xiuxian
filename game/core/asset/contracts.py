@@ -42,6 +42,9 @@ class AssetEntry:
     equipped_slots: tuple[str, ...] = ()
     material_total: int | None = None
     updated_at: str = ""
+    #: 阵法条目若带先天灵宝，这里就是它的编号与效果（没有则为空）。
+    treasure_id: str = ""
+    modifiers: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
