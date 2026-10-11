@@ -45,6 +45,34 @@ async def show_innate_treasures(user_id: str, message: str, manager: Any) -> Non
 
 
 @GameCommand.command(
+    cmd="灵宝谱",
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "修行",
+            "summary": "查看这个世界一共存在哪些先天灵宝（全谱，与你自己有没有无关）",
+            "usage": ("灵宝谱", "灵宝谱 页码"),
+            "side_effect": "只读查询，不改变灵宝槽",
+            "order": 55,
+        },
+    },
+)
+async def show_innate_treasure_catalog(user_id: str, message: str, manager: Any) -> None:
+    feature = current_game_services().features.xiantian_lingbao
+    raw = message.strip()
+    if raw and not raw.isdecimal():
+        await manager.send(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
+        return
+    try:
+        await manager.send(
+            reply.catalog(feature, await feature.catalog(int(raw or 1)))
+        )
+    except InnateTreasureFeatureError as exc:
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+
+
+@GameCommand.command(
     cmd="执掌灵宝",
     metadata={
         "scope": "通用",

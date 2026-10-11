@@ -52,7 +52,7 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
             copy_now = feature.copy()
             text_now = getattr(copy_now, 'text', copy_now)
             raise WanzhenFeatureError(
-                str(text_now.get('阵法编号别带方括号') or '阵法编号别带方括号').format(编号=head)
+                str(text_now.get('阵法编号别带方括号') or '阵法编号别带方括号').format(number=head)
             )
         query = head
     if bracket and not qualifier:

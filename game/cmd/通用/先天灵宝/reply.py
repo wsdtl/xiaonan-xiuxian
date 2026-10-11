@@ -50,6 +50,27 @@ def view(feature: InnateTreasureFeature, result: InnateTreasureView) -> Document
     return builder.build()
 
 
+def catalog(feature: InnateTreasureFeature, result: InnateTreasureView) -> DocumentMessage:
+    """灵宝谱：列这个世界里**一共存在**的先天灵宝（与玩家有没有无关）。"""
+
+    builder = M.document().header(feature.copy("谱标题"))
+    builder.section(feature.copy("谱标题"), icon="inventory").line(
+        feature.copy("谱说明", {"总数": result.total_count})
+    )
+    for index, treasure in enumerate(result.owned, start=1):
+        builder.item(
+            index,
+            M.command(M.text(treasure.name), f"查看 {treasure.treasure_id}"),
+        )
+        builder.small(f"· {feature.copy('谱行权柄')}：{treasure.authority}")
+        builder.small(f"· {feature.copy('谱行加成')}：{_effect(treasure)}")
+    if result.page_count > 1:
+        builder.small(
+            feature.copy("页码", {"当前页": result.page, "总页数": result.page_count})
+        )
+    return builder.build()
+
+
 def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult) -> DocumentMessage:
     treasure = result.treasure
     return (
@@ -97,4 +118,4 @@ def _effect(treasure: InnateTreasure) -> str:
     return f"{treasure.effect.node}：{treasure.effect.ability}"
 
 
-__all__ = ["equipped", "error", "view"]
+__all__ = ["catalog", "equipped", "error", "view"]

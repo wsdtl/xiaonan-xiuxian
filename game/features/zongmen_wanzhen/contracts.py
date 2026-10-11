@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from game.core.sect_assets import SectAssetEntry
 
@@ -28,6 +28,8 @@ class WanzhenPage:
     page_count: int
     total_entries: int
     entries: tuple[SectAssetEntry, ...]
+    #: 条目上的先天灵宝编号 → 名字。渲染层只查这张表，不许自己去问服务（边界判据）。
+    treasure_names: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

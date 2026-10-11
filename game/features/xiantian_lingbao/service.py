@@ -96,6 +96,28 @@ class InnateTreasureFeature:
             len(collection.owned),
         )
 
+    async def catalog(self, page: int = 1) -> InnateTreasureView:
+        """全部先天灵宝的谱（与"你有没有"无关）：每页 `_page_limit` 件。
+
+        `inspect()` 列的是玩家自己的收藏；这一页列的是这个世界里**一共存在**哪些灵宝，
+        所以没有灵宝的账号也能看到全谱——这正是委托方要的那一页。
+        """
+        self._require_initialized()
+        if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+            raise InnateTreasureFeatureError("页码必须是正整数")
+        everything = self._treasures.treasures()
+        page_count = max(1, (len(everything) + self._page_limit - 1) // self._page_limit)
+        if page > page_count:
+            raise InnateTreasureFeatureError(f"页码超出范围：1至{page_count}")
+        start = (page - 1) * self._page_limit
+        return InnateTreasureView(
+            None,
+            everything[start : start + self._page_limit],
+            page,
+            page_count,
+            len(everything),
+        )
+
     async def equip(
         self, request: InnateTreasureEquipRequest
     ) -> InnateTreasureEquipResult:

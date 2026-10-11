@@ -45,6 +45,7 @@ class WanzhenFeature:
         sect: SectService,
         location: LocationService,
         player_state: PlayerStateService,
+        innate_treasure: InnateTreasureService,
     ) -> None:
         self._data = data
         self._assets = assets
@@ -53,6 +54,7 @@ class WanzhenFeature:
         self._sect = sect
         self._location = location
         self._player_state = player_state
+        self._innate_treasure = innate_treasure
         self._copy: WanzhenCopy | None = None
         self._buttons: tuple[Mapping[str, str], ...] = ()
         self._page_limit = 0
@@ -132,13 +134,29 @@ class WanzhenFeature:
         page_count = max(1, ceil(len(entries) / self._page_limit))
         current = min(page_number, page_count)
         offset = (current - 1) * self._page_limit
+        window = entries[offset : offset + self._page_limit]
         return WanzhenPage(
             normalized,
             current,
             page_count,
             len(entries),
-            entries[offset : offset + self._page_limit],
+            window,
+            self._treasure_names(window),
         )
+
+    def _treasure_names(self, entries: Sequence[SectAssetEntry]) -> dict[str, str]:
+        """条目上的先天灵宝编号换成名字（给渲染层查表用；查不到就退回编号）。"""
+
+        names: dict[str, str] = {}
+        for entry in entries:
+            identifier = str(getattr(entry, "treasure_id", "") or "").strip()
+            if not identifier or identifier in names:
+                continue
+            try:
+                names[identifier] = self._innate_treasure.resolve(identifier).name
+            except Exception:  # noqa: BLE001 - 名字只是展示，查不到就用编号
+                names[identifier] = identifier
+        return names
 
     async def donate(
         self,

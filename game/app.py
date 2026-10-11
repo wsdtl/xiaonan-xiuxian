@@ -809,6 +809,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         sect,
         location,
         player_state,
+        innate_treasure,
     )
     zongmen_wanzhen.initialize()
     zongmen_cangjing = CangjingFeature(data, sect_library, sect, location, player_state)
