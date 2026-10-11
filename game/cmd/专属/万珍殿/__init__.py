@@ -37,15 +37,26 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
     找不到或多条，就用展示数据里的话回绝，并把候选摆出来。
     """
     query = str(wanted or '').strip()
-    # 允许写成「阵法名[灵宝名]」——页面上照抄的就是这个样子，比空格分隔好看些。
+    # 两套写法各走各的，不许串味：
+    #   文字：`阵法名[灵宝名]`（方括号是给名字用的）
+    #   id  ：原汁原味——`530002` 或整条条目键 `530002:01:540003`
+    services = current_game_services()
+    if ":" in query:
+        return query
     bracket = ""
     if query.endswith("]") and "[" in query:
-        query, _, bracket = query[:-1].partition("[")
-        query = query.strip()
+        head, _, bracket = query[:-1].partition("[")
+        head = head.strip()
         bracket = bracket.strip()
+        if head.isdecimal():
+            copy_now = feature.copy()
+            text_now = getattr(copy_now, 'text', copy_now)
+            raise WanzhenFeatureError(
+                str(text_now.get('阵法编号别带方括号') or '阵法编号别带方括号').format(编号=head)
+            )
+        query = head
     if bracket and not qualifier:
         qualifier = bracket
-    services = current_game_services()
     snapshot = await services.core.asset.snapshot(user_id)
     matched = []
     for entry in snapshot.entries:
