@@ -24,7 +24,7 @@ from typing import Any
         "help": {
             "category": "道侣",
             "summary": "查看身边道侣的身份、性情、喜好与当前关系",
-            "usage": ("查看道侣 名称", "查看道侣 编号"),
+            "usage": ("查看道侣 名称", "查看道侣 编号或名称"),
             "side_effect": "只读查询，不改变关系或物品",
             "order": 10,
         },
@@ -54,7 +54,7 @@ async def inspect_companion(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "道侣",
             "summary": "与身边的世界道侣交谈",
-            "usage": ("交谈 名称", "交谈 编号"),
+            "usage": ("交谈 名称", "交谈 编号或名称"),
             "side_effect": "只读交谈，不增加好感",
             "order": 20,
         },
@@ -123,7 +123,7 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
         "help": {
             "category": "道侣",
             "summary": "邀约好感圆满的道侣同行",
-            "usage": ("邀约 名称", "邀约 编号"),
+            "usage": ("邀约 名称", "邀约 编号或名称"),
             "side_effect": "占用唯一同行道侣位，首次邀约会固定个人资质与实力波动",
             "order": 40,
         },
@@ -155,7 +155,7 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
         "help": {
             "category": "道侣",
             "summary": "让当前同行道侣返回其原本所在地",
-            "usage": ("暂别 名称", "暂别 编号"),
+            "usage": ("暂别 名称", "暂别 编号或名称"),
             "side_effect": "清除同行位，保留好感、赠礼历史与个人实例",
             "order": 50,
         },
