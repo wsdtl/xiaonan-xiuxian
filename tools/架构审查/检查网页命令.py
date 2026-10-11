@@ -98,6 +98,31 @@ async def _runtime_problems() -> list[str]:
     text = str(getattr(result.replies[0].message, 'content', '')) if result.replies else ''
     if '存入' not in text:
         problems.append('照网页拼出的命令发不出去：%s' % command)
+    # 写法界限：名字含中文、id 只有数字与标点，两套不许串味（委托方 2026-10 口径）。
+    restock = await services.core.asset.plan_formation_reserve_acquisition(
+        user_id, '530002', '01'
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            user_id, '网页判据-补货', '网页判据', (restock.operation,), {'阵法': '530002'}
+        )
+    )
+    mixed = await dispatch(
+        user_id=user_id,
+        raw_message='捐入万珍殿 阵法 530002[大衍周天盘]',
+        event_id='网页判据-混写',
+    )
+    mixed_text = str(getattr(mixed.replies[0].message, 'content', '')) if mixed.replies else ''
+    if '方括号是给阵法名用的' not in mixed_text:
+        problems.append('把文字写法套在 id 上（530002[灵宝名]）没有被回绝')
+    plain = await dispatch(
+        user_id=user_id,
+        raw_message='捐入万珍殿 阵法 530002',
+        event_id='网页判据-编号',
+    )
+    plain_text = str(getattr(plain.replies[0].message, 'content', '')) if plain.replies else ''
+    if '存入' not in plain_text:
+        problems.append('id 写法（只给阵法编号）发不出去')
     return problems
 
 
