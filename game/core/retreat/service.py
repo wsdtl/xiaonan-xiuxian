@@ -227,9 +227,86 @@ class RetreatService:
             raise RetreatConflictError("当前位置不能闭关")
 
         transitions = []
-        formal_count = 0
         user_results: dict[str, dict[str, object]] = {}
         source = random.Random(seed)
+        formal_count = await self._plan_retreat_participants(
+            command,
+            owner,
+            participants,
+            session_id,
+            source,
+            transitions,
+            user_results,
+        )
+
+        session_value = {
+            "开始请求": command.request_id,
+            "发起者": owner,
+            "参与用户": list(participants),
+            "地点": location.location_name,
+            "坐标": list(location.xy),
+            "正式角色数": formal_count,
+            "每轮秒数": self.status().seconds_per_round,
+            "最多轮数": self.status().maximum_rounds,
+            "开始时间": started_at.isoformat(),
+            "最晚出关时间": maximum_ends_at.isoformat(),
+            "种子": seed,
+            "用户结果": user_results,
+        }
+        operations: list[StateMutation] = [
+            StateMutation(owner, SESSION_STATE, session_id, session_value, 0),
+            *(plan.mutation for plan in transitions),
+        ]
+        for user_id in participants:
+            previous = await self._database.get(
+                StateAddress(user_id, LATEST_STATE, LATEST_KEY)
+            )
+            operations.append(
+                StateMutation(
+                    user_id,
+                    LATEST_STATE,
+                    LATEST_KEY,
+                    {"发起者": owner, "闭关编号": session_id},
+                    previous.version if previous else 0,
+                )
+            )
+        try:
+            receipt = await self._database.commit(
+                TransactionCommand(
+                    user_id=owner,
+                    request_id=command.request_id,
+                    business_type="闭关开始",
+                    operations=tuple(operations),
+                    payload={"闭关编号": session_id, "参与用户": list(participants)},
+                )
+            )
+        except StateConflictError as exc:
+            raise RetreatConflictError(str(exc)) from exc
+        return RetreatStarted(
+            session_id,
+            location.location_name,
+            len(participants),
+            formal_count,
+            self.status().maximum_rounds,
+            started_at,
+            maximum_ends_at,
+            receipt.replayed,
+        )
+
+    async def _plan_retreat_participants(
+        self,
+        command: RetreatStartCommand,
+        owner: str,
+        participants: tuple[str, ...],
+        session_id: str,
+        source: Mapping[str, object],
+        transitions: Mapping[str, object],
+        user_results: dict[str, object],
+    ) -> int:
+        """逐位参与者算闭关结果，返回正式角色数；只写进 user_results，不改别处。"""
+
+        formal_count = 0
+
         for user_id in participants:
             guard = await self._player_state.authorize(user_id, "空闲或托管")
             if not guard.allowed:
@@ -307,59 +384,8 @@ class RetreatService:
                 formal_count += 1
             user_results[user_id] = result
 
-        session_value = {
-            "开始请求": command.request_id,
-            "发起者": owner,
-            "参与用户": list(participants),
-            "地点": location.location_name,
-            "坐标": list(location.xy),
-            "正式角色数": formal_count,
-            "每轮秒数": self.status().seconds_per_round,
-            "最多轮数": self.status().maximum_rounds,
-            "开始时间": started_at.isoformat(),
-            "最晚出关时间": maximum_ends_at.isoformat(),
-            "种子": seed,
-            "用户结果": user_results,
-        }
-        operations: list[StateMutation] = [
-            StateMutation(owner, SESSION_STATE, session_id, session_value, 0),
-            *(plan.mutation for plan in transitions),
-        ]
-        for user_id in participants:
-            previous = await self._database.get(
-                StateAddress(user_id, LATEST_STATE, LATEST_KEY)
-            )
-            operations.append(
-                StateMutation(
-                    user_id,
-                    LATEST_STATE,
-                    LATEST_KEY,
-                    {"发起者": owner, "闭关编号": session_id},
-                    previous.version if previous else 0,
-                )
-            )
-        try:
-            receipt = await self._database.commit(
-                TransactionCommand(
-                    user_id=owner,
-                    request_id=command.request_id,
-                    business_type="闭关开始",
-                    operations=tuple(operations),
-                    payload={"闭关编号": session_id, "参与用户": list(participants)},
-                )
-            )
-        except StateConflictError as exc:
-            raise RetreatConflictError(str(exc)) from exc
-        return RetreatStarted(
-            session_id,
-            location.location_name,
-            len(participants),
-            formal_count,
-            self.status().maximum_rounds,
-            started_at,
-            maximum_ends_at,
-            receipt.replayed,
-        )
+        return formal_count
+
 
     async def progress(
         self, user_id: str, *, now: datetime | None = None
