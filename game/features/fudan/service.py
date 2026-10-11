@@ -24,6 +24,7 @@ from game.core.medicine import MedicineError, MedicineService, PreparedBattleMed
 from game.core.player_state import PlayerStateService
 
 from .contracts import (
+    FudanAction,
     AutoMedicineRequest,
     AutoMedicineResult,
     MedicineFeatureConflictError,
@@ -56,6 +57,7 @@ class MedicineFeature:
         self._database = database
         self._innate_treasure = innate_treasure
         self._copy: Mapping[str, object] | None = None
+        self._format_actions: tuple[FudanAction, ...] = ()
 
     def initialize(self) -> None:
         if self._copy is not None:
@@ -78,6 +80,21 @@ class MedicineFeature:
             if not isinstance(copy.get(section), Mapping):
                 raise JsonDataError(f"服丹展示缺少文本.{section}")
         self._copy = copy
+        buttons = copy.get("按钮") or ()
+        self._format_actions = tuple(
+            FudanAction(
+                str(row["编号"]), str(row["名称"]), str(row["命令"]),
+                str(row["行为"]), str(row["样式"]),
+            )
+            for row in buttons
+            if isinstance(row, Mapping)
+        )
+
+    def format_actions(self) -> tuple[FudanAction, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」。"""
+
+        return self._format_actions
+
 
     def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:

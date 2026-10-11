@@ -65,3 +65,14 @@ __all__ = [
     "MedicineUseRequest",
     "MedicineUseResult",
 ]
+
+
+@dataclass(frozen=True)
+class FudanAction:
+    """服丹回执上的动作，字段名与 CommandAction 契约一致。"""
+
+    action_id: str
+    label: str
+    command: str
+    behavior: str
+    style: str

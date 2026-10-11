@@ -19,13 +19,13 @@ from typing import Any
 async def _use(
     target: str, *, user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
+    feature = current_game_services().features.fudan
     parts = message.rsplit(maxsplit=1)
     if not parts or len(parts) > 2:
-        await manager.send(reply.error("格式不正确"))
+        await manager.send(reply.error(feature, feature.copy("错误", "格式"), feature.format_actions()))
         return
     medicine = parts[0]
     grade = parts[1] if len(parts) == 2 else ""
-    feature = current_game_services().features.fudan
     try:
         result = await feature.use(
             MedicineUseRequest(
@@ -38,7 +38,7 @@ async def _use(
         )
         await manager.send(reply.used(feature, result))
     except (MedicineFeatureError, MedicineFeatureConflictError) as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -92,11 +92,11 @@ async def use_for_companion(user_id: str, message: str, message_context: Message
 async def _setting(
     target: str, *, user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
+    feature = current_game_services().features.fudan
     value = message.strip()
     if value not in {"开", "关"}:
-        await manager.send(reply.error("自动用药只能设置为开或关"))
+        await manager.send(reply.error(feature, feature.copy("错误", "自动用药"), feature.format_actions()))
         return
-    feature = current_game_services().features.fudan
     try:
         result = await feature.set_automatic(
             AutoMedicineRequest(
@@ -108,7 +108,7 @@ async def _setting(
         )
         await manager.send(reply.setting(feature, result))
     except (MedicineFeatureError, MedicineFeatureConflictError) as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
