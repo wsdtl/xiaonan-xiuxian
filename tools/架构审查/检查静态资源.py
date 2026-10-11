@@ -34,6 +34,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -363,6 +364,11 @@ def check_page_routes_csp() -> list[Finding]:
     return findings
 
 
+#: 慢检查：`死样式` 要对每个 CSS 类名在整份语料里做子串搜索（实测 12.5 秒）。
+#: 它只在改样式时有意义，因此**必过项用 `--快` 跳过它**，完整版挂在发布验收里（不删、不丢覆盖）。
+SLOW_CHECKS = frozenset({"死样式"})
+
+
 CHECKS = (
     ("手工版本号", check_no_version_query),
     ("页面形状", check_page_shape),
@@ -375,15 +381,23 @@ CHECKS = (
 )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    """跑全部检查；带 `--快` 时跳过慢检查（必过项用，慢检查仍挂在发布验收里）。"""
+
+    args = list(sys.argv[1:] if argv is None else argv)
+    fast_only = "--快" in args
     findings: list[Finding] = []
+    ran = 0
     for name, check in CHECKS:
+        if fast_only and name in SLOW_CHECKS:
+            continue
+        ran += 1
         try:
             findings.extend(check())
         except (OSError, UnicodeDecodeError) as exc:
             findings.append(Finding(name, Path("static"), 0, f"读取失败：{exc}"))
     if not findings:
-        print(f"静态资源审查通过：{len(CHECKS)} 项检查")
+        print(f"静态资源审查通过：{ran} 项检查" + ("（已跳过慢检查死样式）" if fast_only else ""))
         return 0
     print(f"静态资源违规 {len(findings)} 处：")
     for finding in sorted(findings, key=lambda item: (item.rule, str(item.path), item.line)):

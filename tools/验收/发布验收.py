@@ -30,6 +30,8 @@ os.environ["TEMP"] = os.environ["TMP"] = str(_SCRATCH)
 
 
 CHANNELS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    # 必过项只跑静态资源的快检查；这里补上完整版（含最贵的「死样式」）。
+    ("静态资源（含死样式）", ("tools/架构审查/检查静态资源.py",)),
     ("语料通道", ("tools/验收/语料对照.py", "--对照", "tools/基准/语料摘要.sem")),
     ("监听收窄对照", ("tools/验收/监听收窄对照.py",)),
     ("语料行为通道", ("tools/验收/语料对照.py", "--摘要", "行为", "--对照", "tools/基准/语料行为摘要.sem")),
