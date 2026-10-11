@@ -49,7 +49,8 @@ def _id_converter():
     认不出就原样留着——它只负责把能给编号的地方换成编号，不做校验。
     """
 
-    data = current_game_services().core.data
+    services = current_game_services()
+    data = services.core.data
     name_to_id: dict[str, str] = {}
     for section in _ID_SECTIONS:
         try:
@@ -60,6 +61,15 @@ def _id_converter():
             name = str(value.get("名称") or "").strip()
             if name and name not in name_to_id:
                 name_to_id[name] = str(content_id)
+
+    # 品级也是 id 化的内容，只是方式不同：黄品 → 01。照 asset 的品级表来，不硬编码。
+    for grade in services.core.asset.grades():
+        grade_name = str(getattr(grade, "name", "") or "").strip()
+        grade_id = str(getattr(grade, "grade_id", "") or "").strip()
+        if not grade_name or not grade_id:
+            continue
+        for token in (grade_name, grade_name[:1]):
+            name_to_id.setdefault(token, grade_id)
 
     def convert(text: str) -> str:
         return " ".join(name_to_id.get(token, token) for token in str(text).split())
