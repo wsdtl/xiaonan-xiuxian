@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from message import DocumentBuilder, Action, DocumentMessage, M
 
 from game.cmd.help_registry import CommandHelpEntry, help_registry
@@ -9,106 +11,38 @@ from game.cmd.help_registry import CommandHelpEntry, help_registry
 GAME_NAME = "晓楠修仙"
 
 
-def help_message(query: str = "") -> DocumentMessage:
+def help_message(
+    query: str = "",
+    *,
+    id_converter: Callable[[str], str] | None = None,
+    nav: str = "帮助",
+) -> DocumentMessage:
+    """帮助页。`id_converter` 给定时，把文本里的中文名换成编号——`help` 就是它加这一层。"""
+
     normalized = " ".join(str(query or "").split())
     if not normalized:
-        return _home_message()
+        return _home_message(id_converter=id_converter, nav=nav)
     elif normalized in help_registry.categories():
-        return _category_message(normalized)
+        return _category_message(normalized, id_converter=id_converter, nav=nav)
     elif entry := help_registry.find(normalized):
-        return _detail_message(entry)
-    return _not_found_message(normalized)
+        return _detail_message(entry, id_converter=id_converter, nav=nav)
+    return _not_found_message(normalized, id_converter=id_converter, nav=nav)
 
 
-#: 用法里「名称」类槽位——`help` 这一页把它们一律换成「编号」，只讲 id 写法。
-_ID_SLOTS = (
-    "编号或名称", "名称或编号", "阵法名", "珍物名", "角色名或编号", "宗门名或编号",
-    "丹药编号或名称", "丹药编号或丹药名称", "器律编号或名称", "器具编号或名称",
-    "功法编号或名称", "编号", "名称", "角色名", "宗门名", "道侣", "品级",
-)
+def _shown(text: str, id_converter: object) -> str:
+    """给定时把中文名换成编号；命令词（第一个词）不动。"""
 
-#: 一页放多少条——这一页没有按钮，页码靠手打，所以页别太大。
-_ID_PAGE_SIZE = 24
-
-
-def id_form(usage: str) -> str:
-    """把用法里的名称类槽位换成「编号」：同一件东西，这一页只讲 id 写法。
-
-    含中文=名字写法、只有数字与冒号=id 写法（《阵法说明》第五节）。
-    """
-
-    parts = str(usage or "").split(None, 1)
+    if id_converter is None:
+        return str(text)
+    parts = str(text).split(None, 1)
     if not parts:
         return ""
     head = parts[0]
     tail = parts[1] if len(parts) > 1 else ""
-    for slot in sorted(_ID_SLOTS, key=len, reverse=True):
-        if slot == "品级":
-            continue
-        tail = tail.replace(slot, "编号")
-    tail = tail.replace("品级", "品级编号")
-    return " ".join((head + " " + tail).split())
+    return (head + " " + id_converter(tail)).strip() if tail else head
 
 
-def id_help_message(page: int = 1) -> DocumentMessage:
-    """`help`：按 id 写法罗列命令。不参与「帮助」的分类联动，只带自己的导航按钮。"""
-
-    rows: list[object] = []
-    for category in help_registry.categories():
-        for entry in help_registry.in_category(category):
-            if not entry.spec.usage:
-                continue
-            rows.append(entry)
-    total = max(1, (len(rows) + _ID_PAGE_SIZE - 1) // _ID_PAGE_SIZE)
-    current = min(max(int(page or 1), 1), total)
-    builder = (
-        M.document()
-        .header(GAME_NAME)
-        .section("help", icon="system")
-        .small("同一件事的 id 写法（只有数字与冒号的那种）；中文写法看「帮助」。")
-    )
-    begin = (current - 1) * _ID_PAGE_SIZE
-    page_entries = rows[begin : begin + _ID_PAGE_SIZE]
-    _usage_rows(builder, page_entries, id_mode=True)
-    builder.small("第 %d/%d 页，共 %d 条。" % (current, total, len(rows)))
-    # help 只带自己的导航：上一页/下一页/返回自己的首页。
-    # 刻意不指向中文「帮助」——那是别的组件的联动，不掺和。
-    actions: list[Action] = []
-    if current > 1:
-        actions.append(
-            Action(
-                "help.id_prev",
-                "上一页",
-                "help %d" % (current - 1),
-                behavior="callback",
-                style="secondary",
-            )
-        )
-    if current < total:
-        actions.append(
-            Action(
-                "help.id_next",
-                "下一页",
-                "help %d" % (current + 1),
-                behavior="callback",
-            )
-        )
-    if current > 1:
-        actions.append(
-            Action(
-                "help.id_home",
-                "返回首页",
-                "help",
-                behavior="callback",
-                style="secondary",
-            )
-        )
-    if actions:
-        builder.actions(tuple(actions))
-    return builder.build()
-
-
-def _home_message() -> DocumentMessage:
+def _home_message(*, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
         .header(GAME_NAME)
@@ -116,45 +50,35 @@ def _home_message() -> DocumentMessage:
         .small("按分类查看当前已经开放的命令。")
     )
     categories = help_registry.categories()
-    _category_rows(builder, categories)
+    _category_rows(builder, categories, nav=nav)
     if not categories:
         builder.line(M.status("暂无命令", tone="muted"))
     return builder.build()
 
 
-def _usage_rows(builder: DocumentBuilder, entries: object, *, id_mode: bool) -> None:
-    """把命令按行铺开——中文模式（「帮助」分类页）与 id 模式（`help`）共用这一份。
-
-    id 模式只铺**含名称槽位**的那条用法，并把参数里的名称槽位换成「编号」；
-    含占位词的只「填入」不「发送」，免得把「编号」两个字当命令发出去。
-    """
+def _usage_rows(
+    builder: DocumentBuilder, entries: object, *, nav: str, id_converter: object
+) -> None:
+    """把命令按行铺开：「帮助」与 `help` 共用这一份。"""
 
     for entry in entries:
-        usages = tuple(str(usage) for usage in entry.spec.usage)
-        if not id_mode:
-            builder.line(M.command(entry.command, f"帮助 {entry.command}"), " - ", entry.spec.summary)
-            continue
-        picked = next(
-            (usage for usage in usages if any(slot in usage for slot in _ID_SLOTS)),
-            None,
+        builder.line(
+            M.command(entry.command, f"{nav} {entry.command}"),
+            " - ",
+            _shown(entry.spec.summary, id_converter),
         )
-        if picked is None:
-            continue
-        text = id_form(picked)
-        fill_only = ("编号" in text) or ("码" in text)
-        builder.line(M.command(text, text, submit=not fill_only))
 
 
-def _category_message(category: str) -> DocumentMessage:
+def _category_message(category: str, *, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = M.document().header(GAME_NAME).section(category, icon="system")
     entries = help_registry.in_category(category)
-    _usage_rows(builder, entries, id_mode=False)
+    _usage_rows(builder, entries, nav=nav, id_converter=id_converter)
     if not entries:
         builder.line(M.status("暂未开放", tone="muted"))
-    return builder.actions((_home_action(),)).build()
+    return builder.actions((_home_action(nav),)).build()
 
 
-def _detail_message(entry: CommandHelpEntry) -> DocumentMessage:
+def _detail_message(entry: CommandHelpEntry, *, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
         .header(entry.command)
@@ -162,7 +86,7 @@ def _detail_message(entry: CommandHelpEntry) -> DocumentMessage:
         .line(entry.spec.summary)
     )
     for usage in entry.spec.usage:
-        builder.field("发送", usage)
+        builder.field("发送", _shown(usage, id_converter))
     if entry.aliases:
         builder.field("也可发送", "、".join(entry.aliases))
     if entry.spec.side_effect:
@@ -187,7 +111,7 @@ def _detail_message(entry: CommandHelpEntry) -> DocumentMessage:
             Action(
                 "help.category",
                 "返回分类",
-                f"帮助 {entry.spec.category}",
+                f"{nav} {entry.spec.category}",
                 behavior="callback",
                 style="secondary",
             ),
@@ -195,7 +119,7 @@ def _detail_message(entry: CommandHelpEntry) -> DocumentMessage:
     ).build()
 
 
-def _not_found_message(query: str) -> DocumentMessage:
+def _not_found_message(query: str, *, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
         .header(GAME_NAME)
@@ -207,27 +131,22 @@ def _not_found_message(query: str) -> DocumentMessage:
     return builder.actions((_home_action(),)).build()
 
 
-def _category_rows(builder: DocumentBuilder, categories: tuple[str, ...]) -> None:
+def _category_rows(builder: DocumentBuilder, categories: tuple[str, ...], *, nav: str = "帮助") -> None:
     for start in range(0, len(categories), 3):
         parts: list[object] = []
         for index, category in enumerate(categories[start : start + 3]):
             if index:
                 parts.append("　")
-            parts.append(M.command(category, f"帮助 {category}"))
+            parts.append(M.command(category, f"{nav} {category}"))
         builder.line(*parts)
 
 
-def _home_action() -> Action:
+def _home_action(nav: str = "帮助") -> Action:
     return Action(
-        "help.home", "帮助首页", "帮助", behavior="callback", style="secondary"
+        "help.home", f"{nav}首页", nav, behavior="callback", style="secondary"
     )
 
 
 __all__ = [
-    "id_form",
-    "id_help_message",
-    "_category_message",
-    "_detail_message",
-    "_home_message",
     "help_message",
 ]

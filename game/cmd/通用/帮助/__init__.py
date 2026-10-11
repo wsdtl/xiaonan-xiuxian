@@ -5,6 +5,8 @@ from __future__ import annotations
 # 多分支命令与帮助同类（都是命令导航）；显式导入才会注册。
 from . import branches as _branches  # noqa: F401
 
+from game.app import current_game_services
+
 from ...command import GameCommand
 from . import reply
 from typing import Any
@@ -27,6 +29,44 @@ async def help_command(message: str, manager: Any) -> None:
     await manager.send(reply.help_message(message))
 
 
+#: 我自己的转换范围：只在这几个实体节里认名称。别去借别的服务的口——各有各的范围。
+_ID_SECTIONS = (
+    "基础物品",
+    "丹药",
+    "阵法",
+    "先天灵宝",
+    "功法",
+    "真意",
+    "气机",
+    "器律",
+    "道侣",
+)
+
+
+def _id_converter():
+    """自己写的「中文名 → 编号」转换器：先按上面几节建名称表，再逐词替换。
+
+    认不出就原样留着——它只负责把能给编号的地方换成编号，不做校验。
+    """
+
+    data = current_game_services().core.data
+    name_to_id: dict[str, str] = {}
+    for section in _ID_SECTIONS:
+        try:
+            table = data.entities(section)
+        except Exception:  # noqa: BLE001 - 这一节不存在就跳过
+            continue
+        for content_id, value in table.items():
+            name = str(value.get("名称") or "").strip()
+            if name and name not in name_to_id:
+                name_to_id[name] = str(content_id)
+
+    def convert(text: str) -> str:
+        return " ".join(name_to_id.get(token, token) for token in str(text).split())
+
+    return convert
+
+
 @GameCommand.command(
     cmd="help",
     metadata={
@@ -37,17 +77,12 @@ async def help_command(message: str, manager: Any) -> None:
     },
 )
 async def id_help_command(message: str, manager: Any) -> None:
-    """`help [页码]`：按 id 写法罗列命令，纯文本、不带按钮。"""
+    """`help [分类或命令]`：与「帮助」同一套内容，多穿一层「中文名 → 编号」。"""
 
-    text = " ".join(str(message or "").split())
-    page = 1
-    if text:
-        parts = text.split()
-        if len(parts) != 1 or not parts[0].isdecimal():
-            await manager.send(reply.id_help_message(1))
-            return
-        page = int(parts[0])
-    await manager.send(reply.id_help_message(page))
+    query = " ".join(str(message or "").split())
+    await manager.send(
+        reply.help_message(query, id_converter=_id_converter(), nav="help")
+    )
 
 
 __all__ = []
