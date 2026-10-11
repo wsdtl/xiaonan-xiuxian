@@ -34,7 +34,7 @@ async def start_exploration(user_id: str, message_context: MessageContext, manag
             reply.started(feature.copy(), result, feature.start_actions())
         )
     except ExplorationFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -63,7 +63,7 @@ async def exploration_progress(user_id: str, manager: Any) -> None:
             )
         )
     except ExplorationFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -94,7 +94,11 @@ async def settle_exploration(user_id: str, message: str, message_context: Messag
         page = 1 if not page_text else int(page_text)
     except ValueError:
         await manager.send(
-            reply.error(feature.copy(), reply.text(feature.copy(), "错误", "格式"))
+            reply.error(
+                feature.copy(),
+                reply.text(feature.copy(), "错误", "格式"),
+                feature.format_actions(),
+            )
         )
         return
     try:
@@ -112,7 +116,7 @@ async def settle_exploration(user_id: str, message: str, message_context: Messag
             )
         )
     except ExplorationFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 __all__ = []

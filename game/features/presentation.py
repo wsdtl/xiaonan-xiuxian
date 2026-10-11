@@ -141,7 +141,7 @@ def paged_settlement_actions(
 def validate_page_buttons(buttons: tuple[Button, ...], label: str) -> None:
     """按钮只许落在「开始 / 进度 / 总结」三页，且同一页面内编号唯一。"""
 
-    if any(button["页面"] not in {"开始", "进度", "总结"} for button in buttons):
+    if any(button["页面"] not in {"开始", "进度", "总结", "格式"} for button in buttons):
         raise JsonDataError(f"{label}按钮使用了未知页面")
     identities = tuple((button["页面"], button["编号"]) for button in buttons)
     if len(identities) != len(set(identities)):

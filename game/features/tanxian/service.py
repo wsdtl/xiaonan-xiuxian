@@ -85,6 +85,11 @@ class ExplorationFeature:
         except ExplorationError as exc:
             raise ExplorationFeatureError(str(exc)) from exc
 
+
+    def format_actions(self) -> tuple[object, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」——完整用法在帮助组件里。"""
+
+        return actions(self._buttons, "格式", set())
     def start_actions(self) -> tuple[ExplorationAction, ...]:
         return actions(self._buttons, "开始", set())
 

@@ -34,7 +34,7 @@ async def start_ore_gathering(user_id: str, message_context: MessageContext, man
             reply.started(feature.copy(), result, feature.started_actions())
         )
     except OreGatheringFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -64,7 +64,7 @@ async def ore_gathering_progress(user_id: str, manager: Any) -> None:
             )
         )
     except OreGatheringFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -89,7 +89,11 @@ async def finish_ore_gathering(user_id: str, message: str, message_context: Mess
         page = 1 if not page_text else int(page_text)
     except ValueError:
         await manager.send(
-            reply.error(feature.copy(), reply.text(feature.copy(), "错误", "格式"))
+            reply.error(
+                feature.copy(),
+                reply.text(feature.copy(), "错误", "格式"),
+                feature.format_actions(),
+            )
         )
         return
     try:
@@ -107,7 +111,7 @@ async def finish_ore_gathering(user_id: str, message: str, message_context: Mess
             )
         )
     except OreGatheringFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 __all__ = []

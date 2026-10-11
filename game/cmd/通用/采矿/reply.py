@@ -28,9 +28,12 @@ def text(copy: OreGatheringCopy, section: str, key: str, values: Mapping[str, ob
     return copy.text[section][key].format_map(values or {})
 
 
-def error(copy: OreGatheringCopy, message: str) -> DocumentMessage:
+def error(
+    copy: OreGatheringCopy, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", "采矿失败", message, tone="danger"
+    return error_document(        text(copy, "错误", "标题"), "notice", "采矿失败", message, tone="danger",
+        actions=actions,
     )
 
 
