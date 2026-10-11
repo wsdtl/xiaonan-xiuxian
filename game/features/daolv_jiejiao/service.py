@@ -12,6 +12,7 @@ from game.core.companion import (
     CompanionStateError,
 )
 from game.core.item_catalog import (
+    ItemCatalogError,
     ItemDetail,
     ItemCatalogService,
     ItemNameAmbiguousError,
@@ -133,6 +134,25 @@ class CompanionInteractionFeature:
         )
         return CompanionConversation(view, self._choice(definition.dialogue.daily))
 
+    def _reward_detail(self, item_id: str) -> ItemDetail:
+        """圆满回礼的明细：可能是丹药，而物品目录只收基础物品。
+
+        丹药有自己的实体表——照 core 里其它地方的做法取「名称」，
+        别让玩家看到「未找到物品编号：100002」这种机器编号。
+        """
+        try:
+            return self._item_catalog.get(item_id)
+        except ItemCatalogError:
+            value = self._data.entity("丹药", item_id)
+            return ItemDetail(
+                item_id=item_id,
+                category="丹药",
+                name=str(value.get("名称") or "").strip() or item_id,
+                description=str(value.get("说明") or "").strip(),
+                fields={},
+                section="丹药",
+            )
+
     async def gift(self, request: CompanionGiftRequest) -> CompanionGiftResult:
         self._require_initialized()
         definition = self._resolve_companion(request.companion)
@@ -228,7 +248,7 @@ class CompanionInteractionFeature:
         reward_quantity = 0
         if relation_plan.first_full:
             reward = definition.reward
-            reward_item = self._item_catalog.get(reward.item_id)
+            reward_item = self._reward_detail(reward.item_id)
             reward_grade = self._asset.grade(reward.grade_id)
             reward_quantity = reward.quantity
             adjustments.append(
