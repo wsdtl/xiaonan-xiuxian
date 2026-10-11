@@ -50,7 +50,7 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]
 
 def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMessage:
     key = "捐入" if value.action == "存入" else "发放"
-    values = {"名称": value.entry.name, "目标": value.target_name}
+    values = {"name": value.entry.name, "目标": value.target_name}
     return (
         M.document()
         .header(_text(copy, "标题"))

@@ -59,9 +59,9 @@ class SectFacilityFeature:
         """格式与提示类回执的动作：只给该设施页面的「查看帮助」。"""
 
         return tuple(
-            _SheshiAction(编号, 名称, 命令, 行为, 样式)
-            for (页面, 编号, 名称, 命令, 行为, 样式) in self._format_buttons
-            if 页面 == page
+            _SheshiAction(entry_id, entry_name, command, behavior, style)
+            for (page_id, entry_id, entry_name, command, behavior, style) in self._format_buttons
+            if page_id == page
         )
 
 

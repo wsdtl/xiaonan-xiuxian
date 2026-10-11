@@ -55,14 +55,14 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
     text = getattr(copy, 'text', copy)
     if not matched:
         raise WanzhenFeatureError(
-            str(text.get('阵法找不到') or '阵藏里没有这座阵法').format(名称=query)
+            str(text.get('阵法找不到') or '阵藏里没有这座阵法').format(name=query)
         )
     if len(matched) > 1:
         raise WanzhenFeatureError(
             str(text.get('阵法说不清') or '阵藏里有多条同名阵法，请补品级').format(
-                名称=query,
-                数量=len(matched),
-                条目='、'.join(
+                name=query,
+                count=len(matched),
+                entries='、'.join(
                     '%s·%s' % (
                         str(getattr(item, 'grade_name', '')),
                         '无灵宝' if str(getattr(item, 'instance_key', '')).endswith('无灵宝') else str(
