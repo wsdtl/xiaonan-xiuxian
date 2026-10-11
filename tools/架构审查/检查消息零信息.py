@@ -111,6 +111,8 @@ _CORPUS: tuple[dict[str, str], dict[str, float]] | None = None
 #: 精心挑的深页命令抛异常就记在这儿——那说明页面根本出不来。
 _DEEP_FAILURES: list[str] = []
 _SMOKE_FAILURES: list[str] = []
+#: 同一张卡上出现重复按钮（同标签或同编号）——判据原来只管按钮合不合法，不管重不重。
+_DUPLICATE_BUTTONS: list[str] = []
 #: 深页命令：它们必须给出真页面，不能是错误页。
 _DEEP_COMMANDS: list[str] = []
 
@@ -213,6 +215,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     pages: dict[str, str] = {}
     deep_failures: list[str] = []
     smoke_failures: list[str] = []
+    duplicate_buttons: list[str] = []
 
     async def send(text: str, *, user: str = "", strict: bool = False) -> None:
         try:
@@ -223,6 +226,14 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             if strict:
                 smoke_failures.append(text + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:60])
             return
+        for reply in result.replies:
+            actions = list(getattr(reply.message, "actions", ()) or ())
+            for label, values in (
+                ("标签", [getattr(a, "label", "") for a in actions]),
+                ("编号", [getattr(a, "action_id", "") for a in actions]),
+            ):
+                for value in {v for v in values if v and values.count(v) > 1}:
+                    duplicate_buttons.append(text + " 的回复里按钮" + label + "重复：" + value)
         if result.replies and text not in pages:
             # 先到先得：宽参阶段会把「命令 + 空参数」拼成同一条命令，覆盖掉深页阶段
             # 在正确状态下取到的页面——那一覆盖正是让洞天覆盖悄悄失效的原因。
@@ -555,6 +566,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         leftover.unlink(missing_ok=True)
     _DEEP_FAILURES.extend(deep_failures)
     _SMOKE_FAILURES.extend(smoke_failures)
+    _DUPLICATE_BUTTONS.extend(duplicate_buttons)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -693,6 +705,13 @@ def check_garbage_args_do_not_crash() -> list[str]:
     return [item + "（乱写参数炸了）" for item in _SMOKE_FAILURES]
 
 
+def check_buttons_not_duplicated() -> list[str]:
+    """同一张卡上不许出现两个一样的按钮（同标签或同编号）——都是白占聊天屏。"""
+
+    _corpus()
+    return list(_DUPLICATE_BUTTONS)
+
+
 def check_badge_not_restated() -> list[str]:
     """状态徽章后面又跟一句复述它的话，就是同一件事印两遍。
 
@@ -756,6 +775,7 @@ CHECKS = (
     ("零计数不配空陈述", check_no_zero_count_with_empty_note),
     ("徽章不被复述", check_badge_not_restated),
     ("命令不炸", check_garbage_args_do_not_crash),
+    ("按钮不重复", check_buttons_not_duplicated),
 )
 
 
