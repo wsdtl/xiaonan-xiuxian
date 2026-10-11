@@ -51,30 +51,25 @@ def id_form(usage: str) -> str:
 
 
 def id_help_message(page: int = 1) -> DocumentMessage:
-    """`help`：按 id 写法罗列命令。不参与「帮助」的分类联动，也不带按钮。"""
+    """`help`：按 id 写法罗列命令。不参与「帮助」的分类联动，只带自己的导航按钮。"""
 
-    rows: list[tuple[str, str]] = []
+    rows: list[object] = []
     for category in help_registry.categories():
         for entry in help_registry.in_category(category):
-            usages = tuple(str(usage) for usage in entry.spec.usage)
-            if not usages:
+            if not entry.spec.usage:
                 continue
-            picked = next(
-                (usage for usage in usages if any(slot in usage for slot in _ID_SLOTS)),
-                usages[0],
-            )
-            rows.append((entry.command, id_form(picked)))
+            rows.append(entry)
     total = max(1, (len(rows) + _ID_PAGE_SIZE - 1) // _ID_PAGE_SIZE)
     current = min(max(int(page or 1), 1), total)
     builder = (
         M.document()
         .header(GAME_NAME)
         .section("help", icon="system")
-        .small("这一页只列 id 写法（只有数字与冒号的那种）；中文写法另外看「帮助」。")
+        .small("同一件事的 id 写法（只有数字与冒号的那种）；中文写法看「帮助」。")
     )
     begin = (current - 1) * _ID_PAGE_SIZE
-    for command, usage in rows[begin : begin + _ID_PAGE_SIZE]:
-        builder.line(M.text(usage))
+    page_entries = rows[begin : begin + _ID_PAGE_SIZE]
+    _usage_rows(builder, page_entries, id_mode=True)
     builder.small("第 %d/%d 页，共 %d 条。" % (current, total, len(rows)))
     # help 只带自己的导航：上一页/下一页/返回自己的首页。
     # 刻意不指向中文「帮助」——那是别的组件的联动，不掺和。
@@ -127,13 +122,33 @@ def _home_message() -> DocumentMessage:
     return builder.build()
 
 
+def _usage_rows(builder: DocumentBuilder, entries: object, *, id_mode: bool) -> None:
+    """把命令按行铺开——中文模式（「帮助」分类页）与 id 模式（`help`）共用这一份。
+
+    id 模式只铺**含名称槽位**的那条用法，并把参数里的名称槽位换成「编号」；
+    含占位词的只「填入」不「发送」，免得把「编号」两个字当命令发出去。
+    """
+
+    for entry in entries:
+        usages = tuple(str(usage) for usage in entry.spec.usage)
+        if not id_mode:
+            builder.line(M.command(entry.command, f"帮助 {entry.command}"), " - ", entry.spec.summary)
+            continue
+        picked = next(
+            (usage for usage in usages if any(slot in usage for slot in _ID_SLOTS)),
+            None,
+        )
+        if picked is None:
+            continue
+        text = id_form(picked)
+        fill_only = ("编号" in text) or ("码" in text)
+        builder.line(M.command(text, text, submit=not fill_only))
+
+
 def _category_message(category: str) -> DocumentMessage:
     builder = M.document().header(GAME_NAME).section(category, icon="system")
     entries = help_registry.in_category(category)
-    for entry in entries:
-        builder.line(
-            M.command(entry.command, f"帮助 {entry.command}"), " - ", entry.spec.summary
-        )
+    _usage_rows(builder, entries, id_mode=False)
     if not entries:
         builder.line(M.status("暂未开放", tone="muted"))
     return builder.actions((_home_action(),)).build()
