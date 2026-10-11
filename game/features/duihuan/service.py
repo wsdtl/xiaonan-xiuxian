@@ -29,7 +29,7 @@ from game.core.database import (
     TransactionCommand,
 )
 
-from .contracts import DuihuanConflictError, DuihuanError, DuihuanResult
+from .contracts import DuihuanConflictError, DuihuanError, DuihuanResult, DuihuanAction
 
 BUSINESS = '兑换码'
 CODE_PATTERN = re.compile(r'[A-Z0-9]{3,32}')
@@ -48,6 +48,7 @@ class DuihuanFeature:
         self._data, self._character, self._asset, self._database = data, character, asset, database
         self._copy: Mapping[str, object] | None = None
         self._types: dict[str, Mapping[str, object]] = {}
+        self._format_actions: tuple[DuihuanAction, ...] = ()
 
     def initialize(self) -> None:
         if self._copy is not None:
@@ -67,6 +68,21 @@ class DuihuanFeature:
         if not isinstance(copy, Mapping):
             raise JsonDataError('兑换码展示缺少文本.json')
         self._copy = copy
+        buttons = self._data.dataset("兑换码按钮").get("按钮") or ()
+        self._format_actions = tuple(
+            DuihuanAction(
+                str(row["编号"]), str(row["名称"]), str(row["命令"]),
+                str(row["行为"]), str(row["样式"]),
+            )
+            for row in buttons
+            if isinstance(row, Mapping) and str(row.get("页面") or "") == "格式"
+        )
+
+    def format_actions(self) -> tuple[DuihuanAction, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」。"""
+
+        return self._format_actions
+
 
     def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:

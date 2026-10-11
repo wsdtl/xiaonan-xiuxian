@@ -1,5 +1,8 @@
+from typing import Sequence
+
 from game.features.duihuan import DuihuanFeature, DuihuanResult
 from message import DocumentMessage, M
+from ...actions import CommandAction
 from ...presentation import error_document
 
 
@@ -20,8 +23,11 @@ def result(feature: DuihuanFeature, value: DuihuanResult) -> DocumentMessage:
     )
 
 
-def error(feature: DuihuanFeature, message: str) -> DocumentMessage:
+def error(
+    feature: DuihuanFeature, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     # 统一走 error_document：无 ` / ` 的文案渲染结果与原来相同。
     return error_document(
-        feature.copy('错误', '标题'), 'notice', '兑换失败', message, tone='danger'
+        feature.copy('错误', '标题'), 'notice', '兑换失败', message, tone='danger',
+        actions=actions,
     )

@@ -35,7 +35,7 @@ async def redeem_code(
             )
         )
     except (DuihuanError, DuihuanConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = []
