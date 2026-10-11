@@ -20,6 +20,7 @@ from typing import Any
         "help": {
             "category": "角色",
             "summary": "查看当前已经开放的命令分类、用法和结果",
+        "side_effect": "只读，什么也不改动",
             "usage": ("帮助", "帮助 分类", "帮助 命令"),
             "order": 0,
         },

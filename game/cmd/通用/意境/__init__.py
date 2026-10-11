@@ -20,6 +20,7 @@ from . import reply
         "help": {
             "category": "角色",
             "summary": "查看与修习意境",
+        "side_effect": "查看只读；升阶消耗道行，改路会把已练的阶清零",
             "usage": ("意境", "意境 升", "意境 修 <路名>"),
             "order": 20,
         },

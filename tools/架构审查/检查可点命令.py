@@ -397,6 +397,37 @@ def check_player_copy_has_no_jargon() -> list[str]:
     return problems
 
 
+def check_help_has_side_effect() -> list[str]:
+    """每条命令的帮助都要有一句「结果」。
+
+    委托方 2026-10 指着帮助卡：「其他命令你也都看看」。查下来 18 条命令（去重后 8 条）的帮助**根本没有「结果」这一行**，
+    而同屏的 `炼丹`／`炼阵` 都有——卡上少一行，标准就不齐。玩家最想知道的恰恰是「我这一下会付出什么、东西去哪」。
+    """
+
+    problems: list[str] = []
+    summary = re.compile(r'\"summary\"\s*:')
+    for path in sorted(GAME.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in summary.finditer(text):
+            # 帮助元数据的形状是 category/summary/usage/side_effect/order；
+            # 只有后面跟着 usage 的 summary 才是帮助，别处（卡面说明等）不管。
+            # 窗口到下一个 summary 为止：用法多的命令（宗门 11 条）会把 side_effect 推到很后面。
+            rest = text[match.end():]
+            nxt = rest.find('"summary"')
+            if nxt >= 0:
+                rest = rest[:nxt]
+            tail = rest.split("\n")
+            if not any("usage" in line for line in tail):
+                continue
+            if not any("side_effect" in line for line in tail):
+                line = text[: match.start()].count("\n") + 1
+                where = path.relative_to(ROOT).as_posix() + ":" + str(line)
+                problems.append(where + " 的帮助没有「结果」（side_effect）")
+    return problems
+
+
 CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
@@ -408,6 +439,7 @@ CHECKS = (
     ("用法不露机器词", check_usages_have_no_machine_words),
     ("用法要有能照抄的例子", check_usages_have_concrete_example),
     ("玩家文案不露行话", check_player_copy_has_no_jargon),
+    ("帮助要有结果", check_help_has_side_effect),
 )
 
 

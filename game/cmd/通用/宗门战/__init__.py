@@ -55,6 +55,7 @@ async def challenge(user_id: str, message: str, message_context: MessageContext,
         "help": {
             "category": "战斗",
             "summary": "接受本宗当前战书",
+        "side_effect": "接受后进入备战；双方锁阵后到点自动开战并结算",
             "usage": ("接战", "应战", "接受宗门战"),
             "order": 2,
         },
@@ -72,6 +73,7 @@ async def accept(user_id: str, message_context: MessageContext, manager: Any) ->
         "help": {
             "category": "战斗",
             "summary": "拒绝本宗当前战书",
+        "side_effect": "拒绝后战书作废",
             "usage": ("拒战", "拒绝宗门战"),
             "order": 3,
         },
@@ -89,6 +91,7 @@ async def reject(user_id: str, message_context: MessageContext, manager: Any) ->
         "help": {
             "category": "战斗",
             "summary": "撤回本宗发出的战书",
+        "side_effect": "撤回后战书作废",
             "usage": ("撤战", "撤回战书", "撤回宗门战书"),
             "order": 4,
         },
@@ -164,6 +167,7 @@ async def lock(user_id: str, message: str, message_context: MessageContext, mana
         "help": {
             "category": "战斗",
             "summary": "解除本宗已锁定阵容",
+        "side_effect": "解除后可以重新锁阵",
             "usage": ("解阵", "解除宗门战阵容"),
             "order": 6,
         },
@@ -217,6 +221,7 @@ async def cancel(user_id: str, message_context: MessageContext, manager: Any) ->
         "help": {
             "category": "战斗",
             "summary": "查看并在到时后自动结算当前宗门战",
+        "side_effect": "只读，不改动战局",
             "usage": ("查看宗门战况", "查看宗门战况 战书编号", "宗门战况 战书编号"),
             "order": 9,
         },
@@ -243,6 +248,7 @@ async def current(user_id: str, message: str, message_context: MessageContext, m
         "help": {
             "category": "战斗",
             "summary": "分页查看本宗历史宗门战",
+        "side_effect": "只读，按页查看历史战报",
             "usage": ("查看宗门战记录", "查看宗门战记录 2", "宗门战记录 2"),
             "order": 10,
         },
