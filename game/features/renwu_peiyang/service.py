@@ -35,6 +35,7 @@ from game.core.medicine import MedicineError, MedicineService
 from game.features.presentation import require_mapping
 
 from .contracts import (
+    PeiyangAction,
     CharacterBreakthroughRequest,
     CharacterBreakthroughResult,
     CharacterCultivationConflictError,
@@ -73,6 +74,7 @@ class CharacterCultivationFeature:
         self._innate_treasure = innate_treasure
         self._initialized = False
         self._copy: Mapping[str, object] = {}
+        self._format_actions: tuple[PeiyangAction, ...] = ()
 
     def initialize(self) -> None:
         if self._initialized:
@@ -91,11 +93,26 @@ class CharacterCultivationFeature:
                 raise RuntimeError(f"{label}必须先于人物培养玩法启动")
         dataset = self._data.dataset("培养展示")
         self._copy = require_mapping(dataset.get("文本"), "玩法/培养/展示/文本.json")
+        buttons = self._copy.get("按钮") or ()
+        self._format_actions = tuple(
+            PeiyangAction(
+                str(row["编号"]), str(row["名称"]), str(row["命令"]),
+                str(row["行为"]), str(row["样式"]),
+            )
+            for row in buttons
+            if isinstance(row, Mapping)
+        )
         require_mapping(self._copy.get("人物"), "培养文本.人物")
         require_mapping(self._copy.get("装配"), "培养文本.装配")
         require_mapping(self._copy.get("突破"), "培养文本.突破")
         require_mapping(self._copy.get("覆炼"), "培养文本.覆炼")
         self._initialized = True
+
+    def format_actions(self) -> tuple[PeiyangAction, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」。"""
+
+        return self._format_actions
+
 
     def copy(self, section: str, key: str) -> str:
         self._require_initialized()

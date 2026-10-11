@@ -37,7 +37,7 @@ async def show_character_cultivation(user_id: str, manager: Any) -> None:
         result = await feature.inspect(user_id)
         await manager.send(reply.view(feature, result))
     except CharacterCultivationFeatureError as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -58,7 +58,7 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
     feature = current_game_services().features.renwu_peiyang
     parts = message.split()
     if len(parts) != 4 or not parts[3].isdecimal():
-        await manager.send(reply.error("格式：人物装配 类别 编号或名称 品级 槽位"))
+        await manager.send(reply.error(feature, feature.copy("错误", "格式"), feature.format_actions()))
         return
     try:
         result = await feature.equip(
@@ -73,7 +73,7 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
         )
         await manager.send(reply.equipped(feature, result))
     except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -100,7 +100,7 @@ async def breakthrough_character(user_id: str, message: str, message_context: Me
         )
         await manager.send(reply.breakthrough(feature, result))
     except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -121,7 +121,7 @@ async def forge_character_law(user_id: str, message: str, message_context: Messa
     feature = current_game_services().features.renwu_peiyang
     parts = message.rsplit(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdecimal():
-        await manager.send(reply.error("格式：人物覆炼 器律编号或名称 孔位"))
+        await manager.send(reply.error(feature, feature.copy("错误", "格式"), feature.format_actions()))
         return
     try:
         result = await feature.forge_law(
@@ -134,7 +134,7 @@ async def forge_character_law(user_id: str, message: str, message_context: Messa
         )
         await manager.send(reply.forged(feature, result))
     except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = []

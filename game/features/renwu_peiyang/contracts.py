@@ -88,3 +88,14 @@ __all__ = [
     "CharacterLawRequest",
     "CharacterLawResult",
 ]
+
+
+@dataclass(frozen=True)
+class PeiyangAction:
+    """培养回执上的动作，字段名与 CommandAction 契约一致。"""
+
+    action_id: str
+    label: str
+    command: str
+    behavior: str
+    style: str

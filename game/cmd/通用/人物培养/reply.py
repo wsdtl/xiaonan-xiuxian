@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from ...actions import CommandAction
 from ...presentation import error_document
+
+from typing import Sequence
 
 from game.features.renwu_peiyang import (
     CharacterCultivationFeature,
@@ -114,9 +117,18 @@ def forged(feature: CharacterCultivationFeature, result: CharacterLawResult) -> 
     )
 
 
-def error(message: str) -> DocumentMessage:
-    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        "人物培养", "notice", "培养失败", message, tone="danger"
+def error(
+    feature: RenwuPeiyangFeature, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
+    """失败回执：标题与状态词取自展示数据集，动作由玩法层给。"""
+
+    return error_document(
+        feature.copy("错误", "标题"),
+        "notice",
+        feature.copy("错误", "失败"),
+        message,
+        tone="danger",
+        actions=actions,
     )
 
 
