@@ -124,6 +124,22 @@ class MedicineFeature:
             )
         await self._authorize(user_id, self._medicine.active_guard_rule)
         stack = await self._inventory_stack(user_id, medicine_id, requested_grade)
+        return await self._apply_medicine(
+            user_id, request_id, target, stack, medicine_id, query, requested_grade
+        )
+
+    async def _apply_medicine(
+        self,
+        user_id: str,
+        request_id: str,
+        target,
+        stack,
+        medicine_id: str,
+        query: str,
+        requested_grade: str,
+    ) -> MedicineUseResult:
+        """服丹的落库那一段：算增量、写库、把域错误翻成玩法错误。""",
+
         try:
             inventory = await self._asset.plan_inventory_changes(
                 user_id,
