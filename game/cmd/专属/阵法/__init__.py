@@ -10,22 +10,34 @@ from . import reply
 from launch.adapter import MessageContext
 from typing import Any
 
-_GRADES = frozenset({"黄", "玄", "地", "天", "圣"})
+def _grade_prefix(value: str) -> str:
+    """按核心口径受理品级的三种写法，吐命令内部用的单字。
+
+    核心 `asset.grade` 本来就收中文全称（黄品）、中文单字（黄）与编号（01）；
+    这里原先写死一张单字表，导致玩家照着页面写「黄品」反被判成用法错。
+    """
+    resolved = current_game_services().core.asset.grade(value)
+    name = str(getattr(resolved, "name", "") or "").strip()
+    return name[:1] if name else str(value)
 
 
 def _request(
     message: str, usage: str
 ) -> tuple[str, str, dict[str, int] | None]:
     parts = str(message or "").strip().split()
-    if len(parts) not in {2, 5} or parts[1] not in _GRADES:
+    if len(parts) not in {2, 5}:
         raise ValueError(usage)
+    try:
+        grade = _grade_prefix(parts[1])
+    except Exception as exc:  # noqa: BLE001 - 品级不认识时仍然给玩家同一句用法提示
+        raise ValueError(usage) from exc
     investments = None
     if len(parts) == 5:
         values = tuple(int(value) for value in parts[2:])
         if any(value < 1 for value in values):
             raise ValueError("圣品三相投入必须是正整数")
         investments = dict(zip(("兽宝", "灵矿", "灵植"), values, strict=True))
-    return parts[0], parts[1], investments
+    return parts[0], grade, investments
 
 
 @GameCommand.command(
