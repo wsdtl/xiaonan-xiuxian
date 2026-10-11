@@ -115,6 +115,8 @@ _SMOKE_FAILURES: list[str] = []
 _DUPLICATE_BUTTONS: list[str] = []
 #: 深页命令：它们必须给出真页面，不能是错误页。
 _DEEP_COMMANDS: list[str] = []
+#: 每条命令自报的**具体例子**（不含占位词）被自己拒掉的记录。
+_USAGE_EXAMPLE_FAILURES: list[str] = []
 
 
 def _clean(content: str) -> str:
@@ -215,6 +217,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     app._services = services
     LocalEventHandler._build_command_index()
     user_id = "P:消息判据"
+    usage_failures: list[str] = []
     pages: dict[str, str] = {}
     deep_failures: list[str] = []
     smoke_failures: list[str] = []
@@ -562,6 +565,51 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             for arg in ARGS:
                 await send((word + " " + arg).strip())
 
+        # 每条命令自报的**具体例子**必须被自己受理：跳过含占位词的写法，其余逐条真派发。
+        # 只看「光秃秃的格式卡」——项目刻意给每个错误补一句「用法见下方」，不能把它当失败。
+        from game.cmd.help_registry import help_registry
+        from game.cmd.command import registered_command_routes
+
+        placeholder = ("编号", "名称", "品级", "数量", "页码", "槽位", "角色名", "宗门名", "玩家", "目标", "或", "…", "<", ">", "条目")
+        heads = sorted({
+            str(route[0] if isinstance(route, tuple) else route).split()[0]
+            for route in registered_command_routes()
+        })
+        for head in heads:
+            entry = help_registry.find(head)
+            if entry is None:
+                continue
+            for usage in getattr(entry.spec, "usage", ()) or ():
+                phrase = str(usage).strip()
+                if not phrase or any(word in phrase for word in placeholder):
+                    continue
+                try:
+                    result = await dispatch(
+                        user_id=user_id, raw_message=phrase, event_id="用法判据-" + phrase
+                    )
+                except Exception as exc:  # noqa: BLE001 - 例子被自己炸掉也是缺陷
+                    usage_failures.append(
+                        phrase + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:50]
+                    )
+                    continue
+                if not result.replies:
+                    usage_failures.append(phrase + " 没有任何回执")
+                    continue
+                body = str(getattr(result.replies[0].message, "content", ""))
+                lines = [line.strip(" >") for line in body.split("\n") if line.strip(" >")]
+                explained = [
+                    line
+                    for line in lines
+                    if ("用法见下方" not in line)
+                    and ("格式：" not in line)
+                    and ("失败" not in line)
+                    and len(line) > 6
+                ]
+                if (("用法见下方" in body) or ("格式：" in body)) and not explained:
+                    usage_failures.append(
+                        phrase + " 被自己的命令当成用法错：" + " / ".join(lines[:3])[:50]
+                    )
+
     asyncio.run(run())
     baselines = dict(services.core.character.attribute_baselines())
     services.core.database.close()
@@ -572,6 +620,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     _DEEP_FAILURES.extend(deep_failures)
     _SMOKE_FAILURES.extend(smoke_failures)
     _DUPLICATE_BUTTONS.extend(duplicate_buttons)
+    _USAGE_EXAMPLE_FAILURES.extend(usage_failures)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -767,6 +816,16 @@ def check_no_baseline_attribute() -> list[str]:
     return problems
 
 
+def check_usage_examples_are_accepted() -> list[str]:
+    """每条命令自报的具体例子，必须被自己受理——玩家照抄用法不该被当成用法错。
+
+    真出过事：`布阵 阵藏条目编号` 这种写法玩家照抄就被自己的命令拒（现在用法已改成「阵法名 [品级]」）。
+    """
+
+    _corpus()
+    return list(_USAGE_EXAMPLE_FAILURES)
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
@@ -781,6 +840,7 @@ CHECKS = (
     ("徽章不被复述", check_badge_not_restated),
     ("命令不炸", check_garbage_args_do_not_crash),
     ("按钮不重复", check_buttons_not_duplicated),
+    ("用法例子能被自己受理", check_usage_examples_are_accepted),
 )
 
 
