@@ -17,7 +17,11 @@ from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
-from game.core.sect_assets import SectAssetError, SectAssetService
+from game.core.sect_assets import SectAssetEntry, SectAssetError, SectAssetService
+def _has_cjk(value: str) -> bool:
+    return any('\u4e00' <= ch <= '\u9fff' for ch in value)
+
+
 from game.features.presentation import (
     DUNGEON_BUTTON_KEYS,
     project_unique_buttons,
@@ -157,6 +161,88 @@ class WanzhenFeature:
             except Exception:  # noqa: BLE001 - 名字只是展示，查不到就用编号
                 names[identifier] = identifier
         return names
+
+    def match_entry(
+        self, entries: Sequence[SectAssetEntry], query: str
+    ) -> SectAssetEntry | None:
+        """把玩家写法在一批条目里换成唯一那一条；找不到或多条说不清返回 None。
+
+        写法按《阵法说明》第五节的「字符类别即界限」：
+        含 `:` 是整条**条目键**（原汁原味）；只有数字是**内容编号**；
+        含中文是**名字写法**——`名称`、`品级前缀 名称`、`名称[灵宝名]`，`数字[名字]` 这种混写不认。
+        万珍殿发放、宗门战锁阵都用这一份，别各写一套。
+        """
+        text = str(query or '').strip()
+        if not text:
+            return None
+        if ':' in text:
+            for entry in entries:
+                if entry.entry_key == text:
+                    return entry
+            return None
+        mode = 'id' if text.isdecimal() else ('name' if _has_cjk(text) else 'raw')
+        if mode == 'raw':
+            return None
+        grade_hint = ''
+        parts = text.split(None, 1)
+        if len(parts) == 2 and not _has_cjk(parts[0]) and parts[0].endswith(('品', '阶')):
+            grade_hint, text = parts[0], parts[1].strip()
+        bare = ''
+        if text.endswith(']') and '[' in text:
+            head, _, bare = text[:-1].partition('[')
+            head, bare = head.strip(), bare.strip()
+            if head.isdecimal():
+                return None
+            text = head
+        names = self._treasure_names(entries)
+        matched = [
+            entry
+            for entry in entries
+            if self._entry_hits(entry, text, mode, grade_hint, bare, names)
+        ]
+        if len(matched) == 1:
+            return matched[0]
+        if len(matched) > 1:
+            raise WanzhenFeatureError(
+                self.copy(
+                    "条目说不清",
+                    {
+                        "count": len(matched),
+                        "name": text,
+                        "entries": "、".join(
+                            entry.grade_name + " " + entry.entry_key
+                            for entry in matched[:4]
+                        ),
+                    },
+                )
+            )
+        return None
+
+    @staticmethod
+    def _entry_hits(entry: SectAssetEntry, text: str, mode: str, grade_hint: str, bare: str, names: dict[str, str]) -> bool:
+        """一条条目是否命中玩家写法。"""
+
+        if mode == 'id':
+            if str(getattr(entry, 'content_id', '')) != text:
+                return False
+        elif str(getattr(entry, 'name', '')) != text:
+            return False
+        if grade_hint and grade_hint not in str(getattr(entry, 'grade_name', '')):
+            return False
+        if bare:
+            identifier = str(getattr(entry, 'treasure_id', '') or '')
+            if not identifier or names.get(identifier, identifier) != bare:
+                return False
+        return True
+
+    async def resolve_vault_entry(self, user_id: str, query: str) -> str:
+        """万珍殿里把玩家写法换成条目键；认不出就**原样返回**，由核心按自己的话回绝。
+
+        发放与宗门战锁阵共用这一份——它们看的都是本宗万珍殿。
+        """
+        vault = await self._assets.wanzhen(user_id)
+        entry = self.match_entry(vault.entries, query)
+        return entry.entry_key if entry is not None else str(query or '').strip()
 
     async def donate(
         self,

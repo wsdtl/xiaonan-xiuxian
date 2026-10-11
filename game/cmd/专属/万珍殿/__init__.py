@@ -195,8 +195,8 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
             "category": "行动",
             "summary": "由宗主向本宗成员发放万珍殿成品",
             "usage": (
-                "发放万珍殿 角色名或编号 条目编号",
-                "发放万珍殿 角色名或编号 条目编号 数量",
+                "发放万珍殿 角色名或编号 珍物名[灵宝名]",
+                "发放万珍殿 角色名或编号 珍物名[灵宝名] 数量",
             ),
             "side_effect": "原子扣除宗门成品并写入目标成员的对应个人藏库",
             "order": 84,
@@ -210,11 +210,14 @@ async def grant_wanzhen(user_id: str, message: str, message_context: MessageCont
         if len(parts) not in {2, 3}:
             raise WanzhenFeatureError("格式：发放万珍殿 目标 条目编号 [数量]")
         quantity = _positive(parts[2], "数量") if len(parts) == 3 else 1
+        # 玩家写法 → 条目键（含中文走名字写法、纯编号按内容编号、整条键原汁原味）；
+        # 认不出就原样交给核心，由核心用展示数据的话回绝。
+        entry_key = await feature.resolve_vault_entry(user_id, parts[1])
         value = await feature.grant(
             user_id,
             message_context.request_id,
             parts[0],
-            parts[1],
+            entry_key,
             quantity,
         )
         await manager.send(reply.transferred(feature.copy(), value))

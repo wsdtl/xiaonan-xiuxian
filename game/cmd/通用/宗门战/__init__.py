@@ -105,77 +105,21 @@ def _has_cjk(value: str) -> bool:
 
 
 async def _formation_key(user_id: str, wanted: str) -> str:
-    """把玩家写的阵法换成万珍殿条目的机器键。
+    """把玩家写的阵法换成万珍殿条目键——与「发放万珍殿」共用同一份解析（玩法层 `resolve_vault_entry`）。
 
-    写法与《阵法说明》第五节一致：id 写法原汁原味直接放行；名字写法支持
-    `阵法名`、`品级 阵法名`、`阵法名[灵宝名]`（品级只做前缀，方括号只给名字用）。
-    找不到或多条说不清时抛 `SectWarError`，文案取自宗门战展示数据集。
+    认不出就原样返回，由核心按展示数据的话回绝；玩法层的回绝（多条说不清）翻成宗门战自己的错误类型。
     """
-    feature = _feature()
-    query = str(wanted or '').strip()
-    if not query:
-        return query
-    if ':' in query:
-        return query          # 整条条目键：原汁原味
-    mode = 'name' if _has_cjk(query) else ('id' if query.isdecimal() else 'raw')
-    if mode == 'raw':
-        return query
-    grade_hint = ''
-    parts = query.split(None, 1)
-    if len(parts) == 2 and not _has_cjk(parts[0]) and parts[0].endswith(('品', '阶')):
-        grade_hint, query = parts[0], parts[1].strip()
-    bare = ''
-    if query.endswith(']') and '[' in query:
-        head, _, bare = query[:-1].partition('[')
-        head, bare = head.strip(), bare.strip()
-        if head.isdecimal():
-            raise SectWarError(feature.text('错误', 'formation_missing'))
-        query = head
-    services = current_game_services()
+    text = str(wanted or '').strip()
+    if not text:
+        return text
     try:
-        vault = await services.core.sect_assets.wanzhen(user_id)
-    except Exception as exc:  # noqa: BLE001 - 命令层不认核心异常类型，翻成自己这层的话再往上抛
-        raise SectWarError(str(exc)) from exc
-    matched = []
-    for entry in vault.entries:
-        if '阵法' not in str(getattr(entry, 'category', '') or ''):
-            continue
-        if mode == 'id':
-            if str(getattr(entry, 'content_id', '')) != query:
-                continue
-        elif str(getattr(entry, 'name', '')) != query:
-            continue
-        if grade_hint and str(getattr(entry, 'grade_name', '')) not in grade_hint:
-            continue
-        if bare:
-            treasure_id = str(getattr(entry, 'treasure_id', '') or '')
-            if not treasure_id:
-                continue
-            try:
-                treasure_name = services.core.innate_treasure.resolve(treasure_id).name
-            except Exception:  # noqa: BLE001 - 名字只是判据，查不到就不算命中
-                continue
-            if treasure_name != bare:
-                continue
-        matched.append(entry)
-    if len(matched) == 1:
-        return matched[0].entry_key
-    if len(matched) > 1:
-        raise SectWarError(
-            feature.text(
-                '错误',
-                'formation_ambiguous',
-                {
-                    '数量': len(matched),
-                    '阵法': query,
-                    '候选': '、'.join(
-                        entry.grade_name + ' ' + entry.entry_key for entry in matched[:4]
-                    ),
-                },
-            )
+        return await current_game_services().features.zongmen_wanzhen.resolve_vault_entry(
+            user_id, text
         )
-    raise SectWarError(feature.text('错误', 'formation_missing'))
-
+    except SectWarError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - 命令层不认核心/玩法异常类型，翻成自己这层的话
+        raise SectWarError(str(exc)) from exc
 
 @GameCommand.command(
     cmd=("锁阵", "锁定宗门战阵容"),
@@ -195,6 +139,7 @@ async def _formation_key(user_id: str, wanted: str) -> str:
         },
     },
 )
+
 async def lock(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     services = current_game_services()
     raw = str(message or "").strip()
