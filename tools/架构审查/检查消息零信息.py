@@ -507,6 +507,26 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                 continue
             if not result.replies:
                 deep_failures.append(head + "（不带参数）没有任何回执")
+        # 再用命令自己声明的 usage 当合法参数发一遍：参数解析那条路也必须能出回执、不抛异常。
+        # 只扫「乱写参数」会漏掉参数路径上的形状错误（例如把状态词塞进了不该塞的地方）。
+        from game.cmd.help_registry import help_registry
+        for head in sorted(set(heads)):
+            entry = help_registry.find(head)
+            usages = list(getattr(entry.spec, 'usage', ()) or ()) if entry else []
+            best = max(usages, key=lambda u: len(u.split()), default=head)
+            if not best.startswith(head) and len(best.split()) > 1:
+                best = head + " " + " ".join(best.split()[1:])
+            try:
+                result = await dispatch(
+                    user_id=user_id, raw_message=best, event_id="烟囱usage-" + head
+                )
+            except Exception as exc:  # noqa: BLE001 - 声明过的用法不该把命令打成异常
+                deep_failures.append(
+                    best + " 抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
+                )
+                continue
+            if not result.replies:
+                deep_failures.append(best + " 没有任何回执")
 
         for command in ("补天 人物 炼气 140002",):
             _DEEP_COMMANDS.append(command)
