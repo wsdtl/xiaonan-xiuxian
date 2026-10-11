@@ -69,6 +69,7 @@ class WorldService:
         self._locations = self._data.entities("地点")
         self._regions = self._data.entities("区域")
         terrain = self._data.dataset("地势").get("地势")
+        self._altitude_unit = str(terrain.get("高度单位") or "米")
         if not isinstance(terrain, Mapping):
             raise JsonDataError("地势数据必须是对象")
         self._surface = _surface_grid(terrain.get("地表高度"))
@@ -192,6 +193,12 @@ class WorldService:
         )
         self._initialized = True
         return self.status()
+
+    @property
+    def altitude_unit(self) -> str:
+        """海拔单位：住在 地势.json 的 `高度单位`，渲染层不许自己写「米」。"""
+
+        return self._altitude_unit
 
     def status(self) -> WorldStatus:
         return WorldStatus(

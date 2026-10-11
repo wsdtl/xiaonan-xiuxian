@@ -42,6 +42,7 @@ def conflict() -> DocumentMessage:
 def success(
     result: TravelResult,
     actions: tuple[CommandAction, ...],
+    unit: str,
 ) -> DocumentMessage:
     plan = result.plan
     destination = plan.destination
@@ -58,7 +59,7 @@ def success(
     reply.row(("区域", destination.region), ("地形", destination.terrain))
     reply.row(
         ("坐标", f"{destination.xy[0]}, {destination.xy[1]}"),
-        ("海拔", f"{destination.altitude}米"),
+        ("海拔", f"{destination.altitude}{unit}"),
     )
     return reply.actions(message_actions(actions)).build()
 

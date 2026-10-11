@@ -54,7 +54,9 @@ async def create_character(user_id: str, message: str, message_context: MessageC
     except CharacterExistsError:
         await manager.send(reply.character_exists())
         return
-    await manager.send(reply.created(result))
+    await manager.send(reply.created(
+                result, current_game_services().core.world.altitude_unit
+            ))
 
 
 @GameCommand.fullmatch(
@@ -77,7 +79,9 @@ async def show_character(user_id: str, manager: Any) -> None:
     except CharacterOverviewError:
         await manager.send(reply.overview_error())
         return
-    await manager.send(reply.overview(result))
+    await manager.send(reply.overview(
+                result, current_game_services().core.world.altitude_unit
+            ))
 
 
 __all__ = []

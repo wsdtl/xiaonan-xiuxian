@@ -39,7 +39,9 @@ def character_exists() -> DocumentMessage:
     )
 
 
-def created(result: CreateCharacterResult) -> DocumentMessage:
+def created(
+    result: CreateCharacterResult, unit: str
+) -> DocumentMessage:
     builder = (
         M.document()
         .header("人物创建完成")
@@ -52,7 +54,7 @@ def created(result: CreateCharacterResult) -> DocumentMessage:
         .row(("区域", result.region), ("地形", result.terrain))
         .row(
             ("坐标", f"{result.xy[0]}, {result.xy[1]}"),
-            ("海拔", f"{result.altitude}米"),
+            ("海拔", f"{result.altitude}{unit}"),
         )
         .section("初始物资")
     )
@@ -76,7 +78,9 @@ def overview_error() -> DocumentMessage:
     )
 
 
-def overview(result: CharacterOverviewResult) -> DocumentMessage:
+def overview(
+    result: CharacterOverviewResult, unit: str
+) -> DocumentMessage:
     character = result.character
     resources = dict(character.resources)
     attributes = dict(character.attributes)
@@ -121,7 +125,7 @@ def overview(result: CharacterOverviewResult) -> DocumentMessage:
         .row(("区域", result.region), ("地形", result.terrain))
         .row(
             ("坐标", f"{result.xy[0]}, {result.xy[1]}"),
-            ("海拔", f"{result.altitude}米"),
+            ("海拔", f"{result.altitude}{unit}"),
         )
         .section("当前资源", icon="status")
         .field(
