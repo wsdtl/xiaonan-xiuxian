@@ -183,13 +183,102 @@ class GatheringService:
             raise GatheringConflictError(f"当前地形没有{mode.resource_category}资源池")
 
         transitions = []
-        total_units = 0
         user_results: dict[str, dict[str, object]] = {}
         source = random.Random(seed)
         public_profiles = {
             value.user_id: value
             for value in await self._character.public_profiles(participants)
         }
+        total_units = await self._plan_gathering_participants(
+            mode,
+            owner,
+            participants,
+            pool_names,
+            public_profiles,
+            request_id,
+            session_id,
+            source,
+            transitions,
+            user_results,
+        )
+
+        place_name = location.location_name or f"{location.region}·{location.terrain}"
+        session_value = {
+            "玩法": mode.kind,
+            "开始请求": request_id,
+            "发起者": owner,
+            "参与用户": list(participants),
+            "地点": place_name,
+            "坐标": list(location.xy),
+            "地形": location.terrain,
+            "资源类别": mode.resource_category,
+            "资源池": list(pool_names),
+            "采集单位": total_units,
+            "每轮秒数": mode.seconds_per_round,
+            "最多轮数": mode.maximum_rounds,
+            "开始时间": started_at.isoformat(),
+            "最晚结束时间": maximum_ends_at.isoformat(),
+            "种子": seed,
+            "用户结果": user_results,
+        }
+        operations: list[StateMutation] = [
+            StateMutation(owner, SESSION_STATE, session_id, session_value, 0),
+            *(plan.mutation for plan in transitions),
+        ]
+        for user_id in participants:
+            previous = await self._database.get(
+                StateAddress(user_id, LATEST_STATE, mode.kind)
+            )
+            operations.append(
+                StateMutation(
+                    user_id,
+                    LATEST_STATE,
+                    mode.kind,
+                    {"玩法": mode.kind, "发起者": owner, "采集编号": session_id},
+                    previous.version if previous else 0,
+                )
+            )
+        try:
+            receipt = await self._database.commit(
+                TransactionCommand(
+                    user_id=owner,
+                    request_id=request_id,
+                    business_type=f"{mode.kind}开始",
+                    operations=tuple(operations),
+                    payload={"采集编号": session_id, "参与用户": list(participants)},
+                )
+            )
+        except StateConflictError as exc:
+            raise GatheringConflictError(str(exc)) from exc
+        return GatheringStarted(
+            mode.kind,
+            session_id,
+            place_name,
+            location.terrain,
+            len(participants),
+            total_units,
+            mode.maximum_rounds,
+            started_at,
+            maximum_ends_at,
+            receipt.replayed,
+        )
+
+    async def _plan_gathering_participants(
+        self,
+        mode: GatheringMode,
+        owner: str,
+        participants: tuple[str, ...],
+        pool_names: Mapping[str, str],
+        public_profiles: Mapping[str, object],
+        request_id: str,
+        session_id: str,
+        source: Random,
+        transitions: list[StateMutation],
+        user_results: dict[str, dict[str, object]],
+    ) -> int:
+        """逐位参与者算采集结果，返回总单位数；只写进 user_results，不改别处。"""
+        total_units = 0
+
         for user_id in participants:
             guard = await self._player_state.authorize(
                 user_id, "空闲或托管且可行动"
@@ -252,66 +341,8 @@ class GatheringService:
                 ),
             }
 
-        place_name = location.location_name or f"{location.region}·{location.terrain}"
-        session_value = {
-            "玩法": mode.kind,
-            "开始请求": request_id,
-            "发起者": owner,
-            "参与用户": list(participants),
-            "地点": place_name,
-            "坐标": list(location.xy),
-            "地形": location.terrain,
-            "资源类别": mode.resource_category,
-            "资源池": list(pool_names),
-            "采集单位": total_units,
-            "每轮秒数": mode.seconds_per_round,
-            "最多轮数": mode.maximum_rounds,
-            "开始时间": started_at.isoformat(),
-            "最晚结束时间": maximum_ends_at.isoformat(),
-            "种子": seed,
-            "用户结果": user_results,
-        }
-        operations: list[StateMutation] = [
-            StateMutation(owner, SESSION_STATE, session_id, session_value, 0),
-            *(plan.mutation for plan in transitions),
-        ]
-        for user_id in participants:
-            previous = await self._database.get(
-                StateAddress(user_id, LATEST_STATE, mode.kind)
-            )
-            operations.append(
-                StateMutation(
-                    user_id,
-                    LATEST_STATE,
-                    mode.kind,
-                    {"玩法": mode.kind, "发起者": owner, "采集编号": session_id},
-                    previous.version if previous else 0,
-                )
-            )
-        try:
-            receipt = await self._database.commit(
-                TransactionCommand(
-                    user_id=owner,
-                    request_id=request_id,
-                    business_type=f"{mode.kind}开始",
-                    operations=tuple(operations),
-                    payload={"采集编号": session_id, "参与用户": list(participants)},
-                )
-            )
-        except StateConflictError as exc:
-            raise GatheringConflictError(str(exc)) from exc
-        return GatheringStarted(
-            mode.kind,
-            session_id,
-            place_name,
-            location.terrain,
-            len(participants),
-            total_units,
-            mode.maximum_rounds,
-            started_at,
-            maximum_ends_at,
-            receipt.replayed,
-        )
+        return total_units
+
 
     async def progress(
         self,
