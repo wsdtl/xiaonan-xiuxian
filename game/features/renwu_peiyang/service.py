@@ -101,6 +101,7 @@ class CharacterCultivationFeature:
             )
             for row in buttons
             if isinstance(row, Mapping)
+            and str(row.get("编号") or "").startswith("peiyang.")
         )
         require_mapping(self._copy.get("人物"), "培养文本.人物")
         require_mapping(self._copy.get("装配"), "培养文本.装配")

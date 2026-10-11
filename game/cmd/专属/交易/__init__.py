@@ -35,7 +35,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
             await manager.send(reply.overview(feature, value))
             return
         if len(parts) > 2 or parts[0] not in {"真意", "气机"}:
-            raise TradeFeatureError("格式：交易 真意 [页码] / 交易 气机 [页码]")
+            raise TradeFeatureError(feature.copy("错误", "交易格式"))
         page_number = 1
         if len(parts) == 2:
             if not parts[1].isdecimal() or int(parts[1]) < 1:
