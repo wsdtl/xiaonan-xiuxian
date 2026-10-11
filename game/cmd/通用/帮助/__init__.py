@@ -87,7 +87,10 @@ def _id_converter():
     },
 )
 async def id_help_command(message: str, manager: Any) -> None:
-    """`help [分类或命令]`：与「帮助」同一套内容，多穿一层「中文名 → 编号」。"""
+    """`help [分类或命令]`：与「帮助」同一套内容，多穿一层「中文名/品级 → 编号」。
+
+    这一页是给机器/脚本的纯 id 写法，不是给人读的；给人看的走中文「帮助」。
+    """
 
     query = " ".join(str(message or "").split())
     await manager.send(

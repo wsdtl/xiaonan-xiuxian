@@ -17,7 +17,10 @@ def help_message(
     id_converter: Callable[[str], str] | None = None,
     nav: str = "帮助",
 ) -> DocumentMessage:
-    """帮助页。`id_converter` 给定时，把文本里的中文名换成编号——`help` 就是它加这一层。"""
+    """帮助页。`id_converter` 给定时，把**命令写法**里的中文名与品级换成编号。
+
+    「帮助」是给人看的（不给转换器）；`help` 是给机器/脚本看的纯 id 写法（给转换器）。
+    """
 
     normalized = " ".join(str(query or "").split())
     if not normalized:
@@ -62,10 +65,11 @@ def _usage_rows(
     """把命令按行铺开：「帮助」与 `help` 共用这一份。"""
 
     for entry in entries:
+        # 摘要保持原样：「帮助」与 `help` 的内容一模一样，id 化只落在命令写法上。
         builder.line(
             M.command(entry.command, f"{nav} {entry.command}"),
             " - ",
-            _shown(entry.spec.summary, id_converter),
+            entry.spec.summary,
         )
 
 
