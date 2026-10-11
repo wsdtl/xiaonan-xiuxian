@@ -18,6 +18,7 @@ from game.core.exploration import (
 from game.core.item_catalog import ItemCatalogService
 
 from .contracts import ExplorationAction, ExplorationCopy, ExplorationFeatureError
+from game.features.presentation import paged_settlement_actions
 from .presentation import actions, load_presentation
 
 

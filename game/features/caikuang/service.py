@@ -17,6 +17,7 @@ from game.core.gathering import (
 )
 
 from .contracts import OreGatheringAction, OreGatheringCopy, OreGatheringFeatureError
+from game.features.presentation import paged_settlement_actions
 from .presentation import actions, load_presentation
 
 KIND = "采矿"
