@@ -135,6 +135,10 @@ _VERDICT_ALLOWED = frozenset({
 })
 #: 判定词冒出别的命令词的记录（命令词与它实际干的事对不上）。
 _VERDICT_FAILURES: list[str] = []
+#: 通用帮助提示的标记——卡片上只剩它、再没有别的解释行，就是「撞墙不说为什么」。
+_WALL_HINT = "要查这条命令的写法"
+#: 撞墙不说原因的记录。
+_WALL_FAILURES: list[str] = []
 
 
 def _clean(content: str) -> str:
@@ -238,6 +242,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     usage_failures: list[str] = []
     name_id_failures: list[str] = []
     verdict_failures: list[str] = []
+    wall_failures: list[str] = []
     pages: dict[str, str] = {}
     deep_failures: list[str] = []
     smoke_failures: list[str] = []
@@ -649,7 +654,37 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                     usage_failures.append(
                         phrase + " 被自己的命令当成用法错：" + " / ".join(lines[:3])[:50]
                     )
-                # 用法例子检查只认具体例子（含占位词的是写法说明）。
+        # 每条命令故意发一个坏写法：撞墙时卡上必须说清原因，不能只剩通用提示。
+        for head in heads:
+            for bad in ("乱写", "乱写 乱写 乱写"):
+                wall_cmd = head + " " + bad
+                try:
+                    wall_result = await dispatch(
+                        user_id=user_id, raw_message=wall_cmd, event_id="墙判据-" + wall_cmd
+                    )
+                except Exception:  # noqa: BLE001 - 崩溃另有判据管
+                    continue
+                if not wall_result.replies:
+                    continue
+                wall_body = str(getattr(wall_result.replies[0].message, "content", ""))
+                if _WALL_HINT not in wall_body:
+                    continue
+                wall_lines = [
+                    str(line).lstrip("> ").rstrip()
+                    for line in wall_body.split("\n")
+                    if str(line).strip()
+                ]
+                explained = [
+                    line
+                    for line in wall_lines
+                    if (_WALL_HINT not in line) and ("失败" not in line) and (len(line) > 4)
+                ]
+                if not explained:
+                    wall_failures.append(
+                        wall_cmd + " 撞墙只给了通用提示：" + " / ".join(wall_lines[:3])[:46]
+                    )
+
+        # 用法例子检查只认具体例子（含占位词的是写法说明）。
         # 「字符类别即界限」全量检验：名字/编号槽位填中文假名与数字假编号各跑一遍，
         # 任何一侧收到「光秃秃的格式卡」或崩溃都算缺陷（守卫与「找不到」不算）。
         name_slots = ("编号或名称", "名称或编号", "阵法名", "珍物名", "角色名或编号", "宗门名或编号",
@@ -724,6 +759,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     _USAGE_EXAMPLE_FAILURES.extend(usage_failures)
     _NAME_ID_FAILURES.extend(name_id_failures)
     _VERDICT_FAILURES.extend(verdict_failures)
+    _WALL_FAILURES.extend(wall_failures)
     _CORPUS = (pages, baselines)
     return _CORPUS
 
@@ -953,6 +989,17 @@ def check_verdict_names_match_command() -> list[str]:
     return list(_VERDICT_FAILURES)
 
 
+def check_walls_say_why() -> list[str]:
+    """撞墙必须说清为什么：卡上不能只剩一句通用帮助提示。
+
+    真出过事：交易／炼阵的格式错把通用提示当正文，卡上没有原因；
+    探险／闭关／采矿／采药／服丹／铜雀台／托管／炼器／炼丹／赠送／道侣／购买／宗门／队伍 共 14 处同理（详见台账 C5 收口）。
+    """
+
+    _corpus()
+    return list(_WALL_FAILURES)
+
+
 CHECKS = (
     ("没有空条目", check_no_empty_entries),
     ("没有空栏目", check_no_empty_sections),
@@ -970,6 +1017,7 @@ CHECKS = (
     ("用法例子能被自己受理", check_usage_examples_are_accepted),
     ("中文写法与 id 写法都受理", check_name_and_id_forms_are_accepted),
     ("判定词说自己的事", check_verdict_names_match_command),
+    ("撞墙要说清为什么", check_walls_say_why),
 )
 
 
