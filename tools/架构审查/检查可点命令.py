@@ -293,6 +293,41 @@ def check_branches_resolve() -> list[str]:
         problems.append("还差槽位的「借阅功法 400001」被当成完整")
     return problems
 
+USAGE_BLOCK = re.compile(r'"usage"\s*:\s*\(([^)]*)\)', re.S)
+USAGE_MACHINE_WORDS = ("状态键", "实例键", "条目键", "条目", "机器键", "无灵宝")
+USAGE_MACHINE_KEY = re.compile(r"\d{6}:\d{2}")
+
+
+def check_usages_have_no_machine_words() -> list[str]:
+    """命令的 `usage` 是给玩家看的用法，不许出现机器词与机器键形态。
+
+    真出过事：`锁阵 万珍殿阵法条目`、`发放万珍殿 … 条目编号`——玩家被要求敲内部键，
+    而真正受理的是「阵法名[灵宝名]」。委托方 2026-10 的口径：中文有中文的显示与输入定义，
+    id 化只**默默受理**、不必对外宣传。
+    """
+
+    problems: list[str] = []
+    for path in sorted(GAME.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in USAGE_BLOCK.finditer(text):
+            block = match.group(1)
+            line = text[: match.start()].count("\n") + 1
+            where = path.relative_to(ROOT).as_posix() + ":" + str(line)
+            for word in USAGE_MACHINE_WORDS:
+                if word in block:
+                    problems.append(
+                        where + " usage 里出现机器词「" + word + "」：" + block.strip()[:60]
+                    )
+            hit = USAGE_MACHINE_KEY.search(block)
+            if hit:
+                problems.append(
+                    where + " usage 里出现机器键形态「" + hit.group(0) + "」：" + block.strip()[:60]
+                )
+    return problems
+
+
 CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
@@ -301,6 +336,7 @@ CHECKS = (
     ("按钮数据命令已注册", check_button_data_commands_are_registered),
     ("地点面板只许位置/行路取", check_location_panel_callers),
     ("翻页页必须有返回", check_paged_pages_have_way_back),
+    ("用法不露机器词", check_usages_have_no_machine_words),
 )
 
 
