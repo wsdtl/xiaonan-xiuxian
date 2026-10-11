@@ -82,11 +82,15 @@ class AssetService:
         if not self._database.status().initialized:
             raise RuntimeError("核心数据库必须先于玩家资产服务启动")
 
+        paging = _mapping(
+            self._data.dataset("物品规则").get("分页"),
+            "物品/基础物品/规则/分页.json",
+        )
         layout = _mapping(
             self._data.dataset("纳戒展示").get("分类"),
             "物品/基础物品/展示/分类.json",
         )
-        self._page_limit = _positive_int(layout.get("每页上限"), "纳戒.每页上限")
+        self._page_limit = _positive_int(paging.get("每页上限"), "纳戒.每页上限")
         if self._page_limit > 50:
             raise JsonDataError("纳戒每页上限不能超过 50")
         self._load_prefixes()

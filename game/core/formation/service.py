@@ -154,7 +154,12 @@ class FormationService:
         paging = _mapping(
             self._data.dataset("阵法展示").get("分页"), "阵法展示.分页"
         )
-        self._page_limit = _positive_int(paging.get("每页上限"), "阵法分页.每页上限")
+        self._page_limit = _positive_int(
+            _mapping(
+                self._data.dataset("阵法规则").get("炼制"), "阵法规则.炼制"
+            ).get("每页上限"),
+            "阵法.每页上限",
+        )
         if _texts(paging.get("品级顺序"), "阵法分页.品级顺序") != _GRADES:
             raise JsonDataError("阵法品级顺序必须为黄、玄、地、天、圣")
         self._validate_static_rules()

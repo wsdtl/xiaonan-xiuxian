@@ -161,7 +161,12 @@ class AlchemyService:
         paging = _mapping(
             self._data.dataset("炼丹展示").get("分页"), "炼丹展示.分页"
         )
-        self._page_limit = _positive_int(paging.get("每页上限"), "炼丹分页.每页上限")
+        self._page_limit = _positive_int(
+            _mapping(
+                self._data.dataset("炼药规则").get("丹则"), "炼药规则.丹则"
+            ).get("每页上限"),
+            "炼丹.每页上限",
+        )
         if tuple(_texts(paging.get("分类顺序"), "炼丹分页.分类顺序")) != _CATEGORIES:
             raise JsonDataError("炼丹分类顺序必须完整且固定")
         self._validate_static_rules(rules)
