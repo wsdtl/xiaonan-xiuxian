@@ -91,7 +91,7 @@ async def end_retreat(user_id: str, message: str, message_context: MessageContex
         await manager.send(
             reply.error(
                 feature.copy(),
-                reply.text(feature.copy(), "错误", "格式"),
+                reply.text(feature.copy(), "错误", "写法"),
                 feature.format_actions(),
             )
         )
