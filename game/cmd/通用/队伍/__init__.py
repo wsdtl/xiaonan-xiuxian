@@ -62,7 +62,7 @@ async def team_command(user_id: str, message: str, message_context: MessageConte
         elif action == "解散" and not target:
             result = await feature.disband(user_id, request_id)
         else:
-            await manager.send(reply.format_error(feature.copy()))
+            await manager.send(reply.format_error(feature.copy(), feature.page_actions("格式")))
             return
         await manager.send(
             reply.operation(

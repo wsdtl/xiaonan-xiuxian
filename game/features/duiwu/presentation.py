@@ -15,7 +15,7 @@ from game.features.presentation import (
 from .contracts import TeamAction, TeamCopy
 
 _TEXT_SECTIONS = frozenset({"图标", "格式", "查看", "结果", "错误"})
-_PAGES = frozenset({"未组队", "待处理邀请", "队长", "队员"})
+_PAGES = frozenset({"未组队", "待处理邀请", "队长", "队员", "格式"})
 
 
 def load_presentation(

@@ -10,7 +10,7 @@ from game.features.zongmen_tongxing import (
 )
 from message import DocumentMessage, M
 
-from ...actions import message_actions
+from ...actions import CommandAction, message_actions
 from ...presentation import error_document
 
 _ERROR_KEYS = {
@@ -95,9 +95,18 @@ def error(copy: SectFollowCopy, code: str) -> DocumentMessage:
     )
 
 
-def format_error(copy: SectFollowCopy) -> DocumentMessage:
-    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        _text(copy, "查看", "标题"), _text(copy, "图标", "结果"), "格式有误", _text(copy, "错误", "格式"), tone="warning"
+def format_error(
+    copy: SectFollowCopy, actions: Sequence[CommandAction]
+) -> DocumentMessage:
+    """格式错误：文案只给一句提示，完整用法交给「查看帮助」按钮（按钮由玩法层给）。"""
+
+    return error_document(
+        _text(copy, "查看", "标题"),
+        _text(copy, "图标", "结果"),
+        "格式有误",
+        _text(copy, "错误", "格式"),
+        tone="warning",
+        actions=actions,
     )
 
 
