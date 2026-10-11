@@ -64,5 +64,45 @@
     "命令": "查看道侣 {道侣}",
     "行为": "callback",
     "样式": "secondary"
+  },
+  {
+    "页面": "格式查看",
+    "编号": "companion.help_inspect",
+    "名称": "查看帮助",
+    "命令": "帮助 查看道侣",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "页面": "格式交谈",
+    "编号": "companion.help_talk",
+    "名称": "查看帮助",
+    "命令": "帮助 交谈",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "页面": "格式邀约",
+    "编号": "companion.help_invite",
+    "名称": "查看帮助",
+    "命令": "帮助 邀约",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "页面": "格式暂别",
+    "编号": "companion.help_farewell",
+    "名称": "查看帮助",
+    "命令": "帮助 暂别",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "页面": "格式赠予",
+    "编号": "companion.help_gift",
+    "名称": "查看帮助",
+    "命令": "帮助 赠予",
+    "行为": "callback",
+    "样式": "primary"
   }
 ]

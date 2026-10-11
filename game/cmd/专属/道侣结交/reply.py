@@ -8,6 +8,8 @@ from collections.abc import Mapping
 
 from decimal import Decimal
 
+from typing import Sequence
+
 from game.features.daolv_jiejiao import (
     CompanionConversation,
     CompanionCopy,
@@ -25,9 +27,12 @@ def text(copy: CompanionCopy, section: str, key: str, values: Mapping[str, objec
     return copy.text[section][key].format_map(values or {})
 
 
-def error(copy: CompanionCopy, message: str) -> DocumentMessage:
+def error(
+    copy: CompanionCopy, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), copy.icons["错误"], "交互失败", message, tone="danger"
+    return error_document(        text(copy, "错误", "标题"), copy.icons["错误"], "交互失败", message, tone="danger",
+        actions=actions,
     )
 
 

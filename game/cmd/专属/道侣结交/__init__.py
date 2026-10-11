@@ -36,14 +36,14 @@ async def inspect_companion(user_id: str, message: str, manager: Any) -> None:
     copy = feature.copy()
     query = str(message or "").strip()
     if not query:
-        await manager.send(reply.error(copy, reply.text(copy, "命令", "查看格式")))
+        await manager.send(reply.error(copy, reply.text(copy, "命令", "查看格式"), feature.format_actions("格式查看")))
         return
     try:
         view = await feature.inspect(user_id, query)
         actions = feature.actions("查看", view)
         await manager.send(reply.view(copy, view, actions))
     except CompanionInteractionError as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await manager.send(reply.error(copy, str(exc), feature.format_actions("格式查看")))
 
 
 @GameCommand.command(
@@ -66,14 +66,14 @@ async def converse_companion(user_id: str, message: str, manager: Any) -> None:
     copy = feature.copy()
     query = str(message or "").strip()
     if not query:
-        await manager.send(reply.error(copy, reply.text(copy, "命令", "交谈格式")))
+        await manager.send(reply.error(copy, reply.text(copy, "命令", "交谈格式"), feature.format_actions("格式交谈")))
         return
     try:
         result = await feature.converse(user_id, query)
         actions = feature.actions("交谈", result.view)
         await manager.send(reply.conversation(copy, result, actions))
     except CompanionInteractionError as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await manager.send(reply.error(copy, str(exc), feature.format_actions("格式交谈")))
 
 
 @GameCommand.command(
@@ -108,7 +108,7 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
         actions = feature.actions("赠礼", result.view)
         await manager.send(reply.gift(copy, result, actions))
     except (CompanionInteractionError, ValueError) as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await manager.send(reply.error(copy, str(exc), feature.format_actions("格式赠予")))
 
 
 @GameCommand.command(
@@ -131,7 +131,7 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
     copy = feature.copy()
     query = str(message or "").strip()
     if not query:
-        await manager.send(reply.error(copy, reply.text(copy, "命令", "邀约格式")))
+        await manager.send(reply.error(copy, reply.text(copy, "命令", "邀约格式"), feature.format_actions("格式邀约")))
         return
     try:
         result = await feature.invite(
@@ -140,7 +140,7 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
         actions = feature.actions("邀约", result.view)
         await manager.send(reply.invitation(copy, result, actions))
     except (CompanionInteractionError, ValueError) as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await manager.send(reply.error(copy, str(exc), feature.format_actions("格式邀约")))
 
 
 @GameCommand.command(
@@ -163,7 +163,7 @@ async def farewell_companion(user_id: str, message: str, message_context: Messag
     copy = feature.copy()
     query = str(message or "").strip()
     if not query:
-        await manager.send(reply.error(copy, reply.text(copy, "命令", "暂别格式")))
+        await manager.send(reply.error(copy, reply.text(copy, "命令", "暂别格式"), feature.format_actions("格式暂别")))
         return
     try:
         result = await feature.farewell(
@@ -172,7 +172,7 @@ async def farewell_companion(user_id: str, message: str, message_context: Messag
         actions = feature.farewell_actions(result.definition.companion_id)
         await manager.send(reply.farewell(copy, result, actions))
     except (CompanionInteractionError, ValueError) as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await manager.send(reply.error(copy, str(exc), feature.format_actions("格式暂别")))
 
 
 __all__ = []

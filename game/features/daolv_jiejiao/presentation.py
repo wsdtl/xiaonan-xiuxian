@@ -101,13 +101,15 @@ def _buttons(value: object) -> tuple[CompanionButton, ...]:
                 f"道侣按钮[{index}]存在未知字段：{'、'.join(sorted(unknown))}"
             )
         page = _text(row.get("页面"), f"道侣按钮[{index}].页面")
-        if page not in {"查看", "交谈", "赠礼", "邀约", "暂别"}:
+        if page not in {"查看", "交谈", "赠礼", "邀约", "暂别", "格式查看", "格式交谈", "格式邀约", "格式暂别", "格式赠予"}:
             raise JsonDataError(f"道侣按钮[{index}]页面无效：{page}")
         condition = str(row.get("条件") or "").strip()
         if condition not in {"", "可邀约", "同行中"}:
             raise JsonDataError(f"道侣按钮[{index}]条件无效：{condition}")
         label = _template(row.get("名称"), f"道侣按钮[{index}].名称", set())
-        command_fields = set() if page == "暂别" else {"道侣"}
+        command_fields = (
+            set() if page == "暂别" or page.startswith("格式") else {"道侣"}
+        )
         command = _template(
             row.get("命令"),
             f"道侣按钮[{index}].命令",

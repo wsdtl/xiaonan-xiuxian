@@ -425,6 +425,17 @@ class CompanionInteractionFeature:
             result.append(render_action(button, view.definition.companion_id))
         return tuple(result)
 
+    def format_actions(self, page: str) -> tuple[CompanionAction, ...]:
+        """格式与提示类回执的动作：只给该命令页面的「查看帮助」。"""
+
+        self._require_initialized()
+        return tuple(
+            render_action(button, "")
+            for button in self._buttons
+            if button.page == page
+        )
+
+
     def farewell_actions(self, companion_id: str) -> tuple[CompanionAction, ...]:
         self._require_initialized()
         definition = self._companion.definition(companion_id)
