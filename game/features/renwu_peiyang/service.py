@@ -323,9 +323,16 @@ class CharacterCultivationFeature:
         try:
             self._data.entity(section, query)
         except JsonDataError:
+            try:
+                table = self._data.entities(section)
+            except JsonDataError:
+                # 类别本身不存在时，别把核心异常抛给玩家；这层的展示数据里有话。
+                raise CharacterCultivationFeatureError(
+                    self.copy("错误", "未知类别").format(name=section)
+                ) from None
             matches = tuple(
                 entity_id
-                for entity_id, value in self._data.entities(section).items()
+                for entity_id, value in table.items()
                 if str(value.get("名称") or "").strip() == query
             )
             if len(matches) != 1:
