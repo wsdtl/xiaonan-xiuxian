@@ -489,6 +489,40 @@ class RetreatService:
         summaries: list[dict[str, object]] = []
         recovery_rounds = min(1.0, completed * self._health_ratio)
         spirit_rounds = min(1.0, completed * self._spirit_ratio)
+        await self._plan_retreat_settlements(completed, participants, raw_results, recovery_rounds, release_operations, result_operations, reward_operations, spirit_rounds, summaries)
+        settlement_value = {
+            "地点": session["地点"],
+            "完成轮数": completed,
+            "最多轮数": self.status().maximum_rounds,
+            "参与用户": list(participants),
+            "用户结果": summaries,
+            "出关时间": settled_at.isoformat(),
+        }
+        plan = SettlementTransactionPlan(
+            result_operations=tuple(result_operations),
+            reward_operations=tuple(reward_operations),
+            release_operations=tuple(release_operations),
+            record_operations=(
+                StateMutation(owner, SETTLEMENT_STATE, session_id, settlement_value, 0),
+            ),
+        )
+        try:
+            receipt = await self._database.commit(
+                plan.command(
+                    user_id=owner,
+                    request_id=request_id,
+                    business_type="闭关出关",
+                    payload={"闭关编号": session_id, "完成轮数": completed},
+                )
+            )
+        except StateConflictError as exc:
+            raise RetreatConflictError(str(exc)) from exc
+        return self._settlement(
+            session_id, settlement_value, replayed=receipt.replayed
+        )
+
+    async def _plan_retreat_settlements(self, completed, participants, raw_results, recovery_rounds, release_operations, result_operations, reward_operations, spirit_rounds, summaries) -> None:
+        """逐位参与者算闭关结算，写进四张表；不动别处。"""
         for participant in participants:
             raw = _mapping(raw_results.get(participant), f"闭关.用户结果.{participant}")
             player = _mapping(raw.get("人物"), "闭关.人物")
@@ -531,45 +565,7 @@ class RetreatService:
                 }
             ]
             companion = raw.get("道侣")
-            if companion is not None:
-                companion_value = _mapping(companion, "闭关.道侣")
-                companion_experience = (
-                    _nonnegative_int(companion_value.get("每轮经验"), "道侣.每轮经验")
-                    * completed
-                )
-                companion_plan = await self._companion.plan_retreat_settlement(
-                    participant,
-                    companion_id=_text(companion_value.get("编号"), "闭关.道侣.编号"),
-                    experience=companion_experience,
-                    health_recovery_ratio=recovery_rounds,
-                    spirit_recovery_ratio=spirit_rounds,
-                )
-                result_operations.append(companion_plan.operation)
-                companion_treatment = await self._injury.plan_treatment(
-                    participant,
-                    companion_subject(companion_plan.companion_id),
-                    completed,
-                )
-                if companion_treatment.mutation is not None:
-                    result_operations.append(companion_treatment.mutation)
-                characters.append(
-                    {
-                        "名称": _text(companion_value.get("名称"), "闭关.道侣.名称"),
-                        "道侣": True,
-                        "经验": companion_plan.experience_gained,
-                        "原等级": companion_plan.level_before,
-                        "现等级": companion_plan.level_after,
-                        "血气": companion_plan.health,
-                        "精神": companion_plan.spirit,
-                        "疗伤": _injury_changes(companion_treatment.changes),
-                        "剩余伤势": [
-                            dict(value)
-                            for value in self._injury.summary(
-                                companion_treatment.state
-                            ).entries
-                        ],
-                    }
-                )
+            await self._plan_companion_settlement(characters, companion, completed, participant, recovery_rounds, result_operations, spirit_rounds)
             unlocked = _insights(raw.get("功法感悟"), completed)
             acquisition_plan = await self._asset.plan_cultivation_acquisitions(
                 participant,
@@ -612,36 +608,50 @@ class RetreatService:
                     "先天灵宝": raw.get("先天灵宝"),
                 }
             )
-        settlement_value = {
-            "地点": session["地点"],
-            "完成轮数": completed,
-            "最多轮数": self.status().maximum_rounds,
-            "参与用户": list(participants),
-            "用户结果": summaries,
-            "出关时间": settled_at.isoformat(),
-        }
-        plan = SettlementTransactionPlan(
-            result_operations=tuple(result_operations),
-            reward_operations=tuple(reward_operations),
-            release_operations=tuple(release_operations),
-            record_operations=(
-                StateMutation(owner, SETTLEMENT_STATE, session_id, settlement_value, 0),
-            ),
-        )
-        try:
-            receipt = await self._database.commit(
-                plan.command(
-                    user_id=owner,
-                    request_id=request_id,
-                    business_type="闭关出关",
-                    payload={"闭关编号": session_id, "完成轮数": completed},
-                )
+
+
+    async def _plan_companion_settlement(self, characters, companion, completed, participant, recovery_rounds, result_operations, spirit_rounds) -> None:
+        """道侣那一段：有它就一并结算与疗伤，登记进操作表与角色条目。"""
+        if companion is not None:
+            companion_value = _mapping(companion, "闭关.道侣")
+            companion_experience = (
+                _nonnegative_int(companion_value.get("每轮经验"), "道侣.每轮经验")
+                * completed
             )
-        except StateConflictError as exc:
-            raise RetreatConflictError(str(exc)) from exc
-        return self._settlement(
-            session_id, settlement_value, replayed=receipt.replayed
-        )
+            companion_plan = await self._companion.plan_retreat_settlement(
+                participant,
+                companion_id=_text(companion_value.get("编号"), "闭关.道侣.编号"),
+                experience=companion_experience,
+                health_recovery_ratio=recovery_rounds,
+                spirit_recovery_ratio=spirit_rounds,
+            )
+            result_operations.append(companion_plan.operation)
+            companion_treatment = await self._injury.plan_treatment(
+                participant,
+                companion_subject(companion_plan.companion_id),
+                completed,
+            )
+            if companion_treatment.mutation is not None:
+                result_operations.append(companion_treatment.mutation)
+            characters.append(
+                {
+                    "名称": _text(companion_value.get("名称"), "闭关.道侣.名称"),
+                    "道侣": True,
+                    "经验": companion_plan.experience_gained,
+                    "原等级": companion_plan.level_before,
+                    "现等级": companion_plan.level_after,
+                    "血气": companion_plan.health,
+                    "精神": companion_plan.spirit,
+                    "疗伤": _injury_changes(companion_treatment.changes),
+                    "剩余伤势": [
+                        dict(value)
+                        for value in self._injury.summary(
+                            companion_treatment.state
+                        ).entries
+                    ],
+                }
+            )
+
 
     def _precompute_insights(
         self, source: random.Random, attempts_per_round: int = 1
