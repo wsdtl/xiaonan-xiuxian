@@ -42,7 +42,7 @@ async def challenge(user_id: str, message: str, message_context: MessageContext,
         )
         await manager.send(reply.view(_feature(), value))
     except ValueError:
-        await manager.send(reply.error(_feature(), _feature().text("错误", "challenge_format"), _feature().format_actions("约战格式")))
+        await manager.send(reply.error(_feature(), _feature().text("错误", "约战写法"), _feature().format_actions("约战格式")))
     except SectWarError as exc:
         await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
@@ -257,7 +257,7 @@ async def history(user_id: str, message: str, manager: Any) -> None:
             reply.history(_feature(), await _feature().history(user_id, int(raw or 1)))
         )
     except ValueError:
-        await manager.send(reply.error(_feature(), _feature().text("错误", "history_format"), _feature().format_actions("战录格式")))
+        await manager.send(reply.error(_feature(), _feature().text("错误", "战况写法"), _feature().format_actions("战录格式")))
     except SectWarError as exc:
         await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 

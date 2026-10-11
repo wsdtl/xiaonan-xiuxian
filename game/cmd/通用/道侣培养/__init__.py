@@ -84,7 +84,7 @@ async def forge_companion_law(user_id: str, message: str, message_context: Messa
     feature = current_game_services().features.daolv_peiyang
     parts = message.rsplit(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdecimal():
-        await manager.send(reply.error(feature, feature.copy("道侣培养", "格式"), feature.format_actions()))
+        await manager.send(reply.error(feature, feature.copy("道侣培养", "写法"), feature.format_actions()))
         return
     try:
         result = await feature.forge_law(

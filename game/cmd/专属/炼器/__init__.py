@@ -68,7 +68,7 @@ async def commit_forging(user_id: str, message: str, message_context: MessageCon
     if not query:
         await manager.send(
             reply.error(
-      feature.copy(), reply.text(feature.copy(), "错误", "格式"), feature.format_actions(), command="开炉"
+      feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions(), command="开炉"
   )
         )
         return

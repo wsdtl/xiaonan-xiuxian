@@ -22,7 +22,7 @@ async def _use(
     feature = current_game_services().features.fudan
     parts = message.rsplit(maxsplit=1)
     if not parts or len(parts) > 2:
-        await manager.send(reply.error(feature, feature.copy("错误", "格式"), feature.format_actions()))
+        await manager.send(reply.error(feature, feature.copy("错误", "写法"), feature.format_actions()))
         return
     medicine = parts[0]
     grade = parts[1] if len(parts) == 2 else ""

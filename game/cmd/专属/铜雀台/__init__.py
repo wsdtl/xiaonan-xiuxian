@@ -39,7 +39,7 @@ async def transfer_cultivation(user_id: str, message: str, message_context: Mess
             await manager.send(reply.preview(feature, value))
             return
         if mode not in {"护契", "离契"}:
-            raise TongquetaiError(feature.copy("错误", "格式"))
+            raise TongquetaiError(feature.copy("错误", "写法"))
         value = await feature.settle(
             TongquetaiRequest(user_id, message_context.request_id, mode)
         )

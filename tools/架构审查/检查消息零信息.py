@@ -676,7 +676,8 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                 ]
                 explained = [
                     line
-                    for line in wall_lines
+                    # 跳过卡首那行栏目标题（「📌 某某」），它不是解释、长度也过得了阈值
+                    for line in wall_lines[1:]
                     if (_WALL_HINT not in line) and ("失败" not in line) and (len(line) > 4)
                 ]
                 if not explained:

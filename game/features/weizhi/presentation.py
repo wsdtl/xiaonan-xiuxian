@@ -218,7 +218,7 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
         "位置文本.附近修士",
     )
     _require_keys(locations, {"标题", "山河", "没有地点"}, "位置文本.附近地点")
-    _require_keys(command, {"格式错误"}, "位置文本.命令")
+    _require_keys(command, {"写法"}, "位置文本.命令")
     _require_keys(
         icons,
         {"错误", "地点", "修士", "行止", "页次"},
@@ -353,7 +353,7 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
         locations_title=_text(locations.get("标题"), "位置文本.附近地点.标题"),
         locations_section=_text(locations.get("山河"), "位置文本.附近地点.山河"),
         locations_empty=_text(locations.get("没有地点"), "位置文本.附近地点.没有地点"),
-        invalid_command=_text(command.get("格式错误"), "位置文本.命令.格式错误"),
+        invalid_command=_text(command.get("写法"), "位置文本.命令.写法"),
     )
 
 
