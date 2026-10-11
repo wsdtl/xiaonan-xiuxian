@@ -36,6 +36,21 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# 游戏侧：本判据要真派发命令才有内容可比，所以整支都要拉起应用。
+import game.app as app
+import game.cmd  # noqa: F401 - 注册全部命令组件
+from dataclasses import replace
+from game.core.asset import InventoryAdjustment
+from game.features.daolv_jiejiao import CompanionGiftRequest
+from game.core.database import TransactionCommand
+from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
+from game.features.xinglu.contracts import TravelRequest
+from launch.adapter.local import dispatch
+from launch.adapter.local.handler import LocalEventHandler
+from loguru import logger
+from game.cmd.command import registered_command_routes
+from game.cmd.help_registry import help_registry
+
 #: 只看独立的 0：270项 / 160种 里的 0项 不是空条目（前面不能是数字）。
 EMPTY_ENTRY = re.compile(r"(?<![0-9])0\s*(种|份|个|页|条|枚|座|项)")
 #: 整栏都是这些值，等于这一栏什么都没说。
@@ -203,23 +218,522 @@ def _number(value: str) -> float:
         return float("nan")
 
 
+
+
+async def _造场景(send, services, user_id) -> tuple[str, list[str]]:
+    await services.features.chuangjian_renwu.create(
+        CreateCharacterRequest(
+            user_id=user_id, request_id="消息判据", name="判据甲", gender="男"
+        )
+    )
+    # 深页那一套要干净的人物走到指定地点；宽参那一套要留在初始状态——
+    # 深页会把人物带进洞天或各城，之后采药/闭关这类本地命令就全报错了，
+    # 早先 42 个组件里有 15 个因此一条真页面都没有。两个人各管一套。
+    # 切磋要另一个人物，布阵要阵藏里先有一座阵法——这两件事不是派发命令能造的，
+    # 所以在这里直接建人物、直接授予，再把命令发出去。
+    partner = "P:判据乙"
+    await services.features.chuangjian_renwu.create(
+        CreateCharacterRequest(
+            user_id=partner, request_id="消息判据-乙", name="判据乙", gender="女"
+        )
+    )
+    clash_name = "判据乙"
+    # 赠送只能送「基础物品」（灵植 / 灵矿 / 兽宝，共 582 件）——丹药不在那个
+    # 清单里，所以先授一株灵植再送；收礼的人就是上面那个人物，同处溪隐台。
+    gift_plan = await services.core.asset.plan_inventory_changes(
+        user_id, (InventoryAdjustment("200001", "01", 2),)
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            user_id,
+            "判据赠品",
+            "消息判据",
+            tuple(gift_plan.operations),
+            {"物品": "200001"},
+        )
+    )
+    for command in ("赠送 " + clash_name + " 岩露黄精 01 1",):
+        _DEEP_COMMANDS.append(command)
+        await send(command, strict=True)
+    # 易形要纳戒里先有两仪易形丹（160004）；它不是派发命令能造的。
+    pill_plan = await services.core.asset.plan_inventory_changes(
+        user_id, (InventoryAdjustment("160004", "01", 1),)
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            user_id,
+            "判据易形丹",
+            "消息判据",
+            tuple(pill_plan.operations),
+            {"物品": "160004"},
+        )
+    )
+    formation_plan = await services.core.asset.plan_formation_reserve_acquisition(
+        user_id, "530002", "01"
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            user_id,
+            "判据阵藏",
+            "消息判据",
+            (formation_plan.operation,),
+            {"阵法": "530002"},
+        )
+    )
+    for command in ("布阵 诛仙剑阵 黄品",):
+        _DEEP_COMMANDS.append(command)
+        await send(command, strict=True)
+    for command in ("切磋 " + clash_name,):
+        _DEEP_COMMANDS.append(command)
+        await send(command, strict=True)
+
+    for place, commands in DEEP:
+        if place:
+            try:
+                await services.features.xinglu.travel(
+                    TravelRequest(
+                        user_id=user_id, request_id="判据-" + place, destination=place
+                    )
+                )
+            except Exception:  # noqa: BLE001 - 走不到就跳过这一站
+                continue
+        for command in commands:
+            _DEEP_COMMANDS.append(command)
+            await send(command, strict=True)
+    words = sorted(
+        set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
+    )
+    # 讨伐一开就占住行动，跟宽参阶段共用人物会把探险那几条挤成错误页；
+    # 给它一份独立人物，和行动类同样的做法。
+    raid_user = "P:判据讨伐"
+    await services.features.chuangjian_renwu.create(
+        CreateCharacterRequest(
+            user_id=raid_user, request_id="消息判据-讨伐", name="判据讨", gender="男"
+        )
+    )
+    try:
+        await services.features.xinglu.travel(
+            TravelRequest(
+                user_id=raid_user, request_id="判据-镇北军镇", destination="镇北军镇"
+            )
+        )
+    except Exception:  # noqa: BLE001 - 走不到就不跑这一段
+        pass
+    else:
+        for command in ("开始讨伐", "讨伐战况"):
+            _DEEP_COMMANDS.append(command)
+            await send(command, user=raid_user, strict=True)
+    # 服丹要人物有损耗，否则只会得到「血气已满」。用战后结算把血气精神压到 1——
+    # 那是游戏自己结算战果的接口，不是改写状态。
+    pill_user = "P:判据服丹"
+    await services.features.chuangjian_renwu.create(
+        CreateCharacterRequest(
+            user_id=pill_user, request_id="消息判据-服丹", name="判据丹", gender="男"
+        )
+    )
+    battle = await services.core.character.plan_battle_settlement(
+        pill_user, health=1.0, spirit=1.0
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            pill_user,
+            "判据损耗",
+            "消息判据",
+            tuple(battle.operations),
+            {"来源": "判据夹具"},
+        )
+    )
+    for command in ("人物服丹 100005",):
+        _DEEP_COMMANDS.append(command)
+        await send(command, user=pill_user, strict=True)
+    # 同行道侣是归元观与道侣培养的前置。好感靠赠礼正当涨：每株山谷灵植 +10，
+    # 邀约门槛是 100，所以授 12 株连送 12 次到 120 再邀约——这条路本身也是玩家
+    # 真要走的路。铜雀台还要道侣至少 2 级，那一步够不到，故不在这一站。
+    mate_user = "P:判据道侣"
+    await services.features.chuangjian_renwu.create(
+        CreateCharacterRequest(
+            user_id=mate_user, request_id="消息判据-道侣", name="判据侣", gender="男"
+        )
+    )
+    await services.features.xinglu.travel(
+        TravelRequest(user_id=mate_user, request_id="判据-丹霞城", destination="丹霞城")
+    )
+    flower_plan = await services.core.asset.plan_inventory_changes(
+        mate_user, (InventoryAdjustment("200023", "01", 12),)
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            mate_user,
+            "判据灵花",
+            "消息判据",
+            tuple(flower_plan.operations),
+            {"物品": "200023"},
+        )
+    )
+    for index in range(12):
+        await services.features.daolv_jiejiao.gift(
+            CompanionGiftRequest(
+                mate_user, f"判据赠礼{index}", "谢若棠", "200023", "01", 1
+            )
+        )
+    for command in ("邀约 谢若棠", "道侣培养"):
+        _DEEP_COMMANDS.append(command)
+        await send(command, user=mate_user, strict=True)
+    yuan_plan = await services.core.asset.plan_inventory_changes(
+        mate_user, (InventoryAdjustment("160001", "01", 1),)
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            mate_user,
+            "判据归元丹",
+            "消息判据",
+            tuple(yuan_plan.operations),
+            {"物品": "160001"},
+        )
+    )
+    await services.features.xinglu.travel(
+        TravelRequest(user_id=mate_user, request_id="判据-归元观", destination="归元观")
+    )
+    for command in ("归元",):
+        _DEEP_COMMANDS.append(command)
+        await send(command, user=mate_user, strict=True)
+    # 夺元要求同行道侣至少 2 级；道侣的等级用它的成长接口涨（和人物一样的正当路）。
+    mate_growth = await services.core.companion.plan_growth(
+        mate_user, experience=100000
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            mate_user,
+            "判据道侣经验",
+            "消息判据",
+            tuple(mate_growth.operations),
+            {"来源": "判据夹具"},
+        )
+    )
+    await services.features.xinglu.travel(
+        TravelRequest(user_id=mate_user, request_id="判据-铜雀台", destination="铜雀台")
+    )
+    for command in ("夺元",):
+        _DEEP_COMMANDS.append(command)
+        await send(command, user=mate_user, strict=True)
+    # 补天只作用于「已突破」的纯突破节点，而且灵动境压根没有单属性丹（单属性丹
+    # 从炼气 510002 才开始）。所以这条路得走完：灌经验 → 用纯突破丹突破到炼气 →
+    # 再补天；九霄补天丹 160002 是补天自己要的药。
+    butian_user = "P:判据补天"
+    await services.features.chuangjian_renwu.create(
+        CreateCharacterRequest(
+            user_id=butian_user, request_id="消息判据-补天", name="判据天", gender="男"
+        )
+    )
+    growth = await services.core.character.plan_growth(butian_user, experience=100000)
+    await services.core.database.commit(
+        TransactionCommand(
+            butian_user,
+            "判据经验",
+            "消息判据",
+            tuple(growth.operations),
+            {"来源": "判据夹具"},
+        )
+    )
+    for item_id in ("140001", "160002"):
+        grant = await services.core.asset.plan_inventory_changes(
+            butian_user, (InventoryAdjustment(item_id, "01", 1),)
+        )
+        await services.core.database.commit(
+            TransactionCommand(
+                butian_user,
+                "判据丹药" + item_id,
+                "消息判据",
+                tuple(grant.operations),
+                {"物品": item_id},
+            )
+        )
+    breakthrough = await services.core.character.plan_breakthrough(
+        butian_user, medicine_id="140001"
+    )
+    await services.core.database.commit(
+        TransactionCommand(
+            butian_user,
+            "判据突破",
+            "消息判据",
+            (breakthrough.operation,),
+            {"丹药": "140001"},
+        )
+    )
+    await services.features.xinglu.travel(
+        TravelRequest(user_id=butian_user, request_id="判据-裂天原", destination="裂天原")
+    )
+    # 每条注册命令再拿一个乱写参数跑一遍：错误路径也必须给出回执，不能抛异常。
+    # 真出过事：批量改 error 回执时把四条命令的链尾切坏，判据全绿却一调用就炸。
+
+    heads = []
+    return butian_user, words
+
+
+async def _命令词() -> list[str]:
+    heads: list[str] = []
+    for route in registered_command_routes():
+        # 路由表给的是 (命令词, 分类, 组件) 元组，不是字符串。
+        head = str(route[0] if isinstance(route, tuple) else route).split()[0].strip()
+        if not head or any(ch in head for ch in "<>[](){}|*?"):
+            continue
+        heads.append(head)
+    return heads
+
+
+async def _扫裸命令(deep_failures, heads, user_id) -> None:
+    for head in sorted(set(heads)):
+        command = head + " 乱写参数"
+        try:
+            await dispatch(
+                user_id=user_id, raw_message=command, event_id="烟囱-" + head
+            )
+        except Exception as exc:  # noqa: BLE001 - 乱写参数不该把命令打成异常
+            deep_failures.append(
+                command + " 抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
+            )
+    # 命令本身（不带参数）也必须能出回执：只扫「乱写参数」会漏掉成功路径。
+    # 真出过事：网页资源公开 的 notice 少了一层 section，参数一乱就绕过它，
+    # 判据与 168 条回执比对全绿，玩家一用命令本身却直接 ValueError、彻底没反应。
+
+
+async def _扫无参(deep_failures, heads, user_id) -> None:
+    for head in sorted(set(heads)):
+        try:
+            result = await dispatch(
+                user_id=user_id, raw_message=head, event_id="烟囱裸-" + head
+            )
+        except Exception as exc:  # noqa: BLE001 - 命令本身不该把命令打成异常
+            deep_failures.append(
+                head + "（不带参数）抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
+            )
+            continue
+        if not result.replies:
+            deep_failures.append(head + "（不带参数）没有任何回执")
+    # 再用命令自己声明的 usage 当合法参数发一遍：参数解析那条路也必须能出回执、不抛异常。
+    # 只扫「乱写参数」会漏掉参数路径上的形状错误（例如把状态词塞进了不该塞的地方）。
+
+
+async def _扫最佳用法(deep_failures, heads, user_id) -> None:
+    for head in sorted(set(heads)):
+        entry = help_registry.find(head)
+        usages = list(getattr(entry.spec, 'usage', ()) or ()) if entry else []
+        best = max(usages, key=lambda u: len(u.split()), default=head)
+        if not best.startswith(head) and len(best.split()) > 1:
+            best = head + " " + " ".join(best.split()[1:])
+        try:
+            result = await dispatch(
+                user_id=user_id, raw_message=best, event_id="烟囱usage-" + head
+            )
+        except Exception as exc:  # noqa: BLE001 - 声明过的用法不该把命令打成异常
+            deep_failures.append(
+                best + " 抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
+            )
+            continue
+        if not result.replies:
+            deep_failures.append(best + " 没有任何回执")
+
+
+
+async def _补天与活动(butian_user, send, services) -> None:
+    for command in ("补天 人物 炼气 140002",):
+        _DEEP_COMMANDS.append(command)
+        await send(command, user=butian_user, strict=True)
+    for label, commands in ACTIVITIES:
+        activity_user = "P:判据行动" + label
+        await services.features.chuangjian_renwu.create(
+            CreateCharacterRequest(
+                user_id=activity_user,
+                request_id="消息判据-" + label,
+                name="判据" + label[:1],
+                gender="男",
+            )
+        )
+        for command in commands:
+            _DEEP_COMMANDS.append(command)
+            await send(command, user=activity_user, strict=True)
+
+
+async def _扫垃圾参(send, words) -> None:
+    for word in words:
+        for arg in ARGS:
+            await send((word + " " + arg).strip())
+
+    # 每条命令自报的**具体例子**必须被自己受理：跳过含占位词的写法，其余逐条真派发。
+
+
+async def _扫用法举例(usage_failures, user_id) -> None:
+    # 只看「光秃秃的格式卡」——项目刻意给每个错误补一句「用法见下方」，不能把它当失败。
+
+    placeholder = ("编号", "名称", "品级", "数量", "页码", "槽位", "角色名", "宗门名", "玩家", "目标", "或", "…", "<", ">", "条目")
+    heads = sorted({
+        str(route[0] if isinstance(route, tuple) else route).split()[0]
+        for route in registered_command_routes()
+    })
+    for head in heads:
+        entry = help_registry.find(head)
+        if entry is None:
+            continue
+        for usage in getattr(entry.spec, "usage", ()) or ():
+            phrase = str(usage).strip()
+            if not phrase:
+                continue
+            try:
+                result = await dispatch(
+                    user_id=user_id, raw_message=phrase, event_id="用法判据-" + phrase
+                )
+            except Exception as exc:  # noqa: BLE001 - 例子被自己炸掉也是缺陷
+                usage_failures.append(
+                    phrase + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:50]
+                )
+                continue
+            if not result.replies:
+                usage_failures.append(phrase + " 没有任何回执")
+                continue
+            body = str(getattr(result.replies[0].message, "content", ""))
+            lines = [line.lstrip("> ").strip() for line in body.split("\n") if line.lstrip("> ").strip()]
+            explained = [
+                line
+                for line in lines
+                if ("用法见下方" not in line)
+                and ("格式：" not in line)
+                and ("失败" not in line)
+                and len(line) > 6
+            ]
+            # 判定词必须说这条命令自己的事：冒出别的命令词就算歧义。
+            for other in heads:
+                if other == head or len(other) < 2:
+                    continue
+                if (other in head) or (head in other):
+                    continue          # 互为子串＝同一件事的别名，不算歧义
+                for verdict in ("失败", "完成", "成功"):
+                    verdict_word = other + verdict
+                    if verdict_word not in body:
+                        continue
+                    if (head, verdict_word) in _VERDICT_ALLOWED:
+                        continue
+                    _VERDICT_FAILURES.append(
+                        phrase + " 的判定词冒出「" + verdict_word + "」（命令是「" + head + "」）"
+                    )
+
+
+            if any(word in phrase for word in placeholder):
+                continue
+
+            if (("用法见下方" in body) or ("格式：" in body)) and not explained:
+                usage_failures.append(
+                    phrase + " 被自己的命令当成用法错：" + " / ".join(lines[:3])[:50]
+                )
+
+
+async def _扫撞墙(heads, user_id, wall_failures) -> None:
+    # 每条命令故意发一个坏写法：撞墙时卡上必须说清原因，不能只剩通用提示。
+    for head in heads:
+        for bad in ("乱写", "乱写 乱写 乱写"):
+            wall_cmd = head + " " + bad
+            try:
+                wall_result = await dispatch(
+                    user_id=user_id, raw_message=wall_cmd, event_id="墙判据-" + wall_cmd
+                )
+            except Exception:  # noqa: BLE001 - 崩溃另有判据管
+                continue
+            if not wall_result.replies:
+                continue
+            wall_body = str(getattr(wall_result.replies[0].message, "content", ""))
+            if _WALL_HINT not in wall_body:
+                continue
+            wall_lines = [
+                str(line).lstrip("> ").rstrip()
+                for line in wall_body.split("\n")
+                if str(line).strip()
+            ]
+            explained = [
+                line
+                # 跳过卡首那行栏目标题（「📌 某某」），它不是解释、长度也过得了阈值
+                for line in wall_lines[1:]
+                if (_WALL_HINT not in line) and ("失败" not in line) and (len(line) > 4)
+            ]
+            if not explained:
+                wall_failures.append(
+                    wall_cmd + " 撞墙只给了通用提示：" + " / ".join(wall_lines[:3])[:46]
+                )
+
+    # 用法例子检查只认具体例子（含占位词的是写法说明）。
+    # 「字符类别即界限」全量检验：名字/编号槽位填中文假名与数字假编号各跑一遍，
+    # 任何一侧收到「光秃秃的格式卡」或崩溃都算缺陷（守卫与「找不到」不算）。
+
+
+async def _扫中文名与编号(heads, name_id_failures, user_id) -> None:
+    name_slots = ("编号或名称", "名称或编号", "阵法名", "珍物名", "角色名或编号", "宗门名或编号",
+                   "丹药编号或名称", "丹药编号或丹药名称", "器律编号或名称", "器具编号或名称",
+                   "功法编号或名称", "编号", "名称", "角色名", "宗门名")
+    other_slots = (("品级", "黄品"), ("数量", "1"), ("页码", "1"), ("槽位", "1"), ("孔位", "1"),
+                   ("类别", "功法"), ("兽宝数", "1"), ("灵矿数", "1"), ("灵植数", "1"), ("开或关", "开"))
+    slash_slots = (("丹药/真意/气机", "丹药"), ("灵植/灵矿/兽宝", "灵植"), ("真意/气机", "真意"))
+    compound_slots = (("灵石数量", "1"),)
+
+    def fill_slot(usage: str, dummy: str) -> str:
+        text = usage
+        for slot, value in sorted(compound_slots, key=lambda pair: -len(pair[0])):
+            text = text.replace(slot, value)
+        for slot, value in sorted(slash_slots, key=lambda pair: -len(pair[0])):
+            text = text.replace(slot, value)
+        for slot in sorted(name_slots, key=len, reverse=True):
+            text = text.replace(slot, dummy)
+        for slot, value in sorted(other_slots, key=lambda pair: -len(pair[0])):
+            text = text.replace(slot, value)
+        return " ".join(text.split())
+
+    for head in heads:
+        entry = help_registry.find(head)
+        if entry is None:
+            continue
+        for usage in getattr(entry.spec, "usage", ()) or ():
+            usage = str(usage)
+            if not any(slot in usage for slot in name_slots):
+                continue
+            for label, dummy in (("中文名", "测试之物"), ("数字编号", "999999")):
+                filled = fill_slot(usage, dummy)
+                if not filled or filled == usage:
+                    continue
+                try:
+                    result = await dispatch(
+                        user_id=user_id, raw_message=filled, event_id="名字判据-" + filled
+                    )
+                except Exception as exc:  # noqa: BLE001 - 崩溃也是缺陷
+                    name_id_failures.append(
+                        filled + " 填【" + label + "】时抛了 " + type(exc).__name__ + "：" + str(exc)[:40]
+                    )
+                    continue
+                if not result.replies:
+                    name_id_failures.append(filled + " 填【" + label + "】时没有任何回执")
+                    continue
+                body = str(getattr(result.replies[0].message, "content", ""))
+                body_lines = [line.lstrip("> ").strip() for line in body.split("\n") if line.lstrip("> ").strip()]
+                explained_lines = [
+                    line
+                    for line in body_lines
+                    if ("用法见下方" not in line)
+                    and ("格式：" not in line)
+                    and ("失败" not in line)
+                    and len(line) > 6
+                ]
+                if (("用法见下方" in body) or ("格式：" in body)) and not explained_lines:
+                    name_id_failures.append(
+                        filled + " 填【" + label + "】时被当成用法错：" + " / ".join(body_lines[:3])[:50]
+                    )
+
+
+
+
+
 def _corpus() -> tuple[dict[str, str], dict[str, float]]:
     """真实派发一遍全部命令，全程只建一次。"""
 
     global _CORPUS
     if _CORPUS is not None:
         return _CORPUS
-    import game.app as app
-    import game.cmd  # noqa: F401 - 注册全部命令组件
-    from dataclasses import replace
 
-    from game.core.asset import InventoryAdjustment
-    from game.features.daolv_jiejiao import CompanionGiftRequest
-    from game.core.database import TransactionCommand
-    from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
-    from game.features.xinglu.contracts import TravelRequest
-    from launch.adapter.local import dispatch
-    from launch.adapter.local.handler import LocalEventHandler
 
     # 判据是**并行**跑的（`tools/全量核对.py` 用线程池），若与别的判据共用同一个临时目录，
     # 对方的清理动作会把本判据正在用的库删掉——SQLite 随后把它当空库重开，
@@ -232,7 +746,6 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         database=replace(app.game_config.database, path=database),
     )
     # 启动日志走 loguru，先摘掉，别把一屏噪声混进总账。
-    from loguru import logger
 
     quiet = io.StringIO()
     with contextlib.redirect_stdout(quiet), contextlib.redirect_stderr(quiet):
@@ -273,479 +786,17 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
             pages[text] = _clean(getattr(result.replies[0].message, "content", ""))
 
     async def run() -> None:
-        await services.features.chuangjian_renwu.create(
-            CreateCharacterRequest(
-                user_id=user_id, request_id="消息判据", name="判据甲", gender="男"
-            )
-        )
-        # 深页那一套要干净的人物走到指定地点；宽参那一套要留在初始状态——
-        # 深页会把人物带进洞天或各城，之后采药/闭关这类本地命令就全报错了，
-        # 早先 42 个组件里有 15 个因此一条真页面都没有。两个人各管一套。
-        # 切磋要另一个人物，布阵要阵藏里先有一座阵法——这两件事不是派发命令能造的，
-        # 所以在这里直接建人物、直接授予，再把命令发出去。
-        partner = "P:判据乙"
-        await services.features.chuangjian_renwu.create(
-            CreateCharacterRequest(
-                user_id=partner, request_id="消息判据-乙", name="判据乙", gender="女"
-            )
-        )
-        clash_name = "判据乙"
-        # 赠送只能送「基础物品」（灵植 / 灵矿 / 兽宝，共 582 件）——丹药不在那个
-        # 清单里，所以先授一株灵植再送；收礼的人就是上面那个人物，同处溪隐台。
-        gift_plan = await services.core.asset.plan_inventory_changes(
-            user_id, (InventoryAdjustment("200001", "01", 2),)
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                user_id,
-                "判据赠品",
-                "消息判据",
-                tuple(gift_plan.operations),
-                {"物品": "200001"},
-            )
-        )
-        for command in ("赠送 " + clash_name + " 岩露黄精 01 1",):
-            _DEEP_COMMANDS.append(command)
-            await send(command, strict=True)
-        # 易形要纳戒里先有两仪易形丹（160004）；它不是派发命令能造的。
-        pill_plan = await services.core.asset.plan_inventory_changes(
-            user_id, (InventoryAdjustment("160004", "01", 1),)
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                user_id,
-                "判据易形丹",
-                "消息判据",
-                tuple(pill_plan.operations),
-                {"物品": "160004"},
-            )
-        )
-        formation_plan = await services.core.asset.plan_formation_reserve_acquisition(
-            user_id, "530002", "01"
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                user_id,
-                "判据阵藏",
-                "消息判据",
-                (formation_plan.operation,),
-                {"阵法": "530002"},
-            )
-        )
-        for command in ("布阵 诛仙剑阵 黄品",):
-            _DEEP_COMMANDS.append(command)
-            await send(command, strict=True)
-        for command in ("切磋 " + clash_name,):
-            _DEEP_COMMANDS.append(command)
-            await send(command, strict=True)
+        butian_user, words = await _造场景(send, services, user_id)
+        heads = await _命令词()
+        await _扫裸命令(deep_failures, heads, user_id)
+        await _扫无参(deep_failures, heads, user_id)
+        await _扫最佳用法(deep_failures, heads, user_id)
+        await _补天与活动(butian_user, send, services)
+        await _扫垃圾参(send, words)
+        await _扫用法举例(usage_failures, user_id)
+        await _扫撞墙(heads, user_id, wall_failures)
+        await _扫中文名与编号(heads, name_id_failures, user_id)
 
-        for place, commands in DEEP:
-            if place:
-                try:
-                    await services.features.xinglu.travel(
-                        TravelRequest(
-                            user_id=user_id, request_id="判据-" + place, destination=place
-                        )
-                    )
-                except Exception:  # noqa: BLE001 - 走不到就跳过这一站
-                    continue
-            for command in commands:
-                _DEEP_COMMANDS.append(command)
-                await send(command, strict=True)
-        words = sorted(
-            set(LocalEventHandler.command_rules) | set(LocalEventHandler.fullmatch_rules)
-        )
-        # 讨伐一开就占住行动，跟宽参阶段共用人物会把探险那几条挤成错误页；
-        # 给它一份独立人物，和行动类同样的做法。
-        raid_user = "P:判据讨伐"
-        await services.features.chuangjian_renwu.create(
-            CreateCharacterRequest(
-                user_id=raid_user, request_id="消息判据-讨伐", name="判据讨", gender="男"
-            )
-        )
-        try:
-            await services.features.xinglu.travel(
-                TravelRequest(
-                    user_id=raid_user, request_id="判据-镇北军镇", destination="镇北军镇"
-                )
-            )
-        except Exception:  # noqa: BLE001 - 走不到就不跑这一段
-            pass
-        else:
-            for command in ("开始讨伐", "讨伐战况"):
-                _DEEP_COMMANDS.append(command)
-                await send(command, user=raid_user, strict=True)
-        # 服丹要人物有损耗，否则只会得到「血气已满」。用战后结算把血气精神压到 1——
-        # 那是游戏自己结算战果的接口，不是改写状态。
-        pill_user = "P:判据服丹"
-        await services.features.chuangjian_renwu.create(
-            CreateCharacterRequest(
-                user_id=pill_user, request_id="消息判据-服丹", name="判据丹", gender="男"
-            )
-        )
-        battle = await services.core.character.plan_battle_settlement(
-            pill_user, health=1.0, spirit=1.0
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                pill_user,
-                "判据损耗",
-                "消息判据",
-                tuple(battle.operations),
-                {"来源": "判据夹具"},
-            )
-        )
-        for command in ("人物服丹 100005",):
-            _DEEP_COMMANDS.append(command)
-            await send(command, user=pill_user, strict=True)
-        # 同行道侣是归元观与道侣培养的前置。好感靠赠礼正当涨：每株山谷灵植 +10，
-        # 邀约门槛是 100，所以授 12 株连送 12 次到 120 再邀约——这条路本身也是玩家
-        # 真要走的路。铜雀台还要道侣至少 2 级，那一步够不到，故不在这一站。
-        mate_user = "P:判据道侣"
-        await services.features.chuangjian_renwu.create(
-            CreateCharacterRequest(
-                user_id=mate_user, request_id="消息判据-道侣", name="判据侣", gender="男"
-            )
-        )
-        await services.features.xinglu.travel(
-            TravelRequest(user_id=mate_user, request_id="判据-丹霞城", destination="丹霞城")
-        )
-        flower_plan = await services.core.asset.plan_inventory_changes(
-            mate_user, (InventoryAdjustment("200023", "01", 12),)
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                mate_user,
-                "判据灵花",
-                "消息判据",
-                tuple(flower_plan.operations),
-                {"物品": "200023"},
-            )
-        )
-        for index in range(12):
-            await services.features.daolv_jiejiao.gift(
-                CompanionGiftRequest(
-                    mate_user, f"判据赠礼{index}", "谢若棠", "200023", "01", 1
-                )
-            )
-        for command in ("邀约 谢若棠", "道侣培养"):
-            _DEEP_COMMANDS.append(command)
-            await send(command, user=mate_user, strict=True)
-        yuan_plan = await services.core.asset.plan_inventory_changes(
-            mate_user, (InventoryAdjustment("160001", "01", 1),)
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                mate_user,
-                "判据归元丹",
-                "消息判据",
-                tuple(yuan_plan.operations),
-                {"物品": "160001"},
-            )
-        )
-        await services.features.xinglu.travel(
-            TravelRequest(user_id=mate_user, request_id="判据-归元观", destination="归元观")
-        )
-        for command in ("归元",):
-            _DEEP_COMMANDS.append(command)
-            await send(command, user=mate_user, strict=True)
-        # 夺元要求同行道侣至少 2 级；道侣的等级用它的成长接口涨（和人物一样的正当路）。
-        mate_growth = await services.core.companion.plan_growth(
-            mate_user, experience=100000
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                mate_user,
-                "判据道侣经验",
-                "消息判据",
-                tuple(mate_growth.operations),
-                {"来源": "判据夹具"},
-            )
-        )
-        await services.features.xinglu.travel(
-            TravelRequest(user_id=mate_user, request_id="判据-铜雀台", destination="铜雀台")
-        )
-        for command in ("夺元",):
-            _DEEP_COMMANDS.append(command)
-            await send(command, user=mate_user, strict=True)
-        # 补天只作用于「已突破」的纯突破节点，而且灵动境压根没有单属性丹（单属性丹
-        # 从炼气 510002 才开始）。所以这条路得走完：灌经验 → 用纯突破丹突破到炼气 →
-        # 再补天；九霄补天丹 160002 是补天自己要的药。
-        butian_user = "P:判据补天"
-        await services.features.chuangjian_renwu.create(
-            CreateCharacterRequest(
-                user_id=butian_user, request_id="消息判据-补天", name="判据天", gender="男"
-            )
-        )
-        growth = await services.core.character.plan_growth(butian_user, experience=100000)
-        await services.core.database.commit(
-            TransactionCommand(
-                butian_user,
-                "判据经验",
-                "消息判据",
-                tuple(growth.operations),
-                {"来源": "判据夹具"},
-            )
-        )
-        for item_id in ("140001", "160002"):
-            grant = await services.core.asset.plan_inventory_changes(
-                butian_user, (InventoryAdjustment(item_id, "01", 1),)
-            )
-            await services.core.database.commit(
-                TransactionCommand(
-                    butian_user,
-                    "判据丹药" + item_id,
-                    "消息判据",
-                    tuple(grant.operations),
-                    {"物品": item_id},
-                )
-            )
-        breakthrough = await services.core.character.plan_breakthrough(
-            butian_user, medicine_id="140001"
-        )
-        await services.core.database.commit(
-            TransactionCommand(
-                butian_user,
-                "判据突破",
-                "消息判据",
-                (breakthrough.operation,),
-                {"丹药": "140001"},
-            )
-        )
-        await services.features.xinglu.travel(
-            TravelRequest(user_id=butian_user, request_id="判据-裂天原", destination="裂天原")
-        )
-        # 每条注册命令再拿一个乱写参数跑一遍：错误路径也必须给出回执，不能抛异常。
-        # 真出过事：批量改 error 回执时把四条命令的链尾切坏，判据全绿却一调用就炸。
-        from game.cmd.command import registered_command_routes
-
-        heads = []
-        for route in registered_command_routes():
-            # 路由表给的是 (命令词, 分类, 组件) 元组，不是字符串。
-            head = str(route[0] if isinstance(route, tuple) else route).split()[0].strip()
-            if not head or any(ch in head for ch in "<>[](){}|*?"):
-                continue
-            heads.append(head)
-        for head in sorted(set(heads)):
-            command = head + " 乱写参数"
-            try:
-                await dispatch(
-                    user_id=user_id, raw_message=command, event_id="烟囱-" + head
-                )
-            except Exception as exc:  # noqa: BLE001 - 乱写参数不该把命令打成异常
-                deep_failures.append(
-                    command + " 抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
-                )
-        # 命令本身（不带参数）也必须能出回执：只扫「乱写参数」会漏掉成功路径。
-        # 真出过事：网页资源公开 的 notice 少了一层 section，参数一乱就绕过它，
-        # 判据与 168 条回执比对全绿，玩家一用命令本身却直接 ValueError、彻底没反应。
-        for head in sorted(set(heads)):
-            try:
-                result = await dispatch(
-                    user_id=user_id, raw_message=head, event_id="烟囱裸-" + head
-                )
-            except Exception as exc:  # noqa: BLE001 - 命令本身不该把命令打成异常
-                deep_failures.append(
-                    head + "（不带参数）抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
-                )
-                continue
-            if not result.replies:
-                deep_failures.append(head + "（不带参数）没有任何回执")
-        # 再用命令自己声明的 usage 当合法参数发一遍：参数解析那条路也必须能出回执、不抛异常。
-        # 只扫「乱写参数」会漏掉参数路径上的形状错误（例如把状态词塞进了不该塞的地方）。
-        from game.cmd.help_registry import help_registry
-        for head in sorted(set(heads)):
-            entry = help_registry.find(head)
-            usages = list(getattr(entry.spec, 'usage', ()) or ()) if entry else []
-            best = max(usages, key=lambda u: len(u.split()), default=head)
-            if not best.startswith(head) and len(best.split()) > 1:
-                best = head + " " + " ".join(best.split()[1:])
-            try:
-                result = await dispatch(
-                    user_id=user_id, raw_message=best, event_id="烟囱usage-" + head
-                )
-            except Exception as exc:  # noqa: BLE001 - 声明过的用法不该把命令打成异常
-                deep_failures.append(
-                    best + " 抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
-                )
-                continue
-            if not result.replies:
-                deep_failures.append(best + " 没有任何回执")
-
-        for command in ("补天 人物 炼气 140002",):
-            _DEEP_COMMANDS.append(command)
-            await send(command, user=butian_user, strict=True)
-        for label, commands in ACTIVITIES:
-            activity_user = "P:判据行动" + label
-            await services.features.chuangjian_renwu.create(
-                CreateCharacterRequest(
-                    user_id=activity_user,
-                    request_id="消息判据-" + label,
-                    name="判据" + label[:1],
-                    gender="男",
-                )
-            )
-            for command in commands:
-                _DEEP_COMMANDS.append(command)
-                await send(command, user=activity_user, strict=True)
-        for word in words:
-            for arg in ARGS:
-                await send((word + " " + arg).strip())
-
-        # 每条命令自报的**具体例子**必须被自己受理：跳过含占位词的写法，其余逐条真派发。
-        # 只看「光秃秃的格式卡」——项目刻意给每个错误补一句「用法见下方」，不能把它当失败。
-
-        placeholder = ("编号", "名称", "品级", "数量", "页码", "槽位", "角色名", "宗门名", "玩家", "目标", "或", "…", "<", ">", "条目")
-        heads = sorted({
-            str(route[0] if isinstance(route, tuple) else route).split()[0]
-            for route in registered_command_routes()
-        })
-        for head in heads:
-            entry = help_registry.find(head)
-            if entry is None:
-                continue
-            for usage in getattr(entry.spec, "usage", ()) or ():
-                phrase = str(usage).strip()
-                if not phrase:
-                    continue
-                try:
-                    result = await dispatch(
-                        user_id=user_id, raw_message=phrase, event_id="用法判据-" + phrase
-                    )
-                except Exception as exc:  # noqa: BLE001 - 例子被自己炸掉也是缺陷
-                    usage_failures.append(
-                        phrase + " 派发时抛了 " + type(exc).__name__ + "：" + str(exc)[:50]
-                    )
-                    continue
-                if not result.replies:
-                    usage_failures.append(phrase + " 没有任何回执")
-                    continue
-                body = str(getattr(result.replies[0].message, "content", ""))
-                lines = [line.lstrip("> ").strip() for line in body.split("\n") if line.lstrip("> ").strip()]
-                explained = [
-                    line
-                    for line in lines
-                    if ("用法见下方" not in line)
-                    and ("格式：" not in line)
-                    and ("失败" not in line)
-                    and len(line) > 6
-                ]
-                # 判定词必须说这条命令自己的事：冒出别的命令词就算歧义。
-                for other in heads:
-                    if other == head or len(other) < 2:
-                        continue
-                    if (other in head) or (head in other):
-                        continue          # 互为子串＝同一件事的别名，不算歧义
-                    for verdict in ("失败", "完成", "成功"):
-                        verdict_word = other + verdict
-                        if verdict_word not in body:
-                            continue
-                        if (head, verdict_word) in _VERDICT_ALLOWED:
-                            continue
-                        _VERDICT_FAILURES.append(
-                            phrase + " 的判定词冒出「" + verdict_word + "」（命令是「" + head + "」）"
-                        )
-
-
-                if any(word in phrase for word in placeholder):
-                    continue
-
-                if (("用法见下方" in body) or ("格式：" in body)) and not explained:
-                    usage_failures.append(
-                        phrase + " 被自己的命令当成用法错：" + " / ".join(lines[:3])[:50]
-                    )
-        # 每条命令故意发一个坏写法：撞墙时卡上必须说清原因，不能只剩通用提示。
-        for head in heads:
-            for bad in ("乱写", "乱写 乱写 乱写"):
-                wall_cmd = head + " " + bad
-                try:
-                    wall_result = await dispatch(
-                        user_id=user_id, raw_message=wall_cmd, event_id="墙判据-" + wall_cmd
-                    )
-                except Exception:  # noqa: BLE001 - 崩溃另有判据管
-                    continue
-                if not wall_result.replies:
-                    continue
-                wall_body = str(getattr(wall_result.replies[0].message, "content", ""))
-                if _WALL_HINT not in wall_body:
-                    continue
-                wall_lines = [
-                    str(line).lstrip("> ").rstrip()
-                    for line in wall_body.split("\n")
-                    if str(line).strip()
-                ]
-                explained = [
-                    line
-                    # 跳过卡首那行栏目标题（「📌 某某」），它不是解释、长度也过得了阈值
-                    for line in wall_lines[1:]
-                    if (_WALL_HINT not in line) and ("失败" not in line) and (len(line) > 4)
-                ]
-                if not explained:
-                    wall_failures.append(
-                        wall_cmd + " 撞墙只给了通用提示：" + " / ".join(wall_lines[:3])[:46]
-                    )
-
-        # 用法例子检查只认具体例子（含占位词的是写法说明）。
-        # 「字符类别即界限」全量检验：名字/编号槽位填中文假名与数字假编号各跑一遍，
-        # 任何一侧收到「光秃秃的格式卡」或崩溃都算缺陷（守卫与「找不到」不算）。
-        name_slots = ("编号或名称", "名称或编号", "阵法名", "珍物名", "角色名或编号", "宗门名或编号",
-                       "丹药编号或名称", "丹药编号或丹药名称", "器律编号或名称", "器具编号或名称",
-                       "功法编号或名称", "编号", "名称", "角色名", "宗门名")
-        other_slots = (("品级", "黄品"), ("数量", "1"), ("页码", "1"), ("槽位", "1"), ("孔位", "1"),
-                       ("类别", "功法"), ("兽宝数", "1"), ("灵矿数", "1"), ("灵植数", "1"), ("开或关", "开"))
-        slash_slots = (("丹药/真意/气机", "丹药"), ("灵植/灵矿/兽宝", "灵植"), ("真意/气机", "真意"))
-        compound_slots = (("灵石数量", "1"),)
-
-        def fill_slot(usage: str, dummy: str) -> str:
-            text = usage
-            for slot, value in sorted(compound_slots, key=lambda pair: -len(pair[0])):
-                text = text.replace(slot, value)
-            for slot, value in sorted(slash_slots, key=lambda pair: -len(pair[0])):
-                text = text.replace(slot, value)
-            for slot in sorted(name_slots, key=len, reverse=True):
-                text = text.replace(slot, dummy)
-            for slot, value in sorted(other_slots, key=lambda pair: -len(pair[0])):
-                text = text.replace(slot, value)
-            return " ".join(text.split())
-
-        for head in heads:
-            entry = help_registry.find(head)
-            if entry is None:
-                continue
-            for usage in getattr(entry.spec, "usage", ()) or ():
-                usage = str(usage)
-                if not any(slot in usage for slot in name_slots):
-                    continue
-                for label, dummy in (("中文名", "测试之物"), ("数字编号", "999999")):
-                    filled = fill_slot(usage, dummy)
-                    if not filled or filled == usage:
-                        continue
-                    try:
-                        result = await dispatch(
-                            user_id=user_id, raw_message=filled, event_id="名字判据-" + filled
-                        )
-                    except Exception as exc:  # noqa: BLE001 - 崩溃也是缺陷
-                        name_id_failures.append(
-                            filled + " 填【" + label + "】时抛了 " + type(exc).__name__ + "：" + str(exc)[:40]
-                        )
-                        continue
-                    if not result.replies:
-                        name_id_failures.append(filled + " 填【" + label + "】时没有任何回执")
-                        continue
-                    body = str(getattr(result.replies[0].message, "content", ""))
-                    body_lines = [line.lstrip("> ").strip() for line in body.split("\n") if line.lstrip("> ").strip()]
-                    explained_lines = [
-                        line
-                        for line in body_lines
-                        if ("用法见下方" not in line)
-                        and ("格式：" not in line)
-                        and ("失败" not in line)
-                        and len(line) > 6
-                    ]
-                    if (("用法见下方" in body) or ("格式：" in body)) and not explained_lines:
-                        name_id_failures.append(
-                            filled + " 填【" + label + "】时被当成用法错：" + " / ".join(body_lines[:3])[:50]
-                        )
 
     asyncio.run(run())
     baselines = dict(services.core.character.attribute_baselines())
