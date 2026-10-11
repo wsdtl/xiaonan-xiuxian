@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import pathlib
+import json
 import re
 import sys
 from types import SimpleNamespace
@@ -238,7 +239,9 @@ def check_format_lines_follow_rule() -> list[str]:
     for path in sorted((root / "data").rglob("*.json")):
         try:
             body = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 - 不是 JSON 的数据文件跳过
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            # 只跳过「读不了/不是 JSON」的文件；别的异常必须冒出来，
+            # 否则判据会静默变成空转——这里真出过事：json 没导入时每个文件都被吞掉，判据假装干净。
             continue
         for key, text in walk(body):
             where = path.relative_to(root).as_posix() + key
@@ -250,6 +253,51 @@ def check_format_lines_follow_rule() -> list[str]:
     return problems
 
 
+def _strings(node: object):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _strings(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _strings(value)
+
+
+def check_presentation_has_no_machine_keys() -> list[str]:
+    """展示数据里不许出现机器键：玩家看得见的文案只说人话。
+
+    机器键指「编号:品级」「编号:品级:灵宝编号」这种条目键，以及「状态键/实例键/条目键」这类叫法；
+    「无灵宝」这种把内部空值讲给玩家听的话同样不许出现——委托方 2026-10 定的口径（《阵法说明》第五节）。
+    """
+
+    machine_key = re.compile(r"\d{6}:\d{2}")
+    banned_words = ("状态键", "实例键", "条目键", "机器键", "无灵宝")
+    root = pathlib.Path(__file__).resolve().parents[2]
+    problems: list[str] = []
+    for path in sorted((root / "data").rglob("*.json")):
+        if "/展示/" not in path.as_posix():
+            continue
+        try:
+            body = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            # 只跳过「读不了/不是 JSON」的文件；别的异常必须冒出来，
+            # 否则判据会静默变成空转——这里真出过事：json 没导入时每个文件都被吞掉，判据假装干净。
+            continue
+        for text in _strings(body):
+            hit = machine_key.search(text)
+            if hit:
+                problems.append(
+                    f"{path.relative_to(root).as_posix()} 展示了机器键「{hit.group(0)}」：{text[:40]}"
+                )
+            for word in banned_words:
+                if word in text:
+                    problems.append(
+                        f"{path.relative_to(root).as_posix()} 展示了内部说法「{word}」：{text[:40]}"
+                    )
+    return problems
+
+
 CHECKS = (
     ("消息文本没有 LaTeX", check_text_has_no_latex),
     ("Markdown 标点已转义", check_markup_escaped),
@@ -257,6 +305,7 @@ CHECKS = (
     ("两条通道正文一致", check_channels_agree),
     ("补 @ 不改动正文", check_mention_keeps_body),
     ("格式文案记法统一", check_format_lines_follow_rule),
+    ("展示不露机器键", check_presentation_has_no_machine_keys),
 )
 
 
