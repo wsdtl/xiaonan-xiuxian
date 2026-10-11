@@ -116,9 +116,7 @@ def test_all_engine_read_attributes_are_declared() -> None:
 # ─────────── 原 tests/test_race_registry.py ───────────
 
 from dataclasses import replace
-from pathlib import Path
 
-import pytest
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 BASE_RACE = "人族"
@@ -243,12 +241,9 @@ def test_race_rules_come_out_as_inherent_rules(services) -> None:
 
 # ─────────── 原 tests/test_term_naming.py ───────────
 
-import json
 import sys
 from collections import defaultdict
-from pathlib import Path
 
-import pytest
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 if str(DATA.parent / "tools" / "库") not in sys.path:

@@ -506,7 +506,6 @@ import base64
 import binascii
 import random
 
-import pytest
 
 from game.features.zhuangpei.codec import AssemblyCodeError, decode, encode, normalize
 
@@ -598,13 +597,8 @@ def test_whitespace_and_padding_tolerated():
 
 # ─────────── 原 tests/test_zhuangpei_site.py ───────────
 
-import asyncio
-import importlib
-from types import SimpleNamespace
 from urllib.parse import quote
 
-import pytest
-from fastapi import FastAPI
 
 from game.features.zhuangpei import ZhuangpeiFeatureError, encode
 
