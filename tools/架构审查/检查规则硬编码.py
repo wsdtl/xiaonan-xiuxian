@@ -1,7 +1,8 @@
-"""规则目录不得保存具体地点。
+"""规则目录不得硬编码具体事物（地点、商店或主持者名单）。
 
 判据来自 `data/基础/读取规则.json:59-63` 的「禁止规则」第一条：
-「规则不得保存具体地点、商店或主持者名单」。
+「规则不得保存具体地点、商店或主持者名单」——**两半都管**：
+地点（键名式）与主持者（地点内容里那些工匠／丹师／阵师／道侣的名字）。
 
 **为什么需要这一支**：这条规则此前没有判据在管。2026-10 查处 `data/宗门/规则/山门.json` 时，
 它一直存着 `"位置": "宗门园区"` 与 `"位置": "宗门洞天"`——而山门早就改成**按地点功能认**了，
@@ -42,6 +43,30 @@ def location_names() -> set[str]:
     return names
 
 
+#: 主持者名单来自地点内容：工匠／丹师／阵师／道侣这类文件里的「名称」。
+HOST_FILE_MARKERS = ("工匠", "丹师", "阵师", "道侣", "主持", "商人", "店主", "师傅")
+
+
+def host_names() -> set[str]:
+    """地点内容里那些主持者的名字（「规则不得保存主持者名单」管的就是它们）。"""
+    names: set[str] = set()
+    root = DATA / "世界" / "内容"
+    if not root.is_dir():
+        return names
+    for path in root.rglob("*.json"):
+        if not any(mark in path.name for mark in HOST_FILE_MARKERS):
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        rows = data if isinstance(data, list) else [data]
+        for row in rows:
+            if isinstance(row, dict) and isinstance(row.get("名称"), str):
+                names.add(row["名称"])
+    return names
+
+
 def rule_files() -> list[pathlib.Path]:
     """所有规则目录里的 json；展示目录不算（展示本来就要写地点给玩家看）。"""
     out: list[pathlib.Path] = []
@@ -72,6 +97,7 @@ def scan_value(rel: str, key: str, value: object, names: set[str], problems: lis
 
 def find_violations() -> list[str]:
     names = location_names()
+    hosts = host_names()
     problems: list[str] = []
     for path in rule_files():
         try:
@@ -80,6 +106,10 @@ def find_violations() -> list[str]:
             continue
         rel = path.relative_to(ROOT).as_posix()
         scan_value(rel, "", data, names, problems)
+        raw = path.read_text(encoding="utf-8")
+        for host in sorted(hosts):
+            if f'"{host}"' in raw and (rel, "主持者", host) not in ALLOWED:
+                problems.append(f"{rel} 提到主持者：{host}")
     return problems
 
 
@@ -88,9 +118,9 @@ def main() -> int:
     if problems:
         for item in problems:
             print(f"   {item}")
-        print(f"规则存地点 {len(problems)} 处有问题")
+        print(f"规则硬编码 {len(problems)} 处有问题")
         return 1
-    print("规则存地点 干净")
+    print("规则硬编码 干净")
     return 0
 
 
