@@ -118,6 +118,12 @@ class SectWarFeature:
             return self._text["错误"][error.code]
         return str(error)
 
+    def format_actions(self, status: str) -> tuple[SectWarAction, ...]:
+        """格式与提示类回执的动作：只给该命令的「查看帮助」。"""
+
+        return self.actions(status)
+
+
     def actions(self, status: str) -> tuple[SectWarAction, ...]:
         return tuple(
             SectWarAction(

@@ -62,5 +62,21 @@
     "命令": "战况",
     "行为": "callback",
     "样式": "primary"
+  },
+  {
+    "状态": "约战格式",
+    "编号": "sect-war.help_challenge",
+    "名称": "查看帮助",
+    "命令": "帮助 宗门约战",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "状态": "战录格式",
+    "编号": "sect-war.help_history",
+    "名称": "查看帮助",
+    "命令": "帮助 战录",
+    "行为": "callback",
+    "样式": "primary"
   }
 ]

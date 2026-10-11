@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from ...presentation import error_document
 
+from typing import Sequence
+
 from game.features.zongmen_zhan import SectWarFeature, SectWarHistoryPage, SectWarView
 from message import DocumentMessage, M
 
@@ -100,9 +102,18 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessa
     return builder.build()
 
 
-def error(message: str) -> DocumentMessage:
-    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        "宗门战", "notice", "操作失败", message, tone="danger"
+def error(
+    feature: SectWarFeature, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
+    """失败回执：标题与状态词取自展示数据集，动作由玩法层给。"""
+
+    return error_document(
+        feature.text("错误", "标题"),
+        "notice",
+        feature.text("错误", "失败"),
+        message,
+        tone="danger",
+        actions=actions,
     )
 
 
