@@ -53,7 +53,7 @@ function commandFor(item, quantity) {
   const qty = Math.max(1, parseInt(quantity, 10) || 1);
   // 阵法只报名字：状态键是代码内部的东西，玩家不该见；同名多条时带上灵宝名做区分。
   if (item.category === '阵法') {
-    const tail = item.treasure_name ? ' ' + item.treasure_name : '';
+    const tail = item.treasure_name ? '[' + item.treasure_name + ']' : '';
     return '捐入万珍殿 阵法 ' + item.name + tail;
   }
   if (item.category === '器律') return '捐入万珍殿 器律 ' + item.id + ' ' + qty;
@@ -89,7 +89,7 @@ function renderItems() {
       lucky.className = 'item-meta';
       lucky.textContent = item.treasure
         ? (UI['灵宝'] || '灵宝') + '：' + (item.treasure_name || item.treasure) + ' · ' + (item.treasure_effect || '')
-        : (UI['无灵宝'] || '无灵宝');
+        : '';
       button.append(lucky);
     }
     button.onclick = () => { PICKED = item; showCommand(); };

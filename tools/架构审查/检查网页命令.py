@@ -91,7 +91,9 @@ async def _runtime_problems() -> list[str]:
     for row in formations:
         if not str(row.get('name') or ''):
             problems.append('网页条目 %s 没带阵法名，页面拼不出命令' % row.get('id'))
-    command = '捐入万珍殿 阵法 ' + str(formations[0]['name'])
+    first = formations[0]
+    tail = '[' + str(first['treasure_name']) + ']' if first.get('treasure_name') else ''
+    command = '捐入万珍殿 阵法 ' + str(first['name']) + tail
     result = await dispatch(user_id=user_id, raw_message=command, event_id='网页判据-捐')
     text = str(getattr(result.replies[0].message, 'content', '')) if result.replies else ''
     if '存入' not in text:

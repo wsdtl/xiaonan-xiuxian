@@ -35,6 +35,14 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
     找不到或多条，就用展示数据里的话回绝，并把候选摆出来。
     """
     query = str(wanted or '').strip()
+    # 允许写成「阵法名[灵宝名]」——页面上照抄的就是这个样子，比空格分隔好看些。
+    bracket = ""
+    if query.endswith("]") and "[" in query:
+        query, _, bracket = query[:-1].partition("[")
+        query = query.strip()
+        bracket = bracket.strip()
+    if bracket and not qualifier:
+        qualifier = bracket
     services = current_game_services()
     snapshot = await services.core.asset.snapshot(user_id)
     matched = []
@@ -118,7 +126,8 @@ async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
             "usage": (
                 "捐入万珍殿 丹药/真意/气机 编号或名称 品级 数量",
                 "捐入万珍殿 器律 编号或名称 数量",
-                "捐入万珍殿 阵法 阵法名 [品级或灵宝名]",
+                "捐入万珍殿 阵法 阵法名[灵宝名]",
+            "捐入万珍殿 阵法 阵法名 品级",
             ),
             "side_effect": "原子扣除个人成品并计入万珍殿；阵法每次存入一座",
             "order": 83,
