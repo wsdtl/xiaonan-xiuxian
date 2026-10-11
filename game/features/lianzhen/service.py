@@ -52,6 +52,11 @@ class FormationCraftFeature:
     async def form(self, user_id: str, request_id: str, identifier: str, grade: str, investments: Mapping[str, int] | None=None) -> FormationResult:
         return await self._call(self._formation.form(user_id, request_id, identifier, grade, investments))
 
+
+    def format_actions(self) -> tuple[object, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」——完整用法在帮助组件里。"""
+
+        return actions(self._buttons, "格式", set())
     def overview_actions(self, value: FormationOverview) -> tuple[FormationAction, ...]:
         result = []
         if value.page > 1:

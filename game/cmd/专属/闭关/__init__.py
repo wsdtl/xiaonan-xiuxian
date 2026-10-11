@@ -34,7 +34,7 @@ async def start_retreat(user_id: str, message_context: MessageContext, manager: 
             reply.started(feature.copy(), result, feature.started_actions())
         )
     except RetreatFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -64,7 +64,7 @@ async def retreat_progress(user_id: str, manager: Any) -> None:
             )
         )
     except RetreatFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -89,7 +89,11 @@ async def end_retreat(user_id: str, message: str, message_context: MessageContex
         page = 1 if not page_text else int(page_text)
     except ValueError:
         await manager.send(
-            reply.error(feature.copy(), reply.text(feature.copy(), "错误", "格式"))
+            reply.error(
+                feature.copy(),
+                reply.text(feature.copy(), "错误", "格式"),
+                feature.format_actions(),
+            )
         )
         return
     try:
@@ -107,7 +111,7 @@ async def end_retreat(user_id: str, message: str, message_context: MessageContex
             )
         )
     except RetreatFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 __all__ = []

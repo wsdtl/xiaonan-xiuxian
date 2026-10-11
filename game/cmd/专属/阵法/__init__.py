@@ -13,10 +13,12 @@ from typing import Any
 _GRADES = frozenset({"黄", "玄", "地", "天", "圣"})
 
 
-def _request(message: str) -> tuple[str, str, dict[str, int] | None]:
+def _request(
+    message: str, usage: str
+) -> tuple[str, str, dict[str, int] | None]:
     parts = str(message or "").strip().split()
     if len(parts) not in {2, 5} or parts[1] not in _GRADES:
-        raise ValueError("格式：阵法/炼阵 阵法编号或名称 品级 [兽宝数 灵矿数 灵植数]")
+        raise ValueError(usage)
     investments = None
     if len(parts) == 5:
         values = tuple(int(value) for value in parts[2:])
@@ -56,13 +58,15 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
                 reply.overview(feature.copy(), value, feature.overview_actions(value))
             )
             return
-        identifier, grade, investments = _request(query)
+        identifier, grade, investments = _request(
+        query, reply.text(feature.copy(), "错误", "格式")
+    )
         value = await feature.preview(user_id, identifier, grade, investments)
         await manager.send(
             reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
     except (FormationCraftFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -82,7 +86,9 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
 async def commit_formation(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.lianzhen
     try:
-        identifier, grade, investments = _request(message)
+        identifier, grade, investments = _request(
+        message, reply.text(feature.copy(), "错误", "格式")
+    )
         value = await feature.form(
             user_id, message_context.request_id, identifier, grade, investments
         )
@@ -90,7 +96,7 @@ async def commit_formation(user_id: str, message: str, message_context: MessageC
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except (FormationCraftFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 __all__ = []

@@ -10,7 +10,7 @@ from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import FormationAction, FormationCopy
 
-_PAGES = frozenset({"总览", "预览", "完成"})
+_PAGES = frozenset({"总览", "预览", "完成", "格式"})
 _REQUIRED = {
     "总览": frozenset({"标题", "阵师", "传承", "引言", "阵法"}),
     "列表": frozenset({"标题", "阵师", "页码"}),

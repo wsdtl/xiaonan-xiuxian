@@ -10,7 +10,7 @@ from game.features.presentation import project_buttons, require_mapping
 
 from .contracts import RetreatAction, RetreatCopy
 
-_PAGES = frozenset({"开始", "进度", "总结"})
+_PAGES = frozenset({"开始", "进度", "总结", "格式"})
 
 
 def load_presentation(
