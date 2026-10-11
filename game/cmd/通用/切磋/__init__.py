@@ -35,7 +35,7 @@ async def start(user_id: str, message: str, message_context: MessageContext, man
         )
         await manager.send(reply.challenge(feature, value, target_name))
     except (DuelError, ValueError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -60,7 +60,7 @@ async def accept(user_id: str, message_context: MessageContext, manager: Any) ->
         target_name = await feature.target_name(value.target_participants[0])
         await manager.send(reply.result(feature, value, challenger_name, target_name))
     except (DuelError, ValueError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -83,4 +83,4 @@ async def reject(user_id: str, message_context: MessageContext, manager: Any) ->
         await feature.reject(user_id, message_context.request_id)
         await manager.send(reply.rejected())
     except (DuelError, ValueError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from ...actions import CommandAction
 from ...presentation import error_document
+
+from typing import Sequence
 
 from game.features.qiecuo import DuelChallenge, DuelFeature, DuelResult
 from launch.paths import public_url
@@ -77,9 +80,12 @@ def rejected() -> DocumentMessage:
     )
 
 
-def error(feature: DuelFeature, message: str) -> DocumentMessage:
+def error(
+    feature: DuelFeature, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        feature.text("错误", "标题"), "notice", "切磋失败", sentence(message), tone="danger"
+    return error_document(        feature.text("错误", "标题"), "notice", "切磋失败", sentence(message), tone="danger",
+        actions=actions,
     )
 
 

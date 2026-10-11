@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class DuelAction:
+    """切磋回执上的动作，字段名与 CommandAction 契约一致。"""
+
+    action_id: str
+    label: str
+    command: str
+    behavior: str
+    style: str
+
 from collections.abc import Mapping
 
 from game.core.character import CharacterService
@@ -24,9 +37,23 @@ class DuelFeature:
 
     def initialize(self) -> None:
         copy = self._data.dataset("切磋展示").get("文本")
+        self._format_actions = tuple(
+            DuelAction(
+                str(row["编号"]), str(row["名称"]), str(row["命令"]),
+                str(row["行为"]), str(row["样式"]),
+            )
+            for row in (self._data.dataset("切磋按钮").get("按钮") or ())
+            if isinstance(row, Mapping)
+        )
         if not isinstance(copy, Mapping):
             raise JsonDataError("玩法/切磋/展示/文本.json 必须是对象")
         self._copy = copy
+
+    def format_actions(self) -> tuple[DuelAction, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」。"""
+
+        return self._format_actions
+
 
     def text(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         if self._copy is None:
