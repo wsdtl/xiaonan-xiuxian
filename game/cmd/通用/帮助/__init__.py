@@ -27,4 +27,27 @@ async def help_command(message: str, manager: Any) -> None:
     await manager.send(reply.help_message(message))
 
 
+@GameCommand.command(
+    cmd="help",
+    metadata={
+        "scope": "通用",
+        "guard_rule": "始终可用",
+        # 刻意不写 help 块：这条命令不参与「帮助」的分类联动，也不出现在帮助页里。
+        "hidden": True,
+    },
+)
+async def id_help_command(message: str, manager: Any) -> None:
+    """`help [页码]`：按 id 写法罗列命令，纯文本、不带按钮。"""
+
+    text = " ".join(str(message or "").split())
+    page = 1
+    if text:
+        parts = text.split()
+        if len(parts) != 1 or not parts[0].isdecimal():
+            await manager.send(reply.id_help_message(1))
+            return
+        page = int(parts[0])
+    await manager.send(reply.id_help_message(page))
+
+
 __all__ = []
