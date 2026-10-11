@@ -68,4 +68,4 @@ async def send(user_id: str, message: str, message_context: MessageContext, mana
             )
         )
     except (GiftError, ValueError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
