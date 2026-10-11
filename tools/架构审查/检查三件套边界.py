@@ -24,6 +24,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from game.core.combat.template_data import TEMPLATE_CLUSTERS  # noqa: E402
 CONTENT = ROOT / "data" / "战斗" / "内容"
 
 #: 计数类配额：用到叠层设施的功法卡占比上限（现状 97.7%，目标 ≤25%）。
@@ -108,13 +110,8 @@ def report(title: str, bad: list[str], total: int, detail: list[str] | None = No
     return ok
 
 
-def main() -> int:
+def _核对职责边界(arts, wills, breaths) -> int:
     failures = 0
-    arts = cards("功法")
-    wills = cards("真意")
-    breaths = cards("气机")
-    print(f"条目：功法 {len(arts)} ｜ 真意 {len(wills)} ｜ 气机 {len(breaths)}")
-
     # 一、职责边界
     #: `属性构成`（五行根基）**必须有**：五行规则要求功法/真意/气机/器律四段都带它
     #: （game/core/combat/foundation.py 里那条契约），它是卡面前置而不是"玩法"。
@@ -172,11 +169,15 @@ def main() -> int:
     ]
     failures += not report("气机只做属性（不得是技能或状态）", breaths_skill, len(breaths), breaths_skill)
 
+    return failures
+
+
+def _核对主动形状(arts) -> int:
+    failures = 0
     # 二、主动技能的形状：冷却 / 消耗 / 目标，缺一即不算主动技能
     #: `目标` 不在卡里，而在**模板体**里：卡只写 {"模板": …} 与少量参数覆盖，
     #: 真正的 `/效果/[0]/目标/能力` 由模板主体提供。所以判"有没有目标"要看
     #: 引用模板的参数路径，而不是在卡里找 `目标` 这个键（第 38 轮踩过的坑）。
-    from game.core.combat.template_data import TEMPLATE_CLUSTERS
 
     def has_target(card: dict) -> bool:
         found = False
@@ -243,6 +244,11 @@ def main() -> int:
     print(f"        主动技能两分：指向型 {len(pointing_cards)} 张 ｜ 自指型 {len(self_cards)} 张")
     failures += not report("功法要有主动技能的形状（冷却 + 消耗 + 目标）", shapeless, len(arts), shapeless)
 
+    return failures
+
+
+def _核对大作文(arts) -> int:
+    failures = 0
     # 三、大作文：效果里的字符串叶子不许长、不许成句
     long_text: list[str] = []
     prose: list[str] = []
@@ -257,6 +263,11 @@ def main() -> int:
     failures += not report(f"效果里不许写长文本（≤{TEXT_LIMIT} 字符）", long_text, len(arts), long_text)
     failures += not report("效果里不许写成句（不得带成句标点）", prose, len(arts), prose)
 
+    return failures
+
+
+def _核对计数占比(arts) -> int:
+    failures = 0
     #: 口径 D（第 65 轮定的，取代口径 A）：**主动技能里、非声明型**的计数引用占比。
     #: 口径 A（把"声明"也算进去）量的是脚手架而不是玩法：实测同一份数据 A=47.3%、D=**1.2%**。
     #: 声明（`计量`/`状态`/`名称`… 带字符串值的参数）是卡与卡之间的接口，不是玩法。
@@ -296,6 +307,22 @@ def main() -> int:
         f"（{counter_share * 100:.1f}%，上限 {COUNTER_QUOTA * 100:.0f}%）"
     )
 
+    return failures
+
+
+def main() -> int:
+    """跑完四组核对，打印总账。"""
+
+    arts = cards("功法")
+    wills = cards("真意")
+    breaths = cards("气机")
+    print(f"条目：功法 {len(arts)} ｜ 真意 {len(wills)} ｜ 气机 {len(breaths)}")
+
+    failures = 0
+    failures += _核对职责边界(arts, wills, breaths)
+    failures += _核对主动形状(arts)
+    failures += _核对大作文(arts)
+    failures += _核对计数占比(arts)
     print(f"总账：失败 {failures} 组")
     return 1 if failures else 0
 
