@@ -71,7 +71,7 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
             )
             return
         identifier, grade, investments = _request(
-        query, reply.text(feature.copy(), "错误", "格式")
+        query, reply.text(feature.copy(), "错误", "阵法审查格式")
     )
         value = await feature.preview(user_id, identifier, grade, investments)
         await manager.send(
@@ -99,7 +99,7 @@ async def commit_formation(user_id: str, message: str, message_context: MessageC
     feature = current_game_services().features.lianzhen
     try:
         identifier, grade, investments = _request(
-        message, reply.text(feature.copy(), "错误", "格式")
+        message, reply.text(feature.copy(), "错误", "炼阵格式")
     )
         value = await feature.form(
             user_id, message_context.request_id, identifier, grade, investments
