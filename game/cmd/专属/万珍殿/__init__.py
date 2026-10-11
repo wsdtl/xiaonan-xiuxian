@@ -14,6 +14,50 @@ from typing import Any
 _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
 
 
+async def _formation_key(feature: Any, user_id: str, wanted: str, grade: str) -> str:
+    """把玩家写的阵法（名字或编号，可带品级）翻成阵藏条目的状态键。
+
+    阵藏条目在库里是一条状态键（阵法编号:品级:灵宝编号）——玩家不该背它。
+    已经是状态键就原样放行；否则在自己的阵藏里按名字找：唯一一条就用它，
+    找不到或多条，就用展示数据里的话回绝（多条时把候选条目摆出来让他补品级）。
+    """
+    query = str(wanted or '').strip()
+    if query.count(':') >= 2:
+        return query
+    services = current_game_services()
+    snapshot = await services.core.asset.snapshot(user_id)
+    matched = []
+    for entry in snapshot.entries:
+        if '阵法' not in str(getattr(entry, 'subcategory', '')):
+            continue
+        names = {str(getattr(entry, 'name', '')), str(getattr(entry, 'content_id', ''))}
+        if query not in names:
+            continue
+        if grade:
+            grades = {
+                str(getattr(entry, 'grade_id', '')),
+                str(getattr(entry, 'grade_name', '')),
+            }
+            if not any(value and value.startswith(grade) for value in grades):
+                continue
+        matched.append(entry)
+    copy = feature.copy()
+    text = getattr(copy, 'text', copy)
+    if not matched:
+        raise WanzhenFeatureError(
+            str(text.get('阵法找不到') or '阵藏里没有这座阵法').format(名称=query)
+        )
+    if len(matched) > 1:
+        raise WanzhenFeatureError(
+            str(text.get('阵法说不清') or '阵藏里有多条同名阵法，请补品级').format(
+                名称=query,
+                数量=len(matched),
+                条目='、'.join(str(getattr(item, 'instance_key', '')) for item in matched[:4]),
+            )
+        )
+    return str(getattr(matched[0], 'instance_key', ''))
+
+
 @GameCommand.command(
     cmd="万珍殿",
     metadata={
@@ -55,7 +99,8 @@ async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
             "usage": (
                 "捐入万珍殿 丹药/真意/气机 编号或名称 品级 数量",
                 "捐入万珍殿 器律 编号或名称 数量",
-                "捐入万珍殿 阵法 阵藏条目编号",
+                "捐入万珍殿 阵法 阵法名 [品级]",
+            "捐入万珍殿 阵法 阵藏条目编号",
             ),
             "side_effect": "原子扣除个人成品并计入万珍殿；阵法每次存入一座",
             "order": 83,
@@ -69,8 +114,10 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
         if not parts or parts[0] not in _CATEGORIES:
             raise WanzhenFeatureError("格式：捐入万珍殿 类别 内容 ...")
         category = parts[0]
-        if category == "阵法" and len(parts) == 2:
-            identifier, grade_or_key, quantity = parts[1], parts[1], 1
+        if category == "阵法" and 2 <= len(parts) <= 3:
+            # 条目在库里是一条状态键（阵法编号:品级:灵宝编号），但玩家只该填阵法名。
+            identifier = await _formation_key(feature, user_id, parts[1], parts[2] if len(parts) == 3 else "")
+            grade_or_key, quantity = identifier, 1
         elif category == "器律" and len(parts) == 3:
             identifier, grade_or_key, quantity = (
                 parts[1],

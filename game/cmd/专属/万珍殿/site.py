@@ -53,13 +53,40 @@ async def _entries(services, user_id: str) -> list[dict[str, object]]:
                 continue
             name = str(raw.get('名称') or content_id)
             break
+        # 阵法条目的身份是「阵法编号:品级:灵宝编号」这个状态键，不是阵法编号——
+        # 捐入命令要的是整串键，而灵宝决定了加成方向，两样都得交给页面。
+        key = str(getattr(entry, 'instance_key', ''))
+        treasure_id = key.split(':')[2] if key.count(':') >= 2 else ''
+        treasure = '' if not treasure_id or treasure_id == '无灵宝' else treasure_id
+        treasure_name = ''
+        treasure_effect = ''
+        if treasure:
+            try:
+                raw_treasure = dict(services.core.data.entity('先天灵宝', treasure))
+            except Exception:
+                raw_treasure = {}
+            treasure_name = str(raw_treasure.get('名称') or treasure)
+            effect = raw_treasure.get('规则介入') or {}
+            if hasattr(effect, 'get'):
+                ability = str(effect.get('能力') or '')
+                scale = ''
+                for key_name, suffix in (('比例', '%'), ('数量', ''), ('次数', ''), ('进度', '')):
+                    if effect.get(key_name) is not None:
+                        value = effect[key_name]
+                        scale = str(int(round(float(value) * 100))) + suffix if suffix else str(value)
+                        break
+                treasure_effect = (ability + ' ' + scale).strip()
         out.append(
             {
                 'subcategory': str(getattr(entry, 'subcategory', '')),
                 'id': content_id,
+                'key': key,
                 'grade': str(getattr(entry, 'grade_id', '')),
                 'quantity': int(getattr(entry, 'quantity', 0) or 0),
                 'name': name,
+                'treasure': treasure,
+                'treasure_name': treasure_name,
+                'treasure_effect': treasure_effect,
             }
         )
     return out
@@ -92,6 +119,8 @@ async def wanzhen_data(scope: str = '') -> JSONResponse:
         '数量': pick('页面数量'),
         '命令': pick('页面命令'),
         '没有成品': pick('页面没有成品'),
+        '灵宝': pick('页面灵宝'),
+        '无灵宝': pick('页面无灵宝'),
     }
     everything = await _entries(services, user_id)
     items: list[dict[str, object]] = []
