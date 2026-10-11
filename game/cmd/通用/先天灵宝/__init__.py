@@ -34,14 +34,14 @@ async def show_innate_treasures(user_id: str, message: str, manager: Any) -> Non
     feature = current_game_services().features.xiantian_lingbao
     raw = message.strip()
     if raw and not raw.isdecimal():
-        await manager.send(reply.error("格式：先天灵宝 [页码]"))
+        await manager.send(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
         return
     try:
         await manager.send(
             reply.view(feature, await feature.inspect(user_id, int(raw or 1)))
         )
     except InnateTreasureFeatureError as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -68,7 +68,7 @@ async def equip_innate_treasure(user_id: str, message: str, message_context: Mes
         )
         await manager.send(reply.equipped(feature, result))
     except (InnateTreasureFeatureError, InnateTreasureFeatureConflictError) as exc:
-        await manager.send(reply.error(str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = ["router"]

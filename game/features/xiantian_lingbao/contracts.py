@@ -45,3 +45,14 @@ __all__ = [
     "InnateTreasureView",
     "InnateTreasure",
 ]
+
+
+@dataclass(frozen=True)
+class LingbaoAction:
+    """先天灵宝回执上的动作，字段名与 CommandAction 契约一致。"""
+
+    action_id: str
+    label: str
+    command: str
+    behavior: str
+    style: str

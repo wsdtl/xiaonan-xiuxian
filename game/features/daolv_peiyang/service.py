@@ -31,6 +31,7 @@ from game.core.growth import GrowthService
 from game.features.presentation import require_mapping
 
 from .contracts import (
+    DaolvPeiyangAction,
     CompanionBreakthroughRequest,
     CompanionBreakthroughResult,
     CompanionCultivationConflictError,
@@ -82,7 +83,22 @@ class CompanionCultivationFeature:
         require_mapping(self._copy.get("道侣"), "培养文本.道侣")
         require_mapping(self._copy.get("突破"), "培养文本.突破")
         require_mapping(self._copy.get("覆炼"), "培养文本.覆炼")
+        buttons = self._copy.get("按钮") or ()
+        self._format_actions = tuple(
+            DaolvPeiyangAction(
+                str(row["编号"]), str(row["名称"]), str(row["命令"]),
+                str(row["行为"]), str(row["样式"]),
+            )
+            for row in buttons
+            if isinstance(row, Mapping) and str(row.get("编号") or "").startswith("daolv_peiyang.")
+        )
         self._initialized = True
+
+    def format_actions(self) -> tuple[DaolvPeiyangAction, ...]:
+        """格式与提示类回执的动作：只给本组件的「查看帮助」。"""
+
+        return self._format_actions
+
 
     def copy(self, section: str, key: str) -> str:
         self._require_initialized()

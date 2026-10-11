@@ -15,6 +15,7 @@ from game.core.innate_treasure import InnateTreasureError, InnateTreasureService
 from game.features.presentation import require_mapping
 
 from .contracts import (
+    LingbaoAction,
     InnateTreasureEquipRequest,
     InnateTreasureEquipResult,
     InnateTreasureFeatureConflictError,
@@ -51,7 +52,22 @@ class InnateTreasureFeature:
             "玩法/先天灵宝/展示/文本.json",
         )
         self._page_limit = self._treasures.status().page_limit
+        buttons = self._copy.get("按钮") or ()
+        self._format_actions = tuple(
+            LingbaoAction(
+                str(row["编号"]), str(row["名称"]), str(row["命令"]),
+                str(row["行为"]), str(row["样式"]),
+            )
+            for row in buttons
+            if isinstance(row, Mapping)
+        )
         self._initialized = True
+
+    def format_actions(self) -> tuple[LingbaoAction, ...]:
+        """格式与提示类回执的动作：只给本组件的「查看帮助」。"""
+
+        return self._format_actions
+
 
     def copy(self, key: str, values: Mapping[str, object] | None = None) -> str:
         self._require_initialized()
