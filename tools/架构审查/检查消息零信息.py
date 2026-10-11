@@ -594,8 +594,6 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
 
         # 每条命令自报的**具体例子**必须被自己受理：跳过含占位词的写法，其余逐条真派发。
         # 只看「光秃秃的格式卡」——项目刻意给每个错误补一句「用法见下方」，不能把它当失败。
-        from game.cmd.help_registry import help_registry
-        from game.cmd.command import registered_command_routes
 
         placeholder = ("编号", "名称", "品级", "数量", "页码", "槽位", "角色名", "宗门名", "玩家", "目标", "或", "…", "<", ">", "条目")
         heads = sorted({
