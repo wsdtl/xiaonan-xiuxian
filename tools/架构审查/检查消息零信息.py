@@ -492,6 +492,21 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
                 deep_failures.append(
                     command + " 抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
                 )
+        # 命令本身（不带参数）也必须能出回执：只扫「乱写参数」会漏掉成功路径。
+        # 真出过事：网页资源公开 的 notice 少了一层 section，参数一乱就绕过它，
+        # 判据与 168 条回执比对全绿，玩家一用命令本身却直接 ValueError、彻底没反应。
+        for head in sorted(set(heads)):
+            try:
+                result = await dispatch(
+                    user_id=user_id, raw_message=head, event_id="烟囱裸-" + head
+                )
+            except Exception as exc:  # noqa: BLE001 - 命令本身不该把命令打成异常
+                deep_failures.append(
+                    head + "（不带参数）抛了 " + type(exc).__name__ + "：" + str(exc)[:60]
+                )
+                continue
+            if not result.replies:
+                deep_failures.append(head + "（不带参数）没有任何回执")
 
         for command in ("补天 人物 炼气 140002",):
             _DEEP_COMMANDS.append(command)
@@ -720,7 +735,7 @@ CHECKS = (
     ("单页不报页码", check_no_single_page_marker),
     ("零计数不配空陈述", check_no_zero_count_with_empty_note),
     ("徽章不被复述", check_badge_not_restated),
-    ("乱写参数不炸", check_garbage_args_do_not_crash),
+    ("命令不炸", check_garbage_args_do_not_crash),
 )
 
 
