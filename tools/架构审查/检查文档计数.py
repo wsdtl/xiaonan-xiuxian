@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import ast
 import re
 import sys
 
@@ -396,6 +397,26 @@ def check_ledger_index() -> list[str]:
     return problems
 
 
+PROTOCOL_DOC = ROOT / "message" / "消息协议说明.md"
+BUILDER = ROOT / "message" / "builder.py"
+
+
+def check_protocol_doc_covers_builder() -> list[str]:
+    """协议文档是契约：`DocumentBuilder` 的每个公开方法都得在文档里有名字。
+
+    真出过事：`actions(...)`（底部按钮组的批量写法）一直没写进文档表——
+    它是 `action` 的批量版，业务侧要用却查不到。
+    """
+
+    tree = ast.parse(BUILDER.read_text(encoding="utf-8"))
+    methods: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "DocumentBuilder":
+            methods = [n.name for n in node.body if isinstance(n, ast.FunctionDef) and not n.name.startswith("_")]
+    doc = PROTOCOL_DOC.read_text(encoding="utf-8")
+    return [f"协议文档里没写 `{m}` 的用法" for m in methods if (m + "(") not in doc]
+
+
 CHECKS = (
     ("README 结构计数", check_readme_structure),
     ("README 实测规模", check_readme_runtime),
@@ -405,6 +426,7 @@ CHECKS = (
     ("核对项数", check_full_check_counts),
     ("无重复章节", check_no_duplicate_sections),
     ("台账目录", check_ledger_index),
+    ("协议文档覆盖面", check_protocol_doc_covers_builder),
 )
 
 
