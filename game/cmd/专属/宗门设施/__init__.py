@@ -93,7 +93,7 @@ async def _dispatch(
             if parts[0] == "开炉":
                 identifier = " ".join(parts[1:]).strip()
                 if not identifier:
-                    raise ValueError("百炼堂需要指定器律")
+                    raise ValueError(feature.copy()["错误"]["需要器律"])
                 value = await feature.craft(
                     facility, user_id, request_id, source, identifier
                 )
@@ -115,7 +115,7 @@ async def _dispatch(
             if parts[0] == "开炉":
                 identifier = " ".join(parts[1:]).strip()
                 if not identifier:
-                    raise ValueError("丹鼎阁需要指定丹药")
+                    raise ValueError(feature.copy()["错误"]["需要丹药"])
                 value = await feature.craft(
                     facility, user_id, request_id, source, identifier
                 )
@@ -141,18 +141,18 @@ async def _dispatch(
         if action == "炼阵":
             parts = parts[1:]
             if len(parts) < 2:
-                raise ValueError("演阵台炼阵需要指定阵法和品级")
+                raise ValueError(feature.copy()["错误"]["炼阵需要阵法"])
             identifier, grade = parts[:2]
-            investments = _investments(parts[2:])
+            investments = _investments(parts[2:], feature.copy()["错误"]["圣品投入"])
             value = await feature.craft(
                 facility, user_id, request_id, source, identifier, grade, investments
             )
             await manager.send(reply.completed(feature.copy(), value))
             return
         if len(parts) < 2:
-            raise ValueError("演阵台审材需要指定阵法和品级")
+            raise ValueError(feature.copy()["错误"]["审材需要阵法"])
         identifier, grade = parts[:2]
-        investments = _investments(parts[2:])
+        investments = _investments(parts[2:], feature.copy()["错误"]["圣品投入"])
         value = await feature.preview(
             facility, user_id, source, identifier, grade, investments
         )
@@ -174,11 +174,13 @@ def _source(query: str) -> tuple[str, list[str]]:
     return "个人", parts
 
 
-def _investments(values: list[str]) -> dict[str, int] | None:
+def _investments(
+    values: list[str], overflow_hint: str
+) -> dict[str, int] | None:
     if not values:
         return None
     if len(values) != 3 or any(not value.isdigit() for value in values):
-        raise ValueError("圣品阵法投入必须依次填写兽宝、灵矿、灵植数量")
+        raise ValueError(overflow_hint)
     return {"兽宝": int(values[0]), "灵矿": int(values[1]), "灵植": int(values[2])}
 
 
