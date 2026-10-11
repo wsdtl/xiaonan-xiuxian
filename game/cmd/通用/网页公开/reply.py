@@ -6,8 +6,8 @@ def notice(feature: WangyeFeature, enabled: bool) -> DocumentMessage:
     return (
         M.document()
         .header(feature.copy('公开', '标题'))
-        .line(M.status('已公开' if enabled else '已关闭', tone='positive' if enabled else 'notice'))
-        .small(feature.copy('公开', '开启' if enabled else '关闭'))
+        .section(feature.copy('公开', '标题'), icon='system')
+        .line(feature.copy('公开', '开启' if enabled else '关闭'))
         .build()
     )
 
