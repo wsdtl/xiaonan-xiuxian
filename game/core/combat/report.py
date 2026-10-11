@@ -519,10 +519,9 @@ def _event_report(
                 detail_cache[signature] = detail
         details.append(detail)
     amount_text = ""
-    if event.amount > 0 and category == "damage":
-        amount_text = f"{_number_text(event.amount)} 伤害"
-    elif event.amount > 0 and category == "recover":
-        amount_text = f"{_number_text(event.amount)} 恢复"
+    measure = str(category_definition.get("measure") or "")
+    if event.amount > 0 and measure:
+        amount_text = f"{_number_text(event.amount)} {measure}"
 
     return {
         "sequence": sequence,

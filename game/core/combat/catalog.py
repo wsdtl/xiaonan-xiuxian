@@ -165,6 +165,7 @@ class BattleReportCatalog:
                     "color": definition["颜色"],
                     "tone": definition["色调"],
                     "priority": int(definition["优先级"]),
+            "measure": str(definition["计量"]),
                 }
                 for value in _sequence(self.normalization, "分类")
                 for definition in (_mapping_value(value, "标准化.分类"),)
