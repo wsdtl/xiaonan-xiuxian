@@ -45,7 +45,7 @@ async def transfer_cultivation(user_id: str, message: str, message_context: Mess
         )
         await manager.send(reply.settled(feature, value))
     except (TongquetaiError, TongquetaiConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = ["router"]

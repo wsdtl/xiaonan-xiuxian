@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from ...actions import CommandAction, message_actions
 from ...presentation import format_lines
+
+from typing import Sequence
 
 from game.features.tongquetai import TongquetaiFeature, TongquetaiPreview, TongquetaiSettlement
 
@@ -121,7 +124,9 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
     return builder.build()
 
 
-def error(feature: TongquetaiFeature, message: str) -> DocumentMessage:
+def error(
+    feature: TongquetaiFeature, message: str, actions: Sequence[CommandAction] = ()
+) -> DocumentMessage:
     builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
     builder.line(M.status("夺元失败", tone="danger"))
     format_lines(builder, message)
@@ -129,6 +134,8 @@ def error(feature: TongquetaiFeature, message: str) -> DocumentMessage:
     # 正文已经是这句格式文案时别再补一遍：同一句话印两遍就是零信息。
     if hint not in message:
         builder.small(hint)
+    if actions:
+        builder.actions(message_actions(actions))
     return builder.build()
 
 

@@ -34,6 +34,7 @@ from game.core.player_state import PlayerStateService
 from game.core.world import LocationQuery, WorldService
 
 from .contracts import (
+    TongquetaiAction,
     TongquetaiConflictError,
     TongquetaiError,
     TongquetaiOutcome,
@@ -108,6 +109,18 @@ class TongquetaiFeature:
         if not isinstance(value, str) or not value.strip():
             raise RuntimeError(f"铜雀台展示缺少文本：{section}.{key}")
         return value.format_map(values or {})
+
+    def format_actions(self) -> tuple[TongquetaiAction, ...]:
+        """格式与提示类回执的动作：只给「查看帮助」（条件为「格式」的那条）。"""
+
+        return tuple(
+            TongquetaiAction(
+                str(button["编号"]), str(button["名称"]), str(button["命令"]),
+                str(button["行为"]), str(button["样式"]),
+            )
+            for button in self._buttons
+            if button["条件"] == "格式"
+        )
 
     def actions(self, *, has_medicine: bool) -> tuple[Mapping[str, object], ...]:
         return tuple(
@@ -330,7 +343,7 @@ def _button(value: object, index: int) -> Mapping[str, object]:
     if set(value) != expected:
         raise JsonDataError(f"铜雀台按钮[{index}]字段不完整")
     result = {key: _text(value.get(key), f"铜雀台按钮[{index}].{key}") for key in expected}
-    if result["条件"] not in {"始终", "有护契丹"}:
+    if result["条件"] not in {"始终", "有护契丹", "格式"}:
         raise JsonDataError("铜雀台按钮条件无效")
     if result["行为"] not in {"callback", "send", "fill", "link"}:
         raise JsonDataError("铜雀台按钮行为无效")
