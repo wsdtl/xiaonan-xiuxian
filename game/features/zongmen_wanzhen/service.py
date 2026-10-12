@@ -14,7 +14,7 @@ from game.core.data import (
     nonempty_text as _text,
     positive_int as _positive_int,
 )
-from game.core.innate_treasure import InnateTreasureService
+from game.core.innate_treasure import InnateTreasureService, effect_text
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
@@ -29,6 +29,7 @@ from .contracts import (
     WanzhenAction,
     WanzhenCopy,
     WanzhenFeatureError,
+    WanzhenOwnProduct,
     WanzhenPage,
     WanzhenTransferResult,
 )
@@ -263,6 +264,43 @@ class WanzhenFeature:
             raise WanzhenFeatureError(str(exc)) from exc
         entry = self.match_entry(vault.entries, query)
         return entry.entry_key if entry is not None else str(query or '').strip()
+
+    async def own_products(self, user_id: str) -> tuple[WanzhenOwnProduct, ...]:
+        """玩家自己持有的成品——只读台「我有什么可以捐」的事实来源。
+
+        名称取自条目自带的 `name`（不再按类别逐个试取）；灵宝那两栏走核心的类型投影
+        （`treasure_line`/`effect_text`），本包不另写一份能力摘要。
+        """
+
+        snapshot = await self._asset.snapshot(user_id)
+        names = self._treasure_names(snapshot.entries)
+        products: list[WanzhenOwnProduct] = []
+        for entry in snapshot.entries:
+            identifier = str(getattr(entry, "treasure_id", "") or "")
+            treasure_name = names.get(identifier, identifier) if identifier else ""
+            treasure_effect = ""
+            if identifier:
+                try:
+                    treasure_effect = effect_text(
+                        self._innate_treasure.resolve(identifier).effect
+                    )
+                except Exception:  # noqa: BLE001 - 加成只是展示，查不到就留空
+                    treasure_effect = ""
+            products.append(
+                WanzhenOwnProduct(
+                    category=str(getattr(entry, "category", "")),
+                    subcategory=str(getattr(entry, "subcategory", "")),
+                    content_id=str(getattr(entry, "content_id", "")),
+                    entry_key=str(getattr(entry, "instance_key", "")),
+                    grade_id=str(getattr(entry, "grade_id", "")),
+                    quantity=int(getattr(entry, "quantity", 0) or 0),
+                    name=str(getattr(entry, "name", "") or getattr(entry, "content_id", "")),
+                    treasure_id=identifier,
+                    treasure_name=treasure_name,
+                    treasure_effect=treasure_effect,
+                )
+            )
+        return tuple(products)
 
     async def resolve_formation_entry(
         self, user_id: str, wanted: str, qualifier: str = ""

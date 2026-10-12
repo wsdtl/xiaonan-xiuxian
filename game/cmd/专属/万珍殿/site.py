@@ -22,8 +22,6 @@ CATEGORIES = (
     ('器律', ('灵器器律', '法器器律', '法宝器律', '后天灵宝器律')),
     ('阵法', ('黄品阵法', '玄品阵法', '地品阵法', '天品阵法', '圣品阵法')),
 )
-#: 按这些实体类别依次试取名字（编号相同就认第一个命中的）。
-SECTIONS = ('丹药', '功法', '真意', '气机', '器律', '阵法')
 
 
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
@@ -40,56 +38,27 @@ async def wanzhen_page() -> HTMLResponse:
 
 
 async def _entries(services, user_id: str) -> list[dict[str, object]]:
-    """把自己有的成品摊平；名字按实体类别现取，取不到就用编号顶着。"""
+    """把自己有的成品摊平——事实全部来自玩法，本页不碰核心服务。
 
-    snapshot = await services.core.asset.snapshot(user_id)
-    out: list[dict[str, object]] = []
-    for entry in snapshot.entries:
-        content_id = str(getattr(entry, 'content_id', ''))
-        name = content_id
-        for section in SECTIONS:
-            try:
-                raw = services.core.data.entity(section, content_id)
-            except Exception:
-                continue
-            name = str(raw.get('名称') or content_id)
-            break
-        # 阵法条目的身份是「阵法编号:品级:灵宝编号」这个状态键，不是阵法编号——
-        # 捐入命令要的是整串键，而灵宝决定了加成方向，两样都得交给页面。
-        key = str(getattr(entry, 'instance_key', ''))
-        treasure = str(getattr(entry, 'treasure_id', '') or '')
-        treasure_name = ''
-        treasure_effect = ''
-        if treasure:
-            try:
-                raw_treasure = dict(services.core.data.entity('先天灵宝', treasure))
-            except Exception:
-                raw_treasure = {}
-            treasure_name = str(raw_treasure.get('名称') or treasure)
-            effect = raw_treasure.get('规则介入') or {}
-            if hasattr(effect, 'get'):
-                ability = str(effect.get('能力') or '')
-                scale = ''
-                for key_name, suffix in (('比例', '%'), ('数量', ''), ('次数', ''), ('进度', '')):
-                    if effect.get(key_name) is not None:
-                        value = effect[key_name]
-                        scale = str(int(round(float(value) * 100))) + suffix if suffix else str(value)
-                        break
-                treasure_effect = (ability + ' ' + scale).strip()
-        out.append(
-            {
-                'subcategory': str(getattr(entry, 'subcategory', '')),
-                'id': content_id,
-                'key': key,
-                'grade': str(getattr(entry, 'grade_id', '')),
-                'quantity': int(getattr(entry, 'quantity', 0) or 0),
-                'name': name,
-                'treasure': treasure,
-                'treasure_name': treasure_name,
-                'treasure_effect': treasure_effect,
-            }
-        )
-    return out
+    名称、品级、灵宝加成文案都由万珍殿玩法给（own_products）：页面只把数据类
+    摊成 JSON 字段，不自己按类别试取名字、也不自己拼能力摘要。
+    """
+
+    rows = await services.features.zongmen_wanzhen.own_products(user_id)
+    return [
+        {
+            'subcategory': row.subcategory,
+            'id': row.content_id,
+            'key': row.entry_key,
+            'grade': row.grade_id,
+            'quantity': row.quantity,
+            'name': row.name,
+            'treasure': row.treasure_id,
+            'treasure_name': row.treasure_name,
+            'treasure_effect': row.treasure_effect,
+        }
+        for row in rows
+    ]
 
 
 @router.get('/data')

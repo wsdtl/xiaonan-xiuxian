@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from .contracts import InnateTreasureActivation
+from .contracts import InnateTreasure, InnateTreasureActivation, InnateTreasureEffect
 
 
 def activation_payload(
@@ -26,4 +26,27 @@ def activation_payload(
     }
 
 
-__all__ = ["activation_payload"]
+def effect_text(effect: InnateTreasureEffect) -> str:
+    """能力的可读摘要：「提高通用采集 20%」。
+
+    数值取 `比例`/`数量`/`次数`/`进度` 里**第一个声明过**的字段：比例印成百分数，其余印原值。
+    这一段原先在万珍殿页与布阵命令里各写一份（逐字同形），归到定义这个类型的包里。
+    """
+
+    for field, suffix in (("比例", "%"), ("数量", ""), ("次数", ""), ("进度", "")):
+        if effect.values.get(field) is None:
+            continue
+        raw = effect.values[field]
+        shown = str(int(round(float(raw) * 100))) + suffix if suffix else str(raw)
+        return (effect.ability + " " + shown).strip()
+    return effect.ability.strip()
+
+
+def treasure_line(treasure: InnateTreasure) -> str:
+    """「灵宝名 · 能力摘要」——页面与回复里描述一件灵宝加成的那一句。"""
+
+    summary = effect_text(treasure.effect)
+    return (treasure.name + " · " + summary) if summary else treasure.name
+
+
+__all__ = ["activation_payload", "effect_text", "treasure_line"]

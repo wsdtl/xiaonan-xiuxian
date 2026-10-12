@@ -33,6 +33,21 @@ class WanzhenPage:
 
 
 @dataclass(frozen=True)
+class WanzhenOwnProduct:
+    """玩家自己的一件成品：万珍殿只读台照着它拼「捐入」命令文本。"""
+
+    category: str
+    subcategory: str
+    content_id: str
+    entry_key: str
+    grade_id: str
+    quantity: int
+    name: str
+    treasure_id: str = ""
+    treasure_name: str = ""
+    treasure_effect: str = ""
+
+@dataclass(frozen=True)
 class WanzhenTransferResult:
     action: str
     entry: SectAssetEntry
@@ -48,6 +63,7 @@ __all__ = [
     "WanzhenAction",
     "WanzhenCopy",
     "WanzhenFeatureError",
+    "WanzhenOwnProduct",
     "WanzhenPage",
     "WanzhenTransferResult",
 ]

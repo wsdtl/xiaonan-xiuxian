@@ -25,6 +25,8 @@ from .contracts import (
     InnateTreasureStatus as InnateTreasureStatus,
 )
 from .presentation import activation_payload as activation_payload
+from .presentation import effect_text as effect_text
+from .presentation import treasure_line as treasure_line
 from .service import InnateTreasureService as InnateTreasureService
 
 __all__ = [
@@ -38,4 +40,6 @@ __all__ = [
     "InnateTreasureService",
     "InnateTreasureStatus",
     "activation_payload",
+    "effect_text",
+    "treasure_line",
 ]

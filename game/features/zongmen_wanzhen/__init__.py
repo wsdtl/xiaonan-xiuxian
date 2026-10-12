@@ -4,6 +4,7 @@ from .contracts import (
     WanzhenAction,
     WanzhenCopy,
     WanzhenFeatureError,
+    WanzhenOwnProduct,
     WanzhenPage,
     WanzhenTransferResult,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "WanzhenCopy",
     "WanzhenFeature",
     "WanzhenFeatureError",
+    "WanzhenOwnProduct",
     "WanzhenPage",
     "WanzhenTransferResult",
 ]
