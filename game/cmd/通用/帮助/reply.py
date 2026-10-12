@@ -54,11 +54,20 @@ def _home_message(*, id_converter=None, nav: str = "帮助") -> DocumentMessage:
         .section("帮助", icon="system")
         .small("按分类查看当前已经开放的命令。")
     )
-    builder.line(M.link("游戏介绍与玩法", public_url("info")))
     categories = help_registry.categories()
     _category_rows(builder, categories, nav=nav)
     if not categories:
         builder.line(M.status("暂无命令", tone="muted"))
+    builder.action(
+        Action(
+            action_id="help-info",
+            label="游戏介绍与玩法",
+            data=public_url("static/info"),
+            behavior="link",
+            style="primary",
+        )
+    )
+
     return builder.build()
 
 
