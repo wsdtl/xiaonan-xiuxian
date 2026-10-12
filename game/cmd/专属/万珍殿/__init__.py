@@ -136,7 +136,7 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "行动",
-            "summary": "由宗主向本宗成员发放万珍殿成品",
+            "summary": "由宗主或长老向本宗成员发放万珍殿成品",
             "usage": (
                 "发放万珍殿 云中鹤 小还丹", "发放万珍殿 角色名或编号 珍物名[灵宝名]",
                 "发放万珍殿 角色名或编号 珍物名[灵宝名] 数量",

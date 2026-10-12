@@ -67,7 +67,7 @@ async def raid_progress(user_id: str, manager: Any) -> None:
             "category": "行动",
             "summary": "讨伐结束后结算奖励",
             "usage": ("讨伐结束", "结算讨伐", "讨伐结算", "结束讨伐", "讨结"),
-            "side_effect": "发放奖励并释放讨伐状态",
+            "side_effect": "由发起者结算，发放奖励并释放讨伐状态",
             "order": 38,
         },
     },

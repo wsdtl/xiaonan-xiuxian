@@ -56,7 +56,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
             "category": "资源",
             "summary": "从当前位置货架购买真意或气机",
             "usage": ("购买 抢刻 黄品", "购买 编号或名称 品级", "购买 编号或名称 品级 数量"),
-            "side_effect": "扣除灵石，把对应数量收入修行资粮",
+            "side_effect": "扣除灵石，把对应数量收入修行资粮；单次最多买 50 个",
             "order": 56,
         },
     },

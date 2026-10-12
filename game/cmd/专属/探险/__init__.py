@@ -74,7 +74,7 @@ async def exploration_progress(user_id: str, manager: Any) -> None:
         "guard_rule": "已创建",
         "help": {
             "category": "行动",
-            "summary": "探险结束后结算全部结果并按页查看",
+            "summary": "探险结束后由领队结算全部结果并按页查看",
             "usage": (
                 "结算探险",
                 "结算探险 页码",
