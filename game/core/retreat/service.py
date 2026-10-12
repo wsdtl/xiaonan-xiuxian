@@ -6,6 +6,7 @@ import hashlib
 import math
 import random
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from game.core.activity import (
@@ -62,6 +63,21 @@ SESSION_STATE = "retreat_session"
 LATEST_STATE = "retreat_latest"
 SETTLEMENT_STATE = "retreat_settlement"
 LATEST_KEY = "main"
+
+
+@dataclass(frozen=True)
+class _SettlementDraft:
+    """一次闭关出关时，两位计划助手共享的输入量与四处要攒的结果表。"""
+
+    participants: tuple[str, ...]
+    raw_results: Mapping[str, object]
+    completed: int
+    recovery_rounds: float
+    spirit_rounds: float
+    result_operations: list[StateMutation] = field(default_factory=list)
+    reward_operations: list[StateMutation] = field(default_factory=list)
+    release_operations: list[StateMutation] = field(default_factory=list)
+    summaries: list[dict[str, object]] = field(default_factory=list)
 
 
 class RetreatService:
@@ -481,27 +497,26 @@ class RetreatService:
         settled_at = _utc(now)
         started_at = _parse_time(session.get("开始时间"), "闭关.开始时间")
         completed = self._completed_rounds(started_at, settled_at)
-        participants = _texts(session.get("参与用户"), "闭关.参与用户")
-        raw_results = _mapping(session.get("用户结果"), "闭关.用户结果")
-        result_operations: list[StateMutation] = []
-        reward_operations: list[StateMutation] = []
-        release_operations: list[StateMutation] = []
-        summaries: list[dict[str, object]] = []
-        recovery_rounds = min(1.0, completed * self._health_ratio)
-        spirit_rounds = min(1.0, completed * self._spirit_ratio)
-        await self._plan_retreat_settlements(completed, participants, raw_results, recovery_rounds, release_operations, result_operations, reward_operations, spirit_rounds, summaries)
+        draft = _SettlementDraft(
+            participants=_texts(session.get("参与用户"), "闭关.参与用户"),
+            raw_results=_mapping(session.get("用户结果"), "闭关.用户结果"),
+            completed=completed,
+            recovery_rounds=min(1.0, completed * self._health_ratio),
+            spirit_rounds=min(1.0, completed * self._spirit_ratio),
+        )
+        await self._plan_retreat_settlements(draft)
         settlement_value = {
             "地点": session["地点"],
             "完成轮数": completed,
             "最多轮数": self.status().maximum_rounds,
-            "参与用户": list(participants),
-            "用户结果": summaries,
+            "参与用户": list(draft.participants),
+            "用户结果": draft.summaries,
             "出关时间": settled_at.isoformat(),
         }
         plan = SettlementTransactionPlan(
-            result_operations=tuple(result_operations),
-            reward_operations=tuple(reward_operations),
-            release_operations=tuple(release_operations),
+            result_operations=tuple(draft.result_operations),
+            reward_operations=tuple(draft.reward_operations),
+            release_operations=tuple(draft.release_operations),
             record_operations=(
                 StateMutation(owner, SETTLEMENT_STATE, session_id, settlement_value, 0),
             ),
@@ -521,31 +536,31 @@ class RetreatService:
             session_id, settlement_value, replayed=receipt.replayed
         )
 
-    async def _plan_retreat_settlements(self, completed, participants, raw_results, recovery_rounds, release_operations, result_operations, reward_operations, spirit_rounds, summaries) -> None:
+    async def _plan_retreat_settlements(self, draft: _SettlementDraft) -> None:
         """逐位参与者算闭关结算，写进四张表；不动别处。"""
-        for participant in participants:
-            raw = _mapping(raw_results.get(participant), f"闭关.用户结果.{participant}")
+        for participant in draft.participants:
+            raw = _mapping(draft.raw_results.get(participant), f"闭关.用户结果.{participant}")
             player = _mapping(raw.get("人物"), "闭关.人物")
             player_experience = (
-                _nonnegative_int(player.get("每轮经验"), "人物.每轮经验") * completed
+                _nonnegative_int(player.get("每轮经验"), "人物.每轮经验") * draft.completed
             )
             player_plan = await self._character.plan_retreat_settlement(
                 participant,
                 experience=player_experience,
-                health_recovery_ratio=recovery_rounds,
-                spirit_recovery_ratio=spirit_rounds,
+                health_recovery_ratio=draft.recovery_rounds,
+                spirit_recovery_ratio=draft.spirit_rounds,
             )
-            result_operations.append(player_plan.operation)
+            draft.result_operations.append(player_plan.operation)
             player_treatment = await self._injury.plan_treatment(
                 participant,
                 PLAYER_KEY,
-                completed
+                draft.completed
                 * _positive_int(
                     player.get("疗养进度倍率"), "人物.疗养进度倍率"
                 ),
             )
             if player_treatment.mutation is not None:
-                result_operations.append(player_treatment.mutation)
+                draft.result_operations.append(player_treatment.mutation)
             characters = [
                 {
                     "名称": _text(player.get("名称"), "闭关.人物.名称"),
@@ -565,8 +580,8 @@ class RetreatService:
                 }
             ]
             companion = raw.get("道侣")
-            await self._plan_companion_settlement(characters, companion, completed, participant, recovery_rounds, result_operations, spirit_rounds)
-            unlocked = _insights(raw.get("功法感悟"), completed)
+            await self._plan_companion_settlement(draft, characters, companion, participant)
+            unlocked = _insights(raw.get("功法感悟"), draft.completed)
             acquisition_plan = await self._asset.plan_cultivation_acquisitions(
                 participant,
                 tuple(
@@ -574,7 +589,7 @@ class RetreatService:
                     for value in unlocked
                 ),
             )
-            reward_operations.extend(acquisition_plan.operations)
+            draft.reward_operations.extend(acquisition_plan.operations)
             technique_sync = await self._character.plan_technique_grade_sync(
                 participant,
                 tuple(
@@ -584,7 +599,7 @@ class RetreatService:
                 ),
             )
             if technique_sync.operation is not None:
-                reward_operations.append(technique_sync.operation)
+                draft.reward_operations.append(technique_sync.operation)
             insights = [
                 {
                     "轮次": source.round_number,
@@ -596,10 +611,10 @@ class RetreatService:
                     unlocked, acquisition_plan.results, strict=True
                 )
             ]
-            release_operations.append(
+            draft.release_operations.append(
                 (await self._player_state.plan_finish_behavior(participant)).mutation
             )
-            summaries.append(
+            draft.summaries.append(
                 {
                     "用户": participant,
                     "人物": _text(player.get("名称"), "闭关.人物.名称"),
@@ -609,30 +624,29 @@ class RetreatService:
                 }
             )
 
-
-    async def _plan_companion_settlement(self, characters, companion, completed, participant, recovery_rounds, result_operations, spirit_rounds) -> None:
+    async def _plan_companion_settlement(self, draft: _SettlementDraft, characters: list[dict[str, object]], companion: object, participant: str) -> None:
         """道侣那一段：有它就一并结算与疗伤，登记进操作表与角色条目。"""
         if companion is not None:
             companion_value = _mapping(companion, "闭关.道侣")
             companion_experience = (
                 _nonnegative_int(companion_value.get("每轮经验"), "道侣.每轮经验")
-                * completed
+                * draft.completed
             )
             companion_plan = await self._companion.plan_retreat_settlement(
                 participant,
                 companion_id=_text(companion_value.get("编号"), "闭关.道侣.编号"),
                 experience=companion_experience,
-                health_recovery_ratio=recovery_rounds,
-                spirit_recovery_ratio=spirit_rounds,
+                health_recovery_ratio=draft.recovery_rounds,
+                spirit_recovery_ratio=draft.spirit_rounds,
             )
-            result_operations.append(companion_plan.operation)
+            draft.result_operations.append(companion_plan.operation)
             companion_treatment = await self._injury.plan_treatment(
                 participant,
                 companion_subject(companion_plan.companion_id),
-                completed,
+                draft.completed,
             )
             if companion_treatment.mutation is not None:
-                result_operations.append(companion_treatment.mutation)
+                draft.result_operations.append(companion_treatment.mutation)
             characters.append(
                 {
                     "名称": _text(companion_value.get("名称"), "闭关.道侣.名称"),
@@ -651,7 +665,6 @@ class RetreatService:
                     ],
                 }
             )
-
 
     def _precompute_insights(
         self, source: random.Random, attempts_per_round: int = 1
