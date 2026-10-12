@@ -1,4 +1,4 @@
-"""正式 JSON 的实体、资源池与世界索引。"""
+"""正式 JSON 的实体索引、资源池定义与编号类别索引。"""
 
 from __future__ import annotations
 

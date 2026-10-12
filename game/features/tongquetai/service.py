@@ -28,6 +28,7 @@ from game.core.database import (
 from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
+    activation_payload,
 )
 from game.core.location import LocationError, LocationService
 from game.core.player_state import PlayerStateService
@@ -311,16 +312,13 @@ def _settlement(value: Mapping[str, object], *, replayed: bool) -> TongquetaiSet
 
 
 def _activation_payload(value: object) -> dict[str, str] | None:
+    """灵宝载荷的形状由定义这个类型的包给出——本包只做类型校验，不另抄一份。"""
+
     if value is None:
         return None
     if not isinstance(value, InnateTreasureActivation):
         raise TongquetaiError("铜雀台灵宝快照无效")
-    return {
-        "编号": value.treasure_id,
-        "名称": value.name,
-        "权柄": value.authority,
-        "结果": value.summary,
-    }
+    return activation_payload(value)
 
 
 def _payload_activation(value: object) -> InnateTreasureActivation | None:
