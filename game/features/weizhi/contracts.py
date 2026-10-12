@@ -109,6 +109,7 @@ class CompanionView:
     weapon_name: str
     weapon_level: int
 
+@dataclass(frozen=True)
 class NearbyCultivatorView:
     user_id: str
     name: str
