@@ -94,6 +94,7 @@ class JourneyPlanner:
         self._direction_words = _direction_words(display, self._moves)
         self._road_words = _road_words(display, self._road_multipliers)
         self._terrain_words = _mapping(display.get("地形措辞"), "行路展示.地形措辞")
+        _required_texts(self._terrain_words, "行路展示.地形措辞", ("起行", "转入"))
         self._ascent_words = _threshold_words(
             display.get("爬升措辞"), "累计爬升上限", "行路展示.爬升措辞"
         )
