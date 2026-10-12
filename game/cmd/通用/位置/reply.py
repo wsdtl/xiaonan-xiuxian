@@ -191,10 +191,7 @@ def companion(
 
     builder = M.document().header(copy.cultivator_view)
     section = builder.section(view.name, icon=copy.cultivator_icon)
-    section.field(
-        copy.cultivator_view,
-        f"{view.realm_name} {view.level} 级 · 经验 {view.experience}",
-    )
+    section.line(f"{view.realm_name} {view.level} 级 · 经验 {view.experience}")
     for key, value in view.attributes.items():
         section.field(str(key), str(value))
     for key, value in view.resources.items():
