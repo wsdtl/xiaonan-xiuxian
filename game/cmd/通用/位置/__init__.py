@@ -126,4 +126,33 @@ def _page_number(value: str, invalid_message: str) -> int:
         raise NearbyPageError(invalid_message) from exc
 
 
+
+@GameCommand.command(
+    cmd=("查看修士", "看修士"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "世界",
+            "summary": "按名字或编号查看附近某个人的公开资料",
+            "usage": ("查看修士 名字", "查看修士 500001"),
+            "side_effect": "只查看，不会改变人物状态",
+            "order": 40,
+        },
+    },
+)
+async def inspect_cultivator(user_id: str, message: str, manager: Any) -> None:
+    query = " ".join(str(message or "").split())
+    feature = current_game_services().features.weizhi
+    copy = feature.copy()
+    actions = feature.nearby_cultivator_actions(1, False)
+    if not query:
+        await manager.send(reply.error(copy, copy.cultivator_view, copy.invalid_command, actions))
+        return
+    profile = await feature.inspect_cultivator(user_id, query)
+    if profile is None:
+        await manager.send(reply.error(copy, copy.cultivator_view, copy.cultivator_missing, actions))
+        return
+    await manager.send(reply.cultivator(copy, profile, actions))
+
 __all__ = []

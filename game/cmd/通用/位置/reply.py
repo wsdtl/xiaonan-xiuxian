@@ -181,6 +181,29 @@ def nearby_locations(
     return builder.actions(message_actions(actions)).build()
 
 
+def cultivator(
+    copy: PositionCopy,
+    profile: CharacterPublicProfile,
+    actions: tuple[CommandAction, ...],
+) -> DocumentMessage:
+    """看一个人：只给公开摘要那几项，名字仍是可点的无边框按钮。"""
+
+    builder = M.document().header(copy.cultivator_view)
+    builder.section(copy.cultivator_view, icon=copy.cultivator_icon).line(
+        M.command(profile.name, f"查看 {profile.user_id}"),
+        " · ",
+        copy.cultivator_summary.format_map(
+            {
+                "境界": profile.realm_name,
+                "等级": profile.level,
+                "性别": profile.gender,
+                "状态": "",
+            }
+        ),
+    )
+    builder.actions(message_actions(actions))
+    return builder.build()
+
 def error(
     copy: PositionCopy,
     title: str,
