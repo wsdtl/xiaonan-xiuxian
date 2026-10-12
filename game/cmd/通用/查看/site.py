@@ -3,8 +3,8 @@
 融合在「查看」组件里——不另立二级组件。页面走 `/baike`，数据走 `/baike/data`。
 数据只有两个来源，都是既有核心的公共读口，不新建数据：
 
-1. `JsonDataService.numbered_entities()`：21 个前缀（3628 条，实测）；
-2. 角色核心的 `races()`：前缀 `55`（180 个）。两者合计覆盖登记表里全部 22 个前缀。
+1. `JsonDataService.numbered_entities()`：30 个前缀（3628 条，实测）；
+2. 角色核心的 `races()`：前缀 `55`（180 个）。两者合计覆盖登记表里全部 30 个前缀。
 """
 
 from __future__ import annotations
@@ -198,7 +198,7 @@ def _registry(services) -> list[dict]:
     return [row for row in rows if isinstance(row, Mapping)]
 
 def _prefix_rows(entries: list[dict[str, str]]) -> list[dict[str, object]]:
-    """登记表里的 22 个前缀，各自数一数有多少条。"""
+    """登记表里的 30 个前缀，各自数一数有多少条。"""
 
     registry = _registry(current_game_services())
     counted: dict[str, int] = {}
