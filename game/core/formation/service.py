@@ -37,6 +37,7 @@ from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
     activation_payload,
+    treasure_line,
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
@@ -422,6 +423,7 @@ class FormationService:
                 stack.treasure_id,
                 stack.modifiers,
                 1,
+                self._treasure_line(stack.treasure_id),
             )
             payload = dict(value)
             payload["名称"] = stack.name
@@ -476,6 +478,7 @@ class FormationService:
             treasure_id,
             modifiers,
             snapshot.version,
+            self._treasure_line(treasure_id),
         )
 
     async def activation_plan(
@@ -773,6 +776,21 @@ class FormationService:
             )
         return matches[0].instance_key
 
+    def _treasure_line(self, treasure_id: str) -> str:
+        """待战阵法带先天灵宝时的一句人话：「名字 · 能力摘要」。
+
+        形状来自定义类型的包（`core.innate_treasure.treasure_line`）；没有灵宝就给空串——
+        回复那边整段不显示，也不写「无灵宝」三个字。查不到实体就退回编号（与整改前一致）。
+        """
+
+        identifier = str(treasure_id or "").strip()
+        if not identifier:
+            return ""
+        try:
+            return treasure_line(self._innate_treasure.resolve(identifier))
+        except Exception:  # noqa: BLE001 - 展示用；查不到就退回编号
+            return identifier
+
     def _treasure_name(self, treasure_id: str) -> str:
         """先天灵宝的名字（给玩家看的那份）；没有就返回空串。"""
         identifier = str(treasure_id or "").strip()
@@ -940,6 +958,7 @@ class FormationService:
             treasure_id,
             modifiers,
             1,
+            self._treasure_line(treasure_id),
         )
 
     def _require_initialized(self) -> None:

@@ -145,6 +145,8 @@ class FormationPrepared:
     treasure_id: str
     modifiers: tuple[tuple[str, str], ...]
     version: int
+    #: 灵宝加成的可读描述（「名字 · 能力摘要」）；没有灵宝就是空串。形状由定义类型的包给。
+    treasure_line: str = ""
 
 
 @dataclass(frozen=True)
