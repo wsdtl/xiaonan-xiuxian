@@ -146,6 +146,10 @@ def 打包(含工具: bool, 含测试: bool, 含说明: bool) -> dict:
     for name in ("main.py", "game/app.py", "data/基础/读取规则.json"):
         if not (BUILD / name).exists():
             raise SystemExit(f"打包出错：缺关键文件 {name}")
+    钉行尾 = _normalize_shell_scripts()
+    for path in BUILD.rglob("*.sh"):
+        if b"\r" in path.read_bytes():
+            raise SystemExit(f"打包出错：{path.relative_to(BUILD)} 仍含 CR，Linux 下会跑不起来")
     大小 = sum(path.stat().st_size for path in BUILD.rglob("*") if path.is_file())
     信息 = {
         "打包时间": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -173,6 +177,22 @@ def 打包(含工具: bool, 含测试: bool, 含说明: bool) -> dict:
     if 缺项:
         raise SystemExit(f"打包出错：仓库里找不到 {缺项}")
     return 信息
+
+
+def _normalize_shell_scripts() -> int:
+    """把包里的 `.sh` 钉成 LF。
+
+    Windows 的检出与编辑器都容易给它们带上 CRLF，而 Linux 下每行尾巴的 CR 会让脚本当场报
+    “command not found”（委托方在 1panel 容器里就是这么翻的车）。
+    """
+
+    fixed = 0
+    for path in BUILD.rglob("*.sh"):
+        raw = path.read_bytes()
+        if b"\r\n" in raw:
+            path.write_bytes(raw.replace(b"\r\n", b"\n"))
+            fixed += 1
+    return fixed
 
 
 def _提交() -> str:

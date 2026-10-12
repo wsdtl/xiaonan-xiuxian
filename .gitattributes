@@ -1,0 +1,4 @@
+# 行尾按用途钉死：Windows 的 git 默认 autocrlf=true，会把 .sh 检出成 CRLF，
+# 而 Linux 下每行尾巴的 CR 会让脚本当场报 command not found——容器里 start.sh 就死在这。
+*.sh text eol=lf
+*.bat text eol=crlf
