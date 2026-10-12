@@ -20,7 +20,7 @@ from .contracts import (
 )
 from .selection import inverse_weighted_sample
 
-WEIGHTED_SECTIONS = frozenset({"敌人", "基础物品", "功法", "真意", "气机"})
+WEIGHTED_SECTIONS = frozenset({"敌人", "基础物品", "功法", "真意", "气机", "丹药"})
 
 
 class PoolService:
