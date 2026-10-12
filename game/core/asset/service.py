@@ -156,6 +156,21 @@ class AssetService:
         weights = tuple(self._grade_drop_weights[grade_id] for grade_id in grade_ids)
         return self._grades[source.choices(grade_ids, weights=weights, k=1)[0]]
 
+    async def formation_entries(self, user_id: str) -> tuple[AssetEntry, ...]:
+        """玩家个人阵藏的全部条目，按条目键稳定排序。
+
+        捐入宗门万珍殿时要先把玩家写的阵法名换成条目键；这一步需要「我有哪些阵法」这
+        个事实，它属于阵藏（本服务的资产面），所以由这里给，而不是让调用方去筛快照。
+        """
+
+        snapshot = await self.snapshot(user_id)
+        return tuple(
+            sorted(
+                (entry for entry in snapshot.entries if entry.category == "阵藏"),
+                key=lambda entry: entry.instance_key,
+            )
+        )
+
     async def inventory_stacks(
         self, user_id: str, item_id: str
     ) -> tuple[InventoryStack, ...]:

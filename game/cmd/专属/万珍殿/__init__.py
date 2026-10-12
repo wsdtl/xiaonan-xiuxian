@@ -14,89 +14,32 @@ from typing import Any
 _CATEGORIES = frozenset({"丹药", "真意", "气机", "器律", "阵法"})
 
 
-def _entry_label(entry: object, services: object) -> str:
-    """一句话说清这条是哪一座：品级名 · 灵宝名（没有灵宝就只说品级）。"""
-    grade = str(getattr(entry, 'grade_name', '') or '')
-    treasure_id = str(getattr(entry, 'treasure_id', '') or '')
-    # 委托方口径：物品[灵宝]，品级只做前缀。
-    shown = str(getattr(entry, 'name', '') or '')
-    if treasure_id:
-        try:
-            raw = dict(services.core.data.entity('先天灵宝', treasure_id))
-            name = str(raw.get('名称') or treasure_id)
-        except Exception:
-            name = treasure_id
-        shown = shown + '[' + name + ']'
-    return (grade + ' ' + shown).strip() if grade else shown
-
 async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str) -> str:
-    """把玩家写的阵法名翻成阵藏条目的状态键。
+    """把玩家写的阵法换成个人阵藏条目键。
 
-    条目在库里是一条状态键（阵法编号:品级:灵宝编号），但**那是代码内部的东西，玩家永远不该见到**。
-    玩家用阵法名（可带 [灵宝名] 或品级）；阵法编号也照样认——只是不写进帮助，算是给熟手的后门。
-    找不到或多条，就用展示数据里的话回绝，并把候选摆出来。
+    命令层只做**协议解析**：方括号是给阵法名用的，里面写数字（阵法编号）当场回绝；
+    匹配、候选与回绝文案全部由玩法层的 `resolve_formation_entry` 给出——
+    命令层不再自己筛资产快照、也不再自己查灵宝名。
     """
+
     query = str(wanted or '').strip()
-    # 两套写法各走各的，不许串味：
-    #   文字：`阵法名[灵宝名]`（方括号是给名字用的）
-    #   id  ：原汁原味——`530002` 或整条条目键 `530002:01:540003`
-    services = current_game_services()
-    if ":" in query:
-        return query
     bracket = ""
     if query.endswith("]") and "[" in query:
         head, _, bracket = query[:-1].partition("[")
-        head = head.strip()
-        bracket = bracket.strip()
+        head, bracket = head.strip(), bracket.strip()
         if head.isdecimal():
-            copy_now = feature.copy()
-            text_now = getattr(copy_now, 'text', copy_now)
+            copy = feature.copy()
+            copy_text = getattr(copy, "text", copy)
             raise WanzhenFeatureError(
-                str(text_now.get('阵法编号别带方括号') or '阵法编号别带方括号').format(number=head)
+                str(copy_text.get("阵法编号别带方括号") or "阵法编号别带方括号").format(
+                    number=head
+                )
             )
         query = head
     if bracket and not qualifier:
         qualifier = bracket
-    snapshot = await services.core.asset.snapshot(user_id)
-    matched = []
-    for entry in snapshot.entries:
-        if '阵法' not in str(getattr(entry, 'subcategory', '')):
-            continue
-        if query not in {str(getattr(entry, 'name', '')), str(getattr(entry, 'content_id', ''))}:
-            continue
-        if qualifier:
-            treasure_id = str(getattr(entry, 'treasure_id', '') or '')
-            treasure_name = ''
-            if treasure_id and treasure_id != '无灵宝':
-                try:
-                    treasure_name = str(
-                        dict(services.core.data.entity('先天灵宝', treasure_id)).get('名称') or ''
-                    )
-                except Exception:
-                    treasure_name = ''
-            words = {
-                str(getattr(entry, 'grade_id', '')),
-                str(getattr(entry, 'grade_name', '')),
-                treasure_name,
-            }
-            if not any(word and word.startswith(qualifier) for word in words):
-                continue
-        matched.append(entry)
-    copy = feature.copy()
-    text = getattr(copy, 'text', copy)
-    if not matched:
-        raise WanzhenFeatureError(
-            str(text.get('阵法找不到') or '阵藏里没有这座阵法').format(name=query)
-        )
-    if len(matched) > 1:
-        raise WanzhenFeatureError(
-            str(text.get('阵法说不清') or '阵藏里有多条同名阵法，请补品级或灵宝名').format(
-                name=query,
-                count=len(matched),
-                entries='、'.join(_entry_label(item, services) for item in matched[:4]),
-            )
-        )
-    return str(getattr(matched[0], 'instance_key', ''))
+    return await feature.resolve_formation_entry(user_id, query, qualifier)
+
 
 @GameCommand.command(
     cmd="万珍殿",

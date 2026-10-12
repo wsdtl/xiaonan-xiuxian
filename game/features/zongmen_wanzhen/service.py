@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from math import ceil
 from types import MappingProxyType
 
+from game.core.asset import AssetEntry, AssetService
 from game.core.character import CharacterService
 from game.core.data import (
     JsonDataError,
@@ -49,9 +50,11 @@ class WanzhenFeature:
         location: LocationService,
         player_state: PlayerStateService,
         innate_treasure: InnateTreasureService,
+        asset: AssetService,
     ) -> None:
         self._data = data
         self._assets = assets
+        self._asset = asset
         self._character = character
         self._sect = sect
         self._location = location
@@ -91,6 +94,20 @@ class WanzhenFeature:
         if self._copy is None:
             raise RuntimeError("万珍殿玩法尚未初始化")
         return self._copy
+
+    def _line(
+        self,
+        key: str,
+        fallback: str,
+        values: Mapping[str, object] | None = None,
+    ) -> str:
+        """从展示数据取一句话并填占位符；键缺了就用兜底句。
+
+        **不许把 KeyError 或 TypeError 抛给玩家**：文案是数据，代码只负责把事实填进去。
+        """
+
+        template = str(self.copy().text.get(key) or "").strip()
+        return (template or fallback).format_map(values or {})
 
     def page_actions(self, value: WanzhenPage) -> tuple[WanzhenAction, ...]:
         variables = {
@@ -202,8 +219,9 @@ class WanzhenFeature:
             return matched[0]
         if len(matched) > 1:
             raise WanzhenFeatureError(
-                self.copy(
+                self._line(
                     "条目说不清",
+                    "万珍殿里有{count}条「{name}」：{entries}。请补上品级（或灵宝名）再说一次。",
                     {
                         "count": len(matched),
                         "name": text,
@@ -245,6 +263,75 @@ class WanzhenFeature:
             raise WanzhenFeatureError(str(exc)) from exc
         entry = self.match_entry(vault.entries, query)
         return entry.entry_key if entry is not None else str(query or '').strip()
+
+    async def resolve_formation_entry(
+        self, user_id: str, wanted: str, qualifier: str = ""
+    ) -> str:
+        """把玩家写的阵法换成他**个人阵藏**里的条目键。
+
+        认不出或多条说不清，都用万珍殿展示数据里的话回绝（与页面同一套写法）。
+        与 `resolve_vault_entry` 的区别只在看哪一份条目：这里是玩家自己的阵藏，
+        那里是本宗万珍殿。
+        """
+
+        text = str(wanted or "").strip()
+        if ":" in text:
+            # 整条条目键（`阵法编号:品级:灵宝编号`）原汁原味受理。
+            return text
+        entries = await self._asset.formation_entries(user_id)
+        names = self._treasure_names(entries)
+        matched = [
+            entry
+            for entry in entries
+            if text in {str(entry.name), str(entry.content_id)}
+            and self._qualifier_hits(entry, qualifier, names)
+        ]
+        if not matched:
+            raise WanzhenFeatureError(
+                self._line("阵法找不到", "你的阵藏里没有「{name}」。", {"name": text})
+            )
+        if len(matched) > 1:
+            raise WanzhenFeatureError(
+                self._line(
+                    "阵法说不清",
+                    "阵藏里有{count}条「{name}」：{entries}。请补上品级（或灵宝名）再说一次。",
+                    {
+                        "count": len(matched),
+                        "name": text,
+                        "entries": "、".join(
+                            self._formation_label(entry, names)
+                            for entry in matched[:4]
+                        ),
+                    },
+                )
+            )
+        return str(matched[0].instance_key)
+
+    def _qualifier_hits(
+        self, entry: AssetEntry, qualifier: str, names: Mapping[str, str]
+    ) -> bool:
+        """补的限定词（品级编号、品级名或灵宝名）是否与这条条目对得上。"""
+
+        text = str(qualifier or "").strip()
+        if not text:
+            return True
+        identifier = str(getattr(entry, "treasure_id", "") or "")
+        words = {
+            str(getattr(entry, "grade_id", "") or ""),
+            str(getattr(entry, "grade_name", "") or ""),
+            names.get(identifier, identifier) if identifier else "",
+        }
+        return any(word and word.startswith(text) for word in words)
+
+    def _formation_label(self, entry: AssetEntry, names: Mapping[str, str]) -> str:
+        """「品级 名称[灵宝名]」——回绝文案里摆候选用的写法。"""
+
+        grade = str(getattr(entry, "grade_name", "") or "")
+        shown = str(getattr(entry, "name", "") or "")
+        identifier = str(getattr(entry, "treasure_id", "") or "")
+        if identifier:
+            shown = shown + "[" + names.get(identifier, identifier) + "]"
+        return (grade + " " + shown).strip() if grade else shown
 
     async def donate(
         self,
@@ -308,10 +395,13 @@ class WanzhenFeature:
                 if str(value.get("名称") or "").strip() == query
             )
             if len(matches) != 1:
-                template = str(self.copy().text.get("丹药找不到") or "").strip()
-                if not template:
-                    raise WanzhenFeatureError(f"纳戒里没有「{query}」这味丹药")
-                raise WanzhenFeatureError(template.format(name=query))
+                raise WanzhenFeatureError(
+                    self._line(
+                        "丹药找不到",
+                        f"纳戒里没有「{query}」这味丹药",
+                        {"name": query},
+                    )
+                )
             return matches[0]
         if normalized_category == "阵法":
             return ""
