@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from game.core.item_catalog import ItemDetail, ItemSummary
@@ -36,7 +37,59 @@ class ItemInspectionResult:
     mask_text: str = ""
 
 
+@dataclass(frozen=True)
+class BaikeEntry:
+    """百科总表里的一条：编号、名称与来源标签。"""
+
+    entity_id: str
+    name: str
+    source: str
+
+
+@dataclass(frozen=True)
+class BaikePrefixRow:
+    """登记表里的一行前缀：主体、类别与该前缀下的实际条数。"""
+
+    prefix: str
+    subject: str
+    category: str
+    count: int
+
+
+@dataclass(frozen=True)
+class BaikeCatalog:
+    """百科总表：全部条目 + 按登记表数出来的前缀行。"""
+
+    entries: tuple[BaikeEntry, ...]
+    prefix_rows: tuple[BaikePrefixRow, ...]
+
+
+@dataclass(frozen=True)
+class BaikeReference:
+    """实体字段里指向另一条实体的编号式引用。"""
+
+    field: str
+    entity_id: str
+    name: str
+
+
+@dataclass(frozen=True)
+class BaikeDetail:
+    """单条实体的详情：名称、来源、原始字段与引用图。"""
+
+    entity_id: str
+    name: str
+    source: str
+    number_category: str
+    fields: Mapping[str, object]
+    references: tuple[BaikeReference, ...] = ()
+
 __all__ = [
+    "BaikeCatalog",
+    "BaikeDetail",
+    "BaikeEntry",
+    "BaikePrefixRow",
+    "BaikeReference",
     "HeldGrade",
     "ItemInspectionResult",
     "ItemDetail",

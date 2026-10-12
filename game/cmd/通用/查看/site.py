@@ -1,17 +1,14 @@
 """百科页面：按编号前缀浏览全部已 ID 化的实体。
 
 融合在「查看」组件里——不另立二级组件。页面走 `/baike`，数据走 `/baike/data`。
-数据只有两个来源，都是既有核心的公共读口，不新建数据：
 
-1. `JsonDataService.numbered_entities()`：30 个前缀（3628 条，实测）；
-2. 角色核心的 `races()`：前缀 `55`（180 个）。两者合计覆盖登记表里全部 30 个前缀。
+**事实全部来自玩法**（`features.chakan_wupin`）：总表、前缀计数、单条详情与引用图都由它给；
+页面只做筛选、汇总与 JSON 编码，不碰任何核心服务。
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-
-from collections.abc import Mapping
 
 from fastapi import APIRouter
 from fastapi.encoders import jsonable_encoder
@@ -51,15 +48,21 @@ async def baike_page() -> HTMLResponse:
     return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"), headers=_page_headers())
 
 
+
+
 @router.get("/data", response_class=JSONResponse)
 async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONResponse:
     """`id` 给单个实体的详情；`q` 按编号或名称检索；`prefix` 给该前缀的条目；都不带给前缀总表。"""
 
-    services = current_game_services()
+    feature = current_game_services().features.chakan_wupin
     wanted_id = id.strip()
     if wanted_id:
-        return _detail(services, wanted_id)
-    entries = _entries(services)
+        return _detail(feature, wanted_id)
+    catalog = feature.catalog()
+    entries = [
+        {"编号": row.entity_id, "名称": row.name, "来源": row.source}
+        for row in catalog.entries
+    ]
     query = q.strip()
     if query:
         picked = [e for e in entries if query in e["编号"] or query == e["名称"]]
@@ -68,7 +71,10 @@ async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONRespons
     if wanted:
         picked = [e for e in entries if e["编号"].startswith(wanted)]
         return JSONResponse({"模式": "前缀", "前缀": wanted, "条目": picked}, headers=PAGE_HEADERS)
-    table = _prefix_rows(entries)
+    table = [
+        {"前缀": row.prefix, "主体": row.subject, "类别": row.category, "条数": row.count}
+        for row in catalog.prefix_rows
+    ]
     return JSONResponse(
         {
             "模式": "总表",
@@ -81,160 +87,31 @@ async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONRespons
     )
 
 
-def _references(services, entity_id: str, value: object) -> list[dict[str, str]]:
-    """实体字段里指向别的实体的**编号式**引用。
+def _detail(feature, entity_id: str) -> JSONResponse:
+    """单条详情：事实来自玩法，页面只编码成 JSON。"""
 
-    只认「6 位数字且确实在目录里」的值——名字式引用（铸法、卡池来源、属性名一类）
-    不是带编号的实体，链不过去，所以这里不收，页面上也不假装能点。
-    """
-
-    catalog = {e.entity_id: e for e in services.core.data.numbered_entities()}
-    for race in services.core.character.races().values():
-        number = str(race.get("编号") or "")
-        if number:
-            catalog.setdefault(number, race)
-    found: list[dict[str, str]] = []
-    seen: set[str] = set()
-
-    def visit(path: str, node: object) -> None:
-        if isinstance(node, Mapping):
-            for key, child in node.items():
-                visit((path + "." + str(key)) if path else str(key), child)
-            return
-        if isinstance(node, (list, tuple)):
-            for child in node:
-                visit(path, child)
-            return
-        text = str(node or "").strip()
-        if len(text) != 6 or not text.isdigit() or text == entity_id or text in seen:
-            return
-        target = catalog.get(text)
-        if target is None:
-            return
-        seen.add(text)
-        name = None
-        if isinstance(target, Mapping):
-            name = target.get("种族")
-        if name is None:
-            inner = getattr(target, "value", None)
-            name = inner.get("名称") if isinstance(inner, Mapping) else None
-        found.append({
-            "字段": path,
-            "编号": text,
-            "名称": str(name or text),
-        })
-
-    visit("", value)
-    return found
-
-def _detail(services, entity_id: str) -> JSONResponse:
-    """单个实体的详情。按前缀分派：数据索引实体走 `entity_record`，种族走角色核心的 `races()`。"""
-
-    headers = PAGE_HEADERS
-    if entity_id.startswith("55"):
-        race = services.core.character.races().get(entity_id) or _find_race(services, entity_id)
-        if race is None:
-            return JSONResponse(
-                {"模式": "详情", "编号": entity_id, "错误": "没有这个种族"},
-                status_code=404,
-                headers=headers,
-            )
+    got = feature.detail(entity_id)
+    if got is None:
+        missing = "没有这个种族" if feature.is_race(entity_id) else "没有这个编号"
         return JSONResponse(
-            {
-                "模式": "详情",
-                "编号": entity_id,
-                "名称": str(race.get("种族") or ""),
-                "来源": "种族",
-                "字段": jsonable_encoder(race),
-                "引用": _references(services, entity_id, race),
-            },
-            headers=headers,
-        )
-    record = None
-    for entity in services.core.data.numbered_entities():
-        if entity.entity_id == entity_id:
-            record = entity
-            break
-    if record is None:
-        return JSONResponse(
-            {"模式": "详情", "编号": entity_id, "错误": "没有这个编号"},
+            {"模式": "详情", "编号": entity_id, "错误": missing},
             status_code=404,
-            headers=headers,
+            headers=PAGE_HEADERS,
         )
-    return JSONResponse(
-        {
-            "模式": "详情",
-            "编号": entity_id,
-            "名称": str(record.value.get("名称") or entity_id),
-            "来源": str(record.section),
-            "编号类别": str(record.number_category),
-            "字段": jsonable_encoder(record.value),
-            "引用": _references(services, entity_id, record.value),
-        },
-        headers=headers,
-    )
-
-
-def _find_race(services, entity_id: str) -> Mapping | None:
-    """种族登记表按名字索引，详情按编号取，所以要按编号再找一遍。"""
-
-    for race in services.core.character.races().values():
-        if str(race.get("编号") or "") == entity_id:
-            return race
-    return None
-
-
-def _entries(services) -> list[dict[str, str]]:
-    """全部带编号的条目：数据索引 + 角色核心的种族，按编号排序。"""
-
-    numbered = services.core.data.numbered_entities()
-    rows = [
-        {
-            "编号": str(entity.entity_id),
-            "名称": str(entity.value.get("名称") or entity.entity_id),
-            "来源": str(entity.section),
-        }
-        for entity in numbered
+    body: dict[str, object] = {
+        "模式": "详情",
+        "编号": got.entity_id,
+        "名称": got.name,
+        "来源": got.source,
+    }
+    if got.number_category:
+        body["编号类别"] = got.number_category
+    body["字段"] = jsonable_encoder(got.fields)
+    body["引用"] = [
+        {"字段": ref.field, "编号": ref.entity_id, "名称": ref.name}
+        for ref in got.references
     ]
-    rows += [
-        {
-            "编号": str(race.get("编号") or ""),
-            "名称": str(race.get("种族") or ""),
-            "来源": "种族",
-        }
-        for race in services.core.character.races().values()
-    ]
-    return sorted((row for row in rows if row["编号"]), key=lambda row: row["编号"])
-
-
-def _registry(services) -> list[dict]:
-    """编号登记表。`基础/定义/编号.json` 并进数据集 `基础定义`，按已知键直接索引读。
-
-    边界审查禁止业务代码自行 walk 数据结构（正式 JSON 只由 `game/core/data` 建索引），
-    所以这里只走登记表自己那一层键，不做遍历。
-    """
-
-    document = services.core.data.dataset("基础定义").get("编号") or {}
-    rows = document.get("编号前缀") or () if isinstance(document, Mapping) else ()
-    return [row for row in rows if isinstance(row, Mapping)]
-
-def _prefix_rows(entries: list[dict[str, str]]) -> list[dict[str, object]]:
-    """登记表里的 30 个前缀，各自数一数有多少条。"""
-
-    registry = _registry(current_game_services())
-    counted: dict[str, int] = {}
-    for entry in entries:
-        key = entry["编号"][:2]
-        counted[key] = counted.get(key, 0) + 1
-    return [
-        {
-            "前缀": str(row.get("前缀") or ""),
-            "主体": str(row.get("主体") or ""),
-            "类别": str(row.get("类别") or ""),
-            "条数": counted.get(str(row.get("前缀") or ""), 0),
-        }
-        for row in registry
-    ]
+    return JSONResponse(body, headers=PAGE_HEADERS)
 
 
 def _group_rows(table: list[dict[str, object]]) -> list[dict[str, object]]:

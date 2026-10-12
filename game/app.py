@@ -697,7 +697,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("birthplace", birthplace),
         )
     )
-    chakan_wupin = ItemInspectionFeature(item_catalog, combat, asset, data)
+    chakan_wupin = ItemInspectionFeature(item_catalog, combat, asset, data, character)
     chakan_wupin.initialize()
     chakan_juese = CharacterOverviewFeature(
         character,

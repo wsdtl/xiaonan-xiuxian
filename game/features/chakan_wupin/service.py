@@ -6,6 +6,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from types import MappingProxyType
 
 from game.core.asset import AssetService, AssetStateError
+from game.core.character import CharacterService
 from game.core.data import JsonDataError, JsonDataService
 from game.core.combat import CombatService, render_body, render_listeners
 from game.core.item_catalog import (
@@ -15,7 +16,19 @@ from game.core.item_catalog import (
     ItemNotFoundError,
 )
 
-from .contracts import HeldGrade, ItemInspectionResult
+from .contracts import (
+    BaikeCatalog,
+    BaikeDetail,
+    BaikeEntry,
+    BaikePrefixRow,
+    BaikeReference,
+    HeldGrade,
+    ItemInspectionResult,
+)
+
+
+#: 种族在登记表里的编号前缀（唯一不由数据索引提供的一类）。
+_RACE_PREFIX = "55"
 
 
 class ItemInspectionFeature:
@@ -27,11 +40,13 @@ class ItemInspectionFeature:
         combat: CombatService,
         asset: AssetService,
         data: JsonDataService,
+        character: CharacterService,
     ) -> None:
         self._catalog = catalog
         self._data = data
         self._combat = combat
         self._asset = asset
+        self._character = character
         self._initialized = False
         self._enemy_ids: frozenset[str] | None = None
         self._mask_text: str | None = None
@@ -43,6 +58,8 @@ class ItemInspectionFeature:
             raise RuntimeError("实体查询微服务必须先于查看实体玩法启动")
         if not self._combat.status().initialized:
             raise RuntimeError("战斗核心必须先于查看实体玩法启动")
+        if not self._character.status().initialized:
+            raise RuntimeError("角色核心必须先于查看实体玩法启动")
         self._initialized = True
 
     async def inspect(self, query: str, user_id: str = "") -> ItemInspectionResult:
@@ -62,6 +79,143 @@ class ItemInspectionFeature:
             return ItemInspectionResult(normalized, candidates=exc.candidates)
         except ItemNotFoundError:
             return ItemInspectionResult(normalized)
+
+    def is_race(self, entity_id: str) -> bool:
+        """这个编号是不是种族（前缀 55）——百科页用它决定缺号时回哪一句。"""
+
+        return str(entity_id or "").strip().startswith(_RACE_PREFIX)
+
+    def catalog(self) -> BaikeCatalog:
+        """百科总表：全部带编号的条目（编号实体 + 角色核心的种族）与登记表前缀计数。"""
+
+        entries = self._catalog_entries()
+        return BaikeCatalog(entries, self._prefix_rows(entries))
+
+    def detail(self, entity_id: str) -> BaikeDetail | None:
+        """单条详情。种族走角色核心的登记表（前缀 55），其余走编号实体索引。"""
+
+        identifier = str(entity_id or "").strip()
+        if not identifier:
+            return None
+        if identifier.startswith(_RACE_PREFIX):
+            race = self._character.races().get(identifier) or self._find_race(identifier)
+            if race is None:
+                return None
+            return BaikeDetail(
+                identifier,
+                str(race.get("种族") or ""),
+                "种族",
+                "",
+                race,
+                self.references(identifier, race),
+            )
+        record = next(
+            (item for item in self._data.numbered_entities() if item.entity_id == identifier),
+            None,
+        )
+        if record is None:
+            return None
+        return BaikeDetail(
+            identifier,
+            str(record.value.get("名称") or identifier),
+            str(record.section),
+            str(record.number_category),
+            record.value,
+            self.references(identifier, record.value),
+        )
+
+    def references(self, entity_id: str, value: object) -> tuple[BaikeReference, ...]:
+        """实体字段里指向别的实体的**编号式**引用。
+
+        只认「6 位数字且确实在目录里」的值——名字式引用（铸法、卡池来源、属性名一类）不是带
+        编号的实体，链不过去，页面上也不假装能点。这一段原先写在百科页里（命令层自己 walk
+        数据结构），现在归到玩法：它是业务判断，不是渲染。
+        """
+
+        catalog: dict[str, object] = {
+            item.entity_id: item for item in self._data.numbered_entities()
+        }
+        for race in self._character.races().values():
+            number = str(race.get("编号") or "")
+            if number:
+                catalog.setdefault(number, race)
+        found: list[BaikeReference] = []
+        seen: set[str] = set()
+
+        def visit(path: str, node: object) -> None:
+            if isinstance(node, Mapping):
+                for key, child in node.items():
+                    visit((path + "." + str(key)) if path else str(key), child)
+                return
+            if isinstance(node, (list, tuple)):
+                for child in node:
+                    visit(path, child)
+                return
+            text = str(node or "").strip()
+            if len(text) != 6 or not text.isdigit() or text == entity_id or text in seen:
+                return
+            target = catalog.get(text)
+            if target is None:
+                return
+            seen.add(text)
+            name = None
+            if isinstance(target, Mapping):
+                name = target.get("种族")
+            if name is None:
+                inner = getattr(target, "value", None)
+                name = inner.get("名称") if isinstance(inner, Mapping) else None
+            found.append(BaikeReference(path, text, str(name or text)))
+
+        visit("", value)
+        return tuple(found)
+
+    def _catalog_entries(self) -> tuple[BaikeEntry, ...]:
+        """全部带编号的条目：数据索引 + 角色核心的种族，按编号排序。"""
+
+        rows = [
+            BaikeEntry(
+                str(entity.entity_id),
+                str(entity.value.get("名称") or entity.entity_id),
+                str(entity.section),
+            )
+            for entity in self._data.numbered_entities()
+        ]
+        rows += [
+            BaikeEntry(str(race.get("编号") or ""), str(race.get("种族") or ""), "种族")
+            for race in self._character.races().values()
+        ]
+        return tuple(sorted((row for row in rows if row.entity_id), key=lambda row: row.entity_id))
+
+    def _prefix_rows(self, entries: Sequence[BaikeEntry]) -> tuple[BaikePrefixRow, ...]:
+        """登记表里的前缀各数一数有多少条。
+
+        只走登记表自己那一层键，不做遍历：正式 JSON 的结构由 `game.core.data` 建索引。
+        """
+
+        document = self._data.dataset("基础定义").get("编号") or {}
+        registry = document.get("编号前缀") or () if isinstance(document, Mapping) else ()
+        counted: dict[str, int] = {}
+        for entry in entries:
+            key = entry.entity_id[:2]
+            counted[key] = counted.get(key, 0) + 1
+        return tuple(
+            BaikePrefixRow(
+                str(row.get("前缀") or ""),
+                str(row.get("主体") or ""),
+                str(row.get("类别") or ""),
+                counted.get(str(row.get("前缀") or ""), 0),
+            )
+            for row in registry
+            if isinstance(row, Mapping)
+        )
+
+    def _find_race(self, entity_id: str) -> Mapping | None:
+        """种族登记表按名字索引，详情按编号取，所以要按编号再找一遍。"""
+
+        for race in self._character.races().values():
+            if str(race.get("编号") or "") == entity_id:
+                return race
+        return None
 
     def mask_text(self) -> str:
         """敌人条目页的遮罩词：配置里没有的答案（种族／性别／器律）不假装知道。"""
