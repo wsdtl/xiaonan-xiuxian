@@ -348,7 +348,7 @@ class JsonDataReader:
         try:
             text = path.read_text(encoding="utf-8")
             parsed = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
-            return _freeze_json(parsed)
+            return freeze_json(parsed)
         except (OSError, json.JSONDecodeError, JsonDataError) as exc:
             raise JsonDataError(f"数据文件读取失败：{display_path}：{exc}") from exc
 
@@ -602,13 +602,13 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _freeze_json(value: Any) -> Any:
+def freeze_json(value: Any) -> Any:
     if isinstance(value, dict):
         return MappingProxyType(
-            {str(key): _freeze_json(raw) for key, raw in value.items()}
+            {str(key): freeze_json(raw) for key, raw in value.items()}
         )
     if isinstance(value, list):
-        return tuple(_freeze_json(item) for item in value)
+        return tuple(freeze_json(item) for item in value)
     return value
 
 

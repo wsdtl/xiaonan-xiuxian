@@ -16,8 +16,9 @@ from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
-from types import MappingProxyType
 from uuid import uuid4
+
+from game.core.data import freeze_json
 
 from .contracts import (
     CommittedTransaction,
@@ -447,7 +448,7 @@ class SQLiteStateStore:
         return SharedEntityRecord(
             entity_type,
             entity_id,
-            _freeze_json(value),
+            freeze_json(value),
             int(row[2]),
             str(row[3]),
         )
@@ -478,7 +479,7 @@ class SQLiteStateStore:
         return SharedEntityRecord(
             entity_type,
             str(row[0]),
-            _freeze_json(value),
+            freeze_json(value),
             int(row[3]),
             str(row[4]),
         )
@@ -508,7 +509,7 @@ class SQLiteStateStore:
             )
             result.append(
                 SharedEntityRecord(
-                    entity_type, str(row[0]), _freeze_json(value), int(row[3]), str(row[4])
+                    entity_type, str(row[0]), freeze_json(value), int(row[3]), str(row[4])
                 )
             )
         return tuple(result)
@@ -615,7 +616,7 @@ class SQLiteStateStore:
             return None
         return StateSnapshot(
             address,
-            _freeze_json(entry[_ENTRY_VALUE]),
+            freeze_json(entry[_ENTRY_VALUE]),
             int(entry[_ENTRY_VERSION]),
             str(entry[_ENTRY_UPDATED]),
         )
@@ -638,7 +639,7 @@ class SQLiteStateStore:
             snapshots.append(
                 StateSnapshot(
                     StateAddress(user_id, key_type, key_name),
-                    _freeze_json(entry[_ENTRY_VALUE]),
+                    freeze_json(entry[_ENTRY_VALUE]),
                     int(entry[_ENTRY_VERSION]),
                     str(entry[_ENTRY_UPDATED]),
                 )
@@ -664,7 +665,7 @@ class SQLiteStateStore:
                     key_type, key_name = key.split("/", 1)
                     found[(owner, key_type, key_name)] = StateSnapshot(
                         StateAddress(owner, key_type, key_name),
-                        _freeze_json(entry[_ENTRY_VALUE]),
+                        freeze_json(entry[_ENTRY_VALUE]),
                         int(entry[_ENTRY_VERSION]),
                         str(entry[_ENTRY_UPDATED]),
                     )
@@ -815,7 +816,7 @@ class SQLiteStateStore:
         if not isinstance(payload, dict):
             raise DatabaseError("已提交事务缺少对象载荷")
         command = TransactionCommand(user_id, request_id, str(row[1]), (), {})
-        return CommittedTransaction(_receipt_from_row(command, row, replayed=True), _freeze_json(payload))
+        return CommittedTransaction(_receipt_from_row(command, row, replayed=True), freeze_json(payload))
 
     def commit(self, command: TransactionCommand) -> TransactionReceipt:
         self._require_initialized()
@@ -1269,7 +1270,7 @@ def _snapshot(
     value = json.loads(str(state_json))
     if not isinstance(value, dict):
         raise DatabaseError("状态 JSON 根值必须是对象")
-    return StateSnapshot(address, _freeze_json(value), int(version), str(updated_at))
+    return StateSnapshot(address, freeze_json(value), int(version), str(updated_at))
 
 
 def _receipt_from_row(
@@ -1496,14 +1497,6 @@ def _json_value(value: object) -> object:
     return value
 
 
-def _freeze_json(value: object) -> object:
-    if isinstance(value, dict):
-        return MappingProxyType(
-            {str(key): _freeze_json(raw) for key, raw in value.items()}
-        )
-    if isinstance(value, list):
-        return tuple(_freeze_json(item) for item in value)
-    return value
 
 
 def _encode(value: object) -> str:

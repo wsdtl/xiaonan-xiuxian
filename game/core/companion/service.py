@@ -20,6 +20,7 @@ from game.core.data import (
     nonnegative_int as _nonnegative_int,
     positive_int,
     positive_int as _positive_int,
+    nonempty_text,
 )
 from game.core.database import DatabaseService, StateAddress, StateMutation
 from game.core.forging import ForgingService
@@ -69,7 +70,6 @@ ACTIVE_KEY = "main"
 _AFFECTION_QUANTUM = Decimal("0.1")
 
 
-from ..data.fields import nonempty_text
 class CompanionService:
     """拥有道侣静态身份和玩家个人道侣状态的核心边界。"""
 

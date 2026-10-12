@@ -37,6 +37,7 @@ from game.core.data import (
     nonnegative_int,
     positive_int,
     strict_text,
+    nonempty_text,
 )
 from game.core.database import (
     DatabaseService,
@@ -82,7 +83,6 @@ SETTLEMENT_STATE = "exploration_settlement"
 LATEST_KEY = "main"
 
 
-from ..data.fields import nonempty_text
 class ExplorationService:
     """拥有普通探险会话及逐场结果的唯一核心边界。"""
 

@@ -13,6 +13,7 @@ from .contracts import JsonDataError as JsonDataError
 from .contracts import JsonDataStatus as JsonDataStatus
 from .contracts import JsonEntity as JsonEntity
 from .contracts import JsonValue as JsonValue
+from .files import freeze_json as freeze_json
 from .fields import boolean as boolean
 from .fields import mapping as mapping
 from .fields import nonempty_text as nonempty_text
@@ -39,6 +40,7 @@ __all__ = [
     "SchemaError",
     "SchemaValidator",
     "boolean",
+    "freeze_json",
     "mapping",
     "materialize",
     "nonempty_text",
