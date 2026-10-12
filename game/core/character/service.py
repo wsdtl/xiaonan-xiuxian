@@ -1597,7 +1597,9 @@ class CharacterService:
                 "突破记录": records,
             }
         )
-        # 意境道行：这次突破把阶上限抬上去了才发（二十境界九阶，二十次里只发九次）。
+        # 意境道行：这次突破把阶上限抬上去了才发。**第 1 阶没有自己的抬升事件**（开局上限就是 1），
+        # 所以第一次抬升（1 → 2）时连它的价一起补——不补，九阶的价只发到 111，而升满九阶要 112，
+        # 最后一阶永远差一点、够不到（二十境界九阶，八次抬升发满九阶的价）。
         cap_before = _yijing_tier_cap(
             _realm_order(self._data.entity("境界", current_realm_id).get("等级下限"))
         )
@@ -1606,7 +1608,10 @@ class CharacterService:
         )
         if cap_after > cap_before:
             cell = dict(character.get("意境") or {})
-            cell["道行"] = int(cell.get("道行") or 0) + _yijing_tier_cost(cap_after)
+            grant = _yijing_tier_cost(cap_after)
+            if cap_before == 1:
+                grant += _yijing_tier_cost(1)
+            cell["道行"] = int(cell.get("道行") or 0) + grant
             cell.setdefault("编号", "")
             cell.setdefault("阶", 0)
             character["意境"] = cell
