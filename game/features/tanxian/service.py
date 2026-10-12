@@ -32,6 +32,7 @@ class ExplorationFeature:
         action_group: ActionGroupService,
     ) -> None:
         self._data = data
+        self._enemy_numbers: dict[str, str] = {}
         self._exploration = exploration
         self._items = items
         self._asset = asset
@@ -107,6 +108,20 @@ class ExplorationFeature:
         self, page: int, total_pages: int
     ) -> tuple[ExplorationAction, ...]:
         return paged_settlement_actions(actions, self._buttons, page=page, total_pages=total_pages)
+
+    def enemy_number(self, name: str) -> str:
+        """按敌人名字取它的定义编号；取不到返回空串。"""
+
+        """敌人是命名实体池，成员键是名字、编号在值里，所以起一次表就够。"""
+        wanted = str(name or "").strip()
+        if not wanted:
+            return ""
+        if not self._enemy_numbers:
+            self._enemy_numbers = {
+                str(key): str(value.get("编号") or "")
+                for key, value in self._data.entity_fields("敌人", ["编号"])
+            }
+        return self._enemy_numbers.get(wanted, "")
 
     def item_label(self, item_id: str, grade_id: str) -> str:
         return f"{self._asset.grade(grade_id).name}{self._items.get(item_id).name}"

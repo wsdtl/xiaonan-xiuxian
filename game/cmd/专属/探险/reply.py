@@ -179,7 +179,12 @@ def _user_page(
         )
     for character in value.characters:
         title = text(copy, "用户", "道侣" if character.companion else "人物")
-        builder.section(f"{title} · {character.name}", icon="player").row(
+        heading = f"{title} · {character.name}"
+        # 敌人把它做成无边框按钮：名字只作显示，句柄一律用编号。
+        number = "" if character.companion else feature.enemy_number(character.name)
+        if number:
+            heading = M.command(heading, f"查看 {number}")
+        builder.section(heading, icon="player").row(
             (
                 "状态",
                 M.status(
