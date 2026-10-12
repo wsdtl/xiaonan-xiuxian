@@ -8,6 +8,7 @@ const el = {
   pager: document.getElementById("pager"),
   detail: document.getElementById("detail"),
   overview: document.getElementById("overview"),
+  content: document.getElementById("content"),
   dialog: document.getElementById("detail-dialog"),
   status: document.getElementById("status"),
   crumb: document.getElementById("crumb"),
@@ -151,7 +152,8 @@ function renderPager() {
     button.addEventListener("click", () => {
       page = target;
       renderRows();
-      window.scrollTo({ top: 0 });
+      // 桌面端不滚 window（body 是 overflow:hidden），滚动在 .content 上。
+      el.content.scrollTo({ top: 0, behavior: "smooth" });
     });
     return button;
   };
@@ -454,6 +456,11 @@ el.query.addEventListener("keydown", (event) => {
   if (event.key !== "Enter") return;
   const word = el.query.value.trim();
   if (word) search(word);
+});
+
+// 原生 <dialog> 点遮罩不会关：点在 dialog 本身（而不是内容）上才算点到遮罩。
+el.dialog.addEventListener("click", (event) => {
+  if (event.target === el.dialog) closeSheet();
 });
 
 // 弹窗用原生关闭（✕、Esc、点遮罩）：关掉就把列表视图还回来。
