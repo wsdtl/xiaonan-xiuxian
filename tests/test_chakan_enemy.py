@@ -1,7 +1,7 @@
 """查看敌人：编号写法与名字写法都要认，且一律拿真编号做句柄。
 
 判据（tools/基准/说明.md）：显示用中文、隐式受理 id、id 原汁原味。
-这一条钉住的是曾经的违反：只看 6 位数字，于是按钮标签上的中文名发不出来。
+敌人池现在是编号实体池，成员键就是编号，名字在定义的「名称」字段里。
 """
 
 from __future__ import annotations
@@ -9,10 +9,11 @@ from __future__ import annotations
 
 def test_enemy_query_accepts_number_and_name(services) -> None:
     feature = services.features.chakan_wupin
-    pairs = dict(services.core.data.entity_fields('敌人', ['编号']))
-    assert pairs, '库里没有敌人定义'
-    name = next(iter(sorted(pairs)))
-    number = str(pairs[name]['编号'])
+    rows = dict(services.core.data.entity_fields('敌人', ['编号', '名称']))
+    assert rows, '库里没有敌人定义'
+    key = next(iter(sorted(rows)))
+    name = str(rows[key].get('名称') or key)
+    number = str(rows[key]['编号'])
 
     identifiers = feature.enemy_identifiers()
     assert number in identifiers, f'编号写法不认：{number}'

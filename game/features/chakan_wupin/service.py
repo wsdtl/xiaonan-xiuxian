@@ -67,10 +67,12 @@ class ItemInspectionFeature:
 
         """判据：显示用中文、隐式受理 id —— 所以两种写法都必须认。"""
         if self._enemy_ids is None:
-            rows = self._data.entity_fields("敌人", ["编号"])
+            rows = self._data.entity_fields("敌人", ["编号", "名称"])
             found: set[str] = set()
-            for name, value in rows:
-                found.add(str(name))
+            for key, value in rows:
+                # 池成员键是编号；名字取定义里的「名称」，缺了才退回键。
+                display = str(value.get("名称") or key)
+                found.add(display)
                 number = str(value.get("编号") or "")
                 if number:
                     found.add(number)
@@ -84,8 +86,8 @@ class ItemInspectionFeature:
             raise RuntimeError("查看实体玩法微服务尚未初始化")
         wanted = str(identifier or "").strip()
         by_id = {
-            str(value["编号"]): name
-            for name, value in self._data.entity_fields("敌人", ["编号"])
+            str(value["编号"]): str(value.get("名称") or key)
+            for key, value in self._data.entity_fields("敌人", ["编号", "名称"])
         }
         if wanted in by_id:
             number, name = wanted, by_id[wanted]
@@ -94,7 +96,7 @@ class ItemInspectionFeature:
             number, name = by_name.get(wanted, ""), wanted
         if not number:
             return None
-        entry = self._data.entity("敌人", name)
+        entry = self._data.entity("敌人", number)
         return ItemDetail(
             item_id=number,
             category="敌人",

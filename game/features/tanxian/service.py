@@ -118,8 +118,9 @@ class ExplorationFeature:
             return ""
         if not self._enemy_numbers:
             self._enemy_numbers = {
-                str(key): str(value.get("编号") or "")
-                for key, value in self._data.entity_fields("敌人", ["编号"])
+                # 名字 → 编号；池成员键是编号，所以名字要取定义里的「名称」。
+                str(value.get("名称") or key): str(value.get("编号") or "")
+                for key, value in self._data.entity_fields("敌人", ["编号", "名称"])
             }
         return self._enemy_numbers.get(wanted, "")
 

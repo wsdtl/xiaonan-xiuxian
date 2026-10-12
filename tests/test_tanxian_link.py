@@ -9,10 +9,11 @@ from __future__ import annotations
 
 def test_exploration_enemy_number_lookup(services) -> None:
     feature = services.features.tanxian
-    pairs = dict(services.core.data.entity_fields('敌人', ['编号']))
-    assert pairs, '库里没有敌人定义'
-    name = next(iter(sorted(pairs)))
-    number = str(pairs[name]['编号'])
+    rows = dict(services.core.data.entity_fields('敌人', ['编号', '名称']))
+    assert rows, '库里没有敌人定义'
+    key = next(iter(sorted(rows)))
+    name = str(rows[key].get('名称') or key)
+    number = str(rows[key]['编号'])
 
     assert feature.enemy_number(name) == number, '按名字查编号，这是联动按钮的句柄来源'
     assert feature.enemy_number('没有这个敌人') == '', '查不到要给空串，让前端照旧印名字'
