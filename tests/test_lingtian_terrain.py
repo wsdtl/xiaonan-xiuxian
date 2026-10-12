@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from game.core.combat import expand_build_section
 from game.core.data import JsonDataError, JsonDataService
 from game.core.sect_production import (
     SectProductionError,
@@ -133,7 +134,7 @@ def test_声明了非灵植池的地形拒绝启动(tmp_path) -> None:
         json.dumps(raw, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     data = JsonDataService(tree)
-    data.initialize()
+    data.initialize(expand=expand_build_section)
     # initialize 只读数据服务，其余依赖在这一步还没被用到。
     service = SectProductionService(data, None, None, None, None, None, None)  # type: ignore[arg-type]
     with pytest.raises(JsonDataError):

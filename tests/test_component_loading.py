@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from game.core.data import JsonDataError, JsonDataService
+from game.core.combat import expand_build_section
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 
@@ -46,7 +47,7 @@ def test_invalid_component_is_rejected(tree, fault):
             value["读取规则"][0]["路径"] = "世界/内容/地势.json"
         _写(manifest, json.dumps(value, ensure_ascii=False))
     with pytest.raises(JsonDataError):
-        JsonDataService(tree).initialize()
+        JsonDataService(tree).initialize(expand=expand_build_section)
 
 
 def _搬到第二层(tree, 大类: str, 组件: str) -> None:
@@ -71,7 +72,7 @@ def test_component_may_sit_in_a_category_directory(tree):
     """大类下放组件：扫描目录写组件相对路径，清单与注册路径都带上大类。"""
 
     _搬到第二层(tree, "武备", "战斗")
-    assert JsonDataService(tree).initialize().loaded
+    assert JsonDataService(tree).initialize(expand=expand_build_section).loaded
 
 
 def test_category_directory_without_entry_is_rejected(tree):
@@ -83,7 +84,7 @@ def test_category_directory_without_entry_is_rejected(tree):
     routing["扫描目录"] = [x for x in routing["扫描目录"] if x != "武备/战斗"]
     _写(entry, json.dumps(routing, ensure_ascii=False))
     with pytest.raises(JsonDataError):
-        JsonDataService(tree).initialize()
+        JsonDataService(tree).initialize(expand=expand_build_section)
 
 
 def test_nested_component_must_register_under_its_own_prefix(tree):
@@ -95,7 +96,7 @@ def test_nested_component_must_register_under_its_own_prefix(tree):
     value["读取规则"][0]["路径"] = value["读取规则"][0]["路径"].removeprefix("武备/")
     _写(manifest, json.dumps(value, ensure_ascii=False))
     with pytest.raises(JsonDataError):
-        JsonDataService(tree).initialize()
+        JsonDataService(tree).initialize(expand=expand_build_section)
 
 
 def test_all_services_and_startup_contracts(tmp_path, monkeypatch):

@@ -1,4 +1,4 @@
-"""第二个公共核心微服务：战斗。"""
+"""核心公共微服务：战斗（装配序第 22 位）。"""
 
 from .contracts import (
     BattleEvent as BattleEvent,
@@ -48,6 +48,7 @@ from .card_text import render_body as render_body
 from .card_text import render_listeners as render_listeners
 from .presentation import VIEW_PARTS as VIEW_PARTS
 from .service import CombatService as CombatService
+from .service import expand_build_section as expand_build_section
 
 __all__ = [
     "BUILD_SECTIONS",
@@ -71,6 +72,7 @@ __all__ = [
     "CombatantSpec",
     "StatusResult",
     "VIEW_PARTS",
+    "expand_build_section",
     "generate_five_elements",
     "load_build_contracts",
     "render_body",

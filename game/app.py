@@ -94,6 +94,7 @@ from .features.zongmen_wanzhen import WanzhenFeature
 from .features.zhuangpei import ZhuangpeiFeature
 from .features.zongmen_zhan import SectWarFeature
 from .startup import validate_startup_contracts
+from game.core.combat import expand_build_section
 
 
 @dataclass(frozen=True)
@@ -205,7 +206,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     """按依赖顺序创建微服务；JSON 数据服务永远最先初始化。"""
 
     data = JsonDataService(data_dir or (config.base_dir / "data"))
-    status = data.initialize()
+    status = data.initialize(expand=expand_build_section)
     logger.opt(colors=True).success(
         C.join(
             C.ok("JSON 数据微服务已启动"),

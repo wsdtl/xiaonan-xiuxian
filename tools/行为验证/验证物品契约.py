@@ -21,6 +21,7 @@ import pathlib
 import shutil
 import sys
 import tempfile
+from game.core.combat import expand_build_section
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -38,7 +39,7 @@ def _initialize_medicine(root: pathlib.Path, database_path: pathlib.Path) -> str
     """在给定数据副本上初始化丹药核心，返回「通过」或错误摘要。"""
 
     data = JsonDataService(root)
-    data.initialize()
+    data.initialize(expand=expand_build_section)
     database = DatabaseService(database_path, busy_timeout_ms=5000)
     database.initialize()
     try:

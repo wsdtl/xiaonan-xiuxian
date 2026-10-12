@@ -27,6 +27,7 @@ import pathlib
 import sys
 from collections.abc import Callable, Mapping
 from typing import Any
+from game.core.combat import expand_build_section
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -151,7 +152,7 @@ def check_datum_constraints(definition: dict, failures: list[str]) -> None:
     """证明 schema 真的在约束数据，而不只是被声明。"""
 
     data = JsonDataService("data")
-    data.initialize()
+    data.initialize(expand=expand_build_section)
     sample = _first_ability_node(_first_card(data, "功法"))
     if sample is None:
         failures.append("没有可直接破坏的功法节点，无法验证数据侧约束")
@@ -277,7 +278,7 @@ def check_build_contracts(data: JsonDataService, failures: list[str]) -> None:
 
 def main() -> int:
     data = JsonDataService("data")
-    data.initialize()
+    data.initialize(expand=expand_build_section)
     definition = dict(_plain(data.dataset("战斗定义")))  # type: ignore[arg-type]
 
     failures: list[str] = []

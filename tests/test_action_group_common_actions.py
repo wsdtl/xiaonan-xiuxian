@@ -24,6 +24,7 @@ import pytest
 
 from game.core.action_group import ActionGroup, ActionGroupService
 from game.core.data import JsonDataError, JsonDataService
+from game.core.combat import expand_build_section
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -59,14 +60,14 @@ def _数据() -> JsonDataService:
     global _共享数据
     if _共享数据 is None:
         _共享数据 = JsonDataService(DATA)
-        _共享数据.initialize()
+        _共享数据.initialize(expand=expand_build_section)
     return _共享数据
 
 
 def _服务(tree: pathlib.Path | None = None) -> ActionGroupService:
     data = _数据() if tree is None else JsonDataService(tree)
     if tree is not None:
-        data.initialize()
+        data.initialize(expand=expand_build_section)
     return ActionGroupService(data, _就绪(), _就绪())
 
 

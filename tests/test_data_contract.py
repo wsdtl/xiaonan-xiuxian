@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from game.core.combat import expand_build_section
 from game.core.data import JsonDataError, JsonDataService
 
 
@@ -13,7 +14,7 @@ DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 @pytest.fixture(scope="module")
 def data_service() -> JsonDataService:
     service = JsonDataService(DATA_ROOT)
-    service.initialize()
+    service.initialize(expand=expand_build_section)
     return service
 
 
@@ -93,7 +94,7 @@ def test_four_build_contracts_are_satisfied() -> None:
     from game.core.data import JsonDataService
 
     service = JsonDataService(DATA_ROOT)
-    service.initialize()
+    service.initialize(expand=expand_build_section)
     counts = validate_builds(service)
     assert set(counts) == {"功法", "真意", "气机", "器律"}
     assert all(value > 0 for value in counts.values())

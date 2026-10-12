@@ -24,6 +24,7 @@ import shutil
 import sys
 import tempfile
 from collections.abc import Mapping
+from game.core.combat import expand_build_section
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -98,7 +99,7 @@ CASES: dict[str, dict[str, str]] = {
 
 def _load_contract(data_root: pathlib.Path, spec: Mapping[str, str]) -> ContractSet:
     data = JsonDataService(data_root)
-    data.initialize()
+    data.initialize(expand=expand_build_section)
     return ContractSet.from_dataset(data.dataset(spec["dataset"]), spec["contract_path"])
 
 

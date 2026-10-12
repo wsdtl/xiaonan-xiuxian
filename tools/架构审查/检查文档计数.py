@@ -33,6 +33,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from game.cmd.command import registered_command_routes, registered_guard_rules  # noqa: E402
+from game.core.combat import expand_build_section  # noqa: E402
 from game.core.data import JsonDataService  # noqa: E402
 
 README = ROOT / "README.md"
@@ -115,7 +116,7 @@ def check_readme_runtime() -> list[str]:
 
     text = README.read_text(encoding="utf-8")
     problems: list[str] = []
-    status = JsonDataService(ROOT / "data").initialize()
+    status = JsonDataService(ROOT / "data").initialize(expand=expand_build_section)
     match = re.search(r"(\d+) 文档、(\d+) 实体、(\d+) 资源池", text)
     if match is None:
         problems.append("README 里找不到实测规模的计数句")

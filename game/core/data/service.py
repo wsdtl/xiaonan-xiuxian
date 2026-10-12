@@ -44,19 +44,22 @@ class JsonDataService:
     def initialize(self, expand: Callable[[str, Mapping[str, Any]], Any] | Literal[False] | None=None) -> JsonDataStatus:
         """构建本进程唯一快照；数据更新必须通过重启服务生效。
 
-        装载期默认跑构筑模板展开（`game.core.combat.service.expand_build_section`）。
-        这一步**不能省**：卡里可以只写「模板 + 参数」，展开必须在快照冻结之前完成，
+        装载期要跑构筑模板展开：卡里可以只写「模板 + 参数」，展开必须在快照冻结之前完成，
         否则快照里会同时存在「引用」与「展开后的树」两种形态，读取方各拿一种。
 
-        钩子按需导入，避免数据层在模块顶层依赖战斗层；`expand` 传 False 可显式关闭。
+        **钩子由组合根注入**（game/app.py 传 expand_build_section）：数据服务是装配第一位，
+        按边界表不依赖任何其他游戏服务，所以这里不反向导入战斗核心。判据与工具照同一口径
+        显式传入；确实不需要展开时显式传 False。
         """
 
         if expand is None:
-            from game.core.combat.service import expand_build_section
-
-            expand = expand_build_section
-        elif expand is False:
+            raise JsonDataError(
+                "装载正式 JSON 需要构筑模板展开钩子：请由组合根传入 expand_build_section"
+                "（确实不需要展开时显式传 False）"
+            )
+        if expand is False:
             expand = None
+
         with self._load_lock:
             if self._loaded is not None:
                 raise RuntimeError("正式 JSON 已加载；数据更新必须重启服务")

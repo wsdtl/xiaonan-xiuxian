@@ -1210,12 +1210,44 @@ def check_tracked_ignored_files() -> list[Finding]:
     ]
 
 
+def check_data_dependency_free() -> list[Finding]:
+    """game/core/data 不得依赖任何其他游戏服务。
+
+    见 微服务边界规范.md 第六节「当前所有权」表：data 的「可以依赖」一栏是**无其他游戏服务**；
+    系统架构.md 也把它排在装配第一位。它是只读正式 JSON 的快照层，一旦反过来依赖别的服务
+    （哪怕是函数内懒导入），「data 先于一切」这条硬顺序就只剩注释在撑。
+
+    真出过事：构筑模板展开钩子曾在 JsonDataService.initialize() 里懒导入
+    game.core.combat.service——装配期看不出来，但依赖方向已经倒置。现在钩子由组合根
+    （game/app.py）注入，这条判据把方向守死。
+    """
+
+    findings: list[Finding] = []
+    for path in _python_files("game/core/data"):
+        relative = _relative(path)
+        tree = _parse(path)
+        for line, module in _imports(tree):
+            if module == "game.core.data" or module.startswith("game.core.data."):
+                continue
+            if module == "game" or module.startswith("game."):
+                findings.append(
+                    Finding(
+                        "数据层依赖其他服务",
+                        relative,
+                        line,
+                        f"data 不得依赖 {module}；它是装配第一位，只读正式 JSON，依赖由组合根注入",
+                    )
+                )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
     ("跨服务导入内部实现", check_core_internal_imports),
     ("核心引用上层", check_core_upward_dependency),
     ("核心命名空间转发服务", check_core_namespace),
+    ("数据层依赖其他服务", check_data_dependency_free),
     ("运行期依赖 tools", check_game_tools_dependency),
     ("命令层导入核心服务", check_cmd_core_dependency),
     ("适配模块取得组合根", check_command_adapter_purity),
