@@ -10,7 +10,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from game.core.character import CharacterService
-from game.core.companion import CompanionError, CompanionInstance
+from game.core.companion import CompanionError
+from .contracts import CompanionView
 from game.core.companion import CompanionService, LocalCultivator
 from game.core.data import JsonDataService, positive_int as _positive_int
 from game.core.player_state import PlayerStateService
@@ -384,8 +385,28 @@ class PositionFeature:
             definition.interactable,
         )
 
-    async def inspect_companion(self, user_id: str, companion_id: str) -> CompanionInstance | None:
-        """按道侣编号取「我」名下的实例；没有实例就是没结交。"""
+    async def inspect_companion(self, user_id: str, companion_id: str) -> CompanionView | None:
+        """按道侣编号取「我」名下的实例视图；没有实例就是没结交。"""
+
+        """实例的读法本身就带鉴权：它拿的是我的 user_id，问别人的道侣自然没有实例。"""
+        try:
+            instance = await self._companion.instance(user_id, companion_id)
+        except CompanionError:
+            return None
+        if instance is None:
+            return None
+        definition = self._companion.definition(companion_id)
+        return CompanionView(
+            companion_id=companion_id,
+            name=definition.name,
+            realm_name=definition.realm_name,
+            level=instance.level,
+            experience=instance.experience,
+            attributes=instance.attributes,
+            resources=instance.resources,
+            weapon_name=instance.weapon_name,
+            weapon_level=instance.weapon_level,
+        )
 
         """实例的读法本身就带鉴权：它拿的是我的 user_id，问别人的道侣自然没有实例。"""
         try:

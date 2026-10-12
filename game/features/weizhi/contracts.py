@@ -96,6 +96,19 @@ class CurrentPositionView:
 
 
 @dataclass(frozen=True)
+class CompanionView:
+    """道侣实例的公开视图：只看状态，不带突破记录与备药（局内状态归战斗）。"""
+
+    companion_id: str
+    name: str
+    realm_name: str
+    level: int
+    experience: int
+    attributes: Mapping[str, int | float]
+    resources: Mapping[str, int | float]
+    weapon_name: str
+    weapon_level: int
+
 class NearbyCultivatorView:
     user_id: str
     name: str
