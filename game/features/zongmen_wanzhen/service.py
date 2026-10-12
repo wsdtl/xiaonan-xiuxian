@@ -13,14 +13,11 @@ from game.core.data import (
     nonempty_text as _text,
     positive_int as _positive_int,
 )
-from game.core.item_catalog import ItemCatalogService
+from game.core.innate_treasure import InnateTreasureService
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.sect_assets import SectAssetEntry, SectAssetError, SectAssetService
-def _has_cjk(value: str) -> bool:
-    return any('\u4e00' <= ch <= '\u9fff' for ch in value)
-
 
 from game.features.presentation import (
     project_dungeon_buttons,
@@ -36,6 +33,10 @@ from .contracts import (
 )
 
 
+def _has_cjk(value: str) -> bool:
+    return any('\u4e00' <= ch <= '\u9fff' for ch in value)
+
+
 class WanzhenFeature:
     """只编排万珍殿核心，不拥有个人资产或成员关系。"""
 
@@ -43,7 +44,6 @@ class WanzhenFeature:
         self,
         data: JsonDataService,
         assets: SectAssetService,
-        items: ItemCatalogService,
         character: CharacterService,
         sect: SectService,
         location: LocationService,
@@ -52,7 +52,6 @@ class WanzhenFeature:
     ) -> None:
         self._data = data
         self._assets = assets
-        self._items = items
         self._character = character
         self._sect = sect
         self._location = location

@@ -804,7 +804,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     zongmen_wanzhen = WanzhenFeature(
         data,
         sect_assets,
-        item_catalog,
         character,
         sect,
         location,
