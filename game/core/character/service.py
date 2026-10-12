@@ -890,6 +890,17 @@ class CharacterService:
         realm = self._data.entity("境界", str(realm_id))
         return _yijing_tier_cap(_realm_order(realm.get("等级下限")))
 
+    async def yijing_points(self, user_id: str) -> int:
+        """已经攒下的道行——**没选路时也能读**（点是玩家的，不挂在路上）。
+
+        状态格的解释权在本核心：玩法层要读道行就调这里，
+        不要自己去读 `character/main` 的「意境」一格。
+        """
+
+        _, _, character = await self._medicine_state(user_id)
+        parsed = _state_yijing(character.get("意境"))
+        return int(parsed[2]) if parsed else 0
+
     async def plan_yijing_choose(
         self, user_id: str, *, content_id: str
     ) -> CharacterYijingPlan:

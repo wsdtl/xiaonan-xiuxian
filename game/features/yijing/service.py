@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from game.core.character import CharacterCultivationError, CharacterService
-from collections.abc import Mapping
 
 from game.core.data import JsonDataService
-from game.core.database import DatabaseService, StateAddress, TransactionCommand
+from game.core.database import DatabaseService, TransactionCommand
 
 from .contracts import YijingConflictError, YijingError, YijingView
 
@@ -83,19 +82,10 @@ class YijingFeature:
         return await self.inspect(user_id)
 
     async def _pending_points(self, user_id: str) -> int:
-        """还没选路时人物记录里是 None，道行仍在状态里——直接读那一格，别让玩家看不见自己攒的点。"""
+        """还没选路时人物档案里是 None——道行**向人物核心要**（状态格的解释权在它），
+        这样玩家在选路前攒的点也看得见，玩法层不自己解 `character/main`。"""
 
-        snapshot = await self._database.get(StateAddress(user_id, "character", "main"))
-        if snapshot is None:
-            return 0
-        value = snapshot.value if isinstance(snapshot.value, Mapping) else {}
-        cell = value.get("意境")
-        if not isinstance(cell, Mapping):
-            return 0
-        try:
-            return int(cell.get("道行") or 0)
-        except (TypeError, ValueError):
-            return 0
+        return await self._character.yijing_points(user_id)
 
     async def _commit(self, user_id, request_id, business_type, mutation, content_id) -> None:
         await self._database.commit(
