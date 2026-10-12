@@ -456,6 +456,36 @@ def check_inline_commands_do_not_submit() -> list[str]:
     return problems
 
 
+
+def check_icons_are_registered() -> list[str]:
+    """卡片上用到的图标分类都必须在 `message/icons.py` 的注册表里。
+
+    2026-10 上线实测栽过一次：`game/cmd/通用.兑换码/reply.py` 写 `icon="gift"`，而图标表里没有 `gift`——
+    玩家第一次兑换就崩在 `render_markdown` → `icon_for` 的 `KeyError`，服务不挂但回复发不出去。
+    这类「字面量没登记」的眼漏，靠读代码很难发现，所以按字面量逐个核对。
+    """
+
+    import message.icons as icons
+
+    import game.app  # noqa: F401  # 触发游戏侧的图标注册（若有）
+
+    known = set(icons.SECTION_ICONS)
+    pattern = re.compile(r'icon\s*=\s*[\'"]([A-Za-z0-9_.-]+)[\'\"]')
+    problems: list[str] = []
+    for base in ("game", "launch", "message", "static"):
+        for path in sorted((ROOT / base).rglob("*")):
+            if not path.is_file() or path.suffix not in (".py", ".js", ".html"):
+                continue
+            if "__pycache__" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for match in pattern.finditer(text):
+                key = match.group(1)
+                if key not in known:
+                    line = text[: match.start()].count(chr(10)) + 1
+                    problems.append(f"{path.relative_to(ROOT).as_posix()}:{line} 用了没登记的图标分类「{key}」")
+    return problems
+
 CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
@@ -469,6 +499,7 @@ CHECKS = (
     ("玩家文案不露行话", check_player_copy_has_no_jargon),
     ("帮助要有结果", check_help_has_side_effect),
     ("行内按钮只填入", check_inline_commands_do_not_submit),
+    ("图标分类都已登记", check_icons_are_registered),
 )
 
 

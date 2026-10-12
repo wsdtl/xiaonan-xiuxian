@@ -157,6 +157,27 @@ def _候选名字(services, code_id: str) -> set[str]:
     return 名字
 
 
+def test_成功回执能真的渲染出来(services) -> None:
+    '''盯住玩家真正看到的那张卡：`icon` 必须是**已登记**的图标分类。
+
+    这条是补的教训——上线第一次兑换就炸在 `KeyError: gift`（`message/icons.py` 的图标表里没有 `gift`），
+    而当时的验证只看了 `redeem()` 的返回值、**从没渲染过卡片**：语料与判据走的都是错误路径，到不了成功卡。
+    '''
+
+    from game.cmd.通用.兑换码 import reply as 兑换回复
+    from launch.adapter.qq_protocol.render import render_qq_message
+
+    _创建(services, 'd-卡片', '卡片修士')
+    result = asyncio.run(
+        services.features.duihuan.redeem('d-卡片', '兑换:卡片', _码(services, 新手编号))
+    )
+    document = 兑换回复.result(services.features.duihuan, result)
+    payload = render_qq_message(document)
+    content = payload['content'] if isinstance(payload, dict) else str(payload)
+    assert result.name in content, '卡片上要出现礼包名'
+    assert '清心散' in content, '卡片上要出现到手的东西'
+
+
 def test_随机发放只发候选池里的东西(services) -> None:
     _创建(services, 'd-随机', '随机修士')
     result = asyncio.run(
