@@ -417,6 +417,89 @@ def check_protocol_doc_covers_builder() -> list[str]:
     return [f"协议文档里没写 `{m}` 的用法" for m in methods if (m + "(") not in doc]
 
 
+ARCHITECTURE_DOC = ROOT / "系统架构.md"
+CORE_DOC = ROOT / "核心设定.md"
+
+
+def _service_counts() -> tuple[int, int]:
+    """组合根里的两个服务清单长度——文档写服务数时以它为准。"""
+
+    tree = ast.parse((ROOT / "game" / "app.py").read_text(encoding="utf-8"))
+    sizes: dict[str, int] = {}
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name in ("CoreServices", "FeatureServices"):
+            sizes[node.name] = sum(1 for child in node.body if isinstance(child, ast.AnnAssign))
+    return sizes["CoreServices"], sizes["FeatureServices"]
+
+
+def _command_component_count() -> int:
+    return sum(len(_directories(f"game/cmd/{scope}")) for scope in ("通用", "专属", "后台"))
+
+
+def check_architecture_doc_counts() -> list[str]:
+    """`系统架构.md` 的服务数、命令组件数与实测一致。
+
+    真出过事：这一节一直写「45 个玩法微服务、44 个二级命令组件」，而组合根里是
+    47 与 46 —— 判据只覆盖了 README，这份权威架构文档反而没人数。
+    """
+
+    text = ARCHITECTURE_DOC.read_text(encoding="utf-8")
+    core, features = _service_counts()
+    commands = _command_component_count()
+    problems: list[str] = []
+    match = re.search(
+        r"当前共有 (\d+) 个核心微服务与 (\d+) 个玩法微服务[^\n]*?(\d+) 个二级命令组件", text
+    )
+    if match is None:
+        problems.append("系统架构.md 里找不到服务与命令组件的计数句")
+    else:
+        got = tuple(int(value) for value in match.groups())
+        want = (core, features, commands)
+        if got != want:
+            problems.append(
+                f"系统架构.md 写「{got[0]} 核心 / {got[1]} 玩法 / {got[2]} 命令组件」，"
+                f"实际 {want[0]} / {want[1]} / {want[2]}"
+            )
+    for pattern, value, label in (
+        (r"FeatureServices\s+(\d+) 个玩法微服务", features, "组合根示意图"),
+        (r"再创建 (\d+) 个 `FeatureServices`", features, "装配步骤"),
+    ):
+        found = re.search(pattern, text)
+        if found is None:
+            problems.append(f"系统架构.md 的{label}里找不到玩法微服务计数")
+        elif int(found.group(1)) != value:
+            problems.append(f"系统架构.md 的{label}写 {found.group(1)}，实际 {value}")
+    return problems
+
+
+def check_location_count() -> list[str]:
+    """地点总数：世界内容里「带坐标的 JSON」条数，文档必须与它一致。
+
+    真出过事：地点从 81 加到 82 之后，五份文档（含 `核心设定.md`）留在 81。
+    """
+
+    world = ROOT / "data" / "世界" / "内容"
+    actual = 0
+    for path in world.rglob("*.json"):
+        if path.name == "组件.json":
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(value, dict) and ("坐标" in value or "xy" in value):
+            actual += 1
+    problems: list[str] = []
+    for doc in (CORE_DOC, world / "说明.md", ROOT / "data" / "基础" / "内容" / "说明.md"):
+        text = doc.read_text(encoding="utf-8")
+        for match in re.finditer(r"(\d+)\s*个(?:正式)?地点", text):
+            if int(match.group(1)) != actual:
+                problems.append(
+                    f"{doc.relative_to(ROOT).as_posix()} 写「{match.group(1)} 个地点」，实际 {actual}"
+                )
+    return problems
+
+
 CHECKS = (
     ("README 结构计数", check_readme_structure),
     ("README 实测规模", check_readme_runtime),
@@ -424,6 +507,8 @@ CHECKS = (
     ("工具索引总数", check_tools_totals),
     ("工具索引点名", check_tools_listing),
     ("核对项数", check_full_check_counts),
+    ("架构文档计数", check_architecture_doc_counts),
+    ("地点总数", check_location_count),
     ("无重复章节", check_no_duplicate_sections),
     ("台账目录", check_ledger_index),
     ("协议文档覆盖面", check_protocol_doc_covers_builder),
