@@ -7,6 +7,8 @@ const el = {
   entries: document.getElementById("entries"),
   pager: document.getElementById("pager"),
   detail: document.getElementById("detail"),
+  overview: document.getElementById("overview"),
+  dialog: document.getElementById("detail-dialog"),
   status: document.getElementById("status"),
   crumb: document.getElementById("crumb"),
   query: document.getElementById("query"),
@@ -17,6 +19,9 @@ let page = 1;
 let label = "";
 let activePrefix = "";
 let lastQuery = "";
+// 详情走弹窗；顺着「关联」点下去时压栈，好退回上一个词条。
+let currentId = "";
+const detailStack = [];
 
 async function fetchData(params) {
   const response = await fetch("/baike/data" + (params || ""));
@@ -71,7 +76,14 @@ function renderPrefixes(table) {
     count.textContent = row["条数"];
     button.append(code, name, count);
     button.dataset.prefix = row["前缀"];
-    button.addEventListener("click", () => openPrefix(row["前缀"], row["类别"]));
+    if (!Number(row["条数"])) {
+      // 号段先登记、实体还没放进来（精英 / 讨伐首领…）：置灰不可点，别让人点进一片空白。
+      button.classList.add("is-empty");
+      button.disabled = true;
+      button.title = "这一类还没有词条";
+    } else {
+      button.addEventListener("click", () => openPrefix(row["前缀"], row["类别"]));
+    }
     item.append(button);
     frag.append(item);
   }
@@ -151,7 +163,7 @@ function renderPager() {
 }
 
 function renderOverview(table) {
-  clear(el.detail);
+  clear(el.overview);
   const head = document.createElement("header");
   head.className = "overview-head";
   const title = document.createElement("h2");
@@ -171,7 +183,13 @@ function renderOverview(table) {
     name.textContent = row["主体"];
     const count = document.createElement("span");
     count.className = "card-count";
-    count.textContent = row["条数"] + " 条";
+    if (!Number(row["条数"])) {
+      // 号段登记了、实体还没放进来（精英 / 讨伐首领…）：说「未开放」，不摆一个 0 条让人点。
+      item.classList.add("is-empty");
+      count.textContent = "未开放";
+    } else {
+      count.textContent = row["条数"] + " 条";
+    }
     const sub = document.createElement("span");
     sub.className = "card-sub";
     sub.textContent = row["前缀数"] + " 个前缀";
@@ -212,8 +230,8 @@ function renderOverview(table) {
     item.append(button);
     rank.append(item);
   }
-  el.detail.append(head, cards, rankTitle, rank);
-  show(el.detail, true);
+  el.overview.append(head, cards, rankTitle, rank);
+  show(el.overview, true);
 }
 
 // 字段值可能是对象或数组，直接 JSON.stringify 会甩出一堆引号花括号；
@@ -225,6 +243,37 @@ function formatValue(value) {
   return Object.entries(value)
     .map(([key, inner]) => key + "：" + formatValue(inner))
     .join("\n");
+}
+
+// 嵌套对象（敌人的属性覆盖、掉落、交锋所得…）拍平成一行就读不出结构，拆成「子键 + 值」逐行列。
+function fieldValue(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const wrap = document.createElement("ul");
+    wrap.className = "field-object";
+    for (const [key, inner] of Object.entries(value)) {
+      const item = document.createElement("li");
+      const sub = document.createElement("span");
+      sub.className = "field-sub-key";
+      sub.textContent = key;
+      const text = document.createElement("span");
+      text.className = "field-sub-value";
+      text.textContent = formatValue(inner);
+      item.append(sub, text);
+      wrap.append(item);
+    }
+    return wrap;
+  }
+  const span = document.createElement("span");
+  span.textContent = formatValue(value);
+  return span;
+}
+
+function openSheet() {
+  if (el.dialog && !el.dialog.open) el.dialog.showModal();
+}
+
+function closeSheet() {
+  if (el.dialog && el.dialog.open) el.dialog.close();
 }
 
 function renderDetail(body) {
@@ -244,6 +293,18 @@ function renderDetail(body) {
   back.textContent = "返回列表";
   back.addEventListener("click", () => showList());
   head.append(title, meta, back);
+  if (detailStack.length) {
+    const prev = document.createElement("button");
+    prev.type = "button";
+    prev.className = "back";
+    prev.textContent = "← 返回上一词条";
+    prev.addEventListener("click", () => {
+      const last = detailStack.pop() || "";
+      currentId = "";
+      if (last) openDetail(last, true);
+    });
+    head.append(prev);
+  }
   const list = document.createElement("dl");
   list.className = "fields";
   const pairs = Object.entries(body["字段"] || {});
@@ -255,7 +316,7 @@ function renderDetail(body) {
     term.textContent = key;
     const desc = document.createElement("dd");
     desc.className = "field-value";
-    desc.textContent = formatValue(value);
+    desc.append(fieldValue(value));
     list.append(term, desc);
   }
   el.detail.append(head, list);
@@ -286,7 +347,10 @@ function renderDetail(body) {
 }
 
 function showList() {
-  show(el.detail, false);
+  closeSheet();
+  detailStack.length = 0;
+  currentId = "";
+  show(el.overview, false);
   show(el.entries, true);
   show(el.pager, true);
   setStatus(label, false);
@@ -302,7 +366,7 @@ function markActive(prefix) {
 async function openPrefix(prefix, category) {
   markActive(prefix);
   setStatus("正在载入…", false);
-  show(el.detail, false);
+  show(el.overview, false);
   try {
     const body = await fetchData("?prefix=" + encodeURIComponent(prefix));
     rows = body["条目"] || [];
@@ -321,7 +385,7 @@ async function openPrefix(prefix, category) {
 async function search(word) {
   markActive("");
   setStatus("正在载入…", false);
-  show(el.detail, false);
+  show(el.overview, false);
   try {
     const body = await fetchData("?q=" + encodeURIComponent(word));
     rows = body["条目"] || [];
@@ -337,15 +401,18 @@ async function search(word) {
   }
 }
 
-async function openDetail(id) {
+async function openDetail(id, keepStack) {
   markActive("");
   setStatus("正在载入…", false);
   try {
     const body = await fetchData("?id=" + encodeURIComponent(id));
+    if (!keepStack && currentId && currentId !== id) detailStack.push(currentId);
+    currentId = id;
     show(el.entries, false);
     show(el.pager, false);
     setStatus("", false);
     renderDetail(body);
+    openSheet();
     push("?id=" + id);
   } catch (error) {
     setStatus(String(error.message || error), true);
@@ -389,9 +456,18 @@ el.query.addEventListener("keydown", (event) => {
   if (word) search(word);
 });
 
+// 弹窗用原生关闭（✕、Esc、点遮罩）：关掉就把列表视图还回来。
+el.dialog.addEventListener("close", () => {
+  detailStack.length = 0;
+  currentId = "";
+  show(el.entries, true);
+  show(el.pager, true);
+  setStatus(label, false);
+});
+
 window.addEventListener("popstate", () => boot());
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") showList();
+  if (event.key === "Escape" && !el.dialog.open) showList();
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   const buttons = [...el.entries.querySelectorAll(".entry-button")];
   if (!buttons.length) return;

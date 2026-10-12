@@ -55,6 +55,15 @@ class SectFacilityFeature:
             raise JsonDataError("宗门设施展示缺少文本.json")
         self._copy = raw
 
+    def grades(self, facility: str = "炼阵") -> tuple[str, ...]:
+        """这一设施支持哪些品级（黄品/玄品/…）：核心自己声明的，页面照印不自己造。
+
+        演阵台的品级下拉原先发号段编号 `01`–`05`，而阵法核心只认品级名——选哪个都被拒。
+        触发层不许碰核心，所以由这里把核心的公开结果转出来。
+        """
+
+        return tuple(self._facilities.facility(facility).supported_grades)
+
     def formation_catalog(self) -> tuple[tuple[str, str], ...]:
         """全部阵法（编号, 名称）——页面在核心列不出个人阵法时退回的那份总目。"""
 

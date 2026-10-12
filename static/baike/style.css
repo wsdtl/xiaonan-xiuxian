@@ -351,8 +351,64 @@ body {
 
 @media print {
   .topbar, .sidebar, .pager, .back { display: none; }
+  .sheet { position: static; max-height: none; box-shadow: none; border: none; }
   body { overflow: visible; display: block; background: #ffffff; }
   .app { display: block; }
   .content { overflow: visible; padding: 0; }
   .fields { border-color: #cccccc; box-shadow: none; }
+}
+
+/* 词条详情走弹窗：点条目立刻看到内容，不用再往下翻——整页不滚，弹窗自己滚。 */
+.sheet {
+  width: min(880px, 94vw);
+  max-height: 86vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 22px 28px 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-2);
+}
+
+.sheet::backdrop { background: rgba(19, 42, 34, 0.42); backdrop-filter: blur(3px); }
+.sheet[open] { animation: sheet-in 0.18s var(--ease); }
+
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+.sheet-close { position: sticky; top: -10px; display: flex; justify-content: flex-end; margin: -6px 0 0; }
+
+.sheet-close button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  transition: color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+
+.sheet-close button:hover { color: var(--ink); border-color: var(--accent); }
+.sheet .detail { margin-top: 0; }
+
+/* 嵌套字段（属性覆盖 / 掉落 / 交锋所得）逐行「子键 值」，别拍成一大段文字。 */
+.field-object { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.field-sub-key { color: var(--muted); margin-right: 10px; }
+.field-sub-value { font-variant-numeric: tabular-nums; }
+
+/* 号段登记了、实体还没放进来：置灰，别让人点进空白页。 */
+.card.is-empty { opacity: 0.55; }
+.card.is-empty .card-count { font-size: 18px; letter-spacing: 2px; color: var(--muted); }
+
+.prefix-button.is-empty { opacity: 0.45; cursor: default; }
+.prefix-button.is-empty:hover { transform: none; border-color: var(--line); background: transparent; }
+
+@media (max-width: 560px) {
+  .sheet { width: 96vw; max-height: 92vh; padding: 18px 16px 24px; }
 }

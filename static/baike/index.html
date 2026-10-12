@@ -27,8 +27,14 @@
       <p id="status" class="status">正在载入…</p>
       <ol id="entries" class="entries"></ol>
       <nav id="pager" class="pager"></nav>
-      <article id="detail" class="detail"></article>
+      <article id="overview" class="detail"></article>
     </section>
   </main>
+  <dialog id="detail-dialog" class="sheet" aria-label="词条详情">
+    <form method="dialog" class="sheet-close">
+      <button type="submit" aria-label="关闭详情">✕</button>
+    </form>
+    <article id="detail" class="detail"></article>
+  </dialog>
 </body>
 </html>

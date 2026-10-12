@@ -49,13 +49,19 @@ async function load(scope, category, page) {
   try { data = await (await fetch('/jiaoyi/data?' + params)).json(); } catch (error) { say('读不到数据：' + error); return; }
   if (data.error) { say(data.error); return; }
   UI = data.ui || {};
-  ITEMS = (data.page && (data.page.entries || data.page.items)) || [];
+  // 后端 `TradePage` 的商品在 `products`：以前读 `entries/items`，货架永远是空的。
+  ITEMS = (data.page && data.page.products) || [];
   $('title').textContent = UI['标题'] || '货架';
   $('intro').textContent = UI['说明'] || '';
   $('label-shelf').textContent = UI['货架'] || '货架';
   $('prev').textContent = UI['上一页'] || '上一页';
   $('next').textContent = UI['下一页'] || '下一页';
-  $('pager').textContent = (UI['页码'] || '页码') + ' ' + PAGE;
+  const sheet = data.page || {};
+  const totalPages = Number(sheet.total_pages) || 1;
+  PAGE = Number(sheet.page) || PAGE;
+  $('pager').textContent = (UI['页码'] || '页码') + ' ' + PAGE + ' / ' + totalPages;
+  $('prev').disabled = PAGE <= 1;
+  $('next').disabled = PAGE >= totalPages;
   const select = $('scope');
   const scopes = data.scopes || [];
   select.innerHTML = '';
@@ -97,7 +103,8 @@ function renderShelf() {
   }
   for (const row of ITEMS) {
     const id = pick(row, ['编号', 'content_id', 'id', 'item_id']);
-    const grade = pick(row, ['品级', 'grade', 'grade_id', '品级编号']);
+    const gradeId = pick(row, ['grade_id', '品级', 'grade', '品级编号']);
+    const grade = pick(row, ['grade_name', '品级名']) || gradeId;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'item';
@@ -106,10 +113,10 @@ function renderShelf() {
     name.textContent = pick(row, ['名称', 'name', 'content_name']) || id;
     const meta = document.createElement('span');
     meta.className = 'item-meta';
-    const price = pick(row, ['价格', 'price', '售价', '单价']);
+    const price = pick(row, ['unit_price', '价格', 'price', '售价', '单价']);
     meta.textContent = [id, grade && ('品级 ' + grade), price && ('价 ' + price)].filter(Boolean).join(' · ');
     button.append(name, meta);
-    button.onclick = () => show('购买 ' + id + (grade ? ' ' + grade : ''));
+    button.onclick = () => show('购买 ' + id + (gradeId ? ' ' + gradeId : ''));
     host.append(button);
   }
   const first = ITEMS[0];

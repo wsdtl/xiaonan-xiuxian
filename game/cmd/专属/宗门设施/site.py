@@ -17,7 +17,6 @@ from launch.paths import static_path
 from ...site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/lianzhen')
-GRADES = ('01', '02', '03', '04', '05')
 
 
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
@@ -54,7 +53,15 @@ async def lianzhen_data(scope: str = '') -> JSONResponse:
         return failure(str(exc))
     if not user_id:
         return JSONResponse(
-            {'scopes': [], 'scope': '', 'ui': {}, 'grades': list(GRADES), 'formations': [], 'notice': ''},
+            {
+                'scopes': [],
+                'scope': '',
+                'ui': {},
+                # 品级候选由玩法转出：这里以前硬写编号 01–05，核心只认品级名。
+                'grades': list(services.features.zongmen_sheshi.grades()),
+                'formations': [],
+                'notice': '',
+            },
             headers=PAGE_HEADERS,
         )
     feature = services.features.zongmen_sheshi
@@ -78,7 +85,7 @@ async def lianzhen_data(scope: str = '') -> JSONResponse:
         'scopes': scopes,
         'scope': 'user:' + user_id,
         'ui': ui,
-        'grades': list(GRADES),
+        'grades': list(feature.grades()),
         'formations': [
             {'id': row_id, 'name': name}
             for row_id, name in feature.formation_catalog()
@@ -89,10 +96,12 @@ async def lianzhen_data(scope: str = '') -> JSONResponse:
         listed = await feature.page('炼阵', user_id, '个人纳戒')
         # 能让核心列出自己认得的阵法时，就用核心的那份；不能就退回总目。
         rows = getattr(listed, 'entries', ()) or ()
-        value['formations'] = [
-            {'id': str(getattr(row, 'content_id', '')), 'name': str(getattr(row, 'name', ''))}
-            for row in rows
-        ]
+        # 只有核心真的列得出东西才替换总目：空列表会把阵法总目整份盖掉，页面只剩一个空下拉。
+        if rows:
+            value['formations'] = [
+                {'id': str(getattr(row, 'content_id', '')), 'name': str(getattr(row, 'name', ''))}
+                for row in rows
+            ]
     except SectFacilityFeatureError as exc:
         # 门槛不在页面重推：核心说什么就显示什么。
         value['notice'] = str(exc)
