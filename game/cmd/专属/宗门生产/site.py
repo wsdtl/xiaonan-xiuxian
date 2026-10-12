@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import duration
 from ...site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/lingtian')
@@ -48,6 +49,11 @@ async def lingtian_data(scope: str = '') -> JSONResponse:
     groups = feature.copy()
     group = groups.get('灵田', {}) if isinstance(groups, Mapping) else {}
     pick = (lambda key: str(group.get(key) or '')) if isinstance(group, Mapping) else (lambda key: '')
+    # 「通用」那一节数据里早有：灵田开没开、地形数量提示、当前地形的写法。
+    common = groups.get('通用', {}) if isinstance(groups, Mapping) else {}
+    pick_common = (
+        (lambda key: str(common.get(key) or '')) if isinstance(common, Mapping) else (lambda key: '')
+    )
     ui = {
         '标题': pick('页面标题'),
         '说明': pick('页面说明'),
@@ -58,6 +64,11 @@ async def lingtian_data(scope: str = '') -> JSONResponse:
         '未选': pick('页面未选'),
         '命令': pick('页面命令'),
         '常用': pick('页面常用'),
+        '未开始': pick_common('未开始'),
+        '开启说明': pick_common('开启说明'),
+        '地形数量': pick_common('地形数量'),
+        '未选地形': pick_common('未选地形'),
+        '已选地形': pick_common('已选地形'),
     }
     value: dict[str, object] = {
         'scopes': [{'id': 'user:' + item.user_id, 'name': item.name} for item in scopes],
@@ -68,10 +79,23 @@ async def lingtian_data(scope: str = '') -> JSONResponse:
         'notice': '',
         'usual': list(USUAL),
     }
+    # 地形数量的提示用数据模板填；字数由这一处算，页面不自己拼句子。
+    value['terrain_hint'] = ui['地形数量'].format_map({'数量': len(value['terrains'])})
     try:
         view = await feature.view('灵田', user_id)
         value['terrain'] = str(getattr(view, 'terrain', '') or '')
         value['started'] = bool(getattr(view, 'started', False))
+        # 开没开、当前地形都用数据里的词；时长与聊天侧同一个 duration()。
+        value['started_text'] = (
+            ui['开启说明'].format_map({'时长': duration(view.facility.period_seconds)})
+            if value['started']
+            else ui['未开始']
+        )
+        value['terrain_text'] = (
+            ui['已选地形'].format_map({'地形': value['terrain']})
+            if value['terrain']
+            else ui['未选地形']
+        )
     except Exception as exc:
         value['notice'] = str(exc)
     return JSONResponse(value, headers=PAGE_HEADERS)

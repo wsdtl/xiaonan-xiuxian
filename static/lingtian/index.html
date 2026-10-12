@@ -11,14 +11,17 @@
 <header><p class="eyebrow">晓楠修仙 / 宗门洞天</p><h1 id="title">宗门灵田</h1><p id="intro">正在读取…</p></header>
 <p id="status" role="status" aria-live="polite"></p>
 <section class="bar" aria-label="挑自己">
-<label>挑自己<select id="scope"></select></label>
+<label><span id="label-scope">挑自己</span><select id="scope"></select></label>
 <button id="refresh" type="button">刷新</button>
 <p id="notice"></p>
 </section>
 <section class="panel">
-<h2 id="label-terrain">可选地形</h2>
-<div id="terrains"></div>
+<p id="state" class="state"></p>
+<p id="terrain-text" class="terrain-text"></p>
 <div id="command"></div>
+<h2 id="label-terrain">可选地形</h2>
+<p id="hint" class="hint"></p>
+<div id="terrains"></div>
 <h2 id="label-usual">常用命令</h2>
 <div id="usual"></div>
 </section>
