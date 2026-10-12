@@ -371,6 +371,8 @@ class EnemyService:
         required_tier: str | None = None,
     ) -> EnemyInstance:
         raw = (definitions or self._definitions)[name]
+        # 池成员现在是编号（编号实体池）：显示名与兽宝池名一律取定义里的「名称」。
+        display_name = str(raw.get("名称") or name)
         role_name = _text(raw.get("角色规则"), f"{name}.角色规则")
         role = self._role_rules[role_name]
         level = source.randint(*_range(raw.get("等级"), f"{name}.等级"))
@@ -506,7 +508,7 @@ class EnemyService:
         combatant = CombatantSpec(
             id=instance_id,
             content_id=str(raw.get("编号") or ""),
-            name=name,
+            name=display_name,
             attributes=MappingProxyType(attributes),
             level=level,
             combatant_type=_text(role.get("角色类型"), f"{role_name}.角色类型"),
@@ -529,6 +531,7 @@ class EnemyService:
         role_name: str,
         source: random.Random,
     ) -> EnemyReward:
+        display_name = str(raw.get("名称") or name)
         loot = _mapping(raw.get("掉落"), f"{name}.掉落")
         stones = source.randint(*_range(loot.get("灵石"), f"{name}.掉落.灵石"))
         rewards = _mapping(raw.get("交锋所得"), f"{name}.交锋所得")
@@ -537,7 +540,7 @@ class EnemyService:
         )
         pool_names: list[str] = []
         if role_name == "灵兽":
-            pool_names.append(f"兽宝-{name}")
+            pool_names.append(f"兽宝-{display_name}")
         extra = loot.get("丹药池", ())
         if extra:
             pool_names.extend(_texts(extra, f"{name}.丹药池"))

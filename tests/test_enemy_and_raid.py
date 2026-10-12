@@ -89,7 +89,11 @@ def test_every_enemy_definition_generates(services) -> None:
         files = tuple(sorted(f for f, s in pools.items() if s == section))
         if not files:
             continue
-        expected = set(services.data.pool_members(files, section))
+        # 编号实体池成员键是编号，显示名在「名称」；命名实体池没有名称字段就退回成员键。
+        expected = {
+            str(value.get("名称") or key)
+            for key, value in services.data.entities(section).items()
+        }
         try:
             # 一次把该类别池里**每个定义**都抽出来：数量取并集大小，抽不重复优先。
             units = services.enemy.generate_category(
