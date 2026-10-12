@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import uvicorn
 from fastapi import FastAPI
+from loguru import logger
 
 from launch import (
     LOGGING_CONFIG,
@@ -14,9 +17,49 @@ from launch import (
 )
 
 
+def ensure_certs_dir() -> Path:
+    """`certs/` 不进包，新部署时它可能不存在：先把位置建出来，方便往里放证书。
+
+    与 `log/`、`.runtime/`、`database/` 同理——运行期目录由程序按需创建，替包部署只带代码与数据。
+    """
+
+    directory = config.base_dir / "certs"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def uvicorn_ssl_kwargs() -> dict[str, str]:
+    """按 `.env` 与证书**实际在不在**决定 HTTP 还是 HTTPS。
+
+    - 没配 `SERVER_SSL_CERTFILE` / `SERVER_SSL_KEYFILE` → HTTP；
+    - 配了但文件不在（新部署还没把证书放进去）→ **退回 HTTP 并告警**，
+      不让「证书没放」变成「服务起不来」；
+    - 两个文件都在 → HTTPS。
+    """
+
+    certfile = config.server.ssl_certfile
+    keyfile = config.server.ssl_keyfile
+    if not certfile or not keyfile:
+        return {}
+    if not Path(certfile).is_file() or not Path(keyfile).is_file():
+        logger.warning(
+            "证书文件不存在（{} / {}），本次以 HTTP 启动；把证书放进 {} 并在 .env 里设好 "
+            "SERVER_SSL_CERTFILE 与 SERVER_SSL_KEYFILE 即可改用 HTTPS",
+            certfile,
+            keyfile,
+            config.base_dir / "certs",
+        )
+        return {}
+    return {
+        "ssl_certfile": str(certfile),
+        "ssl_keyfile": str(keyfile),
+    }
+
+
 def create_app() -> FastAPI:
     """加载命令模块，挂载消息驱动器并创建应用。"""
 
+    ensure_certs_dir()
     app = FastAPI(
         title=config.project.name,
         debug=config.project.debug,
@@ -25,15 +68,6 @@ def create_app() -> FastAPI:
     FastAPIAllowed(app)
     FastAPIIncludeRouter(app)
     return app
-
-
-def uvicorn_ssl_kwargs() -> dict[str, str]:
-    if not config.server.ssl_certfile or not config.server.ssl_keyfile:
-        return {}
-    return {
-        "ssl_certfile": str(config.server.ssl_certfile),
-        "ssl_keyfile": str(config.server.ssl_keyfile),
-    }
 
 
 # 不要在 Windows 上改事件循环策略：`asyncio.set_event_loop_policy` 与

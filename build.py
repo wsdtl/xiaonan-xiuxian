@@ -6,11 +6,14 @@
     .venv/Scripts/python.exe -X utf8 build.py --跳过自检    # 只打包
     .venv/Scripts/python.exe -X utf8 build.py --含工具      # 连 tools/ 一起打（维护用）
     .venv/Scripts/python.exe -X utf8 build.py --含测试      # 连 tests/ 一起打
+    .venv/Scripts/python.exe -X utf8 build.py --含说明      # 连 .md 说明一起打（默认不带）
     .venv/Scripts/python.exe -X utf8 build.py --压缩        # 额外产出 BUILD.zip
 
 三条硬规矩：
 
-1. **运行期目录不进包**：`database/`、`.runtime/`、`log/`、`certs/`、`.venv/`、`.env` 一律不拷。
+1. **运行期目录不进包**：`database/`、`.runtime/`、`log/`、`certs/`、`.venv/`、`.env` 一律不拷；
+   **包内的运行期状态也剔掉**（`launch/runtime/` 里的单实例锁 `server.lock`——它由 `launch/runtime_guard.py`
+   启动时自建，跟着包走会去顶服务器上正被占用的锁，Windows 下复制会当场报文件占用）。
    这些目录（连同它们的旧内容）**替换时原样留在服务器上**，所以更新永远不会碰到存档；
    程序启动时自己判断它们在不在、缺了就建（`database/`、`log/`、`.runtime/` 都已自建）。
 2. **只动 BUILD/**：脚本只清空并重建 `BUILD/`，仓库里其它地方一个字节都不碰。
@@ -38,7 +41,8 @@ BUILD = ROOT / "BUILD"
     "game", "launch", "message", "static", "data",
     "main.py", "requirements.txt", "start.bat", "start.sh", ".env.example",
 )
-#: 根目录的说明文档跟着一起走（改数据的人要照着读）。
+#: 说明文档（含 `data/` 里各组件与各面的 `说明.md`）默认**不进包**：部署只要干净的代码与数据。
+#: 加 `--含说明` 才带上它们，给需要留档的场合。
 文档 = (
     "README.md", "系统架构.md", "微服务边界规范.md", "核心设定.md", "说明模版.md",
 )
@@ -52,8 +56,41 @@ BUILD = ROOT / "BUILD"
 )
 
 
-def _copytree(name: str) -> int:
-    """拷一个顶层条目，返回文件数；`__pycache__` 与 `.pyc` 不进包。"""
+#: 落在包内、但属于运行期状态的路径（相对仓库根）：进包就会在替换时顶掉服务器上的那一份。
+包内运行期状态 = ("launch/runtime",)
+
+#: 运行期状态的文件后缀：包里出现任何一个都算打包出错。
+运行期后缀 = (".lock", ".db", ".db-wal", ".db-shm", ".bak")
+
+
+def _ignore(含说明: bool):
+    """往 BUILD 拷东西时跳过的：缓存、字节码、（默认还有）说明 md、以及包内运行期状态。"""
+
+    blocked = [ROOT / part for part in 包内运行期状态]
+
+    def _skip(directory: str, names: list[str]) -> set[str]:
+        # copytree 是在**父目录**这一层问「哪些名字要跳过」，所以要看的是
+        # 「当前目录 / 名字」是不是被挡的路径，而不是当前目录本身。
+        current = pathlib.Path(directory).resolve()
+        skipped = {name for name in names if name == "__pycache__"}
+        for name in names:
+            child = (current / name).resolve()
+            if child in blocked:
+                skipped.add(name)
+            elif name.endswith((".pyc", ".pyo")):
+                skipped.add(name)
+            elif not 含说明 and name.endswith(".md"):
+                skipped.add(name)
+        return skipped
+
+    return _skip
+
+
+def _copytree(name: str, 含说明: bool = False) -> int:
+    """拷一个顶层条目，返回文件数。
+
+    `__pycache__`、`.pyc` 不进包；`含说明` 为假时连 `.md` 一起滤掉——部署只要代码与数据。
+    """
 
     source = ROOT / name
     target = BUILD / name
@@ -62,14 +99,16 @@ def _copytree(name: str) -> int:
             source,
             target,
             dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+            ignore=_ignore(含说明),
         )
         return sum(1 for path in target.rglob("*") if path.is_file())
+    if not 含说明 and source.suffix == ".md":
+        return 0
     shutil.copy2(source, target)
     return 1
 
 
-def 打包(含工具: bool, 含测试: bool) -> dict:
+def 打包(含工具: bool, 含测试: bool, 含说明: bool) -> dict:
     if BUILD.exists():
         shutil.rmtree(BUILD)
     BUILD.mkdir(parents=True)
@@ -79,21 +118,32 @@ def 打包(含工具: bool, 含测试: bool) -> dict:
         if not (ROOT / name).exists():
             缺项.append(name)
             continue
-        文件数 += _copytree(name)
-    for name in 文档:
-        if (ROOT / name).exists():
-            文件数 += _copytree(name)
+        文件数 += _copytree(name, 含说明)
+    if 含说明:
+        for name in 文档:
+            if (ROOT / name).exists():
+                文件数 += _copytree(name, True)
     if 含工具:
         if (ROOT / "tools").exists():
-            文件数 += _copytree("tools")
+            文件数 += _copytree("tools", 含说明)
     if 含测试:
         if (ROOT / "tests").exists():
-            文件数 += _copytree("tests")
+            文件数 += _copytree("tests", 含说明)
     # 安全断言：运行期目录一个都不许进包。
     泄漏 = [name for name in 不进包 if (BUILD / name).exists()]
     if 泄漏:
         raise SystemExit(f"打包出错：运行期目录进了 BUILD：{泄漏}")
-    for name in ("main.py", "game/app.py", "data/说明.md"):
+    包内泄漏 = [part for part in 包内运行期状态 if (BUILD / part).exists()]
+    if 包内泄漏:
+        raise SystemExit(f"打包出错：包内运行期状态进了 BUILD：{包内泄漏}")
+    脏文件 = [
+        path.relative_to(BUILD).as_posix()
+        for path in BUILD.rglob("*")
+        if path.is_file() and path.name.endswith(运行期后缀)
+    ]
+    if 脏文件:
+        raise SystemExit(f"打包出错：BUILD 里出现运行期文件（锁/库/备份）：{脏文件[:5]}")
+    for name in ("main.py", "game/app.py", "data/基础/读取规则.json"):
         if not (BUILD / name).exists():
             raise SystemExit(f"打包出错：缺关键文件 {name}")
     大小 = sum(path.stat().st_size for path in BUILD.rglob("*") if path.is_file())
@@ -104,48 +154,25 @@ def 打包(含工具: bool, 含测试: bool) -> dict:
         "总字节": 大小,
         "含工具": 含工具,
         "含测试": 含测试,
-        "运行期目录（不进包，替换时保留）": list(不进包[1:]),
+        "含说明": 含说明,
+        "不进包（替换时原样保留）": list(不进包[1:]),
+        "首次部署": [
+            "把本目录内容复制到服务器上的安装目录",
+            "把 .env.example 复制成 .env，按需改端口与密钥——这一步不能省，程序会明确报错要求它",
+            "跑 start.bat（Windows）或 start.sh：它会自建 .venv、装依赖再启动",
+        ],
+        "日常更新": [
+            "把新一份 BUILD 里的内容复制覆盖过去",
+            "不要动服务器上的 .env、database/、log/、.runtime/、certs/——包里本来就没有它们",
+        ],
+        "包内说明": "只有代码与 data；`.md` 说明默认不进包（--含说明 可带）。",
     }
-    (BUILD / "部署说明.md").write_text(_部署说明(信息), encoding="utf-8")
     (BUILD / "构建信息.json").write_text(
         json.dumps(信息, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     if 缺项:
         raise SystemExit(f"打包出错：仓库里找不到 {缺项}")
     return 信息
-
-
-def _部署说明(信息: dict) -> str:
-    """包里放一份给人看的部署说明：首次装与日常更新的区别，一眼能看懂。"""
-
-    lines = [
-        "# 部署说明（由 build.py 生成）",
-        "",
-        "打包时间：" + str(信息["打包时间"]) + "　来源提交：" + str(信息["来源提交"]),
-        "",
-        "## 首次部署（只做一次）",
-        "",
-        "1. 把本目录内容复制到服务器上的安装目录；",
-        "2. 把 `.env.example` 复制成 `.env`，按需改端口与密钥——**这一步不能省**，程序会明确报错要求它；",
-        "3. 跑 `start.bat`（Windows）或 `start.sh`：它会自建 `.venv`、装依赖再启动。",
-        "",
-        "`database/`、`log/`、`.runtime/` 这些目录**不用事先建**：程序启动时自己判断、缺了就建。",
-        "",
-        "## 日常更新（替换）",
-        "",
-        "1. 把新一份 BUILD 里的内容**复制覆盖**过去；",
-        "2. 不要动服务器上的 `.env`（每台机器不同，包里故意不带它）、`database/`（玩家存档）、`log/`、`.runtime/`。",
-        "",
-        "包里没有这些目录，所以「复制覆盖」不会碰到它们——这正是这套做法的安全点。",
-        "",
-        "## 包里有什么",
-        "",
-        "- 游戏本体：`game/`、`launch/`、`message/`、`static/`、`main.py`、启动脚本、依赖清单；",
-        "- 全部正式数据：`data/`（规则与内容都在这里，代码只是解释器）；",
-        "- 说明文档与 `.env.example` 模板。",
-        "",
-    ]
-    return "\n".join(lines)
 
 
 def _提交() -> str:
@@ -183,7 +210,16 @@ services = app.build_game_services()
 if 缺少后:
     print("自检失败：这些目录没有被自动创建：" + "、".join(缺少后))
     raise SystemExit(1)
-print("自检通过：启动前缺 " + ("、".join(缺少前) or "无") + "，启动后运行期目录齐全")
+# 单实例锁走的是 lifespan（真启动服务器时才拿），轻量自检里显式拿一次再放，证明它会自建。
+from launch.runtime_guard import RuntimeGuard
+guard = RuntimeGuard()
+guard.acquire()
+guard.release()
+lock = root / "launch" / "runtime" / "server.lock"
+if not lock.exists():
+    print("自检失败：单实例锁没有自建（launch/runtime/server.lock）")
+    raise SystemExit(1)
+print("自检通过：启动前缺 " + ("、".join(缺少前) or "无") + "，启动后运行期目录齐全、单实例锁已自建")
 services.core.database.close()
 """
 
@@ -218,14 +254,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="打包游戏本体与 data 到 BUILD/")
     parser.add_argument("--含工具", action="store_true", help="连 tools/ 一起打包")
     parser.add_argument("--含测试", action="store_true", help="连 tests/ 一起打包")
+    parser.add_argument("--含说明", action="store_true", help="连 .md 说明一起打包（默认不带）")
     parser.add_argument("--压缩", action="store_true", help="额外产出 BUILD.zip")
     parser.add_argument("--跳过自检", action="store_true", help="打完不跑部署自检")
     options = parser.parse_args()
 
     print("打包到 " + str(BUILD))
-    信息 = 打包(options.含工具, options.含测试)
+    信息 = 打包(options.含工具, options.含测试, options.含说明)
     print("  文件 " + str(信息["文件数"]) + " 个，合计 " + f"{信息['总字节'] / 1048576:.1f} MB" + "，来源提交 " + str(信息["来源提交"]))
-    print("  已排除（替换时保留）：" + "、".join(信息["运行期目录（不进包，替换时保留）"]))
+    print("  不进包（替换时原样保留）：" + "、".join(信息["不进包（替换时原样保留）"]))
+    if not options.含说明:
+        print("  说明 md 未打包（要带就加 --含说明）")
     if not options.跳过自检:
         自检()
     if options.压缩:

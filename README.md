@@ -97,6 +97,10 @@ bash start.sh
 
 两个脚本都会在启动前建立并验证 `.venv`，依赖缺失时自动安装 `requirements.txt`；验证失败会重建，不使用已损坏的解释器。
 
+证书目录 `certs/` 不用事先建：程序启动时会自己建出来。**用 HTTP 还是 HTTPS 由证书实际在不在决定**——
+没配 `SERVER_SSL_CERTFILE` / `SERVER_SSL_KEYFILE`，或配了但文件还没放进去，就以 HTTP 启动
+（后者会打一条告警告诉你怎么启用）；两个文件都在才走 HTTPS。
+
 服务地址取自 `.env` 的 `SERVER_HOST` 与 `SERVER_PORT`（模板 `.env.example` 为 `0.0.0.0:8845`，本机 `.env` 为 `0.0.0.0:8443` 并配 `SERVER_SSL_CERTFILE` / `SERVER_SSL_KEYFILE`，所以浏览器访问用 `https://127.0.0.1:8443`；未配证书时才是 `http://127.0.0.1:<端口>`）。公开全境舆图为 `/world-map`，百科为 `/baike`，天道后台为 `/game-console`，战报页为 `/battle/<战报编号>`，装配台为 `/assembly`。地图只展示世界 JSON 解析结果，不触发 QQ 命令或游戏行为。玩家命令以运行时帮助注册表为唯一公开清单，状态守卫根据人物是否创建及当前行为、队伍、控制状态统一决定能否执行。天道后台命令保持隐藏，HTTP 登录密码由 `.env` 中的 `WEB_CONSOLE_PASSWORD` 单独提供。
 
 游戏进程不加载 `tools`，也不执行游戏外评分、校核和平衡脚本。
@@ -107,11 +111,17 @@ bash start.sh
 .venv\Scripts\python.exe -X utf8 build.py
 ```
 
-把**游戏本体与 `data/`** 拷进 `BUILD/`（默认带部署自检：拷到临时目录按全新部署启动一次，
-确认程序自己会建 `database/`、`log/`、`.runtime/`）。更新时把 `BUILD/` 里的内容复制覆盖过去即可——
-`database/`（玩家存档）、`.env`（每台机器不同的端口与密钥）、`log/`、`.runtime/`、`certs/` **都不进包**，
-所以替换永远碰不到它们。首次部署的一次性步骤写在包里的 `部署说明.md`（把 `.env.example` 复制成 `.env`）。
-开关：`--跳过自检`、`--含工具`、`--含测试`、`--压缩`。
+把**游戏本体与 `data/`** 拷进 `BUILD/`——**只放代码与数据**：`.md` 说明一律不进包（要留档加 `--含说明`），
+包内只有 `game/`、`launch/`、`message/`、`static/`、`data/`、`main.py`、启动脚本、`requirements.txt`、`.env.example`
+与一份机器可读的 `构建信息.json`（含首次部署步骤与不进包清单）。**包内的运行期状态也会剔掉**：
+`launch/runtime/server.lock`（单实例锁）不随包走——它跟包覆盖过去会去顶服务器上正被占用的锁，
+Windows 下复制会当场报文件占用；程序启动时自己建。打包器还会拦下任何混进包的 `*.lock` / `*.db` / `*.bak`。
+
+默认带**部署自检**：把 BUILD 拷到临时目录、先删掉 `database/log/.runtime`、再按全新部署启动一次，
+确认程序自己会建运行期目录。更新时把 `BUILD/` 内容复制覆盖过去即可——`database/`（玩家存档）、
+`.env`（每台机器不同的端口与密钥）、`log/`、`.runtime/`、`certs/` **都不进包**，所以替换永远碰不到它们；
+首次部署的唯一人工步骤是把 `.env.example` 复制成 `.env`。
+开关：`--跳过自检`、`--含工具`、`--含测试`、`--含说明`、`--压缩`。
 
 ## 验证
 
