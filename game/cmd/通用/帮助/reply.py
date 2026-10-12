@@ -62,7 +62,7 @@ def _home_message(*, id_converter=None, nav: str = "帮助") -> DocumentMessage:
         Action(
             action_id="help-info",
             label="游戏介绍与玩法",
-            data=public_url("static/info"),
+            data=public_url("static/info/index.html"),
             behavior="link",
             style="primary",
         )
