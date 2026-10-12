@@ -275,3 +275,55 @@ def test_the_page_has_one_data_interface() -> None:
     data = next(route for route in router.routes if route.path.endswith("/data"))
     params = {param.name for param in data.dependant.query_params}
     assert params == {"view", "index", "snapshot", "sequence"}, f"数据接口的参数变了：{params}"
+
+
+def _numbers_in(node: object, found: list[str]) -> None:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == 'content_id' and isinstance(value, str) and value.isdigit() and len(value) == 6:
+                found.append(value)
+            _numbers_in(value, found)
+    elif isinstance(node, (list, tuple)):
+        for item in node:
+            _numbers_in(item, found)
+
+
+def test_enemy_roster_carries_its_number() -> None:
+    '''花名册里敌人要带定义编号：战报页才能把名字链到百科（显示中文名、句柄用编号）。
+
+    这一条用**真生成出来的敌人**（不是手工搭的参战者），所以它盖住的是整条链：
+    生成时带编号 → 运行时快照 → 战报参战者 → 花名册档案。任何一环掉了都红。
+    '''
+    services = build_game_services()
+    try:
+        pools = services.core.data.pools()
+        files = tuple(sorted(name for name, section in pools.items() if section == '敌人'))
+        units = services.core.enemy.generate_category(
+            section='敌人', pool_names=files, count=1, seed=20261012, instance_prefix='试'
+        )
+        enemy = units[0].combatant
+        assert enemy.content_id, '生成出来的敌人没带定义编号（第①层断了）'
+        result = asyncio.run(
+            services.core.combat.execute(
+                CombatRequest(
+                    left_team=(
+                        CombatantSpec(
+                            id='L', name='L', attributes=dict(ATTRS),
+                            build=(CombatBuildRef('真意', CARD, instance_id=f'L:{CARD}', born_order=0),),
+                        ),
+                    ),
+                    right_team=(enemy,),
+                    seed=20260911, action_limit=60,
+                    report=CombatReportSpec(scene='切磋', generated_at='2026-01-01T00:00:00+08:00'),
+                )
+            )
+        )
+        header, _parts = services.core.combat.build_report_view(result.report)
+        found: list[str] = []
+        _numbers_in(header, found)
+        assert enemy.content_id in found, (
+            '花名册里没有敌人的定义编号，页面上的名字就链不出去：'
+            f'敌人编号 {enemy.content_id}，载荷里找到 {sorted(set(found))}'
+        )
+    finally:
+        services.core.database.close()
