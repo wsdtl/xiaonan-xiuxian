@@ -61,7 +61,7 @@ async def travel(user_id: str, message: str, message_context: MessageContext, ma
                 plant_pool=result.plan.destination.plant_pool,
                 mineral_pool=result.plan.destination.mineral_pool,
             ),
-            services.core.world.altitude_unit,
+            result.altitude_unit,
         )
     )
 

@@ -31,6 +31,8 @@ class CharacterOverviewResult:
     innate_treasure_usage: tuple[int, int]
     #: 每个属性的基准值；展示层用它滤掉「等于基准、没有信息」的属性。
     attribute_baselines: tuple[tuple[str, float], ...] = ()
+    #: 高度单位（「米」）——由本玩法随结果给出，命令层不再去问世界核心。
+    altitude_unit: str = ""
 
 
 __all__ = [

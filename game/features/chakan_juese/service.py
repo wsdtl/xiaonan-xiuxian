@@ -124,6 +124,7 @@ class CharacterOverviewFeature:
                 1 if active_treasure is not None else 0,
                 treasure_status.slot_count,
             ),
+            altitude_unit=self._world.altitude_unit,
         )
 
 

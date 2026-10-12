@@ -118,6 +118,7 @@ class TravelFeature:
             plan=plan,
             participant_user_ids=participants,
             replayed=moved.replayed,
+            altitude_unit=self._world.altitude_unit,
         )
 
 

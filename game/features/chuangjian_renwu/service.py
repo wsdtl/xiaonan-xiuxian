@@ -106,6 +106,7 @@ class CreateCharacterFeature:
             initial_items=item_names,
             replayed=created.replayed,
             race=created.race,
+            altitude_unit=self._world.altitude_unit,
         )
 
 

@@ -42,6 +42,8 @@ class CreateCharacterResult:
     initial_items: tuple[tuple[str, str, int], ...]
     replayed: bool
     race: str = ""
+    #: 高度单位（「米」）——由本玩法随结果给出，命令层不再去问世界核心。
+    altitude_unit: str = ""
 
 
 __all__ = [
