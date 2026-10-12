@@ -8,6 +8,8 @@ from message import DocumentBuilder, Action, DocumentMessage, M
 
 from game.cmd.help_registry import CommandHelpEntry, help_registry
 
+from launch.paths import public_url
+
 GAME_NAME = "晓楠修仙"
 
 
@@ -52,6 +54,7 @@ def _home_message(*, id_converter=None, nav: str = "帮助") -> DocumentMessage:
         .section("帮助", icon="system")
         .small("按分类查看当前已经开放的命令。")
     )
+    builder.line(M.link("游戏介绍与玩法", public_url("info")))
     categories = help_registry.categories()
     _category_rows(builder, categories, nav=nav)
     if not categories:
