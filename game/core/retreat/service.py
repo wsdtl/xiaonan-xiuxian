@@ -931,10 +931,8 @@ def _text(value: object, label: str) -> str:
 
 
 def _user_id(value: object) -> str:
-    result = str(value or "").strip()
-    if not result:
-        raise ValueError("user_id不能为空")
-    return result
+        """取有效的 user_id：非空文本（去空白），否则抛 ValueError。逻辑在 data/fields.py 一份。"""
+        return nonempty_text(value, "user_id", error=ValueError)
 
 
 def _positive_int(value: object, label: str) -> int:

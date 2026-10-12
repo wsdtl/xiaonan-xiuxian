@@ -69,6 +69,7 @@ ACTIVE_KEY = "main"
 _AFFECTION_QUANTUM = Decimal("0.1")
 
 
+from ..data.fields import nonempty_text
 class CompanionService:
     """拥有道侣静态身份和玩家个人道侣状态的核心边界。"""
 
@@ -1832,10 +1833,8 @@ def _normalize(value: object) -> str:
 
 
 def _user_id(value: object) -> str:
-    normalized = str(value or "").strip()
-    if not normalized:
-        raise ValueError("user_id不能为空")
-    return normalized
+        """取有效的 user_id：非空文本（去空白），否则抛 ValueError。逻辑在 data/fields.py 一份。"""
+        return nonempty_text(value, "user_id", error=ValueError)
 
 
 __all__ = [
