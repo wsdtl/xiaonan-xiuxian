@@ -45,6 +45,7 @@ class RuntimeBattleReportParticipant:
     combatant_type: str = "修士"
 
 
+    content_id: str = ""
 def build_battle_report(
     outcome: CombatResult,
     participants: Sequence[RuntimeBattleReportParticipant],
@@ -400,6 +401,7 @@ def _participant_report(
         "id": participant.id,
         "number": number,
         "name": participant.name,
+        "content_id": participant.content_id,
         "title": participant.title,
         "side": side,
         "level": max(1, int(participant.level)),

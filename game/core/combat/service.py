@@ -385,6 +385,7 @@ class CombatService:
             self._prepared_status(status) for status in value.prepared_statuses
         )
         return RuntimeCombatantSnapshot(
+            content_id=value.content_id,
             id=value.id,
             name=value.name,
             attributes=copy.deepcopy(dict(value.attributes)),
@@ -516,6 +517,7 @@ class CombatService:
             attributes = dict(value.attributes)
             participants.append(
                 RuntimeBattleReportParticipant(
+            content_id=runtime.content_id if runtime else "",
                     id=value.id,
                     name=value.name,
                     title=(

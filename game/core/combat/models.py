@@ -895,6 +895,7 @@ class RuntimeCombatantSnapshot:
     )
 
 
+    content_id: str = ""
 @dataclass(frozen=True)
 class PreparedFieldStage:
     name: str
