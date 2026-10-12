@@ -20,7 +20,6 @@ class DuihuanResult:
     replayed: bool
 
 
-__all__ = ['DuihuanConflictError', 'DuihuanError', 'DuihuanResult']
 
 
 @dataclass(frozen=True)
@@ -32,3 +31,6 @@ class DuihuanAction:
     command: str
     behavior: str
     style: str
+
+
+__all__ = ['DuihuanConflictError', 'DuihuanError', 'DuihuanResult']

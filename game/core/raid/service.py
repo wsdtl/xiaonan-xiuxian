@@ -439,7 +439,6 @@ class RaidService:
             raise RuntimeError("讨伐核心尚未初始化")
 
 
-__all__ = ["RaidService"]
 
 
 def _pool_names(value: object, path: str) -> tuple[str, ...]:
@@ -553,3 +552,6 @@ def _raid_rewards(
             for user_id in recipients:
                 rewards[user_id]["基础物品"].append([item_id, grade_id, share])
     return rewards
+
+
+__all__ = ["RaidService"]

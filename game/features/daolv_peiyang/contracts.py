@@ -60,15 +60,6 @@ class CompanionLawResult:
     replayed: bool
 
 
-__all__ = [
-    "CompanionBreakthroughRequest",
-    "CompanionBreakthroughResult",
-    "CompanionCultivationConflictError",
-    "CompanionCultivationFeatureError",
-    "CompanionCultivationView",
-    "CompanionLawRequest",
-    "CompanionLawResult",
-]
 
 
 @dataclass(frozen=True)
@@ -80,3 +71,14 @@ class DaolvPeiyangAction:
     command: str
     behavior: str
     style: str
+
+
+__all__ = [
+    "CompanionBreakthroughRequest",
+    "CompanionBreakthroughResult",
+    "CompanionCultivationConflictError",
+    "CompanionCultivationFeatureError",
+    "CompanionCultivationView",
+    "CompanionLawRequest",
+    "CompanionLawResult",
+]

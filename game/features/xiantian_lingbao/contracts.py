@@ -37,14 +37,6 @@ class InnateTreasureEquipResult:
     replayed: bool
 
 
-__all__ = [
-    "InnateTreasureEquipRequest",
-    "InnateTreasureEquipResult",
-    "InnateTreasureFeatureConflictError",
-    "InnateTreasureFeatureError",
-    "InnateTreasureView",
-    "InnateTreasure",
-]
 
 
 @dataclass(frozen=True)
@@ -56,3 +48,13 @@ class LingbaoAction:
     command: str
     behavior: str
     style: str
+
+
+__all__ = [
+    "InnateTreasureEquipRequest",
+    "InnateTreasureEquipResult",
+    "InnateTreasureFeatureConflictError",
+    "InnateTreasureFeatureError",
+    "InnateTreasureView",
+    "InnateTreasure",
+]

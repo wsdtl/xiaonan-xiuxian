@@ -57,14 +57,6 @@ class AutoMedicineResult:
     replayed: bool
 
 
-__all__ = [
-    "AutoMedicineRequest",
-    "AutoMedicineResult",
-    "MedicineFeatureConflictError",
-    "MedicineFeatureError",
-    "MedicineUseRequest",
-    "MedicineUseResult",
-]
 
 
 @dataclass(frozen=True)
@@ -76,3 +68,13 @@ class FudanAction:
     command: str
     behavior: str
     style: str
+
+
+__all__ = [
+    "AutoMedicineRequest",
+    "AutoMedicineResult",
+    "MedicineFeatureConflictError",
+    "MedicineFeatureError",
+    "MedicineUseRequest",
+    "MedicineUseResult",
+]

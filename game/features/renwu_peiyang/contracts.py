@@ -77,17 +77,6 @@ class CharacterLawResult:
     replayed: bool
 
 
-__all__ = [
-    "CharacterBreakthroughRequest",
-    "CharacterBreakthroughResult",
-    "CharacterCultivationConflictError",
-    "CharacterCultivationFeatureError",
-    "CharacterCultivationView",
-    "CharacterEquipRequest",
-    "CharacterEquipResult",
-    "CharacterLawRequest",
-    "CharacterLawResult",
-]
 
 
 @dataclass(frozen=True)
@@ -99,3 +88,16 @@ class PeiyangAction:
     command: str
     behavior: str
     style: str
+
+
+__all__ = [
+    "CharacterBreakthroughRequest",
+    "CharacterBreakthroughResult",
+    "CharacterCultivationConflictError",
+    "CharacterCultivationFeatureError",
+    "CharacterCultivationView",
+    "CharacterEquipRequest",
+    "CharacterEquipResult",
+    "CharacterLawRequest",
+    "CharacterLawResult",
+]

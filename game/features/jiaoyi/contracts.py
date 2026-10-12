@@ -7,7 +7,6 @@ class TradeFeatureError(RuntimeError):
     """交易玩法无法完成请求。"""
 
 
-__all__ = ["TradeFeatureError"]
 
 
 @dataclass(frozen=True)
@@ -19,3 +18,6 @@ class TradeAction:
     command: str
     behavior: str
     style: str
+
+
+__all__ = ["TradeFeatureError"]

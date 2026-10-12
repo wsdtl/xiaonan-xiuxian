@@ -65,14 +65,6 @@ class TongquetaiSettlement:
     treasure_activation: InnateTreasureActivation | None = None
 
 
-__all__ = [
-    "TongquetaiConflictError",
-    "TongquetaiError",
-    "TongquetaiOutcome",
-    "TongquetaiPreview",
-    "TongquetaiRequest",
-    "TongquetaiSettlement",
-]
 
 
 @dataclass(frozen=True)
@@ -84,3 +76,13 @@ class TongquetaiAction:
     command: str
     behavior: str
     style: str
+
+
+__all__ = [
+    "TongquetaiConflictError",
+    "TongquetaiError",
+    "TongquetaiOutcome",
+    "TongquetaiPreview",
+    "TongquetaiRequest",
+    "TongquetaiSettlement",
+]
