@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
+from types import MappingProxyType
 
 from game.core.asset import AssetService, AssetStateError
+from game.core.data import JsonDataService
 from game.core.combat import CombatService, render_body, render_listeners
 from game.core.item_catalog import (
     ItemCatalogService,
@@ -20,9 +22,14 @@ class ItemInspectionFeature:
     """把实体查询结果交给命令层，不携带命令或消息协议依赖。"""
 
     def __init__(
-        self, catalog: ItemCatalogService, combat: CombatService, asset: AssetService
+        self,
+        catalog: ItemCatalogService,
+        combat: CombatService,
+        asset: AssetService,
+        data: JsonDataService,
     ) -> None:
         self._catalog = catalog
+        self._data = data
         self._combat = combat
         self._asset = asset
         self._initialized = False
@@ -53,6 +60,31 @@ class ItemInspectionFeature:
             return ItemInspectionResult(normalized, candidates=exc.candidates)
         except ItemNotFoundError:
             return ItemInspectionResult(normalized)
+
+    def inspect_enemy(self, identifier: str) -> ItemDetail:
+        """按敌人编号造一个可渲染的实体详情。"""
+
+        if not self._initialized:
+            raise RuntimeError("查看实体玩法微服务尚未初始化")
+        wanted = str(identifier or "").strip()
+        by_id = {
+            str(value["编号"]): name
+            for name, value in self._data.entity_fields("敌人", ["编号"])
+        }
+        name = by_id.get(wanted)
+        if name is None:
+            raise ItemNotFoundError("未找到敌人编号：" + wanted)
+        entry = self._data.entity("敌人", name)
+        return ItemDetail(
+            item_id=wanted,
+            category="敌人",
+            name=name,
+            description=str(entry.get("说明") or "").strip(),
+            fields=MappingProxyType(
+                {str(key): value for key, value in entry.items() if key != "编号"}
+            ),
+            section="敌人",
+        )
 
     async def _held_grades(self, user_id: str, content_id: str) -> tuple[HeldGrade, ...]:
         """执行者持有该编号的品级。没创建人物、没持有，都按「未持有」处理。
