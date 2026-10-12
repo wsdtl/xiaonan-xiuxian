@@ -466,6 +466,19 @@ function 名录状态(participant, 开局集) {
   return 开局 !== null && 开局 > 0 ? "已退场" : "未入场";
 }
 
+// 敌人名链到百科：显示中文名、句柄用编号（判据第五条）。没有编号就照旧印名字。
+// 地址用同源绝对地址：战报页在 /battle/ 下，路径必须绝对，否则会被战报路由吞成 HTML。
+function rosterName(participant) {
+  const contentId = String(participant.content_id || "");
+  if (!contentId) {
+    return participant.label;
+  }
+  const link = node("a", "roster-link", participant.label);
+  link.href =
+    window.location.origin + "/baike?q=" + encodeURIComponent(contentId);
+  return link;
+}
+
 function renderRoster(segment) {
   // 收起状态下的参战者名录：一栏徽章 + 名字 + 血气/精神条。
   // 面板收起来时只剩下一个标题，左边这一栏会空成一片——名录让它一直有用。
@@ -484,7 +497,7 @@ function renderRoster(segment) {
     const row = node("li", "roster-item", [
       node("div", "roster-head", [
         badge,
-        node("span", "roster-name", participant.label),
+        node("span", "roster-name", rosterName(participant)),
         状态标 ? node("span", "roster-tag", 状态标) : null,
       ]),
       node(
@@ -506,7 +519,7 @@ function renderParticipantSummary(participant) {
   const children = [
     node("div", "participant-heading", [
       badge,
-      node("div", "", [node("strong", "", participant.label)]),
+      node("div", "", [node("strong", "", rosterName(participant))]),
     ]),
     ...(participant.gauges || []).map((gauge) => renderGauge(gauge)),
     renderStatusGroup(participant.status_group),
