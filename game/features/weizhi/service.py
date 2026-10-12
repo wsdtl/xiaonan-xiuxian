@@ -386,9 +386,11 @@ class PositionFeature:
         )
 
     async def inspect_companion(self, user_id: str, companion_id: str) -> CompanionView | None:
-        """按道侣编号取「我」名下的实例视图；没有实例就是没结交。"""
+        """按道侣编号取「我」名下的实例视图；没有实例就是没结交。
 
-        """实例的读法本身就带鉴权：它拿的是我的 user_id，问别人的道侣自然没有实例。"""
+        实例的读法本身就带鉴权：它拿的是我的 user_id，问别人的道侣自然没有实例。
+        """
+
         try:
             instance = await self._companion.instance(user_id, companion_id)
         except CompanionError:
@@ -407,12 +409,6 @@ class PositionFeature:
             weapon_name=instance.weapon_name,
             weapon_level=instance.weapon_level,
         )
-
-        """实例的读法本身就带鉴权：它拿的是我的 user_id，问别人的道侣自然没有实例。"""
-        try:
-            return await self._companion.instance(user_id, companion_id)
-        except CompanionError:
-            return None
 
     async def inspect_cultivator(self, user_id: str, query: str) -> CharacterPublicProfile | None:
         """按名字或用户编号在「附近」范围内解析一个人，取公开摘要。"""

@@ -15,7 +15,6 @@ from .models import (
     RuntimeCombatField,
     RuntimeFormation,
     Skill,
-    StatusState,
 )
 
 

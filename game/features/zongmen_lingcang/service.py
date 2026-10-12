@@ -9,7 +9,6 @@ from math import ceil
 from types import MappingProxyType
 
 from game.core.data import (
-    JsonDataError,
     JsonDataService,
     nonempty_text as _text,
     positive_int as _positive_int,
@@ -174,7 +173,6 @@ class LingcangFeature:
 
 def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
     return project_unique_buttons(value, label=label, keys=DUNGEON_BUTTON_KEYS)
-    return result
 
 
 __all__ = ["LingcangFeature"]

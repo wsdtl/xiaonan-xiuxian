@@ -10,7 +10,6 @@ from types import MappingProxyType
 
 from game.core.asset import (
     Choice as _Choice,
-    Edge as _Edge,
     minimum_cost_matching as _minimum_cost_matching,
     AssetEntry,
     AssetService,

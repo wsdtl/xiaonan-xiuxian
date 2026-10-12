@@ -376,7 +376,6 @@ class WanzhenFeature:
 
 def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
     return project_unique_buttons(value, label=label, keys=DUNGEON_BUTTON_KEYS)
-    return result
 
 
 __all__ = ["WanzhenFeature"]
