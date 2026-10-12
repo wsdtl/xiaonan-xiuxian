@@ -117,6 +117,18 @@ def select_buttons(
     )
 
 
+def project_dungeon_buttons(
+    value: object, label: str
+) -> tuple[Button, ...]:
+    """宗门洞天三处（藏经阁 / 灵藏 / 万珍殿）共用的按钮投影。
+
+    三个服务原先各写一份逐字相同的包装（投影 + 洞天按钮列），收在这里；
+    行为不变，仍走 project_unique_buttons 的唯一性与必填校验。
+    """
+
+    return project_unique_buttons(value, label=label, keys=DUNGEON_BUTTON_KEYS)
+
+
 def paged_settlement_actions(
     project: Callable[..., tuple[object, ...]],
     buttons: tuple[Button, ...],
@@ -163,6 +175,7 @@ __all__ = [
     "format_command",
     "BUTTON_BEHAVIORS",
     "project_buttons",
+    "project_dungeon_buttons",
     "project_unique_buttons",
     "paged_settlement_actions",
     "validate_page_buttons",

@@ -17,8 +17,7 @@ from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.features.presentation import (
-    DUNGEON_BUTTON_KEYS,
-    project_unique_buttons,
+    project_dungeon_buttons,
     require_mapping,
 )
 
@@ -59,7 +58,7 @@ class CangjingFeature:
         self._copy = CangjingCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
-        self._buttons = _buttons(
+        self._buttons = project_dungeon_buttons(
             self._data.dataset("藏经阁按钮").get("按钮"), "藏经阁按钮"
         )
 
@@ -126,10 +125,6 @@ class CangjingFeature:
             or current.space_id != sect.cave_id
         ):
             raise CangjingFeatureError("只有身处本宗洞天时才能使用藏经阁")
-
-
-def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
-    return project_unique_buttons(value, label=label, keys=DUNGEON_BUTTON_KEYS)
 
 
 __all__ = ["CangjingFeature"]

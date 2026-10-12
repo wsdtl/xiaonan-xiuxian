@@ -18,8 +18,7 @@ from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.features.presentation import (
-    DUNGEON_BUTTON_KEYS,
-    project_unique_buttons,
+    project_dungeon_buttons,
     require_mapping,
 )
 
@@ -62,7 +61,7 @@ class LingcangFeature:
         self._copy = LingcangCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
-        self._buttons = _buttons(self._data.dataset("灵藏按钮").get("按钮"), "灵藏按钮")
+        self._buttons = project_dungeon_buttons(self._data.dataset("灵藏按钮").get("按钮"), "灵藏按钮")
 
     def copy(self) -> LingcangCopy:
         if self._copy is None:
@@ -169,10 +168,6 @@ class LingcangFeature:
             or current.space_id != sect.cave_id
         ):
             raise LingcangFeatureError("只有身处本宗洞天时才能使用灵藏（先入山门进洞天）")
-
-
-def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
-    return project_unique_buttons(value, label=label, keys=DUNGEON_BUTTON_KEYS)
 
 
 __all__ = ["LingcangFeature"]

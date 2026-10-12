@@ -23,8 +23,7 @@ def _has_cjk(value: str) -> bool:
 
 
 from game.features.presentation import (
-    DUNGEON_BUTTON_KEYS,
-    project_unique_buttons,
+    project_dungeon_buttons,
     require_mapping,
 )
 
@@ -85,7 +84,7 @@ class WanzhenFeature:
         self._copy = WanzhenCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
-        self._buttons = _buttons(
+        self._buttons = project_dungeon_buttons(
             self._data.dataset("万珍殿按钮").get("按钮"), "万珍殿按钮"
         )
 
@@ -372,10 +371,6 @@ class WanzhenFeature:
             or current.space_id != sect.cave_id
         ):
             raise WanzhenFeatureError("只有身处本宗洞天时才能使用万珍殿")
-
-
-def _buttons(value: object, label: str) -> tuple[Mapping[str, str], ...]:
-    return project_unique_buttons(value, label=label, keys=DUNGEON_BUTTON_KEYS)
 
 
 __all__ = ["WanzhenFeature"]
