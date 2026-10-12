@@ -11,7 +11,7 @@ from game.app import current_game_services
 from game.features.butian import ButianError
 from launch.paths import static_path
 
-from ...presentation import PAGE_CSP, PAGE_HEADERS
+from ...site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/butian')
 
@@ -50,10 +50,6 @@ async def butian_data(scope: str = '') -> JSONResponse:
         return JSONResponse(value, headers=PAGE_HEADERS)
     except ButianError as exc:
         return failure(str(exc))
-
-
-def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({'error': message}, status_code=status, headers=PAGE_HEADERS)
 
 
 __all__ = ['router']

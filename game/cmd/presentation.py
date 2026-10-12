@@ -1,26 +1,12 @@
-"""命令回复共用的轻量展示格式与看板页面共用的 HTTP 头。"""
+"""命令回复共用的轻量展示格式。
+
+只管**消息**：看板页面的响应头与 JSON 失败回执住在 game/cmd/site.py，
+这样任何 reply.py 导入本模块时都不会被拖上 fastapi。
+"""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-
-
-#: 看板页面统一的基础响应头：不发缓存、按内容嗅探。
-#: 原先 11 个 site.py 各写一份逐字相同的内容，收在这里。
-PAGE_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
-
-#: 看板页面统一的内容安全策略：只允许同源脚本与样式。
-#: 原先 10 个 site.py 各写一份同一条长串，收在这里。
-PAGE_CSP = (
-    "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; "
-    "object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
-)
-
-#: 舆图 / 百科 / 战报要把图片画在 <canvas> 或内联 data: 图片上，在基础策略上单独放宽 img-src。
-PAGE_CSP_WITH_IMAGES = (
-    "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
-    "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
-)
 
 
 def natural_deadline(value: datetime) -> str:
@@ -70,26 +56,6 @@ def format_lines(builder: object, text: object) -> str:
     return parts[0]
 
 
-def to_jsonable(value: object) -> object:
-    """把核心返回的结构（含 dataclass）转成可 JSON 序列化的普通对象。
-
-    四个只读看板（灵宝谱 / 货架 / 归元观 / 铜雀台）原先各抄一份逐字相同的实现，
-    收在这里；行为不变——标量原样、映射转字典、序列转列表、dataclass 按字段展开，
-    认不出的落成字符串。
-    """
-
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if hasattr(value, "items"):
-        return {str(key): to_jsonable(raw) for key, raw in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [to_jsonable(item) for item in value]
-    fields = getattr(value, "__dataclass_fields__", None)
-    if fields:
-        return {name: to_jsonable(getattr(value, name)) for name in fields}
-    return str(value)
-
-
 def error_document(
     title: str,
     icon: str,
@@ -122,13 +88,9 @@ def error_document(
 
 
 __all__ = [
-    "PAGE_CSP",
-    "PAGE_CSP_WITH_IMAGES",
-    "PAGE_HEADERS",
     "duration",
     "error_document",
     "format_lines",
     "natural_deadline",
     "sentence",
-    "to_jsonable",
 ]

@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
-from ...presentation import PAGE_CSP, PAGE_HEADERS
+from ...site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/wanzhen')
 #: 五类成品与各自的子类（与「捐入万珍殿」命令认的写法一一对应）。
@@ -145,10 +145,6 @@ async def wanzhen_data(scope: str = '') -> JSONResponse:
     except Exception as exc:
         value['notice'] = str(exc)
     return JSONResponse(value, headers=PAGE_HEADERS)
-
-
-def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({'error': message}, status_code=status, headers=PAGE_HEADERS)
 
 
 __all__ = ['router']

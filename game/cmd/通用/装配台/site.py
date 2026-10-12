@@ -8,7 +8,7 @@ from game.app import current_game_services
 from game.features.zhuangpei import ZhuangpeiFeatureError
 from launch.paths import static_path
 
-from ...presentation import PAGE_CSP, PAGE_HEADERS
+from ...site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix="/assembly")
 
@@ -59,5 +59,3 @@ async def assembly_content(section: str, content_id: str, grade: str = "") -> JS
         return failure(str(exc))
 
 
-def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({"error": message}, status_code=status, headers=PAGE_HEADERS)

@@ -10,7 +10,24 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
-from ...presentation import PAGE_CSP_WITH_IMAGES, PAGE_HEADERS
+from ...site import PAGE_HEADERS
+
+#: 地图页要把图片画在 <canvas> 或内联 data: 图片上，所以在本页单独声明内容安全策略。
+PAGE_CSP = (
+    "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+    "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+)
+
+
+def _page_headers() -> dict[str, str]:
+    """这一页的响应头：共用基础头 + 本页策略与来源限制。"""
+
+    return {
+        **PAGE_HEADERS,
+        "Content-Security-Policy": PAGE_CSP,
+        "Referrer-Policy": "no-referrer",
+        "X-Frame-Options": "SAMEORIGIN",
+    }
 
 router = APIRouter(prefix="/world-map")
 INDEX_HTML = static_path("world-map", "index.html")
@@ -28,19 +45,6 @@ async def world_map_page() -> HTMLResponse:
 async def world_map_data() -> JSONResponse:
     snapshot = current_game_services().features.ditu.snapshot()
     return JSONResponse(asdict(snapshot), headers=PAGE_HEADERS)
-
-
-def _page_headers() -> dict[str, str]:
-    """这一页的响应头：共用基础头 + 本页单独的 CSP 与来源限制。"""
-
-    return {
-        **PAGE_HEADERS,
-        "Content-Security-Policy": PAGE_CSP_WITH_IMAGES,
-        "Referrer-Policy": "no-referrer",
-        "X-Frame-Options": "SAMEORIGIN",
-    }
-
-
 
 
 __all__ = ["router"]
