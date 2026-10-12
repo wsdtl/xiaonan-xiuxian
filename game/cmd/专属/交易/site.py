@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import to_jsonable
+
 router = APIRouter(prefix='/jiaoyi')
 HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 CATEGORIES = ('真意', '气机')
@@ -27,19 +29,6 @@ async def jiaoyi_page() -> HTMLResponse:
             'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
         },
     )
-
-
-def _plain(value: object) -> object:
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if hasattr(value, 'items'):
-        return {str(key): _plain(raw) for key, raw in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(item) for item in value]
-    fields = getattr(value, '__dataclass_fields__', None)
-    if fields:
-        return {name: _plain(getattr(value, name)) for name in fields}
-    return str(value)
 
 
 @router.get('/data')
@@ -79,8 +68,8 @@ async def jiaoyi_data(scope: str = '', category: str = '真意', page: int = 1) 
         'notice': '',
     }
     try:
-        body['overview'] = _plain(await feature.overview(user_id))
-        body['page'] = _plain(await feature.page(user_id, chosen, max(1, int(page))))
+        body['overview'] = to_jsonable(await feature.overview(user_id))
+        body['page'] = to_jsonable(await feature.page(user_id, chosen, max(1, int(page))))
     except Exception as exc:
         body['notice'] = str(exc)
     return JSONResponse(body, headers=HEADERS)

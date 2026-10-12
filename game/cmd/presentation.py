@@ -52,6 +52,26 @@ def format_lines(builder: object, text: object) -> str:
     return parts[0]
 
 
+def to_jsonable(value: object) -> object:
+    """把核心返回的结构（含 dataclass）转成可 JSON 序列化的普通对象。
+
+    四个只读看板（灵宝谱 / 货架 / 归元观 / 铜雀台）原先各抄一份逐字相同的实现，
+    收在这里；行为不变——标量原样、映射转字典、序列转列表、dataclass 按字段展开，
+    认不出的落成字符串。
+    """
+
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, "items"):
+        return {str(key): to_jsonable(raw) for key, raw in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [to_jsonable(item) for item in value]
+    fields = getattr(value, "__dataclass_fields__", None)
+    if fields:
+        return {name: to_jsonable(getattr(value, name)) for name in fields}
+    return str(value)
+
+
 def error_document(
     title: str,
     icon: str,
@@ -83,4 +103,11 @@ def error_document(
     return builder.build()
 
 
-__all__ = ["duration", "error_document", "format_lines", "natural_deadline", "sentence"]
+__all__ = [
+    "duration",
+    "error_document",
+    "format_lines",
+    "natural_deadline",
+    "sentence",
+    "to_jsonable",
+]

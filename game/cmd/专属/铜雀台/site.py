@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import to_jsonable
+
 router = APIRouter(prefix='/tongquetai')
 HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 
@@ -26,19 +28,6 @@ async def tongquetai_page() -> HTMLResponse:
             'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
         },
     )
-
-
-def _plain(value: object) -> object:
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if hasattr(value, 'items'):
-        return {str(key): _plain(raw) for key, raw in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(item) for item in value]
-    fields = getattr(value, '__dataclass_fields__', None)
-    if fields:
-        return {name: _plain(getattr(value, name)) for name in fields}
-    return str(value)
 
 
 @router.get('/data')
@@ -79,7 +68,7 @@ async def tongquetai_data(scope: str = '') -> JSONResponse:
         'modes': ['护契', '离契'],
     }
     try:
-        body['preview'] = _plain(await feature.preview(user_id))
+        body['preview'] = to_jsonable(await feature.preview(user_id))
     except Exception as exc:
         body['notice'] = str(exc)
     return JSONResponse(body, headers=HEADERS)

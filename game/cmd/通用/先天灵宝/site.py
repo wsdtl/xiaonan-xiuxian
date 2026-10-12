@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import to_jsonable
+
 router = APIRouter(prefix='/lingbao')
 HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 
@@ -26,19 +28,6 @@ async def lingbao_page() -> HTMLResponse:
             'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
         },
     )
-
-
-def _plain(value: object) -> object:
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if hasattr(value, 'items'):
-        return {str(key): _plain(raw) for key, raw in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(item) for item in value]
-    fields = getattr(value, '__dataclass_fields__', None)
-    if fields:
-        return {name: _plain(getattr(value, name)) for name in fields}
-    return str(value)
 
 
 @router.get('/data')
@@ -77,8 +66,8 @@ async def lingbao_data(scope: str = '') -> JSONResponse:
             'scopes': [{'id': 'user:' + item.user_id, 'name': item.name} for item in scopes],
             'scope': 'user:' + user_id,
             'ui': ui,
-            'active': _plain(view.active),
-            'owned': [_plain(item) for item in view.owned],
+            'active': to_jsonable(view.active),
+            'owned': [to_jsonable(item) for item in view.owned],
             'page': view.page,
             'page_count': view.page_count,
             'total': view.total_count,
