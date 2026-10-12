@@ -40,6 +40,7 @@ from game.core.data import (
     sequence as _sequence,
     strict_text,
     strict_text as _text,
+    bounded_number,
 )
 from game.core.forging import ForgingError, ForgingService
 from game.core.growth import GrowthError, GrowthService
@@ -859,7 +860,7 @@ class CharacterService:
         maximum = _number(
             attributes.get(f"{normalized_resource}上限"), f"{normalized_resource}上限"
         )
-        before = _bounded_resource(
+        before = bounded_number(
             resources.get(normalized_resource), maximum, f"当前{normalized_resource}"
         )
         if before >= maximum:
@@ -1073,8 +1074,8 @@ class CharacterService:
         character = dict(_state_mapping(character_snapshot.value, "character/main"))
         weapon = dict(_state_mapping(weapon_snapshot.value, "weapon/main"))
         attributes = _state_mapping(character.get("属性"), "人物.属性")
-        health_after = _bounded_resource(health, attributes.get("血气上限"), "战后血气")
-        spirit_after = _bounded_resource(spirit, attributes.get("精神上限"), "战后精神")
+        health_after = bounded_number(health, attributes.get("血气上限"), "战后血气")
+        spirit_after = bounded_number(spirit, attributes.get("精神上限"), "战后精神")
         stone_delta = _request_int(spirit_stones_delta, "灵石变化")
         stones_after = (
             _state_nonnegative_int(character.get("灵石"), "人物.灵石") + stone_delta
@@ -1155,12 +1156,12 @@ class CharacterService:
         resources = dict(_state_mapping(character.get("资源"), "人物.资源"))
         health_maximum = _number(attributes.get("血气上限"), "血气上限")
         spirit_maximum = _number(attributes.get("精神上限"), "精神上限")
-        health = _bounded_resource(
+        health = bounded_number(
             _number(resources.get("血气"), "人物.血气") + health_maximum * health_ratio,
             health_maximum,
             "闭关后血气",
         )
-        spirit = _bounded_resource(
+        spirit = bounded_number(
             _number(resources.get("精神"), "人物.精神") + spirit_maximum * spirit_ratio,
             spirit_maximum,
             "闭关后精神",
@@ -2038,11 +2039,6 @@ def _request_int(value: object, label: str) -> int:
     return value
 
 
-def _bounded_resource(value: object, maximum: object, label: str) -> int | float:
-    raw = _number(value, label)
-    upper = _number(maximum, f"{label}上限")
-    bounded = min(max(0.0, float(raw)), max(0.0, float(upper)))
-    return int(bounded) if bounded.is_integer() else round(bounded, 3)
 
 
 def _required_user_id(value: object) -> str:

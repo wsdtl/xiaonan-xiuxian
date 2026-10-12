@@ -21,6 +21,7 @@ from game.core.data import (
     positive_int,
     positive_int as _positive_int,
     nonempty_text,
+    bounded_number,
 )
 from game.core.database import DatabaseService, StateAddress, StateMutation
 from game.core.forging import ForgingService
@@ -698,7 +699,7 @@ class CompanionService:
             before.attributes.get(f"{normalized_resource}上限"),
             f"道侣{normalized_resource}上限",
         )
-        current_value = _bounded_resource(
+        current_value = bounded_number(
             before.resources.get(normalized_resource),
             maximum,
             f"道侣当前{normalized_resource}",
@@ -767,10 +768,10 @@ class CompanionService:
             experience=before.weapon_experience,
             gained=gained,
         )
-        health_after = _bounded_resource(
+        health_after = bounded_number(
             health, before.attributes.get("血气上限"), "道侣战后血气"
         )
-        spirit_after = _bounded_resource(
+        spirit_after = bounded_number(
             spirit, before.attributes.get("精神上限"), "道侣战后精神"
         )
         after = replace(
@@ -833,13 +834,13 @@ class CompanionService:
         )
         health_maximum = _state_number(attributes.get("血气上限"), "道侣.血气上限")
         spirit_maximum = _state_number(attributes.get("精神上限"), "道侣.精神上限")
-        health = _bounded_resource(
+        health = bounded_number(
             _state_number(before.resources.get("血气"), "道侣.血气")
             + health_maximum * health_ratio,
             health_maximum,
             "闭关后道侣血气",
         )
-        spirit = _bounded_resource(
+        spirit = bounded_number(
             _state_number(before.resources.get("精神"), "道侣.精神")
             + spirit_maximum * spirit_ratio,
             spirit_maximum,
@@ -884,7 +885,7 @@ class CompanionService:
             before.attribute_multipliers,
         )
         resources = {
-            resource: _bounded_resource(
+            resource: bounded_number(
                 before.resources.get(resource),
                 attributes.get(f"{resource}上限"),
                 f"夺元后道侣{resource}",
@@ -1692,11 +1693,6 @@ def _request_ratio(value: object, label: str) -> float:
     return float(value)
 
 
-def _bounded_resource(value: object, maximum: object, label: str) -> int | float:
-    raw = _number(value, label)
-    upper = _number(maximum, f"{label}上限")
-    bounded = min(max(0.0, float(raw)), max(0.0, float(upper)))
-    return int(bounded) if bounded.is_integer() else round(bounded, 3)
 
 
 def _affection_json(value: Decimal) -> int | float:

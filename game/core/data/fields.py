@@ -125,3 +125,14 @@ def speech(value: object, label: str) -> Mapping[str, str]:
         sep = chr(39) + chr(12289) + chr(39)
         raise JsonDataError(f"{label}必须完整包含：{sep.join(sorted(expected))}")
     return MappingProxyType({key: nonempty_text(value[key], f"{label}.{key}") for key in expected})
+
+
+def bounded_number(
+    value: object, maximum: object, label: str, error: type[Exception] = JsonDataError
+) -> int | float:
+    """取一个夹在 [0, maximum] 里的数值；整数就回整数，否则保留三位小数。"""
+
+    raw = number(value, label, error)
+    upper = number(maximum, f"{label}上限", error)
+    bounded = min(max(0.0, float(raw)), max(0.0, float(upper)))
+    return int(bounded) if bounded.is_integer() else round(bounded, 3)
