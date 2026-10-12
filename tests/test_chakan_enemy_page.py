@@ -49,3 +49,35 @@ def test_enemy_page_shows_ranges_and_masks_the_drawn_answers(services) -> None:
             assert str(weapon['名称']) in text, f'{name}：配置里有本命武器却没印'
         else:
             assert '阶' not in text, f'{name}：配置里没有本命武器却印了武器行 —— {text}'
+
+def test_generated_enemy_keeps_name_and_number(services) -> None:
+    """参战者必须同时有「名字」与「编号」：名字取定义的「名称」，不是编号。
+
+    池成员键改成编号之后，最容易犯的错就是把编号当名字印给玩家；
+    这条同时守住战报页把名字链到百科所需的那个编号。
+    """
+    data = services.core.data
+    pools = data.pools()
+    files = tuple(sorted(f for f, s in pools.items() if s == '敌人'))
+    assert files, '没有敌人池'
+
+    rows = {
+        str(value['编号']): str(value.get('名称') or '')
+        for value in data.entities('敌人').values()
+    }
+    assert rows, '没有敌人定义'
+
+    units = services.core.enemy.generate_category(
+        section='敌人', pool_names=files, count=8, seed=20261012, instance_prefix='试'
+    )
+    assert units, '没生成出敌人'
+    for unit in units:
+        combatant = unit.combatant
+        number = combatant.content_id
+        assert number.isdigit() and len(number) == 6, f'参战者没带定义编号：{number!r}'
+        assert number in rows, f'编号不在敌人池里：{number}'
+        assert combatant.name == rows[number], (
+            f'参战者名字不是定义里的名称：拿到 {combatant.name!r}，定义里是 {rows[number]!r}'
+        )
+        assert not combatant.name.isdigit(), f'参战者名字成了编号：{combatant.name!r}'
+
