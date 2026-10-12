@@ -24,6 +24,8 @@ from typing import Any
 from .contracts import JsonDataError
 
 
+from types import MappingProxyType
+
 def positive_int(
     value: object, label: str, error: type[Exception] = JsonDataError
 ) -> int:
@@ -111,3 +113,15 @@ __all__ = [
     "sequence",
     "strict_text",
 ]
+
+
+def speech(value: object, label: str) -> Mapping[str, str]:
+    """取五段讲稿：总览／审材／齐备／不足／完成，键集必须刚好齐、值必须是非空文本。"""
+
+    if not isinstance(value, Mapping):
+        raise JsonDataError(f"{label}必须是对象")
+    expected = {"总览", "审材", "齐备", "不足", "完成"}
+    if set(value) != expected:
+        sep = chr(39) + chr(12289) + chr(39)
+        raise JsonDataError(f"{label}必须完整包含：{sep.join(sorted(expected))}")
+    return MappingProxyType({key: nonempty_text(value[key], f"{label}.{key}") for key in expected})

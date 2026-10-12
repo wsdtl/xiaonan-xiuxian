@@ -23,6 +23,7 @@ from game.core.data import (
     nonnegative_int,
     positive_int,
     positive_int as _positive_int,
+    speech,
 )
 from game.core.database import (
     DatabaseService,
@@ -833,7 +834,7 @@ class FormationService:
                 _text(raw.get("阵台"), f"阵师 {master_id}.阵台"),
                 _text(raw.get("阵道传承"), f"阵师 {master_id}.阵道传承"),
                 _text(raw.get("话语风格"), f"阵师 {master_id}.话语风格"),
-                _speech(raw.get("话语"), f"阵师 {master_id}.话语"),
+                speech(raw.get("话语"), f"阵师 {master_id}.话语"),
                 formation_ids,
             )
         return result
@@ -1063,13 +1064,6 @@ def _texts(value: object, label: str) -> tuple[str, ...]:
     return tuple(_text(item, label) for item in _sequence(value, label))
 
 
-def _speech(value: object, label: str) -> Mapping[str, str]:
-    if not isinstance(value, Mapping):
-        raise JsonDataError(f"{label}必须是对象")
-    expected = {"总览", "审材", "齐备", "不足", "完成"}
-    if set(value) != expected:
-        raise JsonDataError(f"{label}必须完整包含：{'、'.join(sorted(expected))}")
-    return MappingProxyType({key: _text(value[key], f"{label}.{key}") for key in expected})
 
 
 def _request_text(value: object, label: str) -> str:

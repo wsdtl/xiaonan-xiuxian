@@ -21,6 +21,7 @@ from .fields import nonnegative_int as nonnegative_int
 from .fields import number as number
 from .fields import positive_int as positive_int
 from .fields import sequence as sequence
+from .fields import speech as speech
 from .fields import strict_text as strict_text
 from .schema import ContractSet as ContractSet
 from .schema import DefinitionSchemaValidator as DefinitionSchemaValidator
@@ -48,5 +49,6 @@ __all__ = [
     "number",
     "positive_int",
     "sequence",
+    "speech",
     "strict_text",
 ]
