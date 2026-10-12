@@ -33,6 +33,7 @@ class ItemInspectionFeature:
         self._combat = combat
         self._asset = asset
         self._initialized = False
+        self._enemy_ids: frozenset[str] | None = None
 
     def initialize(self) -> None:
         if self._initialized:
@@ -61,6 +62,21 @@ class ItemInspectionFeature:
         except ItemNotFoundError:
             return ItemInspectionResult(normalized)
 
+    def enemy_identifiers(self) -> frozenset[str]:
+        """敌人能被查的所有写法：编号与名字。"""
+
+        """判据：显示用中文、隐式受理 id —— 所以两种写法都必须认。"""
+        if self._enemy_ids is None:
+            rows = self._data.entity_fields("敌人", ["编号"])
+            found: set[str] = set()
+            for name, value in rows:
+                found.add(str(name))
+                number = str(value.get("编号") or "")
+                if number:
+                    found.add(number)
+            self._enemy_ids = frozenset(found)
+        return self._enemy_ids
+
     def inspect_enemy(self, identifier: str) -> ItemDetail | None:
         """按敌人编号造一个可渲染的实体详情。"""
 
@@ -71,12 +87,16 @@ class ItemInspectionFeature:
             str(value["编号"]): name
             for name, value in self._data.entity_fields("敌人", ["编号"])
         }
-        name = by_id.get(wanted)
-        if name is None:
+        if wanted in by_id:
+            number, name = wanted, by_id[wanted]
+        else:
+            by_name = {value: key for key, value in by_id.items()}
+            number, name = by_name.get(wanted, ""), wanted
+        if not number:
             return None
         entry = self._data.entity("敌人", name)
         return ItemDetail(
-            item_id=wanted,
+            item_id=number,
             category="敌人",
             name=name,
             description=str(entry.get("说明") or "").strip(),

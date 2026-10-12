@@ -33,7 +33,7 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
         return
 
     #: 敌人走 30 段专属分派：它们是命名实体池，不在 item_catalog 的编号索引里。
-    if len(query) == 6 and query.isdigit() and query[:2] == "30":
+    if query in current_game_services().features.chakan_wupin.enemy_identifiers():
         detail = current_game_services().features.chakan_wupin.inspect_enemy(query)
         await manager.send(
             reply.inspection(
