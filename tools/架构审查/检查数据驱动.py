@@ -845,6 +845,42 @@ def check_terrain_pace() -> list[str]:
     return problems
 
 
+def check_guard_rules_have_consumers() -> list[str]:
+    """`状态守卫.json` 里的每条规则都要有人消费。
+
+    规则的消费者只有三条路：命令用 `metadata["guard_rule"]` 声明、核心服务用
+    `player_state.authorize(..., "规则名")` 判定、数据用 `"状态守卫": "规则名"` 指定。
+    三条路都没有的规则是**死声明**：改它不会改任何玩法，却让人以为改了有用
+    （第 83 轮口径：没人读的声明接上消费者，或者删掉）。
+
+    实测过一例：`组队中` 三条路都没有——代码里那一处 `组队中` 只是**同名状态**，不是规则，
+    所以本判据**不按「名字在数据里出现过」判**（队伍状态里也有一个叫它的状态，那样会误判）。
+    """
+
+    guard_file = PROJECT_ROOT / "data" / "角色" / "规则" / "状态" / "状态守卫.json"
+    if not guard_file.exists():
+        return ["找不到 data/角色/规则/状态/状态守卫.json"]
+    rows = json.loads(guard_file.read_text(encoding="utf-8"))
+    names = [str(row.get("名称") or "") for row in rows if isinstance(row, dict)]
+    names = [name for name in names if name]
+
+    declared: set[str] = set()
+    for path in sorted((PROJECT_ROOT / "game" / "cmd").rglob("*.py")):
+        declared |= set(re.findall(r'"guard_rule"\s*:\s*"([^"]+)"', path.read_text(encoding="utf-8")))
+    for path in sorted((PROJECT_ROOT / "game" / "core").rglob("*.py")):
+        declared |= set(re.findall(r'authorize\([^)]*?["\']([^"\']+)["\']', path.read_text(encoding="utf-8")))
+    for path in sorted((PROJECT_ROOT / "data").rglob("*.json")):
+        if path == guard_file:
+            continue
+        declared |= set(re.findall(r'"状态守卫"\s*:\s*"([^"]+)"', path.read_text(encoding="utf-8")))
+
+    return [
+        f"状态守卫.json 的规则「{name}」没有任何消费者（命令未声明、核心未判定、数据未指定）"
+        for name in names
+        if name not in declared
+    ]
+
+
 def main() -> int:
     source = _game_source()
     print("JSON 驱动完整性审查")
@@ -929,6 +965,15 @@ def main() -> int:
         print("一条规则只有在有人读的时候才算规则；没人读的声明接上消费者或者删掉。")
         return 1
     print("规则与展示文案里的键都有消费者")
+    守卫 = check_guard_rules_have_consumers()
+    if 守卫:
+        print(f"没人消费的守卫规则 {len(守卫)} 条：")
+        for item in 守卫:
+            print(f"  {item}")
+        print()
+        print("守卫规则只有被引用时才起作用：命令声明、核心判定或数据指定，三条路至少要占一条。")
+        return 1
+    print("守卫规则每一条都有消费者")
     if 地形:
         print(f"地形战斗节奏问题 {len(地形)} 处：")
         for item in 地形:
