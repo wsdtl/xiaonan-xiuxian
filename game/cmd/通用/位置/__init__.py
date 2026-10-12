@@ -147,7 +147,7 @@ async def inspect_cultivator(user_id: str, message: str, manager: Any) -> None:
     copy = feature.copy()
     actions = feature.nearby_cultivator_actions(1, False)
     if not query:
-        await manager.send(reply.error(copy, copy.cultivator_view, copy.invalid_command, actions))
+        await manager.send(reply.error(copy, copy.cultivator_view, copy.cultivator_queriless, actions))
         return
     profile = await feature.inspect_cultivator(user_id, query)
     if profile is None:

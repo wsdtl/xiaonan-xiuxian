@@ -218,7 +218,7 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
         "位置文本.附近修士",
     )
     _require_keys(locations, {"标题", "山河", "没有地点"}, "位置文本.附近地点")
-    _require_keys(command, {"写法", "格式", "修士查看", "找不到此人"}, "位置文本.命令")
+    _require_keys(command, {"写法", "格式", "修士查看", "找不到此人", "没给谁"}, "位置文本.命令")
     _require_keys(
         icons,
         {"错误", "地点", "修士", "行止", "页次"},
@@ -357,6 +357,7 @@ def _position_copy(value: object, icon_value: object) -> PositionCopy:
         error_hint=_text(command.get("格式"), "位置文本.命令.格式"),
         cultivator_view=_text(command.get("修士查看"), "位置文本.命令.修士查看"),
         cultivator_missing=_text(command.get("找不到此人"), "位置文本.命令.找不到此人"),
+        cultivator_queriless=_text(command.get("没给谁"), "位置文本.命令.没给谁"),
     )
 
 
