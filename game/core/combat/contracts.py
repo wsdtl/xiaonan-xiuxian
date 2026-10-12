@@ -141,6 +141,7 @@ class CombatantSpec:
     counts_for_victory: bool = True
 
 
+    content_id: str = ""
 @dataclass(frozen=True)
 class CombatantReportSpec:
     id: str

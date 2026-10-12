@@ -505,6 +505,7 @@ class EnemyService:
             inherent = self.inherent_rules(race)
         combatant = CombatantSpec(
             id=instance_id,
+            content_id=str(raw.get("编号") or ""),
             name=name,
             attributes=MappingProxyType(attributes),
             level=level,
