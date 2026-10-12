@@ -129,6 +129,7 @@ class ButianFeature:
             '可补正': pick('可补正'),
             '不可补正': pick('不可补正'),
             '候选丹': pick('候选丹'),
+            '丹药': pick('丹药'),
             '没有丹': pick('没有丹'),
             '命令': pick('命令'),
             '道侣': pick('道侣'),
@@ -153,7 +154,11 @@ class ButianFeature:
             )
         return {
             'ui': dict(copy),
+            # 每次补天另扣的那枚丹：编号一直有发但页面没用；把名字也带上，页面才好照印。
             'medicine_id': self._medicine_id,
+            'medicine_name': str(
+                self._data.entity('丹药', self._medicine_id).get('名称') or ''
+            ),
             'targets': targets,
             'candidates': [
                 {
