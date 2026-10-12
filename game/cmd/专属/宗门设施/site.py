@@ -99,7 +99,12 @@ async def lianzhen_data(scope: str = '') -> JSONResponse:
         # 只有核心真的列得出东西才替换总目：空列表会把阵法总目整份盖掉，页面只剩一个空下拉。
         if rows:
             value['formations'] = [
-                {'id': str(getattr(row, 'content_id', '')), 'name': str(getattr(row, 'name', ''))}
+                {
+                    'id': str(getattr(row, 'content_id', '')),
+                    'name': str(getattr(row, 'name', '')),
+                    # 核心给的这一句说明（`SectFacilityEntry.detail`）：页面在选中的阵法下面照印。
+                    'detail': str(getattr(row, 'detail', '')),
+                }
                 for row in rows
             ]
     except SectFacilityFeatureError as exc:
@@ -135,20 +140,48 @@ async def lianzhen_preview(
         )
     except Exception as exc:
         return JSONResponse({'notice': str(exc)}, headers=PAGE_HEADERS)
-    return JSONResponse({'notice': '', 'preview': _plain(value)}, headers=PAGE_HEADERS)
+    return JSONResponse(
+        {'notice': '', 'preview': _formation_view(services.features.zongmen_sheshi, value)},
+        headers=PAGE_HEADERS,
+    )
 
 
-def _plain(value: object) -> object:
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if isinstance(value, Mapping):
-        return {str(key): _plain(raw) for key, raw in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_plain(item) for item in value]
-    fields = getattr(value, '__dataclass_fields__', None)
-    if fields:
-        return {name: _plain(getattr(value, name)) for name in fields}
-    return str(value)
+def _formation_view(feature: object, value: object) -> dict[str, object]:
+    """把玩法的演阵预览投影成页面要的**中文形状**。
+
+    字段标签与聊天侧回执同一套（`reply.preview` 里的「阵法／品级／阵基／阵眼／节点」），
+    通用文案取自展示数据集——页面只照印，不自己翻译英文键（原来是整份 JSON 甩给页面）。
+    """
+
+    groups = feature.copy().get('通用', {})
+    pick = (lambda key: str(groups.get(key) or '')) if isinstance(groups, Mapping) else (lambda key: '')
+    assessment = value.assessment
+    formation = assessment.formation
+    return {
+        '标题': f'{value.facility.name} · {formation.name}',
+        '字段': [
+            {'键': '阵法', '值': str(formation.formation_id)},
+            {'键': '品级', '值': str(assessment.grade_name)},
+            {'键': '阵基', '值': f'承载 {assessment.capacity:g}'},
+            {'键': '阵眼', '值': f'冲击 {assessment.impact:g}'},
+            {'键': '节点', '值': f'{assessment.nodes}位 · 传导 {assessment.transmission:g}'},
+            {'键': pick('职位'), '值': str(value.role)},
+            {'键': pick('材料来源'), '值': str(value.material_source)},
+        ],
+        '材料': [
+            {
+                '类别': str(material.category),
+                '名称': str(material.name),
+                '编号': str(material.item_id),
+                '品级': str(material.grade_name),
+                '数量': int(material.quantity),
+            }
+            for material in assessment.materials
+            if material is not None
+        ],
+        '费用': {'键': pick('灵石消耗').split('{数量}')[0], '值': int(value.spirit_stone_cost)},
+        '去向': pick('个人去向') if value.material_source == '个人纳戒' else pick('宗门去向'),
+    }
 
 
 __all__ = ['router']
