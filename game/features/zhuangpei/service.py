@@ -161,7 +161,8 @@ class ZhuangpeiFeature:
         except JsonDataError as exc:
             raise ZhuangpeiFeatureError(str(exc)) from exc
         lines, _ = render_body(value, self._combat.rule_layer())
-        head = self._grade_line(grade)
+        # 器律按器阶划分、没有品级：这一行在器律详情里不该出现（核心已明确拒绝带品级的器律请求）。
+        head = "" if section == "器律" else self._grade_line(grade)
         return {
             "name": value["名称"],
             "grade": grade,

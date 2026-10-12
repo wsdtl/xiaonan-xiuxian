@@ -1,5 +1,7 @@
 const $ = (id) => document.getElementById(id);
-const sections = ["功法", "真意", "气机", "器律"];
+// 后端 `page()` 会发 `sections`：以它为准，页面不写死这份清单。
+const DEFAULT_SECTIONS = ["功法", "真意", "气机", "器律"];
+let sections = DEFAULT_SECTIONS.slice();
 let page = null, allLimits = {}, draft = Object.fromEntries(sections.map(s => [s, []]));
 let target = {section: "功法", index: 0}, offset = 0, revision = 0, scopeRequest = 0, codeRequest = 0;
 let dictionary = new Map();
@@ -64,7 +66,10 @@ function renderCandidates() {
     (section === "器律" || !grade || entry.grade === grade) &&
     (!query || (entry.label + " " + entry.id + " " + entry.description).toLowerCase().includes(query)));
   offset = Math.min(offset, Math.max(0, Math.ceil(rows.length / pageSize) - 1));
-  const container = $("candidates"); container.replaceChildren();
+  // 重画候选时保住滚动位置：点靠后的「填入」不该被弹回列表开头。
+  const container = $("candidates");
+  const keepTop = container.scrollTop;
+  container.replaceChildren();
   $("target-hint").textContent = "填入位置：" + target.section + "第" + (target.index + 1) + "槽";
   // 非器律按编号查重（与整套校验一致），器律按编号加品级；方案里已有的内容不该再被填入。
   const taken = new Map();
@@ -103,6 +108,7 @@ function renderCandidates() {
     card.append(detail, put); container.append(card);
   }
   if (!rows.length) container.append(element("p", "此范围没有符合条件的内容。可调整筛选或选择全池。", "empty"));
+  container.scrollTop = keepTop;
   $("count").textContent = rows.length + " 项 · " + (rows.length ? offset + 1 : 0) + "/" + Math.ceil(rows.length / pageSize) + " 页";
   $("prev").disabled = offset === 0;
   $("next").disabled = (offset + 1) * pageSize >= rows.length;
@@ -117,10 +123,15 @@ async function loadScope(scope = $("scope").value) {
     const data = await request("/assembly/data?scope=" + encodeURIComponent(scope));
     if (sequence !== scopeRequest) return;
     page = data;
-    if (!Object.keys(allLimits).length) {
-      allLimits = {...data.limits};
-      for (const section of sections) draft[section] = Array(allLimits[section]).fill(null);
+    // 清单里带着 `sections` 与 `limits`：换清单（换人）时槽位上限必须跟着变——
+    // 以前只在首次读一次，选低器阶的人右栏仍画四个器律槽。
+    if (Array.isArray(data.sections) && data.sections.length) sections = data.sections.slice();
+    const fresh = {...data.limits};
+    for (const section of sections) {
+      const previous = draft[section] || [];
+      draft[section] = Array.from({length: fresh[section] ?? 0}, (_, index) => previous[index] || null);
     }
+    allLimits = fresh;
     for (const entry of data.entries) dictionary.set(key(entry.section, {编号: entry.id, 品级: entry.grade}), entry);
     if (scope === "all") {
       const chosen = $("grade").value, grades = new Map();
