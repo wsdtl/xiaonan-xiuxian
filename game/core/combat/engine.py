@@ -286,20 +286,7 @@ class BattleEngine(AbilityRuntime):
                 "右方": [value.id for value in right_fighters],
             },
         )
-        while context.both_sides_alive and context.action_number < max(
-            1, int(action_limit)
-        ):
-            order = self._next_action_order(context)
-            for actor in order:
-                if not actor.alive or not context.both_sides_alive:
-                    continue
-                context.action_number += 1
-                context.trigger_counts.clear()
-                context.saved_results.clear()
-                with self.root_chain(context):
-                    self._take_action(context, actor)
-                if context.action_number >= max(1, int(action_limit)):
-                    break
+        self._run_action_loop(context, action_limit)
         left_alive = [
             value
             for value in context.left_team
@@ -343,6 +330,25 @@ class BattleEngine(AbilityRuntime):
                 self._formation_result(value) for value in context.formations
             ),
         )
+
+    def _run_action_loop(self, context: BattleContext, action_limit: int) -> None:
+        """按行动序轮转出手，直到一方全灭或达到行动上限。"""
+
+        while context.both_sides_alive and context.action_number < max(
+            1, int(action_limit)
+        ):
+            order = self._next_action_order(context)
+            for actor in order:
+                if not actor.alive or not context.both_sides_alive:
+                    continue
+                context.action_number += 1
+                context.trigger_counts.clear()
+                context.saved_results.clear()
+                with self.root_chain(context):
+                    self._take_action(context, actor)
+                if context.action_number >= max(1, int(action_limit)):
+                    break
+
 
     @staticmethod
     def _share_inventories(fighters: list[Fighter]) -> None:
