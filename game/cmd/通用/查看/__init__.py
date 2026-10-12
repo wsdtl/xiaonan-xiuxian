@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
+from game.features.chakan_wupin import ItemInspectionResult
 from launch.paths import public_url
 
 from ...command import GameCommand
@@ -31,6 +32,16 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
         await manager.send(reply.missing_query())
         return
 
+    #: 敌人走 30 段专属分派：它们是命名实体池，不在 item_catalog 的编号索引里。
+    if len(query) == 6 and query.isdigit() and query[:2] == "30":
+        detail = current_game_services().features.chakan_wupin.inspect_enemy(query)
+        await manager.send(
+            reply.inspection(
+                ItemInspectionResult(query, detail=detail) if detail else ItemInspectionResult(query),
+                public_url("baike"),
+            )
+        )
+        return
     result = await current_game_services().features.chakan_wupin.inspect(query, user_id)
     await manager.send(reply.inspection(result, public_url("baike")))
 

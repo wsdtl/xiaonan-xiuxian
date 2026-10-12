@@ -61,7 +61,7 @@ class ItemInspectionFeature:
         except ItemNotFoundError:
             return ItemInspectionResult(normalized)
 
-    def inspect_enemy(self, identifier: str) -> ItemDetail:
+    def inspect_enemy(self, identifier: str) -> ItemDetail | None:
         """按敌人编号造一个可渲染的实体详情。"""
 
         if not self._initialized:
@@ -73,7 +73,7 @@ class ItemInspectionFeature:
         }
         name = by_id.get(wanted)
         if name is None:
-            raise ItemNotFoundError("未找到敌人编号：" + wanted)
+            return None
         entry = self._data.entity("敌人", name)
         return ItemDetail(
             item_id=wanted,
