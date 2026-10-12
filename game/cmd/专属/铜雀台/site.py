@@ -11,10 +11,39 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
-from ...site import PAGE_CSP, PAGE_HEADERS, failure, to_jsonable
+from ...site import PAGE_CSP, PAGE_HEADERS, failure
 
 
 router = APIRouter(prefix='/tongquetai')
+
+
+def _outcome_view(ui: dict[str, str], outcome: object) -> dict[str, object]:
+    '''一套归流方式的三个数与名字（给／收／弃都是这份数据里的词）。'''
+
+    return {
+        '给': int(outcome.offered),
+        '收': int(outcome.accepted),
+        '弃': int(outcome.discarded),
+    }
+
+
+def _preview_view(ui: dict[str, str], value: object) -> dict[str, object]:
+    '''把铜雀台预览投影成页面要的**中文形状**。
+
+    标签就是这份数据里的「道侣／层级／丹药／修为／护契／离契」，页面只照印，
+    原来整份 `to_jsonable` 的英文键（companion_level／protected.offered…）页面只能自己猜。
+    '''
+
+    return {
+        '地点': str(value.location_name),
+        '道侣': str(value.companion_name),
+        '层级': int(value.companion_level),
+        '丹药': str(value.medicine_name),
+        '丹药齐备': bool(value.has_medicine),
+        '修为': int(value.cultivation),
+        '护契': _outcome_view(ui, value.protected),
+        '离契': _outcome_view(ui, value.severed),
+    }
 
 
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
@@ -58,6 +87,9 @@ async def tongquetai_data(scope: str = '') -> JSONResponse:
         '收': feature.copy('页面', '收'),
         '弃': feature.copy('页面', '弃'),
         '命令': feature.copy('页面', '命令'),
+        # 「有丹／没丹」两句在预览那一节：页面照印后端的话，不自己判。
+        '护契可用': feature.copy('预览', '护契可用'),
+        '护契不足': feature.copy('预览', '护契不足'),
     }
     body: dict[str, object] = {
         'scopes': [{'id': 'user:' + item.user_id, 'name': item.name} for item in scopes],
@@ -68,7 +100,7 @@ async def tongquetai_data(scope: str = '') -> JSONResponse:
         'modes': ['护契', '离契'],
     }
     try:
-        body['preview'] = to_jsonable(await feature.preview(user_id))
+        body['preview'] = _preview_view(ui, await feature.preview(user_id))
     except Exception as exc:
         body['notice'] = str(exc)
     return JSONResponse(body, headers=PAGE_HEADERS)
