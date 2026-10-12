@@ -25,6 +25,11 @@
   }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
 
   document.querySelectorAll('[data-reveal]').forEach(function (el) { io.observe(el); });
+  // 兜底：无论观察器是否回调，1.2 秒后一律显示（渐进增强，不让内容被 JS 扣住）
+  setTimeout(function () {
+    document.querySelectorAll('[data-reveal]').forEach(function (el) { el.classList.add('in'); });
+  }, 1200);
+
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onScroll);
   onScroll();
