@@ -20,6 +20,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP_WITH_IMAGES, PAGE_HEADERS
+
 router = APIRouter(prefix="/baike")
 INDEX_HTML: Path = static_path("baike", "index.html")
 
@@ -41,11 +43,11 @@ async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONRespons
     query = q.strip()
     if query:
         picked = [e for e in entries if query in e["编号"] or query == e["名称"]]
-        return JSONResponse({"模式": "检索", "查询": query, "条目": picked[:500]}, headers=_data_headers())
+        return JSONResponse({"模式": "检索", "查询": query, "条目": picked[:500]}, headers=PAGE_HEADERS)
     wanted = prefix.strip()
     if wanted:
         picked = [e for e in entries if e["编号"].startswith(wanted)]
-        return JSONResponse({"模式": "前缀", "前缀": wanted, "条目": picked}, headers=_data_headers())
+        return JSONResponse({"模式": "前缀", "前缀": wanted, "条目": picked}, headers=PAGE_HEADERS)
     table = _prefix_rows(entries)
     return JSONResponse(
         {
@@ -55,7 +57,7 @@ async def baike_data(prefix: str = "", q: str = "", id: str = "") -> JSONRespons
             "前缀数": len(table),
             "主体表": _group_rows(table),
         },
-        headers=_data_headers(),
+        headers=PAGE_HEADERS,
     )
 
 
@@ -108,7 +110,7 @@ def _references(services, entity_id: str, value: object) -> list[dict[str, str]]
 def _detail(services, entity_id: str) -> JSONResponse:
     """单个实体的详情。按前缀分派：数据索引实体走 `entity_record`，种族走角色核心的 `races()`。"""
 
-    headers = _data_headers()
+    headers = PAGE_HEADERS
     if entity_id.startswith("55"):
         race = services.core.character.races().get(entity_id) or _find_race(services, entity_id)
         if race is None:
@@ -234,20 +236,16 @@ def _group_rows(table: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 def _page_headers() -> dict[str, str]:
+    """这一页的响应头：共用基础头 + 本页单独的 CSP 与来源限制。"""
+
     return {
-        "Cache-Control": "no-store",
-        "Content-Security-Policy": (
-            "default-src 'self'; img-src 'self' data:; "
-            "style-src 'self'; script-src 'self'; connect-src 'self'"
-        ),
+        **PAGE_HEADERS,
+        "Content-Security-Policy": PAGE_CSP_WITH_IMAGES,
         "Referrer-Policy": "no-referrer",
-        "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "SAMEORIGIN",
     }
 
 
-def _data_headers() -> dict[str, str]:
-    return {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
 
 
 __all__ = ["router"]

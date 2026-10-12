@@ -1,8 +1,26 @@
-"""命令回复共用的轻量展示格式。"""
+"""命令回复共用的轻量展示格式与看板页面共用的 HTTP 头。"""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+
+
+#: 看板页面统一的基础响应头：不发缓存、按内容嗅探。
+#: 原先 11 个 site.py 各写一份逐字相同的内容，收在这里。
+PAGE_HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+
+#: 看板页面统一的内容安全策略：只允许同源脚本与样式。
+#: 原先 10 个 site.py 各写一份同一条长串，收在这里。
+PAGE_CSP = (
+    "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; "
+    "object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+)
+
+#: 舆图 / 百科 / 战报要把图片画在 <canvas> 或内联 data: 图片上，在基础策略上单独放宽 img-src。
+PAGE_CSP_WITH_IMAGES = (
+    "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+    "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+)
 
 
 def natural_deadline(value: datetime) -> str:
@@ -104,6 +122,9 @@ def error_document(
 
 
 __all__ = [
+    "PAGE_CSP",
+    "PAGE_CSP_WITH_IMAGES",
+    "PAGE_HEADERS",
     "duration",
     "error_document",
     "format_lines",

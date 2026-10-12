@@ -13,8 +13,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP, PAGE_HEADERS
+
 router = APIRouter(prefix='/lingtian')
-HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 #: 这座设施的常用命令（与命令组认的写法一致，页面直接把它们摆出来）。
 USUAL = ('灵田', '灵田 开启', '灵田 收取', '灵田 清地形')
 
@@ -24,10 +25,10 @@ async def lingtian_page() -> HTMLResponse:
     return HTMLResponse(
         static_path('lingtian', 'index.html').read_text(encoding='utf-8'),
         headers={
-            **HEADERS,
+            **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',
             'X-Frame-Options': 'DENY',
-            'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            'Content-Security-Policy': PAGE_CSP,
         },
     )
 
@@ -37,7 +38,7 @@ async def lingtian_data(scope: str = '') -> JSONResponse:
     services = current_game_services()
     scopes = await services.features.wangye.scopes()
     if not scopes:
-        return JSONResponse({'scopes': [], 'ui': {}, 'terrains': [], 'terrain': '', 'notice': '', 'usual': list(USUAL)}, headers=HEADERS)
+        return JSONResponse({'scopes': [], 'ui': {}, 'terrains': [], 'terrain': '', 'notice': '', 'usual': list(USUAL)}, headers=PAGE_HEADERS)
     picked = scope.strip() or ('user:' + scopes[0].user_id)
     user_id = picked.removeprefix('user:')
     if user_id not in {item.user_id for item in scopes}:
@@ -73,11 +74,11 @@ async def lingtian_data(scope: str = '') -> JSONResponse:
         value['started'] = bool(getattr(view, 'started', False))
     except Exception as exc:
         value['notice'] = str(exc)
-    return JSONResponse(value, headers=HEADERS)
+    return JSONResponse(value, headers=PAGE_HEADERS)
 
 
 def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({'error': message}, status_code=status, headers=HEADERS)
+    return JSONResponse({'error': message}, status_code=status, headers=PAGE_HEADERS)
 
 
 __all__ = ['router']

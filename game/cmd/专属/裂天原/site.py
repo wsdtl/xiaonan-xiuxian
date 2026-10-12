@@ -11,8 +11,9 @@ from game.app import current_game_services
 from game.features.butian import ButianError
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP, PAGE_HEADERS
+
 router = APIRouter(prefix='/butian')
-HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 
 
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
@@ -20,10 +21,10 @@ async def butian_page() -> HTMLResponse:
     return HTMLResponse(
         static_path('butian', 'index.html').read_text(encoding='utf-8'),
         headers={
-            **HEADERS,
+            **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',
             'X-Frame-Options': 'DENY',
-            "Content-Security-Policy": "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            "Content-Security-Policy": PAGE_CSP,
         },
     )
 
@@ -37,7 +38,7 @@ async def butian_data(scope: str = '') -> JSONResponse:
         if not scopes:
             return JSONResponse(
                 {'scopes': [], 'scope': '', 'ui': {}, 'targets': [], 'candidates': [], 'medicine_id': ''},
-                headers=HEADERS,
+                headers=PAGE_HEADERS,
             )
         picked = scope.strip() or ('user:' + scopes[0].user_id)
         user_id = picked.removeprefix('user:')
@@ -46,13 +47,13 @@ async def butian_data(scope: str = '') -> JSONResponse:
         value = await services.features.butian.page(user_id)
         value['scopes'] = [{'id': 'user:' + item.user_id, 'name': item.name} for item in scopes]
         value['scope'] = picked
-        return JSONResponse(value, headers=HEADERS)
+        return JSONResponse(value, headers=PAGE_HEADERS)
     except ButianError as exc:
         return failure(str(exc))
 
 
 def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({'error': message}, status_code=status, headers=HEADERS)
+    return JSONResponse({'error': message}, status_code=status, headers=PAGE_HEADERS)
 
 
 __all__ = ['router']

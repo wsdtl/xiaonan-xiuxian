@@ -10,6 +10,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP_WITH_IMAGES, PAGE_HEADERS
+
 router = APIRouter(prefix="/world-map")
 INDEX_HTML = static_path("world-map", "index.html")
 
@@ -25,27 +27,20 @@ async def world_map_page() -> HTMLResponse:
 @router.get("/data", response_class=JSONResponse)
 async def world_map_data() -> JSONResponse:
     snapshot = current_game_services().features.ditu.snapshot()
-    return JSONResponse(asdict(snapshot), headers=_data_headers())
+    return JSONResponse(asdict(snapshot), headers=PAGE_HEADERS)
 
 
 def _page_headers() -> dict[str, str]:
+    """这一页的响应头：共用基础头 + 本页单独的 CSP 与来源限制。"""
+
     return {
-        "Cache-Control": "no-store",
-        "Content-Security-Policy": (
-            "default-src 'self'; img-src 'self' data:; "
-            "style-src 'self'; script-src 'self'; connect-src 'self'"
-        ),
+        **PAGE_HEADERS,
+        "Content-Security-Policy": PAGE_CSP_WITH_IMAGES,
         "Referrer-Policy": "no-referrer",
-        "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "SAMEORIGIN",
     }
 
 
-def _data_headers() -> dict[str, str]:
-    return {
-        "Cache-Control": "no-store",
-        "X-Content-Type-Options": "nosniff",
-    }
 
 
 __all__ = ["router"]

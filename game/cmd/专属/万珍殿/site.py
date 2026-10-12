@@ -11,8 +11,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP, PAGE_HEADERS
+
 router = APIRouter(prefix='/wanzhen')
-HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 #: 五类成品与各自的子类（与「捐入万珍殿」命令认的写法一一对应）。
 CATEGORIES = (
     ('丹药', ('恢复丹', '战丹', '突破丹', '特殊丹')),
@@ -30,10 +31,10 @@ async def wanzhen_page() -> HTMLResponse:
     return HTMLResponse(
         static_path('wanzhen', 'index.html').read_text(encoding='utf-8'),
         headers={
-            **HEADERS,
+            **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',
             'X-Frame-Options': 'DENY',
-            'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            'Content-Security-Policy': PAGE_CSP,
         },
     )
 
@@ -96,7 +97,7 @@ async def wanzhen_data(scope: str = '') -> JSONResponse:
     services = current_game_services()
     scopes = await services.features.wangye.scopes()
     if not scopes:
-        return JSONResponse({'scopes': [], 'ui': {}, 'categories': [], 'items': [], 'vault': '', 'notice': ''}, headers=HEADERS)
+        return JSONResponse({'scopes': [], 'ui': {}, 'categories': [], 'items': [], 'vault': '', 'notice': ''}, headers=PAGE_HEADERS)
     picked = scope.strip() or ('user:' + scopes[0].user_id)
     user_id = picked.removeprefix('user:')
     if user_id not in {item.user_id for item in scopes}:
@@ -143,11 +144,11 @@ async def wanzhen_data(scope: str = '') -> JSONResponse:
         )
     except Exception as exc:
         value['notice'] = str(exc)
-    return JSONResponse(value, headers=HEADERS)
+    return JSONResponse(value, headers=PAGE_HEADERS)
 
 
 def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({'error': message}, status_code=status, headers=HEADERS)
+    return JSONResponse({'error': message}, status_code=status, headers=PAGE_HEADERS)
 
 
 __all__ = ['router']

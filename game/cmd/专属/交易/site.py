@@ -11,10 +11,11 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP, PAGE_HEADERS, to_jsonable
+
 from ...presentation import to_jsonable
 
 router = APIRouter(prefix='/jiaoyi')
-HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 CATEGORIES = ('真意', '气机')
 
 
@@ -23,10 +24,10 @@ async def jiaoyi_page() -> HTMLResponse:
     return HTMLResponse(
         static_path('jiaoyi', 'index.html').read_text(encoding='utf-8'),
         headers={
-            **HEADERS,
+            **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',
             'X-Frame-Options': 'DENY',
-            'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            'Content-Security-Policy': PAGE_CSP,
         },
     )
 
@@ -36,7 +37,7 @@ async def jiaoyi_data(scope: str = '', category: str = '真意', page: int = 1) 
     services = current_game_services()
     scopes = await services.features.wangye.scopes()
     if not scopes:
-        return JSONResponse({'scopes': [], 'ui': {}, 'overview': None, 'page': None, 'categories': [], 'notice': ''}, headers=HEADERS)
+        return JSONResponse({'scopes': [], 'ui': {}, 'overview': None, 'page': None, 'categories': [], 'notice': ''}, headers=PAGE_HEADERS)
     picked = scope.strip() or ('user:' + scopes[0].user_id)
     user_id = picked.removeprefix('user:')
     if user_id not in {item.user_id for item in scopes}:
@@ -72,11 +73,11 @@ async def jiaoyi_data(scope: str = '', category: str = '真意', page: int = 1) 
         body['page'] = to_jsonable(await feature.page(user_id, chosen, max(1, int(page))))
     except Exception as exc:
         body['notice'] = str(exc)
-    return JSONResponse(body, headers=HEADERS)
+    return JSONResponse(body, headers=PAGE_HEADERS)
 
 
 def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({'error': message}, status_code=status, headers=HEADERS)
+    return JSONResponse({'error': message}, status_code=status, headers=PAGE_HEADERS)
 
 
 __all__ = ['router']

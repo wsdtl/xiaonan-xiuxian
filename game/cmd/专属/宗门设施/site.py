@@ -14,8 +14,9 @@ from game.app import current_game_services
 from game.features.zongmen_sheshi import SectFacilityFeatureError
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP, PAGE_HEADERS
+
 router = APIRouter(prefix='/lianzhen')
-HEADERS = {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
 GRADES = ('01', '02', '03', '04', '05')
 
 
@@ -24,10 +25,10 @@ async def lianzhen_page() -> HTMLResponse:
     return HTMLResponse(
         static_path('lianzhen', 'index.html').read_text(encoding='utf-8'),
         headers={
-            **HEADERS,
+            **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',
             'X-Frame-Options': 'DENY',
-            'Content-Security-Policy': "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            'Content-Security-Policy': PAGE_CSP,
         },
     )
 
@@ -54,7 +55,7 @@ async def lianzhen_data(scope: str = '') -> JSONResponse:
     if not user_id:
         return JSONResponse(
             {'scopes': [], 'scope': '', 'ui': {}, 'grades': list(GRADES), 'formations': [], 'notice': ''},
-            headers=HEADERS,
+            headers=PAGE_HEADERS,
         )
     feature = services.features.zongmen_sheshi
     # 数据服务交出来的是只读映射（MappingProxy），不是 dict——按 dict 判会恒假，文案就全空了。
@@ -95,7 +96,7 @@ async def lianzhen_data(scope: str = '') -> JSONResponse:
     except SectFacilityFeatureError as exc:
         # 门槛不在页面重推：核心说什么就显示什么。
         value['notice'] = str(exc)
-    return JSONResponse(value, headers=HEADERS)
+    return JSONResponse(value, headers=PAGE_HEADERS)
 
 
 @router.get('/preview')
@@ -124,8 +125,8 @@ async def lianzhen_preview(
             {'兽宝': int(shoubao), '灵矿': int(lingkuang), '灵植': int(lingzhi)},
         )
     except Exception as exc:
-        return JSONResponse({'notice': str(exc)}, headers=HEADERS)
-    return JSONResponse({'notice': '', 'preview': _plain(value)}, headers=HEADERS)
+        return JSONResponse({'notice': str(exc)}, headers=PAGE_HEADERS)
+    return JSONResponse({'notice': '', 'preview': _plain(value)}, headers=PAGE_HEADERS)
 
 
 def _plain(value: object) -> object:
@@ -142,7 +143,7 @@ def _plain(value: object) -> object:
 
 
 def failure(message: str, status: int = 400) -> JSONResponse:
-    return JSONResponse({'error': message}, status_code=status, headers=HEADERS)
+    return JSONResponse({'error': message}, status_code=status, headers=PAGE_HEADERS)
 
 
 __all__ = ['router']

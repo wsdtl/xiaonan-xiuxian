@@ -27,33 +27,22 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
+from ...presentation import PAGE_CSP_WITH_IMAGES, PAGE_HEADERS
+
 router = APIRouter(prefix="/battle")
 INDEX_HTML = static_path("battle-report", "index.html")
 
-#: 战报页面是公开只读的分享页：脚本与样式只许来自本站，不许外链、不许内联。
-PAGE_CSP = (
-    "default-src 'self'; img-src 'self' data:; "
-    "style-src 'self'; script-src 'self'; connect-src 'self'; "
-    "object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
-)
-
-
 def _page_headers() -> dict[str, str]:
+    """这一页的响应头：共用基础头 + 本页单独的 CSP 与来源限制。"""
+
     return {
-        "Cache-Control": "no-store",
-        "Content-Security-Policy": PAGE_CSP,
+        **PAGE_HEADERS,
+        "Content-Security-Policy": PAGE_CSP_WITH_IMAGES,
         "Referrer-Policy": "no-referrer",
-        "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "SAMEORIGIN",
     }
 
 
-def _data_headers() -> dict[str, str]:
-    return {
-        # 画面是实时的：不许任何一层拿旧的糊弄玩家。
-        "Cache-Control": "no-store",
-        "X-Content-Type-Options": "nosniff",
-    }
 
 
 def identifier_of(raw: str) -> str:
@@ -85,7 +74,7 @@ async def battle_report_data(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if payload is None:
         raise HTTPException(status_code=404, detail="没有这一份画面（战报不存在或还没打完）")
-    return JSONResponse(payload, headers=_data_headers())
+    return JSONResponse(payload, headers=PAGE_HEADERS)
 
 
 @router.get("/{report_id:path}", response_class=HTMLResponse, include_in_schema=False)
