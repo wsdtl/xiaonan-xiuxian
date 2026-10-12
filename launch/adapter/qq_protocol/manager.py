@@ -28,6 +28,7 @@ from ..context import (
 )
 from .client import client
 from .event import QqMessageEvent
+from .ids import short_id
 from .keyboard import validate_keyboard
 from .render import render_qq_message
 from .target import QqSendTarget
@@ -398,10 +399,10 @@ class QqReplyManager:
 
         return [
             C.kv("type", "群聊" if item.target.is_group else "私聊"),
-            C.kv("user", QqReplyManager._short_id(item.user_id)),
+            C.kv("user", short_id(item.user_id)),
             C.kv(
                 "target",
-                QqReplyManager._short_id(
+                short_id(
                     item.target.group_id or item.target.user_id
                 ),
             ),
@@ -717,17 +718,5 @@ class QqReplyManager:
             isinstance(row, dict) and bool(row.get("buttons"))
             for row in rows
         )
-
-    @staticmethod
-    def _short_id(value: object, head: int = 8, tail: int = 6) -> str:
-        """缩短开放平台长 ID，避免正常回复日志过长。"""
-
-        text = str(value or "").strip()
-        if not text:
-            return "-"
-        if len(text) <= head + tail + 3:
-            return text
-        return f"{text[:head]}...{text[-tail:]}"
-
 
 manager = QqReplyManager()

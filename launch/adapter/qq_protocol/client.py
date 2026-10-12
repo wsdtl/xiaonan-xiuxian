@@ -22,6 +22,8 @@ from urllib3.exceptions import (
 from launch.config import config
 from launch.log import C, logger
 
+from .ids import short_id
+
 QQ_TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
 QQ_OPEN_API_BASE = "https://api.sgroup.qq.com"
 
@@ -399,17 +401,17 @@ class QqOpenApiClient:
             return [
                 *QqOpenApiClient._path_log_parts(path),
                 C.kv("file_type", payload.get("file_type") or "-"),
-                C.kv("file", QqOpenApiClient._short_id(result_data.get("file_uuid"))),
+                C.kv("file", short_id(result_data.get("file_uuid"))),
                 C.kv("ttl", result_data.get("ttl", "-")),
             ]
 
         return [
             *QqOpenApiClient._path_log_parts(path),
             C.kv("msg_type", payload.get("msg_type") or "-"),
-            C.kv("msg", QqOpenApiClient._short_id(payload.get("msg_id"))),
+            C.kv("msg", short_id(payload.get("msg_id"))),
             C.kv(
                 "result",
-                QqOpenApiClient._short_id(
+                short_id(
                     result_data.get("id")
                     or result_data.get("message_id")
                     or result_data.get("msg_id")
@@ -426,21 +428,9 @@ class QqOpenApiClient:
             target_type = "私聊" if parts[-3] == "users" else "群聊"
             return [
                 C.kv("target", target_type),
-                C.kv("target", QqOpenApiClient._short_id(parts[-2])),
+                C.kv("target", short_id(parts[-2])),
             ]
         return [C.kv("path", path)]
-
-    @staticmethod
-    def _short_id(value: object, head: int = 8, tail: int = 6) -> str:
-        """缩短开放平台长 ID，保留首尾方便排查。"""
-
-        text = str(value or "").strip()
-        if not text:
-            return "-"
-        if len(text) <= head + tail + 3:
-            return text
-        return f"{text[:head]}...{text[-tail:]}"
-
 
 def _positive_int(value: object, default: int, *, allow_zero: bool = False) -> int:
     """把网关返回的数值字段安全转成正整数。"""

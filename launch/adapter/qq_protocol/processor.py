@@ -23,6 +23,7 @@ from ..context import (
 from ..request_scope import request_scope
 from ..shared_dispatch import MessageDispatchMixin
 from .event import QqMessageEvent, parse_message_event
+from .ids import short_id
 from .manager import current_event, manager
 from .rules import QqCommandMatch, QqCommandRegistry
 from .runtime import QqDriverRuntime
@@ -255,17 +256,6 @@ def matched_commands_text(items: list[QqCommandMatch]) -> str:
     if len(commands) > 3:
         text = f"{text} 等{len(commands)}个"
     return short_text(text, limit=60)
-
-
-def short_id(value: object, head: int = 8, tail: int = 6) -> str:
-    """缩短开放平台长 ID，保留首尾方便排查。"""
-
-    text = str(value or "").strip()
-    if not text:
-        return "-"
-    if len(text) <= head + tail + 3:
-        return text
-    return f"{text[:head]}...{text[-tail:]}"
 
 
 def short_text(value: object, limit: int = 80) -> str:
