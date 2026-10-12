@@ -385,6 +385,46 @@ def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
     return tuple(lines) if lines else None
 
 
+#: 敌人条目页的遮罩词。配置里没有的（种族／性别／器律）是生成期按实例编号抽的，
+#: 显示真值就是撒谎，所以遮住——这不是藏信息，是唯一诚实的写法。
+#: 待办：按委托方「文案来自展示数据集」的口径，迁到 `data/角色/展示/文本.json`。
+_MASK_TEXT = "???"
+
+
+def _enemy_lines(source: SectionInput) -> tuple[str, ...]:
+    """敌人条目页：范围照给，答案遮住。"""
+
+    fields = source.fields
+    lines: list[str] = []
+    level = fields.get("等级")
+    if isinstance(level, Sequence) and not isinstance(level, str) and len(level) == 2:
+        lines.append(f"等级：{level[0]} ~ {level[1]}")
+    swing = fields.get("实力波动")
+    if isinstance(swing, Mapping):
+        attributes = swing.get("属性")
+        multiplier = swing.get("倍率")
+        if isinstance(attributes, Sequence) and isinstance(multiplier, Sequence) and len(multiplier) == 2 and not isinstance(multiplier, str):
+            lines.append(
+                "实力波动："
+                + "、".join(str(item) for item in attributes)
+                + f"　{multiplier[0]}% ~ {multiplier[1]}%"
+            )
+    for label, key in (("灵石", "掉落"), ("人物经验", "交锋所得")):
+        block = fields.get(key)
+        if isinstance(block, Mapping):
+            span = block.get(label)
+            if isinstance(span, Sequence) and not isinstance(span, str) and len(span) == 2:
+                lines.append(f"{label}：{span[0]} ~ {span[1]}")
+    weapon = fields.get("本命武器")
+    if isinstance(weapon, Mapping):
+        lines.append(
+            f"本命武器：{weapon.get('名称')}（攻击 {weapon.get('攻击')}）"
+        )
+    lines.append(
+        f"种族：{_MASK_TEXT}　性别：{_MASK_TEXT}　器律：{_MASK_TEXT}"
+    )
+    return tuple(lines) if lines else None
+
 #: 领域 → 自己的详情行构造。返回 `None` 表示不接管，交给 `_generic_lines` 兜底。
 _SECTION_LINES = {
     "意境": _yijing_lines,
@@ -400,6 +440,7 @@ _SECTION_LINES = {
     "炼丹师": _artisan_lines,
     "炼器工匠": _artisan_lines,
     "阵师": _artisan_lines,
+    "敌人": _enemy_lines,
 }
 def _item_effect_lines(
     effect: Mapping[str, object], related: Mapping[str, object]
