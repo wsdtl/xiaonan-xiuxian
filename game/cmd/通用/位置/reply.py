@@ -102,11 +102,12 @@ def nearby_cultivators(
     if result.active_companion is not None:
         builder.section(
             copy.cultivators_active_section, icon=copy.cultivator_icon
-        ).field(
+        ).line(
             M.command(
                 result.active_companion.name,
                 f"查看 {result.active_companion.companion_id}",
             ),
+            " · ",
             copy.cultivator_summary.format_map(
                 {"境界": result.active_companion.realm_name, "等级": result.active_companion.level, "性别": result.active_companion.gender, "状态": ""},
             ),
