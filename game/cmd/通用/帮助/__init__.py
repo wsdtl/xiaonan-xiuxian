@@ -45,32 +45,16 @@ _ID_SECTIONS = (
 
 
 def _id_converter():
-    """自己写的「中文名 → 编号」转换器：先按上面几节建名称表，再逐词替换。
+    """「中文名 → 编号」转换器：名称表向玩法要，再逐词替换。
 
     认不出就原样留着——它只负责把能给编号的地方换成编号，不做校验。
+    要认哪几节由本组件的 `_ID_SECTIONS` 定，玩法只负责取事实。
     """
 
-    services = current_game_services()
-    data = services.core.data
-    name_to_id: dict[str, str] = {}
-    for section in _ID_SECTIONS:
-        try:
-            table = data.entities(section)
-        except Exception:  # noqa: BLE001 - 这一节不存在就跳过
-            continue
-        for content_id, value in table.items():
-            name = str(value.get("名称") or "").strip()
-            if name and name not in name_to_id:
-                name_to_id[name] = str(content_id)
-
-    # 品级也是 id 化的内容，只是方式不同：黄品 → 01。照 asset 的品级表来，不硬编码。
-    for grade in services.core.asset.grades():
-        grade_name = str(getattr(grade, "name", "") or "").strip()
-        grade_id = str(getattr(grade, "grade_id", "") or "").strip()
-        if not grade_name or not grade_id:
-            continue
-        for token in (grade_name, grade_name[:1]):
-            name_to_id.setdefault(token, grade_id)
+    # 事实向玩法要（边界：触发层不直接访问数据服务）；**范围仍由本组件自己定**。
+    name_to_id = dict(
+        current_game_services().features.chakan_wupin.id_aliases(_ID_SECTIONS)
+    )
 
     def convert(text: str) -> str:
         return " ".join(name_to_id.get(token, token) for token in str(text).split())

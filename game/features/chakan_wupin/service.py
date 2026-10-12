@@ -80,6 +80,33 @@ class ItemInspectionFeature:
         except ItemNotFoundError:
             return ItemInspectionResult(normalized)
 
+    def id_aliases(self, sections: Sequence[str]) -> Mapping[str, str]:
+        """「中文名 / 品级名 → 编号」的别名表。
+
+        `sections` 是调用方要认的实体节——**范围由调用方定**（帮助那条给机器读的 `help` 命令
+        只在自己列的那几节里认名称）；本口只负责把事实取出来。品级照资产核心的品级表来，
+        连它的首字一起认（「黄」→ 01），不硬编码。
+        """
+
+        aliases: dict[str, str] = {}
+        for section in sections:
+            try:
+                table = self._data.entities(section)
+            except Exception:  # noqa: BLE001 - 这一节不存在就跳过（与调用方原来的口径一致）
+                continue
+            for content_id, value in table.items():
+                name = str(value.get("名称") or "").strip()
+                if name and name not in aliases:
+                    aliases[name] = str(content_id)
+        for grade in self._asset.grades():
+            grade_name = str(getattr(grade, "name", "") or "").strip()
+            grade_id = str(getattr(grade, "grade_id", "") or "").strip()
+            if not grade_name or not grade_id:
+                continue
+            for token in (grade_name, grade_name[:1]):
+                aliases.setdefault(token, grade_id)
+        return MappingProxyType(aliases)
+
     def is_race(self, entity_id: str) -> bool:
         """这个编号是不是种族（前缀 55）——百科页用它决定缺号时回哪一句。"""
 
