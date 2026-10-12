@@ -80,6 +80,18 @@ class _SettlementDraft:
     summaries: list[dict[str, object]] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class _RetreatDraft:
+    """一次闭关开始里，逐位参与者那一段要用的全部输入。"""
+    command: RetreatStartCommand
+    owner: str
+    participants: tuple[str, ...]
+    session_id: str
+    source: Mapping[str, object]
+    transitions: Mapping[str, object]
+    user_results: dict[str, object]
+
+
 class RetreatService:
     """拥有闭关会话、预计算结果和最终结算的唯一核心边界。"""
 
@@ -245,15 +257,8 @@ class RetreatService:
         transitions = []
         user_results: dict[str, dict[str, object]] = {}
         source = random.Random(seed)
-        formal_count = await self._plan_retreat_participants(
-            command,
-            owner,
-            participants,
-            session_id,
-            source,
-            transitions,
-            user_results,
-        )
+        draft = _RetreatDraft(command, owner, participants, session_id, source, transitions, user_results)
+        formal_count = await self._plan_retreat_participants(draft)
 
         session_value = {
             "开始请求": command.request_id,
@@ -309,35 +314,26 @@ class RetreatService:
             receipt.replayed,
         )
 
-    async def _plan_retreat_participants(
-        self,
-        command: RetreatStartCommand,
-        owner: str,
-        participants: tuple[str, ...],
-        session_id: str,
-        source: Mapping[str, object],
-        transitions: Mapping[str, object],
-        user_results: dict[str, object],
-    ) -> int:
+    async def _plan_retreat_participants(self, draft: _RetreatDraft) -> int:
         """逐位参与者算闭关结果，返回正式角色数；只写进 user_results，不改别处。"""
 
         formal_count = 0
 
-        for user_id in participants:
+        for user_id in draft.participants:
             guard = await self._player_state.authorize(user_id, "空闲或托管")
             if not guard.allowed:
                 raise RetreatConflictError(f"{user_id}无法开始闭关：{guard.reason}")
-            transitions.append(
+            draft.transitions.append(
                 await self._player_state.plan_transition(
                     StateTransitionCommand(
                         user_id=user_id,
-                        request_id=command.request_id,
+                        request_id=draft.command.request_id,
                         state_type="行为",
                         target_state_id=self._state_id,
                         context={
-                            "闭关编号": session_id,
-                            "发起者": owner,
-                            "参与人数": len(participants),
+                            "闭关编号": draft.session_id,
+                            "发起者": draft.owner,
+                            "参与人数": len(draft.participants),
                         },
                     )
                 )
@@ -382,7 +378,7 @@ class RetreatService:
                     "每轮经验": round_experience,
                     "疗养进度倍率": treatment_multiplier,
                 },
-                "功法感悟": self._precompute_insights(source, insight_attempts),
+                "功法感悟": self._precompute_insights(draft.source, insight_attempts),
                 "先天灵宝": activation_payload(activation),
             }
             active = await self._companion.active(user_id)
@@ -398,7 +394,7 @@ class RetreatService:
                     "每轮经验": self._round_experience(instance.level),
                 }
                 formal_count += 1
-            user_results[user_id] = result
+            draft.user_results[user_id] = result
 
         return formal_count
 
