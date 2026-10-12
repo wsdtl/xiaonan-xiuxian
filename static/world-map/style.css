@@ -1,34 +1,34 @@
 :root {
-  color-scheme: light;
-  /* 页底与描边对齐装配台：暖纸 + 玉色，舆图那块冷调地形因此像铺在案上的图。 */
-  --page: #f7f5ef;
-  --paper: #f7f5ef;
-  --map-paper: #aec0b6;
-  --surface: rgba(255, 255, 255, 0.94);
-  --surface-strong: #ffffff;
-  --ink: #1d2a25;
-  --muted: #5c6b64;
-  --line: rgba(19, 66, 53, 0.14);
-  --line-strong: rgba(19, 66, 53, 0.26);
+  /* 与 info 同一套墨底玉金：82 处 var() 引用会跟着这些令牌换调。 */
+  color-scheme: dark;
+  --page: #0a0e14;
+  --paper: #0a0e14;
+  --map-paper: #16222b;
+  --surface: rgba(10, 14, 20, 0.9);
+  --surface-strong: #141c26;
+  --ink: #e8eef7;
+  --muted: #95a3b8;
+  --line: rgba(232, 238, 247, 0.10);
+  --line-strong: rgba(232, 238, 247, 0.18);
   --r-sm: 8px;
   --r: 12px;
   --r-lg: 18px;
-  --sh-1: 0 1px 2px rgba(29, 42, 37, .06), 0 1px 3px rgba(29, 42, 37, .04);
-  --sh-2: 0 2px 6px rgba(29, 42, 37, .07), 0 8px 24px rgba(29, 42, 37, .09);
-  --sheen: 0 0 0 1px rgba(255, 255, 255, .6) inset;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.32);
+  --sh-2: 0 2px 8px rgba(0, 0, 0, 0.55), 0 22px 48px rgba(0, 0, 0, 0.45);
+  --sheen: 0 0 0 1px rgba(232, 238, 247, .06) inset;
   --t: 190ms cubic-bezier(.2, .7, .3, 1);
-  --category-0: #39745e;
-  --category-1: #95573d;
-  --category-2: #41697a;
-  --category-3: #75643f;
-  --category-4: #5f557c;
-  --category-5: #447276;
-  --accent: #95573d;
-  --gold: #a77b31;
-  --focus: #1e6a55;
-  --jade: #1e6a55;
-  --jade-deep: #134235;
-  --danger: #963c35;
+  --category-0: #4fe0bb;
+  --category-1: #e6a17a;
+  --category-2: #7fb6d6;
+  --category-3: #e6c184;
+  --category-4: #b3a1e0;
+  --category-5: #79ccc4;
+  --accent: #e6c184;
+  --gold: #e6c184;
+  --focus: #4fe0bb;
+  --jade: #4fe0bb;
+  --jade-deep: #1d8f78;
+  --danger: #e08a6a;
 }
 
 * {

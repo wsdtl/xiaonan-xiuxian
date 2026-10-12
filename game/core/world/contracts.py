@@ -147,6 +147,8 @@ class WorldMapView:
     bounds: tuple[int, int, int, int]
     cell_size_meters: int
     altitude_range: tuple[int, int]
+    #: 海拔单位（取自地势数据，如「米」）：页面照印，不写死。
+    altitude_unit: str
     surface: tuple[tuple[int, ...], ...]
     regions: tuple[MapRegion, ...]
     terrain_zones: tuple[MapTerrainZone, ...]

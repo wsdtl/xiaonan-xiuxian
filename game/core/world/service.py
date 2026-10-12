@@ -139,6 +139,7 @@ class WorldService:
             bounds=self._bounds,
             cell_size_meters=cell_size_meters,
             altitude_range=altitude_range,
+            altitude_unit=self._altitude_unit,
             surface=self._surface,
             regions=self._map_regions(),
             terrain_zones=self._map_terrain_zones(),

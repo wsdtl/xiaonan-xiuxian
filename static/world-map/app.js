@@ -5,6 +5,8 @@
   const MAP_SIZE = 1000;
   const MIN_VIEW_SIZE = 155;
   const MAX_VERTICAL_OVERSCROLL = 0.5;
+  // 海拔单位由地图数据给（`altitude_unit`，见 validateMap）：不写死。
+  let METERS_UNIT = "";
   const CATEGORY_STYLE_COUNT = 6;
   const ROAD_STYLE_COUNT = 7;
   const NUMBER_FORMATTER = new Intl.NumberFormat("zh-CN", {
@@ -13,14 +15,14 @@
   const RELIEF_LIGHT_LENGTH = Math.sqrt(
     (-0.58) ** 2 + (-0.62) ** 2 + 0.53 ** 2,
   );
-  const CATEGORY_TINT_COLORS = Object.freeze([
-    "#39745e",
-    "#95573d",
-    "#41697a",
-    "#75643f",
-    "#5f557c",
-    "#447276",
-  ]);
+  // 六个类别色以 CSS 变量为唯一出处：以前 JS 里另抄了一份，改样式时地图不跟。
+  const CATEGORY_TINT_COLORS = Object.freeze(
+    Array.from({ length: CATEGORY_STYLE_COUNT }, (_, index) =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue(`--category-${index}`)
+        .trim(),
+    ),
+  );
   const root = document.getElementById("atlasRoot");
   const state = {
     data: null,
@@ -114,6 +116,10 @@
     if (data.schema !== "game.world_map.presentation" || data.version !== 2) {
       throw new Error("地图展示协议暂不支持");
     }
+    if (typeof data.altitude_unit !== "string" || !data.altitude_unit) {
+      throw new Error("地图数据缺少 altitude_unit");
+    }
+    METERS_UNIT = data.altitude_unit;
     requiredArrays.forEach((field) => {
       if (!Array.isArray(data[field])) throw new Error(`地图数据缺少 ${field}`);
     });
@@ -1952,7 +1958,8 @@
   }
 
   function formatMeters(value) {
-    return `${formatNumber(value)} 米`;
+    // 单位来自地图数据（`altitude_unit`，取自地势数据）：以前写死「米」，换单位时页面不跟。
+    return METERS_UNIT ? `${formatNumber(value)} ${METERS_UNIT}` : formatNumber(value);
   }
 
   function formatNumber(value) {
