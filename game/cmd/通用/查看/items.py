@@ -20,6 +20,8 @@ class SectionInput:
     fields: Mapping[str, object]
     related: Mapping[str, object]
     rendered: tuple[str, ...]
+    #: 敌人条目页的遮罩词，由玩法层从展示数据集取出后交进来。
+    mask: str
 
 
 from .utils import (
@@ -388,7 +390,6 @@ def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
 #: 敌人条目页的遮罩词。配置里没有的（种族／性别／器律）是生成期按实例编号抽的，
 #: 显示真值就是撒谎，所以遮住——这不是藏信息，是唯一诚实的写法。
 #: 待办：按委托方「文案来自展示数据集」的口径，迁到 `data/角色/展示/文本.json`。
-_MASK_TEXT = "???"
 
 
 def _enemy_lines(source: SectionInput) -> tuple[str, ...]:
@@ -421,7 +422,7 @@ def _enemy_lines(source: SectionInput) -> tuple[str, ...]:
             f"本命武器：{weapon.get('名称')}（攻击 {weapon.get('攻击')}）"
         )
     lines.append(
-        f"种族：{_MASK_TEXT}　性别：{_MASK_TEXT}　器律：{_MASK_TEXT}"
+        f"种族：{source.mask}　性别：{source.mask}　器律：{source.mask}"
     )
     return tuple(lines) if lines else None
 

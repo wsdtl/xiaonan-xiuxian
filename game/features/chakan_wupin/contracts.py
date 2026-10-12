@@ -32,6 +32,8 @@ class ItemInspectionResult:
     rendered: tuple[str, ...] = ()
     #: 执行者持有该编号的品级（可能多份不同品级）；空表示没持有。
     held_grades: tuple[HeldGrade, ...] = ()
+    #: 敌人条目页的遮罩词（来自 角色/展示/敌人.json）：配置里没有的答案就不假装知道。
+    mask_text: str = ""
 
 
 __all__ = [

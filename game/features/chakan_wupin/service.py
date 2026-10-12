@@ -6,7 +6,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from types import MappingProxyType
 
 from game.core.asset import AssetService, AssetStateError
-from game.core.data import JsonDataService
+from game.core.data import JsonDataError, JsonDataService
 from game.core.combat import CombatService, render_body, render_listeners
 from game.core.item_catalog import (
     ItemCatalogService,
@@ -34,6 +34,7 @@ class ItemInspectionFeature:
         self._asset = asset
         self._initialized = False
         self._enemy_ids: frozenset[str] | None = None
+        self._mask_text: str | None = None
 
     def initialize(self) -> None:
         if self._initialized:
@@ -61,6 +62,18 @@ class ItemInspectionFeature:
             return ItemInspectionResult(normalized, candidates=exc.candidates)
         except ItemNotFoundError:
             return ItemInspectionResult(normalized)
+
+    def mask_text(self) -> str:
+        """敌人条目页的遮罩词：配置里没有的答案（种族／性别／器律）不假装知道。"""
+
+        if self._mask_text is None:
+            root = self._data.dataset("敌人展示").get("文本")
+            value = str(root.get("遮罩") or "").strip()
+            if not value:
+                raise JsonDataError("敌人展示缺少文本.json")
+            self._mask_text = value
+        return self._mask_text
+
 
     def enemy_identifiers(self) -> frozenset[str]:
         """敌人能被查的所有写法：编号与名字。"""

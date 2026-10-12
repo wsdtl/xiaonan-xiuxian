@@ -71,7 +71,7 @@ def inspection(result: ItemInspectionResult, baike_url: str = "") -> DocumentMes
         if detail.section in {"功法", "真意", "气机", "器律"}
         else _definition_lines(
             detail.section,
-            SectionInput(detail.fields, related, result.rendered),
+            SectionInput(detail.fields, related, result.rendered, result.mask_text),
         )
     )
     lines = _with_held_grade(detail.section, result, lines)

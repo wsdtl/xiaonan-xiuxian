@@ -31,7 +31,7 @@ def test_enemy_page_shows_ranges_and_masks_the_drawn_answers(services) -> None:
         # 武器那一支是有条件覆盖：配置里有的必须印、没有的不许印；
         # 池里两类都存在（灵兽不带本命武器），但哪一批落在前 12 个不预定。
         entry = _entry_of(services, name)
-        lines = _enemy_lines(SectionInput(entry, {}, ()))
+        lines = _enemy_lines(SectionInput(entry, {}, (), services.features.chakan_wupin.mask_text()))
         assert lines, f'{name}：一条都没印出来'
         text = chr(10).join(lines)
 

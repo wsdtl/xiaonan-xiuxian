@@ -34,13 +34,14 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
 
     #: 敌人走 30 段专属分派：它们是命名实体池，不在 item_catalog 的编号索引里。
     if query in current_game_services().features.chakan_wupin.enemy_identifiers():
-        detail = current_game_services().features.chakan_wupin.inspect_enemy(query)
-        await manager.send(
-            reply.inspection(
-                ItemInspectionResult(query, detail=detail) if detail else ItemInspectionResult(query),
-                public_url("baike"),
-            )
+        feature = current_game_services().features.chakan_wupin
+        detail = feature.inspect_enemy(query)
+        result = (
+            ItemInspectionResult(query, detail=detail, mask_text=feature.mask_text())
+            if detail
+            else ItemInspectionResult(query)
         )
+        await manager.send(reply.inspection(result, public_url("baike")))
         return
     result = await current_game_services().features.chakan_wupin.inspect(query, user_id)
     await manager.send(reply.inspection(result, public_url("baike")))
