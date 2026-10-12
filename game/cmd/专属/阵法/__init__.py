@@ -10,15 +10,13 @@ from . import reply
 from launch.adapter import MessageContext
 from typing import Any
 
-def _grade_prefix(value: str) -> str:
+def _grade_prefix(feature: Any, value: str) -> str:
     """按核心口径受理品级的三种写法，吐命令内部用的单字。
 
-    核心 `asset.grade` 本来就收中文全称（黄品）、中文单字（黄）与编号（01）；
-    这里原先写死一张单字表，导致玩家照着页面写「黄品」反被判成用法错。
+    三种写法（黄品／黄／01）的受理归阵法玩法；命令层只转交，不再自己去问资产核心。
     """
-    resolved = current_game_services().core.asset.grade(value)
-    name = str(getattr(resolved, "name", "") or "").strip()
-    return name[:1] if name else str(value)
+
+    return feature.grade_prefix(value)
 
 
 def _request(
@@ -28,7 +26,7 @@ def _request(
     if len(parts) not in {2, 5}:
         raise ValueError(usage)
     try:
-        grade = _grade_prefix(parts[1])
+        grade = _grade_prefix(current_game_services().features.lianzhen, parts[1])
     except Exception as exc:  # noqa: BLE001 - 品级不认识时仍然给玩家同一句用法提示
         raise ValueError(usage) from exc
     investments = None

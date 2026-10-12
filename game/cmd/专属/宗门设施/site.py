@@ -80,8 +80,8 @@ async def lianzhen_data(scope: str = '') -> JSONResponse:
         'ui': ui,
         'grades': list(GRADES),
         'formations': [
-            {'id': str(row_id), 'name': str(raw.get('名称') or '')}
-            for row_id, raw in sorted(services.core.data.entities('阵法').items())
+            {'id': row_id, 'name': name}
+            for row_id, name in feature.formation_catalog()
         ],
         'notice': '',
     }

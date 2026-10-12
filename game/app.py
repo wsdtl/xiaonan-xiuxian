@@ -897,7 +897,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     lianqi.initialize()
     liandan = AlchemyFeature(data, alchemy)
     liandan.initialize()
-    lianzhen = FormationCraftFeature(data, formation)
+    lianzhen = FormationCraftFeature(data, formation, asset)
     lianzhen.initialize()
     buzhen = FormationArmFeature(data, formation)
     buzhen.initialize()

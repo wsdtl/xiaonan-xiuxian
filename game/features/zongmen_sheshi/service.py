@@ -55,6 +55,16 @@ class SectFacilityFeature:
             raise JsonDataError("宗门设施展示缺少文本.json")
         self._copy = raw
 
+    def formation_catalog(self) -> tuple[tuple[str, str], ...]:
+        """全部阵法（编号, 名称）——页面在核心列不出个人阵法时退回的那份总目。"""
+
+        return tuple(
+            sorted(
+                (str(key), str(value.get("名称") or ""))
+                for key, value in self._data.entities("阵法").items()
+            )
+        )
+
     def format_actions(self, page: str) -> tuple[object, ...]:
         """格式与提示类回执的动作：只给该设施页面的「查看帮助」。"""
 

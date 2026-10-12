@@ -62,6 +62,20 @@ class CharacterOverviewFeature:
             raise RuntimeError("托管核心必须先于查看角色玩法启动")
         self._initialized = True
 
+    async def identity_text(self, user_id: str) -> str:
+        """人物头的文案：昵称 境界 等级；没建档就写「未建档」。
+
+        回复层给每条回执加的人物头走这一口——**轻**：只读一次人物摘要，不做总览那份
+        综合查询（状态、伤势、灵宝、构筑槽全都不碰）。
+        """
+
+        try:
+            profile = await self._character.profile(user_id)
+        except Exception:  # noqa: BLE001 - 没建档不该挡住回复
+            return "未建档"
+        realm = str(getattr(profile, "realm_name", "") or "").strip()
+        return f"{profile.name} {realm} Lv{profile.level}".strip()
+
     async def inspect(self, user_id: str) -> CharacterOverviewResult:
         if not self._initialized:
             raise RuntimeError("查看角色玩法微服务尚未初始化")

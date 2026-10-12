@@ -73,11 +73,9 @@ async def _identity_text(user_id: str) -> str:
     from game.app import current_game_services
 
     try:
-        profile = await current_game_services().core.character.profile(user_id)
-    except Exception:  # noqa: BLE001 - 没建档或服务没起都不该挡住回复
+        return await current_game_services().features.chakan_juese.identity_text(user_id)
+    except Exception:  # noqa: BLE001 - 玩法没起也不该挡住回复
         return "未建档"
-    realm = str(getattr(profile, "realm_name", "") or "").strip()
-    return f"{profile.name} {realm} Lv{profile.level}".strip()
 
 
 def _with_identity(func: Callable) -> Callable:

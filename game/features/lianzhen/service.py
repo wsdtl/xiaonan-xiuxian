@@ -14,6 +14,7 @@ from game.core.formation import (
 )
 from .contracts import FormationCopy, FormationCraftFeatureError
 
+from game.core.asset import AssetService
 from game.core.data import JsonDataService
 
 from .presentation import actions, load_presentation, FormationAction
@@ -25,9 +26,10 @@ _Result = TypeVar("_Result")
 class FormationCraftFeature:
     """只编排阵法核心与炼阵展示。"""
 
-    def __init__(self, data: JsonDataService, formation: FormationService) -> None:
+    def __init__(self, data: JsonDataService, formation: FormationService, asset: AssetService) -> None:
         self._data = data
         self._formation = formation
+        self._asset = asset
         self._copy = None
         self._buttons = ()
 
@@ -42,6 +44,17 @@ class FormationCraftFeature:
         if self._copy is None:
             raise RuntimeError("炼阵玩法尚未初始化")
         return self._copy
+
+    def grade_prefix(self, value: str) -> str:
+        """受理品级的三种写法（黄品／黄／01），吐阵法内部用的单字。
+
+        资产核心的品级表本来就收全称、单字和编号；这一段原先是命令层自己去问资产核心的。
+        认不出的写法由核心按自己的话回绝（`InventoryChangeError`）。
+        """
+
+        resolved = self._asset.grade(value)
+        name = str(getattr(resolved, "name", "") or "").strip()
+        return name[:1] if name else str(value)
 
     async def overview(self, user_id: str, page: int = 1) -> FormationOverview:
         return await self._call(self._formation.overview(user_id, page))

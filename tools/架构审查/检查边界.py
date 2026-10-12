@@ -1241,6 +1241,37 @@ def check_data_dependency_free() -> list[Finding]:
     return findings
 
 
+def check_cmd_core_access() -> list[Finding]:
+    """触发层不得直接访问核心服务（见 `微服务边界规范.md` 第三节）。
+
+    `cmd` 只负责触发与输入输出：业务事实必须由 `features` 的公共结果给出。
+    这条违规是**经组合根取值**（`current_game_services().core.*`）——只查 import 的扫描看不见，
+    所以它能一直绿着：2026-10 实测有 28 处（灵宝名、编号目录、引用图、品级表、名→号表都落在命令层）。
+
+    唯一例外是 `game/cmd/access_guard.py`：守卫的声明与执行本来就是触发层的本职——
+    它要读玩家状态与托管状态才能放行或拦下命令（`微服务边界规范.md` 已把它写成例外）。
+    """
+
+    allowed = {"game/cmd/access_guard.py"}
+    findings: list[Finding] = []
+    for path in _python_files("game/cmd"):
+        relative = _relative(path)
+        if relative.as_posix() in allowed:
+            continue
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if ".core." not in line or line.strip().startswith("#"):
+                continue
+            findings.append(
+                Finding(
+                    "触发层访问核心服务",
+                    relative,
+                    line_number,
+                    "cmd 是触发层，不得直接访问核心服务；业务事实由 features 的公共结果给出",
+                )
+            )
+    return findings
+
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -1248,6 +1279,7 @@ CHECKS = (
     ("核心引用上层", check_core_upward_dependency),
     ("核心命名空间转发服务", check_core_namespace),
     ("数据层依赖其他服务", check_data_dependency_free),
+    ("触发层访问核心服务", check_cmd_core_access),
     ("运行期依赖 tools", check_game_tools_dependency),
     ("命令层导入核心服务", check_cmd_core_dependency),
     ("适配模块取得组合根", check_command_adapter_purity),
