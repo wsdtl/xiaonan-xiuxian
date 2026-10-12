@@ -1004,29 +1004,7 @@ class AbilityRuntime(ChainRuntime):
         buckets = self._event_listener_buckets(context, kind)
         if not buckets:
             return _CandidateList((), filtered_version=version)
-        groups: list[list[tuple[int, Any]]] = []
-        relations_known = True
-        for role, relation, by_key in buckets:
-            who = parties.get(role)
-            if who is None:
-                # 角色认不出来：全给，交给动态判定（宁可多问，不许漏问）。
-                hits = by_key.get(None)
-            elif relation == "自身":
-                hits = by_key.get(who.id)
-            elif relation in {"任意己方", "其他己方", "任意敌方"}:
-                # 「敌方」那一桶的键也是**当事人自己的阵营**：装配时已经按「不是这侧的」
-                # 并好了，所以这里与「己方」同一写法。
-                hits = by_key.get(who.side)
-            else:  # 任意（或不认识的关系）：全收
-                hits = by_key.get(None)
-            if hits:
-                if who is None or relation not in {"自身", "任意己方", "其他己方", "任意敌方", "任意"}:
-                    relations_known = False
-                elif relation == "自身":
-                    hits = [pair for pair in hits if pair[1][1] is who]
-                elif relation == "其他己方":
-                    hits = [pair for pair in hits if pair[1][1] is not who]
-                groups.append(hits)
+        groups, relations_known = self._collect_listener_groups(buckets, parties)
         if not groups:
             filtered = _CandidateList((), filtered_version=version)
             cache[key] = (source_ref, target_ref, actor_ref, filtered)
@@ -1063,6 +1041,37 @@ class AbilityRuntime(ChainRuntime):
         filtered = _CandidateList(pairs, filtered_version=version)
         cache[key] = (source_ref, target_ref, actor_ref, filtered)
         return filtered
+
+    def _collect_listener_groups(self, buckets: object, parties: Mapping[str, Fighter] | None) -> tuple[list[list[tuple[int, Any]]], bool]:
+        """按阵营关系收候选桶，返回（分组表, 关系是否都认得）。"""
+
+        groups: list[list[tuple[int, Any]]] = []
+        relations_known = True
+
+        for role, relation, by_key in buckets:
+            who = parties.get(role)
+            if who is None:
+                # 角色认不出来：全给，交给动态判定（宁可多问，不许漏问）。
+                hits = by_key.get(None)
+            elif relation == "自身":
+                hits = by_key.get(who.id)
+            elif relation in {"任意己方", "其他己方", "任意敌方"}:
+                # 「敌方」那一桶的键也是**当事人自己的阵营**：装配时已经按「不是这侧的」
+                # 并好了，所以这里与「己方」同一写法。
+                hits = by_key.get(who.side)
+            else:  # 任意（或不认识的关系）：全收
+                hits = by_key.get(None)
+            if hits:
+                if who is None or relation not in {"自身", "任意己方", "其他己方", "任意敌方", "任意"}:
+                    relations_known = False
+                elif relation == "自身":
+                    hits = [pair for pair in hits if pair[1][1] is who]
+                elif relation == "其他己方":
+                    hits = [pair for pair in hits if pair[1][1] is not who]
+                groups.append(hits)
+
+        return groups, relations_known
+
 
     def _collect_fighter_listeners(self, context: BattleContext, sink: _ListenerSink) -> None:
         """修士自带的监听：被动槽位在前，状态（战丹、长期伤势）在后。
