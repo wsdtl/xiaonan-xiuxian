@@ -17,6 +17,7 @@ async function load(scope) {
   ITEMS = data.items || [];
   $('title').textContent = UI['标题'] || '万珍殿';
   $('intro').textContent = UI['说明'] || '';
+  $('label-scope').textContent = UI['挑人'] || '挑自己';
   $('label-category').textContent = UI['分类'] || '分类';
   $('label-quantity').textContent = UI['数量'] || '数量';
   $('label-items').textContent = UI['成品'] || '你的成品';
@@ -37,10 +38,11 @@ async function load(scope) {
   if (!scopes.length) { $('notice').textContent = UI['没人公开'] || ''; $('items').innerHTML = ''; say(''); return; }
   const cat = $('category');
   cat.innerHTML = '';
-  for (const name of data.categories || []) {
+  // 分类带条数：空类直接标 0，不再看着像一个正常分类（后端发的就是名字与条数）。
+  for (const row of data.categories || []) {
     const option = document.createElement('option');
-    option.value = name;
-    option.textContent = name;
+    option.value = row.name;
+    option.textContent = row.name + '（' + row.count + '）';
     cat.append(option);
   }
   cat.onchange = renderItems;
@@ -87,9 +89,10 @@ function renderItems() {
     if (item.category === '阵法') {
       const lucky = document.createElement('span');
       lucky.className = 'item-meta';
+      // 没有灵宝加成就印后端那句「没有灵宝加成」，别留一行空白让人以为是漏了。
       lucky.textContent = item.treasure
         ? (UI['灵宝'] || '灵宝') + '：' + (item.treasure_name || item.treasure) + ' · ' + (item.treasure_effect || '')
-        : '';
+        : (UI['无灵宝'] || '');
       button.append(lucky);
     }
     button.onclick = () => { PICKED = item; showCommand(); };
@@ -107,6 +110,9 @@ function showCommand() {
   const line = commandFor(PICKED, $('quantity').value);
   const box = document.createElement('div');
   box.className = 'cmd';
+  const label = document.createElement('span');
+  label.className = 'cmd-label';
+  label.textContent = UI['命令'] || '';
   const text = document.createElement('code');
   text.className = 'cmd-text';
   text.textContent = line;
@@ -118,7 +124,7 @@ function showCommand() {
     try { await navigator.clipboard.writeText(line); copy.textContent = '已复制'; }
     catch (error) { copy.textContent = '请手动复制'; }
   };
-  box.append(text, copy);
+  box.append(label, text, copy);
   host.append(box);
 }
 

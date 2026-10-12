@@ -101,7 +101,11 @@ async def wanzhen_data(scope: str = '') -> JSONResponse:
         'scopes': [{'id': 'user:' + item.user_id, 'name': item.name} for item in scopes],
         'scope': 'user:' + user_id,
         'ui': ui,
-        'categories': [name for name, _subs in CATEGORIES],
+        # 每类带上自己的条数：空类在页面上标成 0，不再看着像一个正常分类。
+        'categories': [
+            {'name': name, 'count': sum(1 for item in items if item['category'] == name)}
+            for name, _subs in CATEGORIES
+        ],
         'items': items,
         'vault': '',
         'notice': '',
