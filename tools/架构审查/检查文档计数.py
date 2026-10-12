@@ -259,13 +259,14 @@ def _check_count(source: str, name: str) -> int:
 
 
 def check_full_check_counts() -> list[str]:
-    """三处**当前状态**文档里的「必过 N 项」都要与全量核对的条数一致。
+    """**当前状态**文档里的「必过 N 项」都要与全量核对的条数一致。
 
     台账（`tools/基准/说明.md`）与各类审查记录是**史册**：里面的旧数字是当时的史实，不管。
-    这里只管会随判据增减而必须同步的三处——README、工具索引、基线。
+    这里只管会随判据增减而必须同步的两处——README 与工具索引。
 
-    真出过事：基线的小标题「36 项必过项里」在加成 37 项之后没人改，
-    因为原先只覆盖了工具索引一处，而且那处的标签还错写着 README。
+    真出过事：旧基线页的小标题「36 项必过项里」在加成 37 项之后没人改，
+    因为原先只覆盖了工具索引一处，而且那处的标签还错写着 README。后来那一版基线页
+    在瘦身里挪出了仓库（正文进 git 历史），所以这里不再把它当「当前状态文档」。
     """
 
     source = (ROOT / "tools" / "全量核对.py").read_text(encoding="utf-8")
@@ -274,7 +275,6 @@ def check_full_check_counts() -> list[str]:
     for doc, pattern, label in (
         (TOOLS_DOC, r"当前必过 (\d+) 项", "工具索引"),
         (ROOT / "README.md", r"必过 (\d+) 项", "README"),
-        (ROOT / "tools" / "基准" / "基线.md", r"\| 必过项 \| \*\*(\d+)\*\*", "基线"),
     ):
         match = re.search(pattern, doc.read_text(encoding="utf-8"))
         if match is None:
