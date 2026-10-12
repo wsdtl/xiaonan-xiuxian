@@ -383,6 +383,25 @@ class PositionFeature:
             definition.interactable,
         )
 
+    async def inspect_cultivator(self, user_id: str, query: str) -> CharacterPublicProfile | None:
+        """按名字或用户编号在「附近」范围内解析一个人，取公开摘要。"""
+
+        """只认附近可见的人：名字由附近的来往修士与本地修士共同解析，
+        再向角色核心要公开摘要（它只回姓名、性别、境界、等级，不碰背包与修行槽）。"""
+        wanted = str(query or "").strip()
+        if not wanted:
+            return None
+        page = await self.nearby_cultivators(user_id, 1)
+        target = ""
+        for view in page.cultivators:
+            if wanted in (view.name, view.user_id):
+                target = view.user_id
+                break
+        if not target:
+            return None
+        profiles = await self._character.public_profiles((target,))
+        return profiles[0] if profiles else None
+
     async def nearby_locations(self, user_id: str) -> NearbyWorldLocations:
         self._require_initialized()
         current = await self._location.current(user_id)
