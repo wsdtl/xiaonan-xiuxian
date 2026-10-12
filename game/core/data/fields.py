@@ -20,11 +20,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from typing import Any
+from types import MappingProxyType
 
 from .contracts import JsonDataError
 
 
-from types import MappingProxyType
 
 def positive_int(
     value: object, label: str, error: type[Exception] = JsonDataError
@@ -103,16 +103,6 @@ def sequence(
     return tuple(value)
 
 
-__all__ = [
-    "boolean",
-    "mapping",
-    "nonempty_text",
-    "nonnegative_int",
-    "number",
-    "positive_int",
-    "sequence",
-    "strict_text",
-]
 
 
 def speech(value: object, label: str) -> Mapping[str, str]:
@@ -136,3 +126,17 @@ def bounded_number(
     upper = number(maximum, f"{label}上限", error)
     bounded = min(max(0.0, float(raw)), max(0.0, float(upper)))
     return int(bounded) if bounded.is_integer() else round(bounded, 3)
+
+
+__all__ = [
+    "boolean",
+    "bounded_number",
+    "mapping",
+    "nonempty_text",
+    "nonnegative_int",
+    "number",
+    "positive_int",
+    "sequence",
+    "speech",
+    "strict_text",
+]
