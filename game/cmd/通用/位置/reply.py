@@ -1,6 +1,7 @@
 """位置命令回复构造。"""
 
 from __future__ import annotations
+from game.features.weizhi.contracts import CompanionView
 
 from ...presentation import format_lines
 
@@ -180,6 +181,28 @@ def nearby_locations(
         _append_location(builder, copy, index, location)
     return builder.actions(message_actions(actions)).build()
 
+
+def companion(
+    copy: PositionCopy,
+    view: CompanionView,
+    actions: tuple[CommandAction, ...],
+) -> DocumentMessage:
+    """看「我名下」这个道侣现在的样子：字段名直接用数据里的键，不另造词。"""
+
+    builder = M.document().header(copy.cultivator_view)
+    section = builder.section(view.name, icon=copy.cultivator_icon)
+    section.field(
+        copy.cultivator_view,
+        f"{view.realm_name} {view.level} 级 · 经验 {view.experience}",
+    )
+    for key, value in view.attributes.items():
+        section.field(str(key), str(value))
+    for key, value in view.resources.items():
+        section.field(str(key), str(value))
+    if view.weapon_name:
+        section.field(view.weapon_name, f"{view.weapon_level} 阶")
+    builder.actions(message_actions(actions))
+    return builder.build()
 
 def cultivator(
     copy: PositionCopy,

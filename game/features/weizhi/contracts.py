@@ -18,6 +18,7 @@ class NearbyPageError(PositionViewError, ValueError):
 
 @dataclass(frozen=True)
 class PositionCopy:
+    cultivator_not_met: str
     cultivator_queriless: str
     cultivator_missing: str
     cultivator_view: str

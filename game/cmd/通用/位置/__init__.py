@@ -149,6 +149,20 @@ async def inspect_cultivator(user_id: str, message: str, manager: Any) -> None:
     if not query:
         await manager.send(reply.error(copy, copy.cultivator_view, copy.cultivator_queriless, actions))
         return
+    if len(query) == 6 and query.isdigit() and query[:2] == "50":
+        view = await feature.inspect_companion(user_id, query)
+        if view is None:
+            await manager.send(
+                reply.error(
+                    copy,
+                    copy.cultivator_view,
+                    copy.cultivator_not_met.format_map({"编号": query}),
+                    actions,
+                )
+            )
+            return
+        await manager.send(reply.companion(copy, view, actions))
+        return
     profile = await feature.inspect_cultivator(user_id, query)
     if profile is None:
         await manager.send(reply.error(copy, copy.cultivator_view, copy.cultivator_missing, actions))
