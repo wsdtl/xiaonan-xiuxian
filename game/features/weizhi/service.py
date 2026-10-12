@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from game.core.character import CharacterService
+from game.core.companion import CompanionError, CompanionInstance
 from game.core.companion import CompanionService, LocalCultivator
 from game.core.data import JsonDataService, positive_int as _positive_int
 from game.core.player_state import PlayerStateService
@@ -382,6 +383,15 @@ class PositionFeature:
             definition.level,
             definition.interactable,
         )
+
+    async def inspect_companion(self, user_id: str, companion_id: str) -> CompanionInstance | None:
+        """按道侣编号取「我」名下的实例；没有实例就是没结交。"""
+
+        """实例的读法本身就带鉴权：它拿的是我的 user_id，问别人的道侣自然没有实例。"""
+        try:
+            return await self._companion.instance(user_id, companion_id)
+        except CompanionError:
+            return None
 
     async def inspect_cultivator(self, user_id: str, query: str) -> CharacterPublicProfile | None:
         """按名字或用户编号在「附近」范围内解析一个人，取公开摘要。"""
