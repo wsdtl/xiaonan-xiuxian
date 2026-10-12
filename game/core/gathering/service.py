@@ -87,6 +87,21 @@ class _Mode:
         )
 
 
+@dataclass(frozen=True)
+class _GatheringDraft:
+    """一次采集里，逐位参与者那一段要用的全部输入。"""
+    mode: GatheringMode
+    owner: str
+    participants: tuple[str, ...]
+    pool_names: Mapping[str, str]
+    public_profiles: Mapping[str, object]
+    request_id: str
+    session_id: str
+    source: Random
+    transitions: list[StateMutation]
+    user_results: dict[str, dict[str, object]]
+
+
 class GatheringService:
     """拥有采药与采矿会话、结果快照和最终结算的唯一核心边界。"""
 
@@ -189,18 +204,8 @@ class GatheringService:
             value.user_id: value
             for value in await self._character.public_profiles(participants)
         }
-        total_units = await self._plan_gathering_participants(
-            mode,
-            owner,
-            participants,
-            pool_names,
-            public_profiles,
-            request_id,
-            session_id,
-            source,
-            transitions,
-            user_results,
-        )
+        draft = _GatheringDraft(mode, owner, participants, pool_names, public_profiles, request_id, session_id, source, transitions, user_results)
+        total_units = await self._plan_gathering_participants(draft)
 
         place_name = location.location_name or f"{location.region}·{location.terrain}"
         session_value = {
@@ -263,42 +268,30 @@ class GatheringService:
             receipt.replayed,
         )
 
-    async def _plan_gathering_participants(
-        self,
-        mode: GatheringMode,
-        owner: str,
-        participants: tuple[str, ...],
-        pool_names: Mapping[str, str],
-        public_profiles: Mapping[str, object],
-        request_id: str,
-        session_id: str,
-        source: Random,
-        transitions: list[StateMutation],
-        user_results: dict[str, dict[str, object]],
-    ) -> int:
+    async def _plan_gathering_participants(self, draft: _GatheringDraft) -> int:
         """逐位参与者算采集结果，返回总单位数；只写进 user_results，不改别处。"""
         total_units = 0
 
-        for user_id in participants:
+        for user_id in draft.participants:
             guard = await self._player_state.authorize(
                 user_id, "空闲或托管且可行动"
             )
             if not guard.allowed:
-                name = public_profiles.get(user_id)
+                name = draft.public_profiles.get(user_id)
                 raise GatheringConflictError(
-                    f"{name.name if name else '有同行修士'}无法开始{mode.kind}：{guard.reason}"
+                    f"{name.name if name else '有同行修士'}无法开始{draft.mode.kind}：{guard.reason}"
                 )
-            transitions.append(
+            draft.transitions.append(
                 await self._player_state.plan_transition(
                     StateTransitionCommand(
                         user_id=user_id,
-                        request_id=request_id,
+                        request_id=draft.request_id,
                         state_type="行为",
-                        target_state_id=mode.state_id,
+                        target_state_id=draft.mode.state_id,
                         context={
-                            "采集编号": session_id,
-                            "发起者": owner,
-                            "参与人数": len(participants),
+                            "采集编号": draft.session_id,
+                            "发起者": draft.owner,
+                            "参与人数": len(draft.participants),
                         },
                     )
                 )
@@ -314,17 +307,17 @@ class GatheringService:
             if active_treasure is not None and active_treasure.effect.node == "采集开始":
                 effect = active_treasure.effect
                 applies = effect.ability == "提高通用采集" or (
-                    effect.ability == "提高采药" and mode.kind == "采药"
-                ) or (effect.ability == "提高采矿" and mode.kind == "采矿")
+                    effect.ability == "提高采药" and draft.mode.kind == "采药"
+                ) or (effect.ability == "提高采矿" and draft.mode.kind == "采矿")
                 if applies:
                     treasure_ratio = float(effect.values["比例"])
                     activation = InnateTreasureActivation(
                         active_treasure.treasure_id,
                         active_treasure.name,
                         active_treasure.authority,
-                        f"{mode.kind}收获提高{treasure_ratio:.0%}，每种最低增加1份",
+                        f"{draft.mode.kind}收获提高{treasure_ratio:.0%}，每种最低增加1份",
                     )
-            user_results[user_id] = {
+            draft.user_results[user_id] = {
                 "人物": profile.name,
                 "道侣相助": companion_name,
                 "采集单位": unit_count,
@@ -332,10 +325,10 @@ class GatheringService:
                 "灵宝增益比例": treasure_ratio,
                 "先天灵宝": activation_payload(activation),
                 "预定收获": self._precompute_items(
-                    mode,
-                    pool_names,
+                    draft.mode,
+                    draft.pool_names,
                     unit_count,
-                    source,
+                    draft.source,
                     gathering_multiplier,
                     await self._sect_grade_floor(user_id),
                 ),
