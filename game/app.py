@@ -777,7 +777,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         data, medicine, character, asset, player_state, location, world, database
     )
     xigen.initialize()
-    duihuan = DuihuanFeature(data, character, asset, database)
+    duihuan = DuihuanFeature(data, character, asset, database, pool, item_catalog)
     duihuan.initialize()
     yijing = YijingFeature(data, character, database)
     yijing.initialize()
