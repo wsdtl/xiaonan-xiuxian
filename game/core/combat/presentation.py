@@ -461,6 +461,7 @@ def _participant_static(
     return {
         value["id"]: {
             "label": value["name"],
+            "content_id": str(value.get("content_id") or ""),
             "team_id": team_of[value["id"]][0],
             "team_label": team_of[value["id"]][1],
             "visual": dict(visuals[value["id"]]),

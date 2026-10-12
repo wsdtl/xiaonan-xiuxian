@@ -28,7 +28,8 @@
       "team_label",
       "visual",
       "detail_label",
-      "detail_groups"
+      "detail_groups",
+      "content_id"
     ]
   },
   "游戏名称": "晓楠修仙",
