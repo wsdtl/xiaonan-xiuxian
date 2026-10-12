@@ -20,7 +20,7 @@ from typing import Any
             "category": "行动",
             "summary": "进入当前宗门的独立洞天",
             "usage": ("入山门",),
-            "side_effect": "领队带领当前同行成员一同进入宗门洞天",
+            "side_effect": "领队（队长或宗主）带领当前同行成员一同进入宗门洞天；须本人站在山门地点，随行成员须同宗",
             "order": 44,
         },
     },

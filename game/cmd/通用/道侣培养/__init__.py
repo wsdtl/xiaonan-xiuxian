@@ -48,7 +48,7 @@ async def show_companion_cultivation(user_id: str, manager: Any) -> None:
             "category": "修行",
             "summary": "消耗突破丹为当前同行道侣独立突破",
             "usage": ("道侣突破 小还丹", "道侣突破 丹药编号或名称",),
-            "side_effect": "消耗共享纳戒中最低品级的一枚对应突破丹",
+            "side_effect": "消耗共享纳戒中最低品级的一枚对应突破丹；须当前同行道侣已满级且该境界还没突破过",
             "order": 60,
         },
     },

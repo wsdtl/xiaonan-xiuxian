@@ -27,7 +27,7 @@ def _feature() -> SectWarFeature:
             "category": "战斗",
             "summary": "向另一宗门发出战书",
             "usage": ("宗门约战 太素坊 1000", "宗门约战 宗门名 灵石数量", "约战 宗门名 灵石数量"),
-            "side_effect": "发起时扣除本宗押注；撤回、拒绝或过期会原额退回",
+            "side_effect": "发起时扣除本宗押注；撤回、拒绝或过期会原额退回；正式结算按九成——胜方取彩池九成、平局各返九成，一成是损耗",
             "order": 1,
         },
     },
@@ -221,7 +221,7 @@ async def cancel(user_id: str, message_context: MessageContext, manager: Any) ->
         "help": {
             "category": "战斗",
             "summary": "查看并在到时后自动结算当前宗门战",
-        "side_effect": "只读，不改动战局",
+        "side_effect": "查看只读；但到点后再看会自动结算并记下战果",
             "usage": ("查看宗门战况", "查看宗门战况 战书编号", "宗门战况 战书编号"),
             "order": 9,
         },

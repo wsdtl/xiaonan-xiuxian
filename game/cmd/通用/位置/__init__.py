@@ -134,7 +134,7 @@ def _page_number(value: str, invalid_message: str) -> int:
         "guard_rule": "已创建",
         "help": {
             "category": "世界",
-            "summary": "按名字或编号查看附近某个人的公开资料",
+            "summary": "按名字查看附近某个人的公开资料；按 6 位 50 开头编号查看的是自己名下的道侣（不要求在附近）",
             "usage": ("查看修士 名字", "查看修士 500001"),
             "side_effect": "只查看，不会改变人物状态",
             "order": 40,

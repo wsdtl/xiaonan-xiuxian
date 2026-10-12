@@ -25,7 +25,7 @@ from typing import Any
             "category": "角色",
             "summary": "建立当前账号的唯一修士人物",
             "usage": ("创建人物 姓名 性别 [种族]",),
-            "side_effect": "每个账号只能创建一个人物",
+            "side_effect": "每个账号只能创建一个人物；姓名须 2–12 个汉字、字母或数字，种族可省略（默认人族）",
             "order": 10,
         },
     },
