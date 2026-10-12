@@ -21,7 +21,7 @@ import ast
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出"}
+SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出", "BUILD"}
 
 #: 代码特征符：出现这些才值得试着解析，免得把整篇中文注释都拿去 parse。
 CODE_MARKS = (

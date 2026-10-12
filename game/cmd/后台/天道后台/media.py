@@ -27,6 +27,9 @@ class ConsoleMediaStore:
 
     def __init__(self, media_dir: Path) -> None:
         self.media_dir = Path(media_dir)
+        # 全新部署时这一层目录不存在：自己建，别等写图片时才炸（替包部署只带游戏本体与 data，
+        # `.runtime/` 这类运行期目录都由程序按需创建）。
+        self.media_dir.mkdir(parents=True, exist_ok=True)
 
     def materialize(self, image: object) -> str:
         """把一条消息里的图片字段转成可供页面引用的字符串。"""

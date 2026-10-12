@@ -216,7 +216,7 @@ def check_tools_listing() -> list[str]:
 
 
 #: 全树遍历时要先剪掉的目录：索引与扫描都不该进这里。
-_WALK_SKIP = frozenset({".git", ".venv", "node_modules", "_输出", "__pycache__", ".history"})
+_WALK_SKIP = frozenset({".git", ".venv", "node_modules", "_输出", "BUILD", "__pycache__", ".history"})
 
 
 def _all_file_names() -> set[str]:
@@ -340,7 +340,7 @@ def check_readme_files() -> list[str]:
 
 
 #: 扫文档时跳过的目录。
-DOC_SKIP_PARTS = {"__pycache__", ".venv", ".git", "node_modules", "_输出"}
+DOC_SKIP_PARTS = {"__pycache__", ".venv", ".git", "node_modules", "_输出", "BUILD"}
 
 
 def check_no_duplicate_sections() -> list[str]:

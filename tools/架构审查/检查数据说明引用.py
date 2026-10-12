@@ -25,7 +25,7 @@ import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出"}
+SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出", "BUILD"}
 REFERENCE = re.compile(r"`([\w\u4e00-\u9fff/]+\.(?:json|md|py))`")
 
 #: 已知的「不是缺陷」的引用：(文档相对路径, 被点的名字)。

@@ -23,7 +23,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 #: 走目录时直接摘掉的目录名（与「文档计数」那支同一套口径）。
-_WALK_SKIP = frozenset({".venv", ".git", "_输出", "__pycache__", "node_modules", ".history"})
+_WALK_SKIP = frozenset({".venv", ".git", "_输出", "BUILD", "__pycache__", "node_modules", ".history"})
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -79,7 +79,7 @@ def check_dangling_script_refs() -> list[str]:
     problems: list[str] = []
     names = {p.name for p in ROOT.rglob("*.py")}
     for path in sorted(ROOT.rglob("*.md")):
-        if {".venv", ".git", "_输出"} & set(path.parts):
+        if {".venv", ".git", "_输出", "BUILD"} & set(path.parts):
             continue
         text = path.read_text(encoding="utf-8")
         for line_no, line in enumerate(text.splitlines(), start=1):
@@ -221,7 +221,7 @@ def check_unused_imports() -> list[str]:
 
     problems: list[str] = []
     for path in sorted(ROOT.rglob("*.py")):
-        if {".venv", ".git", "_输出", "__pycache__"} & set(path.parts):
+        if {".venv", ".git", "_输出", "BUILD", "__pycache__"} & set(path.parts):
             continue
         source = path.read_text(encoding="utf-8")
         try:
@@ -281,7 +281,7 @@ def check_deprecated_apis() -> list[str]:
     problems: list[str] = []
     guard = pathlib.Path(__file__).resolve()
     for path in sorted(ROOT.rglob("*.py")):
-        if {".venv", ".git", "_输出", "__pycache__"} & set(path.parts):
+        if {".venv", ".git", "_输出", "BUILD", "__pycache__"} & set(path.parts):
             continue
         if path.resolve() == guard:
             continue

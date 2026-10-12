@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-SKIP_DIRS = {"__pycache__", ".venv", ".git", "_输出", "database"}
+SKIP_DIRS = {"__pycache__", ".venv", ".git", "_输出", "BUILD", "database"}
 
 
 def _python_files(root: Path):

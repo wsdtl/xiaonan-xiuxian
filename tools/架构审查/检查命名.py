@@ -24,7 +24,7 @@ import builtins
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出"}
+SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出", "BUILD"}
 BUILTINS = frozenset(dir(builtins))
 
 #: 已知的故意遮蔽：FastAPI 路由的查询参数名就是 API 的一部分，改名等于改 URL。

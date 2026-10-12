@@ -24,7 +24,7 @@ import ast
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出"}
+SKIP_PARTS = {".venv", ".git", "__pycache__", "_输出", "BUILD"}
 
 
 def _scopes(tree: ast.Module) -> list[tuple[str, list[ast.stmt]]]:
