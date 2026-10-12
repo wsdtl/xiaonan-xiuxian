@@ -55,6 +55,8 @@ async def jiaoyi_data(scope: str = '', category: str = '真意', page: int = 1) 
         '下一页': feature.copy('页面', '下一页'),
         '空': feature.copy('页面', '空'),
         '命令': feature.copy('页面', '命令'),
+        # 总览那节的货币名（「灵石」）：概览行要用，页面不许自己造这个词。
+        '货币': feature.copy('总览', '货币'),
     }
     chosen = category if category in CATEGORIES else CATEGORIES[0]
     body: dict[str, object] = {

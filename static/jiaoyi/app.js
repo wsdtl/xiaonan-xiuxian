@@ -18,6 +18,10 @@ function pick(row, keys) {
 function commandBox(line) {
   const box = document.createElement('div');
   box.className = 'cmd';
+  // 这一句是后端下发的说明（「把这条发进聊天即可」）：页面不自己凑。
+  const label = document.createElement('span');
+  label.className = 'cmd-label';
+  label.textContent = UI['命令'] || '';
   const text = document.createElement('code');
   text.className = 'cmd-text';
   text.textContent = line;
@@ -29,7 +33,7 @@ function commandBox(line) {
     try { await navigator.clipboard.writeText(line); copy.textContent = '已复制'; }
     catch (error) { copy.textContent = '请手动复制'; }
   };
-  box.append(text, copy);
+  box.append(label, text, copy);
   return box;
 }
 
@@ -54,6 +58,16 @@ async function load(scope, category, page) {
   $('title').textContent = UI['标题'] || '货架';
   $('intro').textContent = UI['说明'] || '';
   $('label-shelf').textContent = UI['货架'] || '货架';
+  // 挑人、类别两处文案后端一直有发（ui['挑人'] / ui['类别']），以前页面写死没用。
+  $('label-scope').textContent = UI['挑人'] || '挑自己';
+  $('tabs-label').textContent = UI['类别'] || '';
+  const overview = data.overview || {};
+  const money = overview.spirit_stones;
+  const summary = [];
+  if (overview.location_name) summary.push(String(overview.location_name));
+  if (money !== undefined && money !== null) summary.push((UI['货币'] || '') + ' ' + money);
+  $('overview').textContent = summary.join(' · ');
+  $('overview').hidden = !summary.length;
   $('prev').textContent = UI['上一页'] || '上一页';
   $('next').textContent = UI['下一页'] || '下一页';
   const sheet = data.page || {};
