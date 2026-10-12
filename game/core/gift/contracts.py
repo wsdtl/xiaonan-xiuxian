@@ -28,6 +28,9 @@ class GiftResult:
     item_id: str = ""
     grade_id: str = ""
     replayed: bool = False
+    #: 展示用：物品名与品级名（由本服务按编号取；取不到就留空）。形状属于定义这个类型的包。
+    item_name: str = ""
+    grade_name: str = ""
 
 
 __all__ = ["GiftError", "GiftResult", "GiftSendCommand"]

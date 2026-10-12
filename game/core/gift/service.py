@@ -75,7 +75,7 @@ class GiftService:
             raise GiftError("不能赠送给自己")
         cached = await self._database.get(StateAddress(sender, RESULT_STATE, request_id))
         if cached is not None:
-            return _result(cached.value, replayed=True)
+            return self._result(cached.value, replayed=True)
         if self._same_location_required:
             first = await self._location.current(sender)
             second = await self._location.current(target)
@@ -115,15 +115,40 @@ class GiftService:
             receipt = await self._database.commit(TransactionCommand(sender, request_id, "玩家赠送", tuple(operations), {"接收者": target}))
         except StateConflictError as exc:
             raise GiftError("资产已经变化，请重试") from exc
-        return _result(value, replayed=receipt.replayed)
+        return self._result(value, replayed=receipt.replayed)
 
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("玩家赠送核心尚未初始化")
 
 
-def _result(value: Mapping[str, object], *, replayed: bool) -> GiftResult:
-    return GiftResult(str(value["请求编号"]), str(value["赠送者"]), str(value["接收者"]), str(value["类别"]), int(value["数量"]), str(value.get("物品编号") or ""), str(value.get("品级") or ""), replayed)
+    def _result(self, value: Mapping[str, object], *, replayed: bool) -> GiftResult:
+        """把落库的赠送事实转成公共结果，并补上展示用的两个名字。
+
+        物品名与品级名只由编号现取（不写进状态载荷）：载荷存事实，名字是投影。
+        """
+
+        item_id = str(value.get("物品编号") or "")
+        grade_id = str(value.get("品级") or "")
+        item_name = ""
+        grade_name = ""
+        try:
+            item_name = self._item_catalog.inspect(item_id).name if item_id else ""
+            grade_name = self._asset.grade(grade_id).name if grade_id else ""
+        except Exception:  # noqa: BLE001 - 展示用；取不到就留空，不影响赠送事实
+            pass
+        return GiftResult(
+            str(value["请求编号"]),
+            str(value["赠送者"]),
+            str(value["接收者"]),
+            str(value["类别"]),
+            int(value["数量"]),
+            item_id,
+            grade_id,
+            replayed,
+            item_name,
+            grade_name,
+        )
 
 
 def _bounded(value: object, maximum: int, label: str) -> int:

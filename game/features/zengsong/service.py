@@ -71,5 +71,11 @@ class GiftFeature:
     async def send(self, command: GiftSendCommand) -> GiftResult:
         return await self._gift.send(command)
 
-    def item_name(self, item_id: str) -> str:
-        return self._items.get(item_id).name
+    def resolve_item(self, query: str) -> str:
+        """把玩家写的物品名或编号换成物品编号。
+
+        认不出或多条同名由物品查询核心按自己的话回绝（`ItemCatalogError` 是 `ValueError`），
+        命令层不解释物品 JSON。
+        """
+
+        return self._items.inspect(query).item_id

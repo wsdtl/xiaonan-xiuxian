@@ -46,25 +46,24 @@ async def send(user_id: str, message: str, message_context: MessageContext, mana
             raise ValueError(feature.text("命令", "物品格式"))
         target = await feature.resolve_target(user_id, parts[0])
         target_name = await feature.target_name(target)
-        item = current_game_services().core.item_catalog.inspect(parts[1])
+        item_id = feature.resolve_item(parts[1])
         value = await feature.send(
             GiftSendCommand(
                 user_id,
                 target,
                 message_context.request_id,
-                item_id=item.item_id,
+                item_id=item_id,
                 grade_id=parts[2],
                 quantity=int(parts[3]),
             )
         )
-        grade = current_game_services().core.asset.grade(value.grade_id).name
         await manager.send(
             reply.item(
                 feature,
                 target_name,
                 value,
-                grade_name=grade,
-                item_name=item.name,
+                grade_name=value.grade_name,
+                item_name=value.item_name,
             )
         )
     except (GiftError, ValueError) as exc:
