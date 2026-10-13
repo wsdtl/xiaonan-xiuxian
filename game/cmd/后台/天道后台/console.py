@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from launch.battle_log import BATTLE_RETENTION_SECONDS, BattleReportStore
-from .storage import MessageFlowRow, MessageFlowStore
+from game.features.zhanbao.battle_log import BATTLE_RETENTION_SECONDS, BattleReportStore
+from game.features.tiandao_houtai import MessageFlowRow, MessageFlowStore
 from launch.adapter.local import LocalDispatchResult
 
 import asyncio
@@ -326,7 +326,7 @@ def _replace_queue_tail(queue: asyncio.Queue, value: Any) -> None:
 def _runtime_log_database_path() -> Path:
     """解析消息流水库路径（与战报同库；解析规则单一来源在 `launch/battle_log.py`）。"""
 
-    from launch.battle_log import runtime_log_database_path
+    from game.features.zhanbao.battle_log import runtime_log_database_path
 
     return runtime_log_database_path()
 

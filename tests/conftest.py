@@ -11,7 +11,7 @@ from dataclasses import replace
 import pytest
 
 import game.app as app
-import launch.battle_log as battle_log
+import game.features.zhanbao.battle_log as battle_log
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -25,7 +25,7 @@ import time
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
-from launch.battle_log import BattleReportSink
+from game.core.database.battle_report import BattleReportSink
 
 from game.core.action_group import ActionGroupError, ActionGroupService
 from game.core.character import CharacterService

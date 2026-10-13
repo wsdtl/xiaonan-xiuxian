@@ -1,23 +1,54 @@
 """运行期非资产记录：短期战报仓储。
 
-战报是**非资产数据**：它不归任何玩家拥有，只按战报编号对外分享，并且只留一段时间。
-因此它不进资产库（`game.db` 的玩家状态），而与消息流水同住在非资产库
-（`database/runtime_log.db`），用同一套 `expires_at` + 定时清理来过期。
+战报是**非资产数据**：不归任何玩家拥有，只按编号对外分享，只留一段时间；
+因此与事务流水、消息流水同住在非资产库（database/runtime_log.db），共用 expires_at 与定时清理。
 
-放在 `launch/` 而不是命令组件里：命令组件的包名是中文，而 `game/app.py` 这类装配点必须用
-ASCII 标识符导入它（架构边界判据：标识符不许是中文）。
-"""
+**为什么在 launch/（框架层）**：维护者入口「天道后台」（game/cmd/后台/天道后台）要读它，
+而架构判据规定**维护者入口不得导入 game.***（启动报「后台越界读取游戏」），
+而且命令层也不得直接 import 核心；所以这份仓储与「非资产日志库在哪」必须待在框架层，
+供 game/ 侧与后台侧同时使用。
+
+（2026-10-14 核对：旧注释曾写「命令组件包名是中文、装配点只能按 ASCII 导入」——那不是真原因，
+真正的原因是上面这条「后台只能读框架」的判据。）"""
 
 from __future__ import annotations
 
+from game.core.database.battle_report import (
+    BattleReportSink,
+    runtime_log_database_path,
+)
+
+import base64
 import sqlite3
 import time
+import zlib
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
-from typing import Protocol
+
+#: 战报本体的打包前缀：存进去前 zlib 最高级别压缩，读出来再解。战报比消息重得多，不压会撑爆库。
+_PACK_PREFIX = "gz:"
+
+
+def _pack(text: str) -> str:
+    """战报本体按**最高压缩级别**（zlib 9 级）打包；已经是打包形态的原样返回。"""
+
+    if not text or text.startswith(_PACK_PREFIX):
+        return text
+    return _PACK_PREFIX + base64.b64encode(
+        zlib.compress(text.encode("utf-8"), 9)
+    ).decode("ascii")
+
+
+def _unpack(text: str) -> str:
+    """读回战报本体；没有前缀的（历史明文行）原样返回。"""
+
+    if not text.startswith(_PACK_PREFIX):
+        return text
+    return zlib.decompress(base64.b64decode(text[len(_PACK_PREFIX) :])).decode("utf-8")
+
 
 #: 战报比消息重得多：同样按到期清理，但留得久（7 天），条数上限也更宽。
 BATTLE_MAX_ROWS = 2_000
@@ -25,40 +56,6 @@ BATTLE_RETENTION_SECONDS = 7 * 24 * 60 * 60
 
 #: 战报类型：只有这几种会被登记，别的取值一律拒绝。
 KINDS = ("切磋", "宗门战", "探险")
-
-
-class BattleReportSink(Protocol):
-    """战报的去处契约：核心服务只认它，不直接开非资产库。
-
-    由 `BattleReportStore` 实现；两个产出战报的核心（切磋、宗门战）都通过它登记。
-    """
-
-    def save(
-        self,
-        *,
-        report_id: str,
-        kind: str,
-        participants: Sequence[str],
-        finished_at: str,
-        finished_timestamp: float,
-        report_json: str,
-    ) -> object: ...
-
-    def load(self, report_id: str) -> object | None: ...
-
-
-def runtime_log_database_path() -> Path:
-    """非资产库（消息流水与战报同住）的路径。
-
-    维护者入口自己解释框架自定义项，不经过 `game/config.py`：游戏配置只登记游戏自身拥有的
-    事实库，运行期观察库不进入游戏配置面。相对路径按项目根解析。
-    """
-
-    from launch import config
-
-    raw = (config.custom.get("RUNTIME_LOG_DATABASE_PATH", "") or "").strip()
-    path = Path(raw or "database/runtime_log.db").expanduser()
-    return path if path.is_absolute() else config.base_dir / path
 
 
 @dataclass(frozen=True)
@@ -152,7 +149,7 @@ class BattleReportStore:
                     "\n".join(names),
                     str(finished_at),
                     float(finished_timestamp),
-                    str(report_json),
+                    _pack(str(report_json)),
                     expires_at,
                 ),
             )
@@ -231,7 +228,7 @@ def _row(row: sqlite3.Row | tuple[object, ...]) -> BattleReportRow:
         participants=str(row["participants"]),
         finished_at=str(row["finished_at"]),
         finished_timestamp=float(row["finished_timestamp"]),
-        report_json=str(row["report_json"]),
+        report_json=_unpack(str(row["report_json"])),
         expires_at=float(row["expires_at"]),
     )
 

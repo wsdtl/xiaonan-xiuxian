@@ -8,6 +8,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+#: 消息流水的保留时长（与战报同一套到期清理口径）。
+MESSAGE_RETENTION_SECONDS = 2 * 60 * 60
+
 from threading import RLock
 
 

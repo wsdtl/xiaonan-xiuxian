@@ -68,7 +68,7 @@ import time
 
 import pytest
 
-from launch.battle_log import BattleReportStore
+from game.features.zhanbao.battle_log import BattleReportStore
 
 NOW = time.time()
 

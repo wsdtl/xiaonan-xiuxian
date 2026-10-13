@@ -40,7 +40,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from uuid import uuid4
 
-from launch.battle_log import BattleReportSink
+from game.core.database.battle_report import BattleReportSink
 
 from game.core.activity import (
     ActivityFacts,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from launch import C, OnEvent, Scheduler, logger
-from launch.battle_log import BATTLE_MAX_ROWS
+from game.features.zhanbao.battle_log import BATTLE_MAX_ROWS
 from launch.message_events import subscribe_message_events, unsubscribe_message_events
 
 from .console import battle_reports, service

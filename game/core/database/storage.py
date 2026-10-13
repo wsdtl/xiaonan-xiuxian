@@ -171,7 +171,7 @@ _RECEIPT_TTL_SECONDS = 7 * 24 * 3600
 
 
 def _log_db_path() -> pathlib.Path:
-    from launch.battle_log import runtime_log_database_path
+    from game.core.database.battle_report import runtime_log_database_path
 
     return pathlib.Path(runtime_log_database_path())
 

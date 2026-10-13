@@ -144,6 +144,7 @@ class CoreServices:
 @dataclass(frozen=True)
 class FeatureServices:
     """具体玩法微服务；后续按 JSON 契约逐项加入。"""
+    tiandao_houtai: MessageFlowStore
 
     chuangjian_renwu: CreateCharacterFeature
     chakan_juese: CharacterOverviewFeature
@@ -513,7 +514,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         )
     )
     # 战报是**非资产数据**：登记进非资产库（同一个 runtime_log 库与清理任务）。
-    from launch.battle_log import (
+    from game.features.zhanbao.battle_log import (
         BATTLE_RETENTION_SECONDS,
         BattleReportStore,
         runtime_log_database_path,
@@ -524,6 +525,13 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         retention_seconds=BATTLE_RETENTION_SECONDS,
     )
     battle_reports.initialize()
+    from game.features.tiandao_houtai import MESSAGE_RETENTION_SECONDS, MessageFlowStore
+
+    message_flows = MessageFlowStore(
+        runtime_log_database_path(),
+        retention_seconds=MESSAGE_RETENTION_SECONDS,
+    )
+    message_flows.initialize()
 
     duel = DuelService(
         data,
@@ -905,6 +913,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     buzhen = FormationArmFeature(data, formation)
     buzhen.initialize()
     features = FeatureServices(
+        tiandao_houtai=message_flows,
         chuangjian_renwu=create_character,
         chakan_juese=chakan_juese,
         chakan_wupin=chakan_wupin,
