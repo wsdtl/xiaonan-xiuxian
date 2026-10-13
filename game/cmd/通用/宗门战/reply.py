@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ...presentation import duration, error_document
 
+from datetime import UTC, datetime
 from typing import Sequence
 
 from game.features.zongmen_zhan import SectWarFeature, SectWarHistoryPage, SectWarView
@@ -54,6 +55,12 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             ),
         )
     )
+    if value.status == "战斗中" and value.ends_at is not None:
+        # 细节：别的活动卡片都印剩余时间，宗门战也得印——不然玩家不知道要等多久。
+        builder.field(
+            feature.text("查看", "剩余时间"),
+            duration(max(0, int((value.ends_at - datetime.now(UTC)).total_seconds()))),
+        )
     if value.attacker_formation or value.defender_formation:
         builder.section("双方阵法", icon="item").row(
             ("攻方阵法", value.attacker_formation or "无"),
