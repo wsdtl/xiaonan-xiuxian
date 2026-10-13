@@ -786,3 +786,30 @@ def test_扩展位可解析并且按名称字典序规范化() -> None:
     with pytest.raises(ItemRefError):
         parse_item_ref("05530002{兽宝=1,兽宝=2}")
 
+def test_同一指称里不许混搭编号与中文名() -> None:
+    """委托方口径：一条指称要么全编号、要么全中文名；混搭一律拒。数量（个数）不是指称。"""
+
+    from game.core.asset import ItemRefError, format_item_ref, parse_item_ref
+
+    for text in (
+        "02410137",
+        "02410137[540001]",
+        "黄品五岳镇界镇岳诀",
+        "黄品五岳镇界镇岳诀[大衍周天盘]",
+    ):
+        assert format_item_ref(parse_item_ref(text)) == text
+
+    for bad in (
+        "02410137[大衍周天盘]",
+        "黄品五岳镇界镇岳诀[540001]",
+        "黄品410137",
+        "黄品[540001]",
+        "0" + "2五岳镇界镇岳诀",
+    ):
+        with pytest.raises(ItemRefError):
+            parse_item_ref(bad)
+
+    # 数量（个数）不是编号：它只落在值或扩展位里，不会被当成指称。
+    assert parse_item_ref("兽宝=1944").item == "兽宝=1944"
+
+

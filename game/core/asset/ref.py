@@ -84,7 +84,7 @@ def format_item_ref(ref: ItemRef) -> str:
 def parse_item_ref(text: str, *, grades: Mapping[str, str] | None = None) -> ItemRef:
     """按统一语法解析；`grades` 是「品级名 → 编号」，用来认出中文品级。
 
-    认不出品级就当作「没写品级」（物品名本身可能以汉字开头）。
+    认不出品级就当作「没写品级」（物品名本身可能以汉字leading）。
     """
 
     raw = " ".join(str(text or "").split())
@@ -127,6 +127,18 @@ def parse_item_ref(text: str, *, grades: Mapping[str, str] | None = None) -> Ite
             item = rest.strip()
     if not item:
         raise ItemRefError("物品不能为空")
+    # 同一条指称里不许混搭：物品用编号，品级与灵宝就必须也用编号；物品用中文名，它们就得用中文名。
+    # 判据只看「这一整串是不是纯编号」——数量（个数）不在指称里，不会走到这里。
+    is_numeric = item.isdigit()
+    if treasure and treasure.isdigit() != is_numeric:
+        raise ItemRefError("同一指称里不能混搭：物品与灵宝要么都用编号、要么都用中文名")
+    if grade and grade.isdigit() != is_numeric:
+        raise ItemRefError("同一指称里不能混搭：品级与物品要么都用编号、要么都用中文名")
+    # 另一种漏网：品级写了编号、物品却是中文名。上面「剩下正好 6 位」的前缀判据认不出它，
+    # 于是整串被当成"以数字leading的物品名"——按委托方口径这仍是混搭，一律拒。
+    leading = item[:GRADE_WIDTH]
+    if leading.isdigit() and len(item) > GRADE_WIDTH and not item.isdigit():
+        raise ItemRefError("同一指称里不能混搭：品级用编号时，物品也必须是编号")
     return ItemRef(item=item, grade=grade, treasure=treasure, extra=_clean_extra(extra))
 
 
