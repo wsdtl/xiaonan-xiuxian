@@ -148,11 +148,14 @@ async function loadScope(scope = $("scope").value) {
     $("import-help").textContent = data.ui.导入说明;
     $("cost-help").textContent = data.ui.消耗说明;
     const yijingInfo = $("yijing-info");
-    const yijingPaths = data.yijing || [];
-    if (yijingPaths.length) {
-      yijingInfo.textContent = "意境：" + yijingPaths.map((one) =>
-        one.display + "（道行 " + one.points + (one.missing ? "，距下一阶还差 " + one.missing : "") + "）"
-      ).join("；");
+    const yijingRoutes = (data.yijing && data.yijing.routes) || [];
+    if (yijingRoutes.length) {
+      // 六路全表（含没点过的）：这条口子就是以后天赋盘的数据源，页面先按现状并排显示。
+      yijingInfo.textContent = "意境（道行 " + data.yijing.points +
+        "，境界可点到 " + data.yijing.cap + " 阶）：" + yijingRoutes.map((one) =>
+          one.name + (one.tier ? " " + one.tier + " 阶" : " 未点") +
+          (one.next_cost ? "（下一阶 " + one.next_cost + "）" : "（已满）")
+        ).join("；");
       yijingInfo.hidden = false;
     } else {
       yijingInfo.textContent = "";
