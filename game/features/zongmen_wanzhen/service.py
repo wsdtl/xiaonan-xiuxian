@@ -227,7 +227,7 @@ class WanzhenFeature:
                         "count": len(matched),
                         "name": text,
                         "entries": "、".join(
-                            entry.grade_name + " " + entry.entry_key
+                            entry.grade_name + entry.entry_key
                             for entry in matched[:4]
                         ),
                     },
