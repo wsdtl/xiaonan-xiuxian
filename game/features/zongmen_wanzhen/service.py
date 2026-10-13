@@ -303,7 +303,7 @@ class WanzhenFeature:
         return tuple(products)
 
     async def resolve_formation_entry(
-        self, user_id: str, wanted: str, qualifier: str = ""
+        self, user_id: str, wanted: str, qualifier: str = "", *, grade: str = "", treasure: str = ""
     ) -> str:
         """把玩家写的阵法换成他**个人阵藏**里的条目键。
 
@@ -322,7 +322,7 @@ class WanzhenFeature:
             entry
             for entry in entries
             if text in {str(entry.name), str(entry.content_id)}
-            and self._qualifier_hits(entry, qualifier, names)
+            and self._ref_hits(entry, qualifier, grade, treasure, names)
         ]
         if not matched:
             raise WanzhenFeatureError(
@@ -360,6 +360,43 @@ class WanzhenFeature:
             names.get(identifier, identifier) if identifier else "",
         }
         return any(word and word.startswith(text) for word in words)
+
+    def _ref_hits(
+        self,
+        entry: AssetEntry,
+        qualifier: str,
+        grade: str,
+        treasure: str,
+        names: Mapping[str, str],
+    ) -> bool:
+        """统一语法给的三件套是否与这条条目对得上；两槽都空时退回旧的模糊限定词。"""
+
+        if grade or treasure:
+            return self._grade_hits(entry, grade) and self._treasure_hits(entry, treasure, names)
+        return self._qualifier_hits(entry, qualifier, names)
+
+    def _grade_hits(self, entry: AssetEntry, grade: str) -> bool:
+        """品级槽：品级编号或品级名前缀对得上即可；空槽不设限。"""
+
+        text = str(grade or "").strip()
+        if not text:
+            return True
+        words = {
+            str(getattr(entry, "grade_id", "") or ""),
+            str(getattr(entry, "grade_name", "") or ""),
+        }
+        return any(word and word.startswith(text) for word in words)
+
+    def _treasure_hits(self, entry: AssetEntry, treasure: str, names: Mapping[str, str]) -> bool:
+        """灵宝槽：灵宝名或编号前缀对得上即可；空槽不设限；写了灵宝但条目没有就不算命中。"""
+
+        text = str(treasure or "").strip()
+        if not text:
+            return True
+        identifier = str(getattr(entry, "treasure_id", "") or "")
+        if not identifier:
+            return False
+        return names.get(identifier, identifier).startswith(text) or identifier.startswith(text)
 
     def _formation_label(self, entry: AssetEntry, names: Mapping[str, str]) -> str:
         """「品级名称[灵宝名]」——回绝文案里摆候选用的写法（统一语法：连写不分隔）。"""

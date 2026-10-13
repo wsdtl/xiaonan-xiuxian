@@ -44,7 +44,8 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
         query = head
     if bracket and not qualifier:
         qualifier = bracket
-    return await feature.resolve_formation_entry(user_id, query, qualifier)
+    # 方括号里的灵宝走显式的 treasure 槽：别与品级抢同一个位置（旧的 qualifier 继续接品级）。
+    return await feature.resolve_formation_entry(user_id, query, qualifier, treasure=bracket)
 
 
 @GameCommand.command(
@@ -113,6 +114,8 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
             except ItemRefError:
                 ref = None
             if ref is not None and (ref.grade or ref.treasure):
+                # 仍走 _formation_key（它负责「阵法编号别带方括号」那道拒绝），
+                # 方括号里的灵宝由它用 treasure 槽转发，不跟品级抢位置。
                 wanted = format_item_ref(ItemRef(item=ref.item, treasure=ref.treasure))
                 identifier = await _formation_key(
                     feature, user_id, wanted, ref.grade or old_qualifier
