@@ -6,7 +6,7 @@
     .venv/Scripts/python.exe -X utf8 tools/报告与生成/生成兑换码.py --count 20 --prefix KAIFU
     .venv/Scripts/python.exe -X utf8 tools/报告与生成/生成兑换码.py --count 20 --prefix KAIFU --write
 
-`--grant` 写成 `类型:参数` 的逗号分隔串：`灵石:1000` 或 `物品:100001:01:1`（物品是 编号:品级:数量，品级可省）。
+`--grant` 写成 `类型:参数` 的逗号分隔串：`灵石:1000` 或 `物品:02410137:3`（物品是「指称:数量」，指称＝可选品级前缀＋物品编号＋可选灵宝方括号）。
 说明与名称按前缀生成，命名规则改这里就行。
 '''
 
@@ -40,9 +40,13 @@ def _grants(text: str) -> list[dict]:
         if kind == '灵石':
             out.append({'类型': '灵石', '数量': int(parts[1])})
         elif kind == '物品':
-            item = {'类型': '物品', '编号': parts[1].strip(), '数量': int(parts[-1])}
-            if len(parts) == 4:
-                item['品级'] = parts[2].strip()
+            # 统一语法：指称一段（可选品级前缀＋物品编号＋可选灵宝方括号），数量是后面独立的一段。
+            from game.core.asset import parse_item_ref
+
+            ref = parse_item_ref(parts[1].strip())
+            item = {'类型': '物品', '编号': ref.item, '数量': int(parts[-1])}
+            if ref.grade:
+                item['品级'] = ref.grade
             out.append(item)
         else:
             raise SystemExit(f'不认识的发放类型：{kind}（只支持 灵石 与 物品）')
