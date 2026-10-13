@@ -571,7 +571,11 @@ class ExplorationService:
                     dict(item) for item in self._injury.summary(evolution.state).entries
                 ]
                 user_results[value.owner_id]["消耗"].update(value.consumed_items)
-                detail[value.owner_id]["消耗"].update(value.consumed_items)
+                # 记录里只放纯物品指称：引擎键是「物品键|用户」（运行期协议），落盘前在这里翻成正形。
+                detail[value.owner_id]["消耗"] = {
+                    _record_item_ref(str(key)): int(quantity)
+                    for key, quantity in value.consumed_items.items()
+                }
             for user_id in participants:
                 owner_results = [
                     value for value in formal_left_results if value.owner_id == user_id
@@ -1513,15 +1517,21 @@ def _consumption_adjustments(
     return result
 
 
+def _record_item_ref(key: str) -> str:
+    """把引擎/旧写法翻成记录里的纯物品指称：去掉「|用户」，把「编号:品级」写成统一形式。"""
+
+    text = str(key).split("|", 1)[0].strip()
+    head, _, tail = text.partition(":")
+    if tail and head.isdigit() and tail.isdigit():
+        return format_item_ref(ItemRef(item=head, grade=tail))
+    return text
+
+
 def _stack_rows(values: Mapping[str, int]) -> list[dict[str, object]]:
-    normalized: Counter[str] = Counter()
-    for stack_key, quantity in values.items():
-        normalized[_base_stack_key(stack_key)] += quantity
     result = []
-    for stack_key, quantity in sorted(normalized.items()):
-        ref = parse_item_ref(str(stack_key))
-        item_id, grade_id = ref.item, ref.grade
-        result.append({"编号": item_id, "品级": grade_id, "数量": quantity})
+    for stack_key, quantity in sorted(values.items()):
+        ref = parse_item_ref(_record_item_ref(str(stack_key)))
+        result.append({"编号": ref.item, "品级": ref.grade, "数量": quantity})
     return result
 
 
@@ -1529,8 +1539,7 @@ def _owner_stack_key(user_id: str, stack_key: str) -> str:
     return f"{stack_key}|{user_id}"
 
 
-def _base_stack_key(stack_key: str) -> str:
-    return stack_key.split("|", 1)[0]
+# 运行期协议：把「物品键」按用户分开，仅供战斗引擎回传配对用，**不落存档**。
 
 
 def _drop_rows(values: Mapping[tuple[str, str], int]) -> list[dict[str, object]]:
