@@ -753,3 +753,21 @@ def test_scheme_rejects_duplicate_and_over_limit(services):
     assert limits["功法"] >= 2
     with pytest.raises(ZhuangpeiFeatureError, match="不能重复装配"):
         feature.scheme({**blank(), "功法": [item(ids[0]), item(ids[0])]})
+
+
+def test_物品指称语法可往返且六位编号不被误读() -> None:
+    """统一语法 [品级编号]物品编号[[灵宝编号]]：四种组合可往返，且 6 位编号不被读成「品级+4 位」。"""
+    from game.core.asset import format_item_ref, parse_item_ref
+
+    for text in (
+        "02410137",
+        "410137",
+        "02410001[410002]",
+        "410001[410002]",
+    ):
+        assert format_item_ref(parse_item_ref(text)) == text
+
+    plain = parse_item_ref("410137")
+    assert plain.item == "410137" and plain.grade == ""
+    graded = parse_item_ref("02410137")
+    assert graded.grade == "02" and graded.item == "410137"
