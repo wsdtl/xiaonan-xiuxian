@@ -35,16 +35,14 @@ class BattleReportSink(Protocol):
 
 
 def runtime_log_database_path() -> Path:
-    """非资产库（消息流水与战报同住）的路径。
+    """非资产库（事务流水、消息流水、战报同住）的路径：**从游戏配置取**。
 
-    维护者入口自己解释框架自定义项，不经过 `game/config.py`：游戏配置只登记游戏自身拥有的
-    事实库，运行期观察库不进入游戏配置面。相对路径按项目根解析。
+    2026-10-14 起非资产库与资产库对称，路径统一由 `game/config.py` 的 `GameRuntimeLogConfig`
+    提供；在此之前这里自己读框架自定义项，等于核心反向依赖框架。
     """
 
-    from launch import config
+    from game.config import game_config
 
-    raw = (config.custom.get("RUNTIME_LOG_DATABASE_PATH", "") or "").strip()
-    path = Path(raw or "database/runtime_log.db").expanduser()
-    return path if path.is_absolute() else config.base_dir / path
+    return game_config.runtime_log.path
 
 

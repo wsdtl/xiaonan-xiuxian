@@ -19,10 +19,18 @@ class CustomConfigSource(Protocol):
 
 @dataclass(frozen=True)
 class GameDatabaseConfig:
-    """游戏资产库配置。
+    """游戏**资产库**配置（玩家事实：纳戒、道藏、资粮、阵藏…）。"""
 
-    只包含游戏自身拥有的事实库。维护者入口（`game/cmd/后台`）的消息观察使用
-    独立库，其路径由后台组件直接从框架自定义项读取，不进入游戏配置。
+    path: Path
+    busy_timeout_ms: int
+
+
+@dataclass(frozen=True)
+class GameRuntimeLogConfig:
+    """游戏**非资产库**配置（观测数据：事务流水、消息流水、战报），与资产库对称。
+
+    非资产库同样属于游戏，所以路径进游戏配置面；维护者入口（`game/cmd/后台`）按它自己的
+    规范从框架自定义项读取同名键、同默认值，**不读**游戏配置——那是一处已注明的例外。
     """
 
     path: Path
@@ -32,6 +40,7 @@ class GameDatabaseConfig:
 @dataclass(frozen=True)
 class GameConfig:
     database: GameDatabaseConfig
+    runtime_log: GameRuntimeLogConfig
 
 
 def load_game_config(source: CustomConfigSource = framework_config) -> GameConfig:
@@ -41,7 +50,11 @@ def load_game_config(source: CustomConfigSource = framework_config) -> GameConfi
         path=_custom_path(source, "DATABASE_PATH", "database/game.db"),
         busy_timeout_ms=_positive_int(source, "DATABASE_BUSY_TIMEOUT_MS", 5000),
     )
-    return GameConfig(database=database)
+    runtime_log = GameRuntimeLogConfig(
+        path=_custom_path(source, "RUNTIME_LOG_DATABASE_PATH", "database/runtime_log.db"),
+        busy_timeout_ms=_positive_int(source, "RUNTIME_LOG_BUSY_TIMEOUT_MS", 5000),
+    )
+    return GameConfig(database=database, runtime_log=runtime_log)
 
 
 def _custom_path(source: CustomConfigSource, name: str, default: str) -> Path:
@@ -67,6 +80,7 @@ game_config = load_game_config()
 __all__ = [
     "GameConfig",
     "GameDatabaseConfig",
+    "GameRuntimeLogConfig",
     "game_config",
     "load_game_config",
 ]

@@ -216,7 +216,7 @@ def check_cmd_core_dependency() -> list[Finding]:
         relative = _relative(path)
         tree = _parse(path)
         for line, module in _imports(tree):
-            if module.startswith("game.features.tiandao_houtai"):
+            if module.startswith("game.core.database.log_message_flows"):
                 # 消息流水：维护者入口**唯一**合法的微服务（委托方 2026-10-14 口径：
                 # 后台是用户天道的私人后台，默认只需要消息流水的支持；战报不例外）。
                 continue
@@ -353,7 +353,7 @@ def check_console_boundary() -> list[Finding]:
         for line, module in _imports(tree):
             # 维护者入口不读游戏规则、玩家资产、战斗事实，也不使用游戏配置：
             # 消息观察库路径由控制台自己从框架自定义项解析。
-            if module.startswith("game.features.tiandao_houtai"):
+            if module.startswith("game.core.database.log_message_flows"):
                 # 消息流水：维护者入口**唯一**合法的微服务（委托方 2026-10-14 口径：
                 # 后台是用户天道的私人后台，默认只需要消息流水的支持；战报不例外）。
                 continue
@@ -1289,7 +1289,7 @@ def check_cmd_core_access() -> list[Finding]:
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if ".core." not in line or line.strip().startswith("#"):
                 continue
-            if ".core.log_" in line:
+            if ".core.database.log_message_flows" in line or ".core.log_" in line:
                 # 非资产日志服务：后台读流水的合法入口（见本函数文档字符串）。
                 continue
             findings.append(

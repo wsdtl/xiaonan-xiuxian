@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from game.features.tiandao_houtai import MessageFlowRow, MessageFlowStore
+from game.core.database.log_message_flows import MessageFlowRow, MessageFlowStore
 from launch.adapter.local import LocalDispatchResult
 
 import asyncio
