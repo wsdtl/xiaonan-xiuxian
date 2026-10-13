@@ -73,11 +73,16 @@ def parse_item_ref(text: str, *, grades: Mapping[str, str] | None = None) -> Ite
     grade = ""
     prefix = item[:GRADE_WIDTH]
     if len(item) > GRADE_WIDTH:
-        # 认品级：给了表就按表（名称→编号）；没给就按定长约定——2 位数字，或以「品」结尾的 2 字前缀。
+        rest = item[GRADE_WIDTH:]
+        # 数字前缀只有在「剩下正好 6 位编号」时才算品级——否则 6 位物品编号会被误读成
+        # 「2 位品级 + 4 位物品」。名称前缀按表认，或按约定「以品结尾的 2 字」。
         known = (prefix in grades) if grades is not None else prefix.endswith("品")
-        if prefix.isdigit() or known:
+        if prefix.isdigit() and rest.isdigit() and len(rest) == 6:
             grade = prefix
-            item = item[GRADE_WIDTH:].strip()
+            item = rest
+        elif known:
+            grade = prefix
+            item = rest.strip()
     if not item:
         raise ItemRefError("物品不能为空")
     return ItemRef(item=item, grade=grade, treasure=treasure)

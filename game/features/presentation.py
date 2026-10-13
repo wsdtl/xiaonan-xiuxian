@@ -168,7 +168,7 @@ def format_command(button: Button, variables: Mapping[str, object] | None) -> st
 
 
 from collections.abc import Sequence
-from game.core.asset import ItemRefError, parse_item_ref
+from game.core.asset import ItemRef, ItemRefError, format_item_ref, parse_item_ref
 
 
 def split_quantity(parts: Sequence[str]) -> tuple[list[str], int]:
@@ -207,6 +207,7 @@ __all__ = [
     "project_dungeon_buttons",
     "project_unique_buttons",
     "ItemRef",
+    "format_item_ref",
     "ItemRefError",
     "parse_item_ref",
     "paged_settlement_actions",

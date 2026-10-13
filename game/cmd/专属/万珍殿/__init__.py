@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from game.app import current_game_services
+from game.features.presentation import (
+    ItemRef,
+    ItemRefError,
+    format_item_ref,
+    parse_item_ref,
+)
 from game.features.zongmen_wanzhen import WanzhenFeatureError
 
 from ...command import GameCommand
@@ -80,11 +86,11 @@ async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
             "category": "宗门",
             "summary": "将个人成品存入本宗万珍殿",
             "usage": (
-                "捐入万珍殿 丹药/真意/气机 编号或名称 品级 数量",
+                "捐入万珍殿 丹药 黄品小还丹 3",
                 "捐入万珍殿 器律 编号或名称 数量",
                 # 阵法编号也认，但**不写进帮助**：那是内部身份，玩家只会用到阵法名。
                 "捐入万珍殿 阵法 阵法名[灵宝名]",
-                "捐入万珍殿 阵法 阵法名 品级",
+                "捐入万珍殿 阵法 黄品周天星斗大阵",
             ),
             "side_effect": "扣除个人成品，计入万珍殿；阵法每次存入一座",
             "order": 83,
@@ -99,8 +105,20 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
             raise WanzhenFeatureError("格式：捐入万珍殿 类别 内容 ...")
         category = parts[0]
         if category == "阵法" and 2 <= len(parts) <= 3:
-            # 条目在库里是一条状态键（阵法编号:品级:灵宝编号），但玩家只该填阵法名。
-            identifier = await _formation_key(feature, user_id, parts[1], parts[2] if len(parts) == 3 else "")
+            # 新写法：<品级><阵法名>[灵宝]；旧写法 <阵法名> [品级] 仍受理。
+            name_word = parts[1]
+            old_qualifier = parts[2] if len(parts) == 3 else ""
+            try:
+                ref = parse_item_ref(name_word)
+            except ItemRefError:
+                ref = None
+            if ref is not None and (ref.grade or ref.treasure):
+                wanted = format_item_ref(ItemRef(item=ref.item, treasure=ref.treasure))
+                identifier = await _formation_key(
+                    feature, user_id, wanted, ref.grade or old_qualifier
+                )
+            else:
+                identifier = await _formation_key(feature, user_id, name_word, old_qualifier)
             grade_or_key, quantity = identifier, 1
         elif category == "器律" and len(parts) == 3:
             identifier, grade_or_key, quantity = (
@@ -108,12 +126,13 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
                 "",
                 _positive(parts[2], "数量"),
             )
-        elif category in {"丹药", "真意", "气机"} and len(parts) == 4:
-            identifier, grade_or_key, quantity = (
-                parts[1],
-                parts[2],
-                _positive(parts[3], "数量"),
-            )
+        elif category in {"丹药", "真意", "气机"} and len(parts) in {3, 4}:
+            if len(parts) == 4:
+                identifier, grade_or_key = parts[1], parts[2]
+            else:
+                ref = parse_item_ref(parts[1])
+                identifier, grade_or_key = ref.item, ref.grade
+            quantity = _positive(parts[-1], "数量")
         else:
             raise WanzhenFeatureError("万珍殿存入参数与类别不匹配")
         value = await feature.donate(
@@ -138,7 +157,7 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
             "category": "宗门",
             "summary": "由宗主或长老向本宗成员发放万珍殿成品",
             "usage": (
-                "发放万珍殿 云中鹤 小还丹", "发放万珍殿 角色名或编号 珍物名[灵宝名]",
+                "发放万珍殿 云中鹤 小还丹", "发放万珍殿 角色名 珍物名[灵宝名]",
                 "发放万珍殿 角色名或编号 珍物名[灵宝名] 数量",
             ),
             "side_effect": "扣除宗门成品，计入目标成员的个人藏库",
