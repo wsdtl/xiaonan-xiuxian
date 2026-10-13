@@ -15,6 +15,7 @@ from game.core.database import (
     StateSnapshot,
 )
 
+from .ref import ItemRef, format_item_ref, parse_item_ref
 from .contracts import (
     AssetCategory,
     AssetEntry,
@@ -182,7 +183,7 @@ class AssetService:
             StateAddress(
                 normalized_user_id,
                 "inventory",
-                f"{normalized_item_id}:{grade_id}",
+                format_item_ref(ItemRef(item=normalized_item_id, grade=grade_id)),
             )
             for grade_id in self._grades
         )
@@ -190,11 +191,11 @@ class AssetService:
         result: list[InventoryStack] = []
         for snapshot in snapshots:
             value = _mapping(snapshot.value, "普通物品")
-            grade_id, _ = snapshot.address.state_key.rsplit(":", 1)
-            if grade_id != normalized_item_id:
+            item_id = parse_item_ref(snapshot.address.state_key).item
+            if item_id != normalized_item_id:
                 raise AssetStateError("普通物品状态键与查询编号不一致")
             grade = self.grade(_text(value.get("品级"), "普通物品.品级"))
-            _expect_key(snapshot, f"{normalized_item_id}:{grade.grade_id}")
+            _expect_key(snapshot, format_item_ref(ItemRef(item=normalized_item_id, grade=grade.grade_id)))
             result.append(
                 InventoryStack(
                     normalized_item_id,
@@ -231,14 +232,14 @@ class AssetService:
             key = (normalized_item_id, normalized_grade_id)
             if key in seen:
                 raise InventoryChangeError(
-                    f"初始物品重复：{normalized_item_id}:{normalized_grade_id}"
+                    "初始物品重复：同一品级的这份物品已经存在"
                 )
             seen.add(key)
             result.append(
                 StateMutation(
                     normalized_user_id,
                     "inventory",
-                    f"{normalized_item_id}:{normalized_grade_id}",
+                    format_item_ref(ItemRef(item=normalized_item_id, grade=normalized_grade_id)),
                     {
                         "编号": normalized_item_id,
                         "品级": normalized_grade_id,
@@ -273,7 +274,7 @@ class AssetService:
             return InventoryMutationPlan((), ())
 
         addresses = tuple(
-            StateAddress(normalized_user_id, "inventory", f"{item_id}:{grade_id}")
+            StateAddress(normalized_user_id, "inventory", format_item_ref(ItemRef(item=item_id, grade=grade_id)))
             for item_id, grade_id in totals
         )
         snapshots = await self._database.get_many(addresses)
@@ -286,7 +287,7 @@ class AssetService:
             totals,
             key=lambda key: (key[0], self._grades[key[1]].order),
         ):
-            state_key = f"{item_id}:{grade_id}"
+            state_key = format_item_ref(ItemRef(item=item_id, grade=grade_id))
             snapshot = snapshot_by_key.get(state_key)
             before = 0
             version = 0
@@ -463,7 +464,7 @@ class AssetService:
         if record.number_category != normalized_category:
             raise AssetStateError("修行资粮编号类别不匹配")
         grade = self.grade(grade_id)
-        key = f"{normalized_content_id}:{grade.grade_id}"
+        key = format_item_ref(ItemRef(item=normalized_content_id, grade=grade.grade_id))
         snapshot = await self._database.get(
             StateAddress(normalized_user_id, "cultivation_reserve", key)
         )
@@ -521,7 +522,7 @@ class AssetService:
                 f"{grade.name}{_entity_name(self._data, normalized_category, normalized_content_id)}"
                 f"储备不足：现有{before}，需要{-quantity_delta}"
             )
-        key = f"{normalized_content_id}:{grade.grade_id}"
+        key = format_item_ref(ItemRef(item=normalized_content_id, grade=grade.grade_id))
         name = _entity_name(self._data, normalized_category, normalized_content_id)
         stack = current or CultivationReserveStack(
             normalized_category,
@@ -684,9 +685,13 @@ class AssetService:
         # 固定品的身份就是「阵法编号:品级」，带增幅灵宝的再缀上灵宝编号——
         # 键**照玩家看到的那套写法写**（物品[灵宝]、品级在前），所以可读、可推、能按数量堆叠；
         # 不带灵宝的就没有第三段，因此「无灵宝」这种占位永远不会出现。
-        state_key = f"{normalized_formation_id}:{grade.grade_id}"
-        if normalized_treasure_id:
-            state_key = f"{state_key}:{normalized_treasure_id}"
+        state_key = format_item_ref(
+            ItemRef(
+                item=normalized_formation_id,
+                grade=grade.grade_id,
+                treasure=normalized_treasure_id,
+            )
+        )
         snapshot = await self._database.get(
             StateAddress(normalized_user_id, "formation_reserve", state_key)
         )
@@ -836,9 +841,9 @@ class AssetService:
         else:
             # 固定品的键就是「阵法编号:品级」，带增幅灵宝的再缀灵宝编号；
             # 不带灵宝的没有第三段——所以「无灵宝」这种占位永远不会出现在键里。
-            expected = f"{formation_id}:{grade.grade_id}"
-            if treasure_id:
-                expected = f"{expected}:{treasure_id}"
+            expected = format_item_ref(
+                ItemRef(item=formation_id, grade=grade.grade_id, treasure=treasure_id)
+            )
             if normalized_key != expected:
                 raise AssetStateError("固定品阵藏状态键与内容不一致")
             materials = ()
@@ -921,7 +926,7 @@ class AssetService:
         number_category, _ = self._number_identity(content_id)
         grade_id, grade_name = self._grade(value.get("品级"))
         quantity = _positive_int(value.get("数量"), "普通物品.数量")
-        _expect_key(snapshot, f"{content_id}:{grade_id}")
+        _expect_key(snapshot, format_item_ref(ItemRef(item=content_id, grade=grade_id)))
         name = _inventory_name(self._data, content_id)
         subcategory = self._match_subcategory(category, "编号类别", number_category)
         return AssetEntry(
@@ -980,7 +985,7 @@ class AssetService:
             raise AssetStateError("修行资粮编号类别与正文不一致")
         grade_id, grade_name = self._grade(value.get("品级"))
         quantity = _positive_int(value.get("数量"), "修行资粮.数量")
-        _expect_key(snapshot, f"{content_id}:{grade_id}")
+        _expect_key(snapshot, format_item_ref(ItemRef(item=content_id, grade=grade_id)))
         return AssetEntry(
             category,
             self._match_subcategory(category, "编号类别", number_category),
@@ -1037,9 +1042,9 @@ class AssetService:
             quantity = 1
         else:
             treasure_id = str(value.get("灵宝编号") or "").strip()
-            expected = f"{content_id}:{grade_id}"
-            if treasure_id:
-                expected = f"{expected}:{treasure_id}"
+            expected = format_item_ref(
+                ItemRef(item=content_id, grade=grade_id, treasure=treasure_id)
+            )
             _expect_key(snapshot, expected)
             quantity = _positive_int(value.get("数量"), "阵藏.数量")
         return AssetEntry(
@@ -1340,7 +1345,7 @@ def _expect_key(snapshot: StateSnapshot, expected: str) -> None:
 
 
 def _cultivation_state_key(category: str, content_id: str, grade_id: str) -> str:
-    return content_id if category == "功法" else f"{content_id}:{grade_id}"
+    return content_id if category == "功法" else format_item_ref(ItemRef(item=content_id, grade=grade_id))
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:

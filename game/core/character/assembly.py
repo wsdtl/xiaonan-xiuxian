@@ -3,6 +3,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
+from game.core.asset import ItemRef, format_item_ref
 from game.core.database import StateAddress, StateMutation
 
 from .contracts import CharacterAssemblyPlan, CharacterCultivationError, CharacterStateError
@@ -89,7 +90,7 @@ async def plan_assembly(
                 raise CharacterCultivationError("修行资粮已经变化，请重试")
             operations.append(plan.operation)
         elif stack is not None:
-            operations.append(StateMutation(user_id, "cultivation_reserve", f"{content_id}:{grade_id}",
+            operations.append(StateMutation(user_id, "cultivation_reserve", format_item_ref(ItemRef(item=content_id, grade=grade_id)),
                 {"类别": category, "编号": content_id, "品级": grade_id, "数量": quantity}, stack.version))
     level = weapon["等级"]
     limit = service._forging.weapon_stage(level).open_law_slots

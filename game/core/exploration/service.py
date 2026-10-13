@@ -15,7 +15,13 @@ from game.core.activity import (
     ActivityLifecycle,
     ActivityLifecycleService,
 )
-from game.core.asset import AssetService, InventoryAdjustment
+from game.core.asset import (
+    AssetService,
+    InventoryAdjustment,
+    ItemRef,
+    format_item_ref,
+    parse_item_ref,
+)
 from game.core.character import CharacterService
 from game.core.combat import (
     CombatantResult,
@@ -491,7 +497,11 @@ class ExplorationService:
                 detail[user_id]["灵石"] = int(allocation["灵石"])
                 # 明细要过 JSON，键只能是字符串：把 (编号, 品级) 拼成「编号:品级」。
                 detail[user_id]["掉落"] = {
-                    (f"{key[0]}:{key[1]}" if isinstance(key, tuple) else str(key)): int(
+                    (
+                        format_item_ref(ItemRef(item=key[0], grade=key[1]))
+                        if isinstance(key, tuple)
+                        else str(key)
+                    ): int(
                         quantity
                     )
                     for key, quantity in allocation["掉落"].items()
@@ -856,7 +866,8 @@ class ExplorationService:
                 for key, quantity in _mapping(
                     per.get("掉落") or {}, "明细.掉落"
                 ).items():
-                    item_id, _, grade_id = str(key).partition(":")
+                    ref = parse_item_ref(str(key))
+                    item_id, grade_id = ref.item, ref.grade
                     spot = (item_id, grade_id)
                     drops[user_id][spot] = drops[user_id].get(spot, 0) + int(quantity)
                 for key, quantity in _mapping(
@@ -1508,7 +1519,8 @@ def _stack_rows(values: Mapping[str, int]) -> list[dict[str, object]]:
         normalized[_base_stack_key(stack_key)] += quantity
     result = []
     for stack_key, quantity in sorted(normalized.items()):
-        item_id, grade_id = stack_key.rsplit(":", 1)
+        ref = parse_item_ref(str(stack_key))
+        item_id, grade_id = ref.item, ref.grade
         result.append({"编号": item_id, "品级": grade_id, "数量": quantity})
     return result
 
