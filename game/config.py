@@ -38,9 +38,23 @@ class GameRuntimeLogConfig:
 
 
 @dataclass(frozen=True)
+class GameConsoleConfig:
+    """天道后台（一个二级组件）自己的配置：密码、非资产库路径、媒体目录。
+
+    后台是普通二级组件，配置**同样走这一处游戏配置面**；密码不再散在 env 里各自解释。
+    """
+
+    password: str
+    runtime_log_path: Path
+    runtime_log_busy_timeout_ms: int
+    media_dir: Path
+
+
+@dataclass(frozen=True)
 class GameConfig:
     database: GameDatabaseConfig
     runtime_log: GameRuntimeLogConfig
+    console: GameConsoleConfig
 
 
 def load_game_config(source: CustomConfigSource = framework_config) -> GameConfig:
@@ -54,7 +68,14 @@ def load_game_config(source: CustomConfigSource = framework_config) -> GameConfi
         path=_custom_path(source, "RUNTIME_LOG_DATABASE_PATH", "database/runtime_log.db"),
         busy_timeout_ms=_positive_int(source, "RUNTIME_LOG_BUSY_TIMEOUT_MS", 5000),
     )
-    return GameConfig(database=database, runtime_log=runtime_log)
+    console = GameConsoleConfig(
+        password=(source.get("WEB_CONSOLE_PASSWORD", "") or "").strip(),
+        # 与游戏侧同源，不再各写默认值。
+        runtime_log_path=runtime_log.path,
+        runtime_log_busy_timeout_ms=runtime_log.busy_timeout_ms,
+        media_dir=_custom_path(source, "RUNTIME_LOG_MEDIA_DIR", ".runtime/runtime_log_media"),
+    )
+    return GameConfig(database=database, runtime_log=runtime_log, console=console)
 
 
 def _custom_path(source: CustomConfigSource, name: str, default: str) -> Path:
@@ -79,6 +100,7 @@ game_config = load_game_config()
 
 __all__ = [
     "GameConfig",
+    "GameConsoleConfig",
     "GameDatabaseConfig",
     "GameRuntimeLogConfig",
     "game_config",

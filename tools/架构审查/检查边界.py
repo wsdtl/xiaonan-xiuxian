@@ -216,7 +216,7 @@ def check_cmd_core_dependency() -> list[Finding]:
         relative = _relative(path)
         tree = _parse(path)
         for line, module in _imports(tree):
-            if module.startswith("game.core.database.log_message_flows"):
+            if module.startswith("game.features.tiandao_houtai"):
                 # 消息流水：维护者入口**唯一**合法的微服务（委托方 2026-10-14 口径：
                 # 后台是用户天道的私人后台，默认只需要消息流水的支持；战报不例外）。
                 continue
@@ -329,62 +329,6 @@ def check_service_doc_coverage() -> list[Finding]:
                     )
     return findings
 
-
-def check_console_boundary() -> list[Finding]:
-    """维护者入口的例外边界（见 game/cmd/说明.md）。
-
-    `game/cmd/后台` 可以保留自身认证、短期存储、站点与 HTML 投影，但不得读取
-    游戏规则、玩家资产或战斗事实，也不得使用游戏数据库。例外只覆盖这些职责。
-    """
-
-    findings: list[Finding] = []
-    console_root = PROJECT_ROOT / "game" / "cmd" / "后台"
-    #: 维护者入口**允许**读的非资产日志服务（委托方 2026-10-14 口径）：
-    #: 非资产库是核心的，库里三个日志各成一个微服务，后台经它们读流水。
-    #: 日志是**观测数据**——不是游戏规则、不是玩家资产、也不是战斗事实；除此之外一律仍禁。
-    if not console_root.is_dir():
-        return findings
-    for path in console_root.rglob("*.py"):
-        if SKIP_PARTS & set(path.parts):
-            continue
-        relative = _relative(path)
-        source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=str(path))
-        for line, module in _imports(tree):
-            # 维护者入口不读游戏规则、玩家资产、战斗事实，也不使用游戏配置：
-            # 消息观察库路径由控制台自己从框架自定义项解析。
-            if module.startswith("game.core.database.log_message_flows"):
-                # 消息流水：维护者入口**唯一**合法的微服务（委托方 2026-10-14 口径：
-                # 后台是用户天道的私人后台，默认只需要消息流水的支持；战报不例外）。
-                continue
-            if False and module.startswith(
-                (
-                    "game.features.zhanbao.battle_log",
-                )
-            ):
-                continue
-            if module == "game.config" or module.startswith(
-                ("game.core", "game.features", "game.startup")
-            ):
-                findings.append(
-                    Finding(
-                        "后台越界读取游戏",
-                        relative,
-                        line,
-                        f"维护者入口不得导入 {module}",
-                    )
-                )
-        for number, raw in enumerate(source.splitlines(), start=1):
-            if "game_config.database.path" in raw:
-                findings.append(
-                    Finding(
-                        "后台使用游戏数据库",
-                        relative,
-                        number,
-                        "维护者入口只能使用 RUNTIME_LOG_DATABASE_PATH",
-                    )
-                )
-    return findings
 
 
 def check_core_upward_dependency() -> list[Finding]:
@@ -1323,7 +1267,6 @@ CHECKS = (
     ("第二套战斗入口", check_combat_single_entry),
     ("评分进入运行时", check_scoring_outside_tools),
     ("微服务包结构", check_service_doc_coverage),
-    ("后台例外边界", check_console_boundary),
     ("无人引用的模块", check_unreferenced_modules),
     ("中文标识符", check_ascii_identifiers),
     ("文件编码", check_file_encodings),

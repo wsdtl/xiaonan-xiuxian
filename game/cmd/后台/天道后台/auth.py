@@ -7,7 +7,7 @@ import secrets
 import time
 from collections import defaultdict, deque
 
-from launch import config
+from game.config import game_config
 
 from .models import ConsoleSession
 
@@ -34,7 +34,7 @@ class ConsoleAuthService:
 
     @property
     def password(self) -> str:
-        return config.get("WEB_CONSOLE_PASSWORD", "")
+        return game_config.console.password
 
     def login(
         self, username: str, password: str, *, source: str = "unknown"

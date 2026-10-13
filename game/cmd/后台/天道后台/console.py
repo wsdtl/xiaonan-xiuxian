@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from game.core.database.log_message_flows import MessageFlowRow, MessageFlowStore
+from game.features.tiandao_houtai import MessageFlowRow, MessageFlowStore
 from launch.adapter.local import LocalDispatchResult
 
 import asyncio
@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
+from game.config import game_config
 from launch import C, config, logger
 from launch.adapter import dispatch_local_message
 from launch.message_events import (
@@ -323,15 +324,9 @@ def _replace_queue_tail(queue: asyncio.Queue, value: Any) -> None:
 
 
 def _runtime_log_database_path() -> Path:
-    """解析消息流水库路径（与战报同库；解析规则单一来源在 `launch/battle_log.py`）。"""
+    """消息流水库路径：与游戏侧同源，统一由 game/config.py 的配置面给出。"""
 
-    from launch import config
-
-    raw = (config.custom.get("RUNTIME_LOG_DATABASE_PATH", "") or "").strip()
-    path = Path(raw or "database/runtime_log.db").expanduser()
-    return path if path.is_absolute() else config.base_dir / path
-
-    return runtime_log_database_path()
+    return game_config.console.runtime_log_path
 
 
 service = MessageConsoleService(
@@ -339,7 +334,7 @@ service = MessageConsoleService(
         _runtime_log_database_path(),
         retention_seconds=RETENTION_SECONDS,
     ),
-    media_dir=config.base_dir / ".runtime" / "runtime_log_media",
+    media_dir=game_config.console.media_dir,
 )
 
 def _record_from_row(row: MessageFlowRow) -> ConsoleFlowRecord:
