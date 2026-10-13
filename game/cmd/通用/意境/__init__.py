@@ -10,6 +10,7 @@ from launch.adapter import MessageContext
 
 from ...command import GameCommand
 from . import reply
+from .site import router
 
 
 @GameCommand.command(
@@ -18,7 +19,7 @@ from . import reply
         "scope": "通用",
         "guard_rule": "已创建",
         "help": {
-            "category": "角色",
+            "category": "战斗",
             "summary": "查看与修习意境（六条路各自记阶、道行共享）",
             "side_effect": (
                 "查看只读；点阶消耗道行，六条路各自受当前境界给的阶上限约束（最高第 9 阶），"
@@ -55,3 +56,6 @@ async def yijing(user_id: str, message: str, message_context: MessageContext, ma
             await manager.send(reply.yijing_view(await feature.inspect(user_id)))
     except YijingError as exc:
         await manager.send(reply.yijing_refused(str(exc)))
+
+
+__all__ = ["router"]

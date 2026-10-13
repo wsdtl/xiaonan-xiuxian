@@ -25,6 +25,26 @@ from .contracts import (
     YijingView,
 )
 
+#: 意境页面要用的文案键：**逐个点名**（页面缺一条就在这儿报错，判据也要求每个键都有消费者）。
+PAGE_KEYS = (
+    "标题",
+    "说明",
+    "挑人",
+    "命令",
+    "没人公开",
+    "道行",
+    "阶上限",
+    "下一阶",
+    "未点",
+    "已满",
+    "到上限",
+    "点这一路",
+    "还差",
+    "退点",
+    "退点命令",
+    "复制退点",
+)
+
 #: 坐忘台的功能名（写死在代码里，多一个少一个声明都在启动期报错）。
 FUNCTION = "坐忘"
 #: 退点的业务类型：收据按它区分「这一笔是坐忘」。
@@ -56,6 +76,7 @@ class YijingFeature:
         self._world = world
         self._database = database
         self._copy: Mapping[str, object] | None = None
+        self._page: Mapping[str, object] | None = None
         self._medicine_id = ""
         self._medicine_name = ""
         self._guard_rule = ""
@@ -75,6 +96,13 @@ class YijingFeature:
         if not isinstance(copy, Mapping):
             raise JsonDataError("坐忘展示缺少文本.json")
         self._copy = copy
+        page = self._data.dataset("意境展示").get("文本")
+        if not isinstance(page, Mapping):
+            raise JsonDataError("意境展示缺少文本.json")
+        section = page.get("页面")
+        if not isinstance(section, Mapping):
+            raise JsonDataError("意境展示缺少页面文案")
+        self._page = section
 
     def copy(self, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
         """展示文案一律走数据（`data/玩法/坐忘/展示/文本.json`），代码里不写死。"""
@@ -86,6 +114,36 @@ class YijingFeature:
         if not isinstance(value, str):
             raise JsonDataError(f"坐忘展示缺少文本：{section}.{key}")
         return value.format_map(values or {})
+
+    async def page(self, user_id: str) -> dict:
+        """**意境页面的数据口**：六路全表＋阶价阶梯＋道行余额＋当前境界的阶上限；文案从展示数据集取。
+
+        六路那一份直接复用意境的视图（单源）——页面与命令看到的永远是同一套数。
+        """
+
+        if self._page is None:
+            raise RuntimeError("意境玩法尚未初始化")
+        view = await self.inspect(user_id)
+        return {
+            "ui": {
+                key: _text(self._page.get(key), f"意境展示.页面.{key}")
+                for key in PAGE_KEYS
+            },
+            "points": view.points,
+            "cap": view.cap,
+            "costs": [self._character.yijing_cost(tier) for tier in range(1, 10)],
+            "routes": [
+                {
+                    "id": route.content_id,
+                    "name": route.name,
+                    "tier": route.tier,
+                    "display": route.display,
+                    "next_cost": route.next_cost,
+                    "missing": route.missing,
+                }
+                for route in view.routes
+            ],
+        }
 
     def _routes(self) -> tuple[tuple[str, str], ...]:
         """六条路：编号与名称，按编号排序（展示顺序稳定）。"""

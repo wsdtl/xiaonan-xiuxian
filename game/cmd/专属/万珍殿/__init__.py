@@ -47,7 +47,7 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
         "scope": "专属",
         "guard_rule": "已创建",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "在本宗洞天分类查看宗门成品",
             "usage": ("万珍殿", "万珍殿 丹药", "万珍殿 阵法 2"),
             "side_effect": "只读查询；成品由宗主统一发放",
@@ -77,7 +77,7 @@ async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "将个人成品存入本宗万珍殿",
             "usage": (
                 "捐入万珍殿 丹药/真意/气机 编号或名称 品级 数量",
@@ -135,7 +135,7 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "由宗主或长老向本宗成员发放万珍殿成品",
             "usage": (
                 "发放万珍殿 云中鹤 小还丹", "发放万珍殿 角色名或编号 珍物名[灵宝名]",

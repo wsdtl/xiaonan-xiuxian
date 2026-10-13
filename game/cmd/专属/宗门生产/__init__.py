@@ -16,7 +16,7 @@ from typing import Any
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "查看或收取本宗灵脉的随机灵石与灵矿",
             "usage": ("灵脉", "灵脉 开启", "灵脉 收取"),
             "side_effect": "查看只读；开启与收取限宗主或长老，收取时按完整生产轮次统一写入本宗灵藏",
@@ -36,7 +36,7 @@ async def lingmai(user_id: str, message: str, message_context: MessageContext, m
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "查看或收取本宗灵田的随机灵植，并可选定一处地形",
             "usage": (
                 "灵田",

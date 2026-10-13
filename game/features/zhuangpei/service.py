@@ -56,7 +56,6 @@ class ZhuangpeiFeature:
             raise ZhuangpeiFeatureError("该清单未公开，请选择全池或其他公开用户")
         limits = self._character.assembly_limits()
         build: Build = {section: () for section in SECTIONS}
-        yijing: dict = {}
         entries: dict[tuple[str, str, str], dict] = {}
         if scope == "all":
             for section in SECTIONS:
@@ -73,7 +72,6 @@ class ZhuangpeiFeature:
             limits = dict(profile.cultivation_slots)
             limits["器律"] = profile.weapon.open_law_slots
             build = self._profile_build(profile)
-            yijing = await self._yijing_table(profile)
             snapshot = await self._asset.snapshot(user_id)
             for entry in snapshot.entries:
                 section = {"道藏": "功法", "器藏": "器律"}.get(entry.category, entry.subcategory)
@@ -94,39 +92,10 @@ class ZhuangpeiFeature:
             "scopes": scopes, "scope": scope, "limits": limits,
             "sections": list(SECTIONS), "entries": list(entries.values()),
             "current": build, "ui": self._copy,
-            # 意境：**六路全表**（含没点过的，阶为 0）＋阶价阶梯＋道行余额＋当前境界的阶上限——
-            # 以后的意境页面直接接这张表；今天的装配台页面也用它显示每一路的现状。
-            "yijing": yijing,
+            # 意境不在这一页：它有独立页面 `/yijing`（数据口在意境特性里），装配台只管构筑。
         }
 
-    async def _yijing_table(self, profile) -> dict:
-        """意境的**页面数据口**：六路各自的阶与下一阶的价、当前境界的阶上限、六路共享的道行。
 
-        价与上限都走人物核心的公开口（取值只有一处真源）；未点过的路也进表，阶记 0。
-        """
-
-        cap = self._character.yijing_cap(profile.realm_id)
-        pointed = {item.content_id: item.tier for item in profile.yijing}
-        limit = min(9, cap)
-        routes = [
-            {
-                "id": content_id,
-                "name": str(entity.get("名称") or ""),
-                "tier": pointed.get(content_id, 0),
-                "next_cost": (
-                    self._character.yijing_cost(pointed.get(content_id, 0) + 1)
-                    if pointed.get(content_id, 0) < limit
-                    else 0
-                ),
-            }
-            for content_id, entity in sorted(self._data.entities("意境").items())
-        ]
-        return {
-            "points": await self._character.yijing_points(profile.user_id),
-            "cap": cap,
-            "costs": [self._character.yijing_cost(tier) for tier in range(1, 10)],
-            "routes": routes,
-        }
 
     def _entry(self, section: str, content_id: str, grade: str) -> dict:
         try:

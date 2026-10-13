@@ -17,7 +17,7 @@ from typing import Any
         "scope": "通用",
         "guard_rule": "已创建",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "召集或加入本宗同行",
             "usage": (
                 "宗门同行",

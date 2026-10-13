@@ -15,7 +15,7 @@ from typing import Any
         'scope': '通用',
         'guard_rule': '自主空闲或休息',
         'help': {
-            'category': '角色',
+            'category': '资源',
             'summary': '用一个兑换码换回数据里写好的发放',
             'usage': ('兑换 XN2026', '兑换 <码>',),
             'side_effect': '每个码每人限次（数据里定）；码是 3–32 位大写字母数字，不区分大小写，允许首尾空白',

@@ -42,7 +42,7 @@ async def _runtime_problems() -> list[str]:
     from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
     from game.features.xinglu.contracts import TravelRequest
     from game.core.asset import InventoryAdjustment
-    from game.core.database import TransactionCommand
+    from game.core.database import StateAddress, StateMutation, TransactionCommand
     from game.cmd.专属.万珍殿.site import _entries
     from launch.adapter.local import dispatch
     from launch.adapter.local.handler import LocalEventHandler
@@ -123,6 +123,36 @@ async def _runtime_problems() -> list[str]:
     plain_text = str(getattr(plain.replies[0].message, 'content', '')) if plain.replies else ''
     if '存入' not in plain_text:
         problems.append('id 写法（只给阵法编号）发不出去')
+    # 意境页面拼出的「意境 点 <路名>」必须真能点：页面只挑不发，命令是它给玩家的唯一入口。
+    table = await services.features.yijing.page(user_id)
+    named = [row for row in table.get('routes') or [] if str(row.get('name') or '')]
+    if len(named) != 6:
+        problems.append('意境页面数据口没给出六路全表（拿到 %d 路）' % len(named))
+    else:
+        snapshot = await services.core.database.get(
+            StateAddress(user_id, 'character', 'main')
+        )
+        character = dict(snapshot.value)
+        character['意境'] = {'道行': 1}   # 道行正常来自突破，判据不重跑突破，直接置备。
+        await services.core.database.commit(
+            TransactionCommand(
+                user_id,
+                '网页判据-道行',
+                '网页判据',
+                (StateMutation(user_id, 'character', 'main', character, snapshot.version),),
+                {},
+            )
+        )
+        command = '意境 点 ' + str(named[0]['name'])
+        point = await dispatch(user_id=user_id, raw_message=command, event_id='网页判据-意境')
+        # 别看文案看状态：照页面拼的命令发出去，那一路必须**真的上了一阶**。
+        view = await services.features.yijing.inspect(user_id)
+        tier = next(
+            (route.tier for route in view.routes if route.content_id == named[0]['id']),
+            0,
+        )
+        if not point.replies or tier != 1:
+            problems.append('照意境页面拼出的命令没有点上一阶（tier=%d）：%s' % (tier, command))
     return problems
 
 

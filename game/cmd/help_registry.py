@@ -8,6 +8,8 @@ from dataclasses import dataclass
 HELP_CATEGORY_ORDER = (
     "角色",
     "道侣",
+    #: 宗门自成一类：山门、洞天设施、灵藏/万珍殿/灵田/灵脉、藏经阁这些都在这里。
+    "宗门",
     "修行",
     "行动",
     "世界",

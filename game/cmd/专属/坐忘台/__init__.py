@@ -18,7 +18,7 @@ from . import reply
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
-            "category": "角色",
+            "category": "战斗",
             "summary": "在坐忘台服下忘境丹，把六条意境抹去、道行退回重排",
             "usage": ("坐忘", "坐忘台坐忘"),
             "side_effect": "消耗一枚忘境丹；六条意境练过的阶全部清零，道行退回到已发总额",

@@ -17,7 +17,7 @@ from typing import Any
         "scope": "专属",
         "guard_rule": "已创建",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "身处本宗洞天时查看本宗成员共享的最高品级功法",
             "usage": ("藏经阁", "藏经阁 2"),
             "side_effect": "只读查询，不转移个人道藏所有权",
@@ -44,7 +44,7 @@ async def show_cangjing(user_id: str, message: str, manager: Any) -> None:
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "身处本宗洞天时把藏经阁功法借入人物指定功法槽",
             "usage": ("借阅功法 五岳镇界镇岳诀 1", "借阅功法 编号或名称 槽位",),
             "side_effect": "替换指定人物功法槽；离开洞天后仍生效，离宗时恢复原功法",

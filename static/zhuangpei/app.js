@@ -147,20 +147,7 @@ async function loadScope(scope = $("scope").value) {
     $("public-help").textContent = data.ui.公开说明;
     $("import-help").textContent = data.ui.导入说明;
     $("cost-help").textContent = data.ui.消耗说明;
-    const yijingInfo = $("yijing-info");
-    const yijingRoutes = (data.yijing && data.yijing.routes) || [];
-    if (yijingRoutes.length) {
-      // 六路全表（含没点过的）：这条口子就是以后意境页面的数据源，页面先按现状并排显示。
-      yijingInfo.textContent = "意境（道行 " + data.yijing.points +
-        "，境界可点到 " + data.yijing.cap + " 阶）：" + yijingRoutes.map((one) =>
-          one.name + (one.tier ? " " + one.tier + " 阶" : " 未点") +
-          (one.next_cost ? "（下一阶 " + one.next_cost + "）" : "（已满）")
-        ).join("；");
-      yijingInfo.hidden = false;
-    } else {
-      yijingInfo.textContent = "";
-      yijingInfo.hidden = true;
-    }
+    // 意境不在这里：它有独立页面 /yijing，装配台只管构筑。
     $("scope-info").textContent = scope === "all" ? "全池：完整构筑目录，用来研究与试配——它不表示你拥有这些真意、气机或器律。想在候选里只看到自己有的，先在聊天里发「网页资源公开」，再回到上面把清单范围选成你自己。" :
       "此人的当前槽位：" + sections.map(s => s + " " + data.limits[s]).join(" / ") + "。切换清单不会覆盖右侧方案。" ;
     offset = 0; renderSlots(); renderCandidates(); status("清单已更新，方案保持不变。");
@@ -168,8 +155,6 @@ async function loadScope(scope = $("scope").value) {
     if (sequence !== scopeRequest) return;
     page = null;
     $("scope-info").textContent = "";
-    $("yijing-info").textContent = "";
-    $("yijing-info").hidden = true;
     $("scope").replaceChildren(option("all", "全池"));
     $("count").textContent = "";
     status(error.message + "；点击刷新清单返回全池。", true);

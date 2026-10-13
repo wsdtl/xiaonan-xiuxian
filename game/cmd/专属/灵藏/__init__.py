@@ -19,7 +19,7 @@ _CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
         "scope": "专属",
         "guard_rule": "已创建",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "在本宗洞天分类查看宗门基础资源",
             "usage": ("灵藏", "灵藏 灵植", "灵藏 灵矿 2"),
             "side_effect": "只读查询；玩家只能捐入，取用发生在宗门生产与宗门设施的自动结算里，成品由万珍殿发放",
@@ -49,7 +49,7 @@ async def show_lingcang(user_id: str, message: str, manager: Any) -> None:
         "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
-            "category": "行动",
+            "category": "宗门",
             "summary": "向本宗灵藏捐献基础材料或灵石",
             "usage": (
                 "捐入灵藏 灵石 100", "捐入灵藏 灵石 数量",

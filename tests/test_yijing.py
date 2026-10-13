@@ -343,3 +343,20 @@ def test_坐忘的成功回执能真的渲染出来(services) -> None:
     content = payload["content"] if isinstance(payload, dict) else str(payload)
     assert "忘境丹" in content, content
     assert "不尽长江意境" in content, content
+
+
+def test_意境页面数据口给出六路全表(services) -> None:
+    """页面数据口：**六路全表**（含没点过的，阶记 0）＋阶价阶梯＋道行余额＋当前境界的阶上限；文案来自展示数据集。"""
+
+    _创建(services, "y-page", "页面修士")
+    _发道行(services, "y-page", 3)
+    _点(services, "y-page", 长江)
+    table = asyncio.run(services.features.yijing.page("y-page"))
+    profile = asyncio.run(services.core.character.profile("y-page"))
+    assert len(table["routes"]) == 6, "页面必须列出全部六路（含没点过的）"
+    assert table["costs"] == [1, 2, 4, 6, 9, 13, 18, 25, 34], table["costs"]
+    assert table["points"] == 2, "3 点道行点掉一阶（价 1）后应剩 2"
+    assert table["cap"] == services.core.character.yijing_cap(profile.realm_id)
+    tiers = {row["id"]: row["tier"] for row in table["routes"]}
+    assert tiers[长江] == 1 and tiers[山尘] == 0, tiers
+    assert table["ui"].get("标题"), "页面文案要从展示数据集来，不许写死在代码里"
