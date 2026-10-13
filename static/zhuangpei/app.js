@@ -150,7 +150,7 @@ async function loadScope(scope = $("scope").value) {
     const yijingInfo = $("yijing-info");
     const yijingRoutes = (data.yijing && data.yijing.routes) || [];
     if (yijingRoutes.length) {
-      // 六路全表（含没点过的）：这条口子就是以后天赋盘的数据源，页面先按现状并排显示。
+      // 六路全表（含没点过的）：这条口子就是以后意境页面的数据源，页面先按现状并排显示。
       yijingInfo.textContent = "意境（道行 " + data.yijing.points +
         "，境界可点到 " + data.yijing.cap + " 阶）：" + yijingRoutes.map((one) =>
           one.name + (one.tier ? " " + one.tier + " 阶" : " 未点") +

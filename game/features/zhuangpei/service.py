@@ -95,12 +95,12 @@ class ZhuangpeiFeature:
             "sections": list(SECTIONS), "entries": list(entries.values()),
             "current": build, "ui": self._copy,
             # 意境：**六路全表**（含没点过的，阶为 0）＋阶价阶梯＋道行余额＋当前境界的阶上限——
-            # 以后的天赋盘直接接这张表；今天的装配台页面也用它显示每一路的现状。
+            # 以后的意境页面直接接这张表；今天的装配台页面也用它显示每一路的现状。
             "yijing": yijing,
         }
 
     async def _yijing_table(self, profile) -> dict:
-        """意境的**天赋盘数据口**：六路各自的阶与下一阶的价、当前境界的阶上限、六路共享的道行。
+        """意境的**页面数据口**：六路各自的阶与下一阶的价、当前境界的阶上限、六路共享的道行。
 
         价与上限都走人物核心的公开口（取值只有一处真源）；未点过的路也进表，阶记 0。
         """
