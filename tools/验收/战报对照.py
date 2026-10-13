@@ -194,8 +194,8 @@ def main() -> int:
     if args.差异名单:
         listing = pathlib.Path(args.差异名单)
         listing.parent.mkdir(parents=True, exist_ok=True)
-        # 键是 `体裁:编号`，顺手把左方卡片去重列出，大批次一眼核「差异 ⊆ 授权集」。
-        cards = sorted({":".join(key.split(":")[:2]) for key in changed if ":" in key})
+        # 键现在就是统一形式的物品指称（没有冒号），直接按整键去重列出。
+        cards = sorted(set(changed))
         listing.write_text(
             json.dumps({"差异": changed, "差异卡": cards, "新增": added, "缺失": removed},
                        ensure_ascii=False, indent=1) + "\n",
