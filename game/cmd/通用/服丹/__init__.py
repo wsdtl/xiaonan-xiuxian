@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
+from game.features.presentation import ItemRefError, parse_item_ref
 from game.features.fudan import (
     AutoMedicineRequest,
     MedicineFeatureConflictError,
@@ -26,6 +27,13 @@ async def _use(
         return
     medicine = parts[0]
     grade = parts[1] if len(parts) == 2 else ""
+    if len(parts) == 1:
+        # 新写法：<品级><丹药>；拆不出品级就按原名交给玩法层（与从前一致）。
+        try:
+            ref = parse_item_ref(medicine)
+            medicine, grade = ref.item, ref.grade
+        except ItemRefError:
+            pass
     try:
         result = await feature.use(
             MedicineUseRequest(
@@ -49,7 +57,7 @@ async def _use(
         "help": {
             "category": "修行",
             "summary": "为人物服用恢复丹或寄存一枚战丹",
-            "usage": ("人物服丹 小还丹", "人物服丹 丹药编号或名称 [品级]",),
+            "usage": ("人物服丹 小还丹", "人物服丹 玄品小还丹",),
             "side_effect": "消耗共享纳戒中的一枚丹药；每人最多寄存 1 枚战丹（已有待战战丹会被拒），恢复丹在资源已满时拒绝服用",
             "order": 80,
         },
@@ -73,7 +81,7 @@ async def use_for_character(user_id: str, message: str, message_context: Message
         "help": {
             "category": "修行",
             "summary": "为当前同行道侣服用恢复丹或寄存一枚战丹",
-            "usage": ("道侣服丹 小还丹", "道侣服丹 丹药编号或名称 [品级]",),
+            "usage": ("道侣服丹 小还丹", "道侣服丹 玄品小还丹",),
             "side_effect": "消耗共享纳戒中的一枚丹药；每人最多寄存 1 枚战丹（已有待战战丹会被拒），恢复丹在资源已满时拒绝服用",
             "order": 90,
         },
