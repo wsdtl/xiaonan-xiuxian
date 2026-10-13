@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
+from game.features.presentation import ItemRefError, parse_item_ref
 from game.features.renwu_peiyang import (
     CharacterBreakthroughRequest,
     CharacterCultivationConflictError,
@@ -48,7 +49,7 @@ async def show_character_cultivation(user_id: str, manager: Any) -> None:
         "help": {
             "category": "修行",
             "summary": "把功法或一份真意、气机装入人物槽位",
-            "usage": ("人物装配 功法 五岳镇界镇岳诀 黄 1", "人物装配 类别 编号或名称 品级 孔位",),
+            "usage": ("人物装配 功法 黄品五岳镇界镇岳诀 1", "人物装配 类别 <品级><物品> 孔位",),
             "side_effect": "功法保留所有权；真意和气机消耗一份。有「保留被替换资粮」的先天灵宝时，被替换的那份回修行资粮；否则原槽内容消失",
             "order": 20,
         },
@@ -57,21 +58,34 @@ async def show_character_cultivation(user_id: str, manager: Any) -> None:
 async def equip_character(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.renwu_peiyang
     parts = message.split()
-    if len(parts) != 4 or not parts[3].isdecimal():
+    # 新写法：<类别> <品级><物品> <孔位>（3 段）；旧写法：<类别> <物品> <品级> <孔位>（4 段）仍受理。
+    if len(parts) not in {3, 4} or not parts[-1].isdecimal():
         # 参数不对时直接把这条子命令的格式印出来，别只让人去翻帮助。
         await manager.send(
             reply.error(feature, feature.copy("错误", "装配写法"), feature.format_actions())
         )
         return
+    category, slot = parts[0], int(parts[-1])
+    if len(parts) == 4:
+        content, grade = parts[1], parts[2]
+    else:
+        try:
+            ref = parse_item_ref(parts[1])
+        except ItemRefError:
+            await manager.send(
+                reply.error(feature, feature.copy("错误", "装配写法"), feature.format_actions())
+            )
+            return
+        content, grade = ref.item, ref.grade
     try:
         result = await feature.equip(
             CharacterEquipRequest(
                 user_id,
                 message_context.request_id,
-                parts[0],
-                parts[1],
-                parts[2],
-                int(parts[3]),
+                category,
+                content,
+                grade,
+                slot,
             )
         )
         await manager.send(reply.equipped(feature, result))
