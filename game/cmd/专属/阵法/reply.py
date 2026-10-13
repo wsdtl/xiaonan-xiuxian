@@ -43,9 +43,9 @@ def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[Forma
             index,
             M.command(
                 M.text(entry.formation.name),
-                f"查看 {entry.formation.formation_id}",
+                f"查看 {entry.formation.name}",
             ),
-        ).small(f"编号：{entry.formation.formation_id} · {entry.formation.core}")
+        ).small(f"{entry.formation.core}")
     # 只有一页就不报页码，免得占一行什么都不说。
     if value.page_count > 1:
         builder.small(
@@ -70,7 +70,6 @@ def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[Formati
         .small(master.speech["审材"].format_map({"主持": master.name}))
         .section(value.formation.name, icon="item")
         .row(
-            (text(copy, "预览", "阵法"), value.formation.formation_id),
             (text(copy, "预览", "品级"), value.grade_name),
         )
         .row(

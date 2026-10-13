@@ -68,11 +68,11 @@ def law_list(copy: ForgingCopy, value: ForgingLawList) -> DocumentMessage:
             index,
             M.command(
                 M.text(entry.law.name),
-                f"查看 {entry.law.law_id}",
+                f"查看 {entry.law.name}",
             ),
             " · ",
             M.status(state, tone="positive" if entry.can_forge else "warning"),
-        ).small(f"编号：{entry.law.law_id} · 铸法：{entry.law.method}")
+        ).small(f"铸法：{entry.law.method}")
     builder.small(text(copy, "列表", "页码", {"当前页": 1, "总页数": 1}))
     return builder.build()
 
@@ -97,7 +97,6 @@ def preview(
         .small(artisan.speech["审材"].format_map({"主持": artisan.name}))
         .section(value.law.name, icon="item")
         .row(
-            (text(copy, "预览", "器律"), value.law.law_id),
             (text(copy, "预览", "器阶"), value.law.stage),
         )
         .field(text(copy, "预览", "铸法"), value.law.method)
