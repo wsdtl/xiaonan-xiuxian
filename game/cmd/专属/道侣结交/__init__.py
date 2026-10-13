@@ -85,9 +85,8 @@ async def converse_companion(user_id: str, message: str, manager: Any) -> None:
             "category": "道侣",
             "summary": "向身边道侣赠送其喜欢的灵植",
             "usage": (
-                "赠予 道侣 灵植",
-                "赠予 道侣 灵植 数量",
-                "赠予 道侣 灵植 品级 数量",
+                "赠予 道侣 黄品云参 3",
+                "赠予 道侣 <品级><灵植> [数量]",
             ),
             "side_effect": "消耗灵植并增加好感，首次圆满时发放一次回礼",
             "order": 30,
