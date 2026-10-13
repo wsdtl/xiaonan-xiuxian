@@ -86,8 +86,11 @@ async def choose_branch(raw_message: str, manager: Any) -> None:
         builder.line(M.status("认不出", tone="warning"), " 分支词必须是已注册的命令。")
         await manager.send(builder.build())
         return
-    for word, command in options:
-        builder.line(M.command(word, command))
+    # 带序号：2~5 条都一眼数得清（与列表卡同款）。
+    for index, (word, command) in enumerate(options, start=1):
+        builder.item(index, M.command(word, command))
+    if len(options) > 2:
+        builder.small(f"共 {len(options)} 条分支 · 点一条执行")
     await manager.send(builder.build())
 
 

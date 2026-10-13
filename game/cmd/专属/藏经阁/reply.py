@@ -28,12 +28,10 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
     for index, entry in enumerate(value.entries, start=1):
         builder.item(
             index,
-            f"{entry.grade_name} · ",
-            # 同一份功法有两条命令（查看 / 借阅功法），参数尾巴一样，合成一个分支控件：
-            # 点一次回选择菜单，够参数的直接发、还差槽位的只填入。
-            M.command(entry.name, f"查看|借阅功法 {entry.content_id}"),
-            " · ",
-            entry.content_id,
+            # 卡面全中文、不印编号；名字只作显示，点它出「查看 | 借阅功法」两条分支。
+            # 分支参数用名字（聊天命令本来就收名字），编号只在 help 里出现、不参与联动。
+            M.command(entry.name, f"查看 {entry.name} | 借阅功法 {entry.name}"),
+            f" · {entry.grade_name}",
         )
     # 只有一页就不报页码——灵藏与万珍殿本来就是这个口径，藏经阁跟上。
     if value.page_count > 1:

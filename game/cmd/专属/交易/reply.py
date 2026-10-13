@@ -45,14 +45,16 @@ def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
         .field("商品", M.text(value.total_products, tone="emphasis"))
     )
     for index, product in enumerate(value.products, start=(value.page - 1) * 50 + 1):
+        # 卡面全中文、不印编号；名字只作显示，点它出「查看 | 购买」两条分支。
+        # 两条分支的参数尾巴不一样（购买还要品级），所以各自写全（branches.py 认可这种写法）。
         builder.item(
             index,
             M.command(
                 M.text(f"{product.grade_name}{product.name}"),
-                f"购买 {product.content_id} {product.grade_id}",
+                f"查看 {product.name} | 购买 {product.name} {product.grade_name}",
                 submit=False,
             ),
-            f" · {product.content_id} · {product.unit_price}灵石",
+            f" · {product.unit_price}灵石",
         )
     actions: list[Action] = []
     if value.page > 1:
