@@ -189,7 +189,7 @@ class GatheringService:
             len({(value.space_type, value.space_id, value.xy) for value in locations})
             != 1
         ):
-            raise GatheringConflictError("同行修士必须位于同一空间和坐标")
+            raise GatheringConflictError("参与修士必须位于同一空间和坐标")
         if locations[0].space_type != "地表":
             raise GatheringConflictError("宗门洞天内不能采集地表资源")
         location = self._world.locate(LocationQuery(xy=locations[0].xy))
@@ -281,7 +281,7 @@ class GatheringService:
             if not guard.allowed:
                 name = draft.public_profiles.get(user_id)
                 raise GatheringConflictError(
-                    f"{name.name if name else '有同行修士'}无法开始{draft.mode.kind}：{guard.reason}"
+                    f"{name.name if name else '有参与修士'}无法开始{draft.mode.kind}：{guard.reason}"
                 )
             draft.transitions.append(
                 await self._player_state.plan_transition(
@@ -594,17 +594,21 @@ class GatheringService:
         if session is None or session.value.get("开始请求") != request_id:
             return None
         raw = session.value
+        participants = _texts(raw.get("参与用户"), "采集.参与用户")
+        units = _positive_int(raw.get("采集单位"), "采集.采集单位")
         return GatheringStarted(
             mode.kind,
             session_id,
             _text(raw.get("地点"), "采集.地点"),
             _text(raw.get("地形"), "采集.地形"),
-            len(_texts(raw.get("参与用户"), "采集.参与用户")),
-            _positive_int(raw.get("采集单位"), "采集.采集单位"),
+            len(participants),
+            units,
             mode.maximum_rounds,
             _parse_time(raw.get("开始时间"), "采集.开始时间"),
             _parse_time(raw.get("最晚结束时间"), "采集.最晚结束时间"),
             True,
+            # 重放也要带上道侣数：会话里存的是采集单位数，减参与人数就是道侣数。
+            companion_count=units - len(participants),
         )
 
     async def _session_for(

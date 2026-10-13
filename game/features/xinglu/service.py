@@ -82,7 +82,7 @@ class TravelFeature:
             if not guard.allowed:
                 profile = participant_profiles.get(user_id)
                 raise TravelQueryError(
-                    f"{profile.name if profile else '有同行修士'}当前不能行路：{guard.reason}"
+                    f"{profile.name if profile else '有参与修士'}当前不能行路：{guard.reason}"
                 )
         current = await self._location.current(request.user_id)
         if current.space_type != "地表":

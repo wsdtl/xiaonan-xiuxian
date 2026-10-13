@@ -240,7 +240,7 @@ class LocationService:
             or current.space_id != currents[0].space_id
             for current in currents
         ):
-            raise LocationConflictError("同行修士不在同一空间")
+            raise LocationConflictError("参与修士不在同一空间")
         try:
             receipt = await self._database.commit(
                 TransactionCommand(
@@ -341,7 +341,7 @@ class LocationService:
         if any(current.space_type != "地表" for current in currents):
             raise LocationConflictError("非地表空间不能执行世界行路")
         if any(current.xy != expected for current in currents):
-            raise LocationConflictError("同行修士已经不在同一出发位置")
+            raise LocationConflictError("参与修士已经不在同一出发位置")
         if expected == destination:
             return GroupLocationMoveResult(
                 owner, participants, expected, destination, False, False

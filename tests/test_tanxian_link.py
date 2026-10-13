@@ -207,9 +207,17 @@ def test_活动卡片把人物与道侣分开数(services) -> None:
     assert (v.participant_count, v.formal_unit_count, v.companion_count) == (1, 2, 1)
     assert v.formal_unit_count - v.companion_count == 1, '人物数不能被道侣顶高'
 
+    # 重放（同一条开始命令再发一次）也必须带上道侣数——这里真出过缺口：
+    # 重放走的是另一条构造路径，没带新字段时卡片会少印「同行道侣」。
+    重放 = asyncio.run(services.features.tanxian.start(侣, '探:侣'))
+    assert 重放.replayed is True
+    assert 重放.companion_count == 1, '重放丢了道侣数'
+
     拽子 = 造('闭关带侣', True, '玉泉涧')
     v = asyncio.run(services.features.biguan.start(拽子, '闭:侣'))
     assert v.companion_count == 1 and v.formal_character_count == 2
+    重放闭 = asyncio.run(services.features.biguan.start(拽子, '闭:侣'))
+    assert 重放闭.companion_count == 1, '重放丢了道侣数'
 
     采侣 = 造('采药带侣', True, '')
     v = asyncio.run(services.features.caiyao.start(采侣, '药:侣'))

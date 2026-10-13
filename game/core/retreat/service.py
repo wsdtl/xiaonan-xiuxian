@@ -247,7 +247,7 @@ class RetreatService:
             len({(value.space_type, value.space_id, value.xy) for value in locations})
             != 1
         ):
-            raise RetreatConflictError("同行修士必须位于同一空间和坐标")
+            raise RetreatConflictError("参与修士必须位于同一空间和坐标")
         if locations[0].space_type != "地表":
             raise RetreatConflictError("宗门洞天内不能进行闭关")
         location = self._world.locate(LocationQuery(xy=locations[0].xy))
@@ -710,15 +710,19 @@ class RetreatService:
         if session is None or session.value.get("开始请求") != request_id:
             return None
         raw = session.value
+        participants = _texts(raw.get("参与用户"), "闭关.参与用户")
+        roles = _positive_int(raw.get("正式角色数"), "闭关.正式角色数")
         return RetreatStarted(
             session_id,
             _text(raw.get("地点"), "闭关.地点"),
-            len(_texts(raw.get("参与用户"), "闭关.参与用户")),
-            _positive_int(raw.get("正式角色数"), "闭关.正式角色数"),
+            len(participants),
+            roles,
             _positive_int(raw.get("最多轮数"), "闭关.最多轮数"),
             _parse_time(raw.get("开始时间"), "闭关.开始时间"),
             _parse_time(raw.get("最晚出关时间"), "闭关.最晚出关时间"),
             True,
+            # 重放也要带上道侣数：会话里存的是正式角色数，减参与人数就是道侣数。
+            companion_count=roles - len(participants),
         )
 
     async def _session_for(self, user_id: str) -> tuple[str, str, Mapping[str, object]]:

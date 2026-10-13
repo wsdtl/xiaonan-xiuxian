@@ -226,7 +226,7 @@ class RaidService:
             return _started(replay.value, replayed=True)
         locations = await self._location.current_many(participants)
         if len({(item.space_type, item.space_id, item.xy) for item in locations}) != 1:
-            raise RaidError("同行修士必须处于同一位置")
+            raise RaidError("参与修士必须处于同一位置")
         current = locations[0]
         if current.space_type != "地表":
             raise RaidError("洞天内不能进行讨伐")
@@ -256,13 +256,12 @@ class RaidService:
             if not guard.allowed:
                 name = public_profiles.get(user_id)
                 raise RaidError(
-                    f"{name.name if name else '有同行修士'}无法参加讨伐：{guard.reason}"
+                    f"{name.name if name else '有参与修士'}无法参加讨伐：{guard.reason}"
                 )
         state_snapshots = {
             value.user_id: value
             for value in await self._player_state.current_many(participants)
         }
-        companion_count = 0
         for user_id in participants:
             transition_operations.append(
                 (await self._player_state.plan_transition(StateTransitionCommand(
@@ -281,7 +280,6 @@ class RaidService:
                 companion = replace(companion, group_id=f"玩家编组:{user_id}")
                 allies.append(companion)
                 members.append(companion.id)
-                companion_count += 1
             user_character_ids[user_id] = members
             ally_groups.append(CombatGroupSpec(f"玩家编组:{user_id}", tuple(members), tuple(members)))
         groups = self.generate(
@@ -331,7 +329,6 @@ class RaidService:
             "结束时间": (started_at + timedelta(seconds=_positive_int(self._rules.get("持续秒数", 120), "讨伐.持续秒数"))).isoformat(),
             "用户角色": user_character_ids,
             "编组数量": len(groups.groups),
-            "同行道侣": companion_count,
             "战果": {item.id: {"用户编号": item.owner_id, "道侣": item.id.startswith("companion:"), "血气": item.health, "精神": item.spirit, "武器经验": weapon_experience} for item in result.left_results},
             "奖励": rewards,
             "战败敌人": len(defeated),
@@ -596,6 +593,22 @@ def _positive_int(value: object, label: str) -> int:
     return positive_int(value, label, error=RaidError)
 
 
+def _companion_count(value: Mapping[str, object]) -> int:
+    """同行道侣数：会话的「用户角色」里记着每人参战者，`companion:` 开头的是道侣。
+
+    从会话**现数**、不另存字段——重放与老会话都能算对。
+    """
+
+    rows = value.get("用户角色")
+    if not isinstance(rows, Mapping):
+        return 0
+    total = 0
+    for ids in rows.values():
+        if isinstance(ids, (list, tuple)):
+            total += sum(1 for one in ids if str(one).startswith("companion:"))
+    return total
+
+
 def _started(value: Mapping[str, object], *, replayed: bool) -> RaidStarted:
     return RaidStarted(
         str(value.get("讨伐会话编号") or value.get("讨伐编号") or ""),
@@ -605,7 +618,7 @@ def _started(value: Mapping[str, object], *, replayed: bool) -> RaidStarted:
         _time(value.get("开始时间")),
         _time(value.get("结束时间")),
         replayed,
-        companion_count=int(value.get("同行道侣", 0) or 0),
+        companion_count=_companion_count(value),
     )
 
 

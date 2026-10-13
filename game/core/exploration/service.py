@@ -198,7 +198,7 @@ class ExplorationService:
             len({(value.space_type, value.space_id, value.xy) for value in locations})
             != 1
         ):
-            raise ExplorationConflictError("同行修士必须位于同一空间和坐标")
+            raise ExplorationConflictError("参与修士必须位于同一空间和坐标")
         if locations[0].space_type != "地表":
             raise ExplorationConflictError("宗门洞天内不能进行普通探险")
         location = self._world.locate(LocationQuery(xy=locations[0].xy))
@@ -243,7 +243,7 @@ class ExplorationService:
             if not guard.allowed:
                 name = public_profiles.get(user_id)
                 raise ExplorationConflictError(
-                    f"{name.name if name else '有同行修士'}无法开始探险：{guard.reason}"
+                    f"{name.name if name else '有参与修士'}无法开始探险：{guard.reason}"
                 )
             transition_plans.append(
                 await self._player_state.plan_transition(
@@ -1097,15 +1097,19 @@ class ExplorationService:
         if session is None or session.value.get("开始请求") != request_id:
             return None
         raw = session.value
+        participants = _texts(raw.get("参与用户"), "探险.参与用户")
+        units = _positive_int(raw.get("初始正式单位数"), "初始正式单位数")
         return ExplorationStarted(
             session_id,
             _text(raw.get("地点"), "探险.地点"),
-            len(_texts(raw.get("参与用户"), "探险.参与用户")),
-            _positive_int(raw.get("初始正式单位数"), "初始正式单位数"),
+            len(participants),
+            units,
             _nonnegative_int(raw.get("场数"), "探险.场数"),
             _parse_time(raw.get("开始时间"), "探险.开始时间"),
             _parse_time(raw.get("结束时间"), "探险.结束时间"),
             True,
+            # 重放也要带上道侣数：会话里存的是单位数，减参与人数就是道侣数。
+            companion_count=units - len(participants),
         )
 
     async def _session_for(self, user_id: str) -> tuple[str, str, Mapping[str, object]]:

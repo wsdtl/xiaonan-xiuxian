@@ -234,7 +234,7 @@ class DuelService:
             if not guard.allowed:
                 profile = profiles.get(user_id)
                 raise DuelError(
-                    f"{profile.name if profile else '有同行修士'}当前不能切磋：{guard.reason}"
+                    f"{profile.name if profile else '有参与修士'}当前不能切磋：{guard.reason}"
                 )
 
     async def _combat_side(self, users: tuple[str, ...], challenge_id: str, side: str) -> tuple[tuple[CombatantSpec, ...], tuple[CombatGroupSpec, ...]]:
