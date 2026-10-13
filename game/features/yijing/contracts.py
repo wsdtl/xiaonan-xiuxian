@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 class YijingError(ValueError):
-    """意境请求不符合当前人物状态（没选路、境界不够、道行不足、已满九阶）。"""
+    """意境请求不符合当前人物状态（境界不够、道行不足、已满九阶）。"""
 
 
 class YijingConflictError(RuntimeError):
@@ -14,18 +14,25 @@ class YijingConflictError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class YijingView:
-    """命令层渲染用的一份视图：路、阶、道行与下一阶还差多少。"""
+class YijingRoute:
+    """六条路里的一条在面板上的现状：未点过的一行阶为 0、展示串为空。"""
 
     content_id: str
     name: str
-    display: str
     tier: int
-    points: int
-    cap: int
+    display: str
+    #: 点下一阶要多少道行、还差多少（已满或到境界上限时为 0）。
     next_cost: int
     missing: int
-    routes: tuple[tuple[str, str], ...]
 
 
-__all__ = ["YijingConflictError", "YijingError", "YijingView"]
+@dataclass(frozen=True)
+class YijingView:
+    """命令层渲染用的一份视图：**六条路各自的阶** ＋ 六路共享的道行 ＋ 当前境界给的阶上限。"""
+
+    points: int
+    cap: int
+    routes: tuple[YijingRoute, ...]
+
+
+__all__ = ["YijingConflictError", "YijingError", "YijingRoute", "YijingView"]

@@ -130,9 +130,9 @@ class YijingProfile:
 
 @dataclass(frozen=True)
 class CharacterYijingPlan:
-    """一次意境动作（选路或升阶）的结果。
+    """一次意境动作（给某一条路点一阶）的结果。
 
-    状态里只写「编号 / 阶 / 道行」三个键；名称按编号现取，所以这里带编号不带名字。
+    状态里写「路」（编号 → 阶）与共享的「道行」；名称按编号现取，所以这里带编号不带名字。
     """
 
     content_id: str
@@ -173,8 +173,9 @@ class CharacterProfile:
     age: int = 0
     #: 一生修行累计是否已把寿元上限用满（展示用）：换种族/换境界会改上限，这个标志跟着重算。
     lifespan_full: bool = False
-    #: 意境（战斗内的自身强化层）：未开启时为空，人物面板与装配台整段不显示。
-    yijing: YijingProfile | None = None
+    #: 意境（战斗内的自身强化层）：**每条点过的路一条**，按编号排序；一条都没点过就是空元组，
+    #: 人物面板与装配台整段不显示。六路共享同一份道行（见 YijingProfile.daoxing）。
+    yijing: tuple[YijingProfile, ...] = ()
 
 
 @dataclass(frozen=True)

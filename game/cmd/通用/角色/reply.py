@@ -149,12 +149,16 @@ def overview(
     )
     if shield := resources.get("护盾", 0):
         builder.field("护盾", _display_number(shield))
-    # 意境：只存编号与阶，名称按编号现取；未开启就整段不显示（不许出现空栏目）。
-    if character.yijing is not None:
+    # 意境：六条路各自记阶、道行共享；一条都没点过就整段不显示（不许出现空栏目）。
+    if character.yijing:
         builder.section("意境", icon="status")
-        builder.row(("意境", character.yijing.display), ("道行", character.yijing.daoxing))
-        if character.yijing.missing:
-            builder.line(f"距{character.yijing.tier + 1}阶还差 {character.yijing.missing} 道行。")
+        builder.row(("意境", "、".join(item.display for item in character.yijing)))
+        builder.row(("道行", character.yijing[0].daoxing))
+        behind = [item for item in character.yijing if item.missing]
+        if behind:
+            builder.line(
+                "道行不足：" + "、".join(f"{item.display} 还差 {item.missing}" for item in behind)
+            )
     primary_names = (
         "攻击",
         "防御",

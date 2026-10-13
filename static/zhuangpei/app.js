@@ -148,9 +148,11 @@ async function loadScope(scope = $("scope").value) {
     $("import-help").textContent = data.ui.导入说明;
     $("cost-help").textContent = data.ui.消耗说明;
     const yijingInfo = $("yijing-info");
-    if (data.yijing) {
-      yijingInfo.textContent = "意境：" + data.yijing.display + "，道行 " + data.yijing.points +
-        (data.yijing.missing ? "，距下一阶还差 " + data.yijing.missing : "");
+    const yijingPaths = data.yijing || [];
+    if (yijingPaths.length) {
+      yijingInfo.textContent = "意境：" + yijingPaths.map((one) =>
+        one.display + "（道行 " + one.points + (one.missing ? "，距下一阶还差 " + one.missing : "") + "）"
+      ).join("；");
       yijingInfo.hidden = false;
     } else {
       yijingInfo.textContent = "";

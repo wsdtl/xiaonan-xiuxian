@@ -447,7 +447,7 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
-            yijing=_yijing_profile(
+            yijing=_yijing_profiles(
                 self._data, character.get("意境"), character.get("境界")
             ),
             age=age,
@@ -517,86 +517,88 @@ class CharacterService:
     ) -> tuple[float, tuple[CombatStatusSpec, ...]]:
         """把人物身上的意境落进战斗快照。
 
-        基础数值并进属性（开局上限与初始值只认属性，状态修正改不了它们），
-        本路增幅写进状态修正（战斗中读数生效）。没升过阶就是没激活，两样都不加。
-        质变与戒律等激活方案定了再往这条路上接。
+        **每条点过的路各落一个状态**：基础数值并进属性（开局上限与初始值只认属性，
+        状态修正改不了它们），本路增幅写进状态修正（战斗中读数生效）。
+        各路的动态档用**数据里各自的计量名**——战斗核心的计量键是（参战者、构筑实例、计量名），
+        所以六路同时开着也各有各的档、互不串。
         """
 
-        yijing = profile.yijing
-        if yijing is None:
-            return weapon_attack, ()
-        row = self._data.entity("意境", yijing.content_id)
-        carrier = _mapping(row.get("载体"), "意境.载体")
-        basics = _mapping(_mapping(carrier.get("基础数值"), "意境.基础数值").get("每阶"), "意境.基础数值.每阶")
-        absolute = {str(name) for name in (_mapping(carrier.get("基础数值"), "意境.基础数值").get("绝对值") or ())}
-        for name, step in basics.items():
-            key = str(name)
-            if key in absolute:
-                if key == "器的量":
-                    weapon_attack += float(step) * yijing.tier
-                else:
-                    base = _number(attributes.get(key, 0), f"意境.{key}")
-                    attributes[key] = base + float(step) * yijing.tier
-                continue
-            base = _number(attributes.get(key, 0), f"意境.{key}")
-            attributes[key] = base + base * float(step) * yijing.tier / 100.0
-        amp = _mapping(carrier.get("增幅"), "意境.载体.增幅")
-        per_tier = _mapping(amp.get("每阶"), "意境.增幅.每阶")
-        baseline = _mapping(amp.get("基准"), "意境.增幅.基准")
-        modifiers = tuple(
-            (str(name), float(baseline.get(name, 0)) + float(step) * yijing.tier)
-            for name, step in per_tier.items()
-        )
-        raw_listeners = row.get("质变监听") or {}
-        picked = (
-            [value for key, value in raw_listeners.items() if key.isdigit() and int(key) <= yijing.tier]
-            if isinstance(raw_listeners, Mapping)
-            else []
-        )
-        listeners = [dict(value) for value in picked if isinstance(value, Mapping)]
-        counter = _mapping(row.get("战斗档"), "意境.战斗档")
-        counter_name = _state_text(counter.get("计量"), "意境.战斗档.计量")
-        if listeners:
-            # 动态档的计量由核心开：数据不知道玩家买到几阶，上限只能在这儿给。
-            listeners.append(
-                {
-                    "能力": "监听事件",
-                    "事件": "行动开始",
-                    "观察角色": "行动者",
-                    "阵营关系": "自身",
-                    "效果": [
-                        {
-                            "能力": "修改构筑计量",
-                            "计量": counter_name,
-                            "方式": "增加",
-                            "数值": 0,
-                            "初始值": 0,
-                            "最低值": 0,
-                            "最高值": yijing.tier,
-                            "目标": {"能力": "选择目标", "范围": "自身"},
-                        }
-                    ],
-                    "每次行动最多触发": 1,
-                }
+        statuses: list[CombatStatusSpec] = []
+        for yijing in profile.yijing:
+            row = self._data.entity("意境", yijing.content_id)
+            carrier = _mapping(row.get("载体"), "意境.载体")
+            basics = _mapping(_mapping(carrier.get("基础数值"), "意境.基础数值").get("每阶"), "意境.基础数值.每阶")
+            absolute = {str(name) for name in (_mapping(carrier.get("基础数值"), "意境.基础数值").get("绝对值") or ())}
+            for name, step in basics.items():
+                key = str(name)
+                if key in absolute:
+                    if key == "器的量":
+                        weapon_attack += float(step) * yijing.tier
+                    else:
+                        base = _number(attributes.get(key, 0), f"意境.{key}")
+                        attributes[key] = base + float(step) * yijing.tier
+                    continue
+                base = _number(attributes.get(key, 0), f"意境.{key}")
+                attributes[key] = base + base * float(step) * yijing.tier / 100.0
+            amp = _mapping(carrier.get("增幅"), "意境.载体.增幅")
+            per_tier = _mapping(amp.get("每阶"), "意境.增幅.每阶")
+            baseline = _mapping(amp.get("基准"), "意境.增幅.基准")
+            modifiers = tuple(
+                (str(name), float(baseline.get(name, 0)) + float(step) * yijing.tier)
+                for name, step in per_tier.items()
             )
-        listeners = tuple(listeners)
-        limits: tuple[str, ...] = ()
-        rule = row.get("戒律")
-        if isinstance(rule, Mapping) and int(rule.get("阶") or 0) <= yijing.tier:
-            limits = tuple(str(value) for value in (rule.get("行动限制") or ()))
-        status = CombatStatusSpec(
-            name=f"意境·{yijing.name}·{yijing.tier}阶",
-            category="增益",
-            remaining_actions=999,
-            duration_unit="状态承受者行动",
-            modifiers=modifiers,
-            tags=("意境",),
-            listeners=listeners,
-            action_limits=limits,
-            source=yijing.content_id,
-            source_name=yijing.name,
-        )
-        return weapon_attack, (status,)
+            raw_listeners = row.get("质变监听") or {}
+            picked = (
+                [value for key, value in raw_listeners.items() if key.isdigit() and int(key) <= yijing.tier]
+                if isinstance(raw_listeners, Mapping)
+                else []
+            )
+            listeners = [dict(value) for value in picked if isinstance(value, Mapping)]
+            counter = _mapping(row.get("战斗档"), "意境.战斗档")
+            counter_name = _state_text(counter.get("计量"), "意境.战斗档.计量")
+            if listeners:
+                # 动态档的计量由核心开：数据不知道玩家买到几阶，上限只能在这儿给。
+                listeners.append(
+                    {
+                        "能力": "监听事件",
+                        "事件": "行动开始",
+                        "观察角色": "行动者",
+                        "阵营关系": "自身",
+                        "效果": [
+                            {
+                                "能力": "修改构筑计量",
+                                "计量": counter_name,
+                                "方式": "增加",
+                                "数值": 0,
+                                "初始值": 0,
+                                "最低值": 0,
+                                "最高值": yijing.tier,
+                                "目标": {"能力": "选择目标", "范围": "自身"},
+                            }
+                        ],
+                        "每次行动最多触发": 1,
+                    }
+                )
+            listeners = tuple(listeners)
+            limits: tuple[str, ...] = ()
+            rule = row.get("戒律")
+            if isinstance(rule, Mapping) and int(rule.get("阶") or 0) <= yijing.tier:
+                limits = tuple(str(value) for value in (rule.get("行动限制") or ()))
+            statuses.append(
+                CombatStatusSpec(
+                    name=f"意境·{yijing.name}·{yijing.tier}阶",
+                    category="增益",
+                    remaining_actions=999,
+                    duration_unit="状态承受者行动",
+                    modifiers=modifiers,
+                    tags=("意境",),
+                    listeners=listeners,
+                    action_limits=limits,
+                    source=yijing.content_id,
+                    source_name=yijing.name,
+                )
+            )
+        return weapon_attack, tuple(statuses)
 
     async def combatant(
         self, user_id: str, *, profile: CharacterProfile | None = None
@@ -891,56 +893,46 @@ class CharacterService:
         return _yijing_tier_cap(_realm_order(realm.get("等级下限")))
 
     async def yijing_points(self, user_id: str) -> int:
-        """已经攒下的道行——**没选路时也能读**（点是玩家的，不挂在路上）。
+        """已经攒下的道行——**一条路都没点时也能读**（点是玩家共有的，不挂在某条路上）。
 
         状态格的解释权在本核心：玩法层要读道行就调这里，
         不要自己去读 `character/main` 的「意境」一格。
         """
 
         _, _, character = await self._medicine_state(user_id)
-        parsed = _state_yijing(character.get("意境"))
-        return int(parsed[2]) if parsed else 0
+        paths, points = _state_yijing(character.get("意境")) or ({}, 0)
+        return int(points)
 
-    async def plan_yijing_choose(
+    async def plan_yijing_point(
         self, user_id: str, *, content_id: str
     ) -> CharacterYijingPlan:
-        """选定一条意境的路。编号必须在册；改路会把已练的阶清零（锁认路）。"""
+        """给**某一条路**点一阶（没点过的从 0 升到 1＝激活）。
+
+        六条路各自记阶、**道行共享那一份**；每条路各自受境界给的阶上限约束。
+        投进去的道行不退（洗点是忘境丹那条线，见台账施工单）。
+        """
 
         user, snapshot, character = await self._medicine_state(user_id)
-        self._data.entity("意境", str(content_id))
+        content_id = str(content_id)
+        self._data.entity("意境", content_id)
         cell = dict(character.get("意境") or {})
-        before = int(cell.get("阶") or 0)
-        cell["编号"] = str(content_id)
-        cell["阶"] = 0
-        cell["道行"] = int(cell.get("道行") or 0)
-        character["意境"] = cell
-        return CharacterYijingPlan(
-            str(content_id), before, 0, 0, cell["道行"],
-            StateMutation(user, "character", "main", character, snapshot.version),
-        )
-
-    async def plan_yijing_upgrade(self, user_id: str) -> CharacterYijingPlan:
-        """用道行把意境的阶升一级，升到一阶就是激活。受境界给的阶上限约束。"""
-
-        user, snapshot, character = await self._medicine_state(user_id)
-        cell = dict(character.get("意境") or {})
-        content_id = str(cell.get("编号") or "")
-        if not content_id:
-            raise CharacterCultivationError("还没有选定意境，先挑一条路")
-        tier = int(cell.get("阶") or 0)
-        points = int(cell.get("道行") or 0)
+        paths, points = _state_yijing(cell) or ({}, 0)
+        tier = int(paths.get(content_id, 0))
         realm_id = _state_text(character.get("境界"), "人物.境界")
         cap = _yijing_tier_cap(
             _realm_order(self._data.entity("境界", realm_id).get("等级下限"))
         )
         if tier >= 9:
-            raise CharacterCultivationError("意境已满九阶")
+            raise CharacterCultivationError("这条意境已满九阶")
         if tier >= cap:
             raise CharacterCultivationError(f"当前境界只撑得到{cap}阶意境")
         cost = _yijing_tier_cost(tier + 1)
         if points < cost:
             raise CharacterCultivationError(f"道行还差{cost - points}点")
-        cell["阶"] = tier + 1
+        paths[content_id] = tier + 1
+        cell.pop("编号", None)
+        cell.pop("阶", None)
+        cell["路"] = {key: paths[key] for key in sorted(paths)}
         cell["道行"] = points - cost
         character["意境"] = cell
         return CharacterYijingPlan(
@@ -2174,57 +2166,87 @@ def _state_redeemed(value: object) -> tuple[str, ...]:
     return items
 
 
-def _state_yijing(value: object) -> tuple[str, int, int] | None:
-    """意境：只在状态里存编号与阶，名称按编号现取（编号不可改、名称可改）。"""
+def _check_yijing_id(content_id: str) -> None:
+    """意境编号：六位数字，与其它编号实体同一形状。"""
+
+    if len(content_id) != 6 or not content_id.isdigit():
+        raise CharacterStateError("人物.意境.编号必须是六位数字")
+
+
+def _state_yijing(value: object) -> tuple[dict[str, int], int] | None:
+    """意境：状态里存「路」（编号 → 阶）与**六路共享**的道行；名称按编号现取。
+
+    旧形状（只有一个「编号」「阶」）按**迁移读**：那一路记着原来的阶，其余按 0 算——
+    存档里已经练过的人不丢进度。写回一律新形状，见 plan_yijing_point。
+    """
 
     if value is None:
         return None
     row = _state_mapping(value, "人物.意境")
-    if set(row) - {"编号", "阶", "道行"}:
-        raise CharacterStateError("人物.意境只认「编号」「阶」「道行」三个键")
-    content_id = str(row.get("编号") or "")
-    tier = int(row.get("阶") or 0)
-    if not content_id:
-        # 还没选路：允许只攒道行（面板不显示，点不会丢）。
-        if tier:
-            raise CharacterStateError("人物.意境.没有编号时阶必须是0")
+    if set(row) - {"路", "道行", "编号", "阶"}:
+        raise CharacterStateError("人物.意境只认「路」「道行」（迁移读时容得下旧的「编号」「阶」）")
+    paths: dict[str, int] = {}
+    raw_paths = row.get("路")
+    if raw_paths is None:
+        content_id = str(row.get("编号") or "")
+        tier = int(row.get("阶") or 0)
+        if not content_id:
+            # 没点过任何路：允许只攒道行（面板不显示，点不会丢）。
+            if tier:
+                raise CharacterStateError("人物.意境.没有编号时阶必须是0")
+        else:
+            _check_yijing_id(content_id)
+            if tier < 0 or tier > 9:
+                raise CharacterStateError("人物.意境.阶必须在0到9之间")
+            # 阶 0 ＝ 旧形状里「选了路但还没激活」：新模型没有认路这回事，直接不记。
+            if tier:
+                paths[content_id] = tier
     else:
-        if len(content_id) != 6 or not content_id.isdigit():
-            raise CharacterStateError("人物.意境.编号必须是六位数字")
-        # 阶 0 是合法状态：选了路但还没花道行激活（选路把已练的阶清零，见 plan_yijing_choose）。
-        # 早先这里是 1..9，于是选路会当场写出一个自己校验不过的状态，下一次读人物就抛错——
-        # 这条线一个测试都没有，所以谁也没发现。
-        if tier < 0 or tier > 9:
-            raise CharacterStateError("人物.意境.阶必须在0到9之间")
+        mapping = _state_mapping(raw_paths, "人物.意境.路")
+        for key, raw_tier in mapping.items():
+            content_id = str(key)
+            _check_yijing_id(content_id)
+            if isinstance(raw_tier, bool) or not isinstance(raw_tier, int) or not 1 <= raw_tier <= 9:
+                raise CharacterStateError("人物.意境.路.阶必须是1到9的整数（点过的路才有键）")
+            paths[content_id] = raw_tier
     points = row.get("道行", 0)
     if isinstance(points, bool) or not isinstance(points, int) or points < 0:
         raise CharacterStateError("人物.意境.道行必须是不小于0的整数")
-    return content_id, tier, points
+    return paths, points
 
 
-def _yijing_profile(
+def _yijing_profiles(
     data: object, value: object, realm_id: object = None
-) -> YijingProfile | None:
-    """把状态里的（编号、阶）补成带名称的意境档案；没有这一格就是未开启。"""
+) -> tuple[YijingProfile, ...]:
+    """把状态里的（路 → 阶）补成带名称的意境档案；**同一份道行给每条路**。
+
+    一条都没点过就是空元组（人物面板与装配台整段不显示）。按编号排序，展示顺序稳定。
+    """
 
     state = _state_yijing(value)
     if state is None:
-        return None
-    content_id, tier, points = state
-    if not content_id:
-        return None
-    row = data.entity("意境", content_id)
-    name = _state_text(row.get("名称"), "意境.名称")
+        return ()
+    paths, points = state
+    if not paths:
+        return ()
     cap = yijing_tier_cap_for(data, realm_id)
-    cost = _yijing_tier_cost(tier + 1) if tier < min(9, cap) else 0
-    return YijingProfile(
-        content_id=content_id,
-        name=name,
-        tier=tier,
-        daoxing=points,
-        next_cost=cost,
-        missing=max(0, cost - points) if cost else 0,
-    )
+    profiles: list[YijingProfile] = []
+    for content_id in sorted(paths):
+        tier = paths[content_id]
+        row = data.entity("意境", content_id)
+        name = _state_text(row.get("名称"), "意境.名称")
+        cost = _yijing_tier_cost(tier + 1) if tier < min(9, cap) else 0
+        profiles.append(
+            YijingProfile(
+                content_id=content_id,
+                name=name,
+                tier=tier,
+                daoxing=points,
+                next_cost=cost,
+                missing=max(0, cost - points) if cost else 0,
+            )
+        )
+    return tuple(profiles)
 
 
 def yijing_tier_cap_for(data: object, realm_id: object) -> int:

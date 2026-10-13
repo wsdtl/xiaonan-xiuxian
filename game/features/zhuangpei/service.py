@@ -56,7 +56,7 @@ class ZhuangpeiFeature:
             raise ZhuangpeiFeatureError("该清单未公开，请选择全池或其他公开用户")
         limits = self._character.assembly_limits()
         build: Build = {section: () for section in SECTIONS}
-        yijing = None
+        yijing: tuple = ()
         entries: dict[tuple[str, str, str], dict] = {}
         if scope == "all":
             for section in SECTIONS:
@@ -94,11 +94,14 @@ class ZhuangpeiFeature:
             "scopes": scopes, "scope": scope, "limits": limits,
             "sections": list(SECTIONS), "entries": list(entries.values()),
             "current": build, "ui": self._copy,
-            # 意境：有值才给，前端据此决定整块显不显示（未开启不出空块）。
-            "yijing": None if yijing is None else {
-                "id": yijing.content_id, "tier": yijing.tier, "display": yijing.display,
-                "points": yijing.daoxing, "next_cost": yijing.next_cost, "missing": yijing.missing,
-            },
+            # 意境：每条点过的路一项；一条都没点过就是空表，前端据此不显示整块（不出空块）。
+            "yijing": [
+                {
+                    "id": item.content_id, "tier": item.tier, "display": item.display,
+                    "points": item.daoxing, "next_cost": item.next_cost, "missing": item.missing,
+                }
+                for item in yijing
+            ],
         }
 
     def _entry(self, section: str, content_id: str, grade: str) -> dict:
