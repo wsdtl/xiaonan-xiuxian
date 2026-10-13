@@ -77,6 +77,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
         builder.field(
             feature.text("查看", "战报"), M.link("打开战报", public_url("battle", value.report_id))
         )
+    builder.line(M.command(M.text(feature.text("查看", "最近战报")), "宗门战报"))
     return builder.actions(message_actions(feature.actions(value.status))).build()
 
 
