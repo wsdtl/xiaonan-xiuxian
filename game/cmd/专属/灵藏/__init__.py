@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
+from game.features.presentation import ItemRefError, parse_item_ref
 from game.features.zongmen_lingcang import LingcangFeatureError
 
 from ...command import GameCommand
@@ -39,7 +40,7 @@ async def show_lingcang(user_id: str, message: str, manager: Any) -> None:
         await manager.send(
             reply.page(feature.copy(), value, feature.page_actions(value))
         )
-    except LingcangFeatureError as exc:
+    except (LingcangFeatureError, ItemRefError) as exc:
         await manager.send(reply.error(feature.copy(), str(exc)))
 
 
@@ -52,8 +53,8 @@ async def show_lingcang(user_id: str, message: str, manager: Any) -> None:
             "category": "宗门",
             "summary": "向本宗灵藏捐献基础材料或灵石",
             "usage": (
-                "捐入灵藏 灵石 100", "捐入灵藏 灵石 数量",
-                "捐入灵藏 灵植/灵矿/兽宝 编号或名称 品级 数量",
+                "捐入灵藏 灵石 100", "捐入灵藏 灵植 黄品云参 3",
+                "捐入灵藏 类别 <品级><物品> 数量",
             ),
             "side_effect": "扣除个人资源，计入宗门灵藏；玩家只能捐入，取用发生在宗门生产与宗门设施的自动结算里",
             "order": 81,
@@ -71,20 +72,26 @@ async def donate_lingcang(user_id: str, message: str, message_context: MessageCo
             )
             await manager.send(reply.donated_stones(feature.copy(), quantity, result))
             return
-        if len(parts) != 4 or parts[0] not in _CATEGORIES:
+        # 新写法：类别 <品级><物品> 数量（3 段）；旧的「类别 物品 品级 数量」4 段仍受理。
+        if len(parts) not in {3, 4} or parts[0] not in _CATEGORIES:
             raise LingcangFeatureError(
-                "格式：捐入灵藏 灵石 数量，或捐入灵藏 类别 编号或名称 品级 数量"
+                "格式：捐入灵藏 类别 <品级><物品> 数量"
             )
+        if len(parts) == 4:
+            item, grade = parts[1], parts[2]
+        else:
+            ref = parse_item_ref(parts[1])
+            item, grade = ref.item, ref.grade
         result = await feature.donate_material(
             user_id,
             message_context.request_id,
             parts[0],
-            parts[1],
-            parts[2],
-            _positive(parts[3], "捐献数量"),
+            item,
+            grade,
+            _positive(parts[-1], "捐献数量"),
         )
         await manager.send(reply.donated_material(feature.copy(), result))
-    except LingcangFeatureError as exc:
+    except (LingcangFeatureError, ItemRefError) as exc:
         await manager.send(reply.error(feature.copy(), str(exc)))
 
 
