@@ -9,6 +9,7 @@ from dataclasses import replace
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from types import MappingProxyType
 
+from game.core.asset import ItemRef, format_item_ref, parse_item_ref
 from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
 from game.core.data import (
     ContractSet,
@@ -258,8 +259,8 @@ class CompanionService:
         totals_value = _state_mapping(value.get("赠礼累计"), "道侣关系.赠礼累计")
         totals: dict[str, int] = {}
         for key, raw in totals_value.items():
-            parts = str(key).split(":")
-            if len(parts) != 2 or len(parts[0]) != 6 or len(parts[1]) != 2:
+            ref = parse_item_ref(str(key))
+            if len(ref.item) != 6 or len(ref.grade) != 2:
                 raise CompanionStateError(f"赠礼累计键无效：{key}")
             totals[str(key)] = _state_positive_int(raw, f"赠礼累计.{key}")
         return CompanionRelation(
@@ -1135,7 +1136,7 @@ class CompanionService:
         normalized_grade_id = str(grade_id or "").strip()
         if len(normalized_grade_id) != 2 or not normalized_grade_id.isdecimal():
             raise CompanionGiftError("赠礼品级编号无效")
-        gift_key = f"{normalized_item_id}:{normalized_grade_id}"
+        gift_key = format_item_ref(ItemRef(item=normalized_item_id, grade=normalized_grade_id))
         totals = dict(relation.gift_totals)
         totals[gift_key] = totals.get(gift_key, 0) + quantity
         first_full = (
