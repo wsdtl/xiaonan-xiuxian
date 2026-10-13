@@ -351,7 +351,8 @@ class AssetService:
             )
         )
         if snapshot is None:
-            raise AssetStateError("道藏中没有该修行内容")
+            # 玩家看得懂的话：别把"道藏"当成"没这东西"的黑话。
+            raise AssetStateError("你的道藏里没有这门功法：先取得它，再来装配")
         value = _mapping(snapshot.value, "道藏实例")
         if _text(value.get("编号"), "道藏实例.编号") != normalized_content_id:
             raise AssetStateError("道藏状态键与编号不一致")

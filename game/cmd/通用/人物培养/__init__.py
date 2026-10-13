@@ -58,7 +58,10 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
     feature = current_game_services().features.renwu_peiyang
     parts = message.split()
     if len(parts) != 4 or not parts[3].isdecimal():
-        await manager.send(reply.error(feature, feature.copy("错误", "写法"), feature.format_actions()))
+        # 参数不对时直接把这条子命令的格式印出来，别只让人去翻帮助。
+        await manager.send(
+            reply.error(feature, feature.copy("错误", "装配写法"), feature.format_actions())
+        )
         return
     try:
         result = await feature.equip(
@@ -128,7 +131,9 @@ async def forge_character_law(user_id: str, message: str, message_context: Messa
     feature = current_game_services().features.renwu_peiyang
     parts = message.rsplit(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdecimal():
-        await manager.send(reply.error(feature, feature.copy("错误", "写法"), feature.format_actions()))
+        await manager.send(
+            reply.error(feature, feature.copy("错误", "覆炼写法"), feature.format_actions())
+        )
         return
     try:
         result = await feature.forge_law(
