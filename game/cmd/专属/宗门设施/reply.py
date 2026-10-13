@@ -49,12 +49,8 @@ def page(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessage:
                 )
             )
         if entry.content_id.isdigit() and len(entry.content_id) == 6:
-            parts[0] = M.command(
-                M.text(entry.name), f"查看 {entry.content_id}"
-            )
-            parts.extend(
-                (" · ", M.command(entry.content_id, f"查看 {entry.content_id}"))
-            )
+            # 卡面全中文：名字当可点控件，编号不外露；联动也用中文名（命令本来就收名字）。
+            parts[0] = M.command(M.text(entry.name), f"查看 {entry.name}")
         builder.item(index, *parts)
     if value.page_count > 1:
         builder.small(common["页码"].format_map({"当前页": value.page, "总页数": value.page_count}))
