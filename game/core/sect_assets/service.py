@@ -416,7 +416,7 @@ class SectAssetService:
             key = (material.category, material.content_id, material.grade_id)
             totals[key] = totals.get(key, 0) + quantity
         for (category, content_id, grade_id), quantity in totals.items():
-            entry_key = f"{category}:{format_item_ref(ItemRef(item=content_id, grade=grade_id))}"
+            entry_key = format_item_ref(ItemRef(item=content_id, grade=grade_id))
             raw = entries.get(entry_key)
             if not isinstance(raw, Mapping):
                 raise SectAssetError("灵藏中缺少炼制材料")
@@ -507,7 +507,7 @@ class SectAssetService:
             totals[key] = totals.get(key, 0) + material.quantity
         generated_entries: list[SectAssetEntry] = []
         for (category, content_id, grade_id), quantity in sorted(totals.items()):
-            entry_key = f"{category}:{format_item_ref(ItemRef(item=content_id, grade=grade_id))}"
+            entry_key = format_item_ref(ItemRef(item=content_id, grade=grade_id))
             raw = entries.get(entry_key)
             before = int(raw.get("数量") or 0) if isinstance(raw, Mapping) else 0
             after = before + quantity
@@ -770,9 +770,9 @@ class SectAssetService:
         if category == "阵法" and grade_id == "05" and not str(instance_key or "").strip():
             raise SectAssetError("圣品阵法产出必须具有独立实例编号")
         key = (
-            f"{category}:{format_item_ref(ItemRef(item=content_id, grade=grade_id))}:{instance_key}"
+            format_item_ref(ItemRef(item=content_id, grade=grade_id, treasure=instance_key))
             if instanced
-            else f"{category}:{format_item_ref(ItemRef(item=content_id, grade=grade_id))}"
+            else format_item_ref(ItemRef(item=content_id, grade=grade_id))
         )
         before_raw = entries.get(key)
         before = (
