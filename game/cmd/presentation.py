@@ -23,6 +23,12 @@ def natural_deadline(value: datetime) -> str:
     return f"{prefix} {local:%H:%M}"
 
 
+def span(start: datetime, end: datetime) -> str:
+    """一段活动的**总用时**——启程卡印这个：比绝对时刻直观，也与进度卡的「剩余时间」同单位。"""
+
+    return duration(int(max(0.0, (end - start).total_seconds())))
+
+
 def duration(seconds: int) -> str:
     minutes, remainder = divmod(max(0, seconds), 60)
     if not minutes:

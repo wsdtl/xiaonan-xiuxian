@@ -21,7 +21,7 @@ from game.features.caiyao import (
 )
 
 from ...actions import message_actions
-from ...presentation import duration, natural_deadline
+from ...presentation import duration, span
 
 
 def text(copy: HerbGatheringCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
@@ -54,7 +54,7 @@ def started(
         )
         .row(
             (text(copy, "开始", "轮次"), value.maximum_rounds),
-            (text(copy, "开始", "最晚结束"), natural_deadline(value.maximum_ends_at)),
+            (text(copy, "开始", "预计用时"), span(value.started_at, value.maximum_ends_at)),
         )
         .small(text(copy, "开始", "说明"))
         .actions(message_actions(actions))

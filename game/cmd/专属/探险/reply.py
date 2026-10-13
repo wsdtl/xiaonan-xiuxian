@@ -19,7 +19,7 @@ from game.features.tanxian import (
 )
 
 from ...actions import message_actions
-from ...presentation import duration, natural_deadline
+from ...presentation import duration, span
 
 
 def text(copy: ExplorationCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
@@ -51,7 +51,7 @@ def started(
         )
         .row(
             (text(copy, "开始", "预计场数"), value.battle_count),
-            (text(copy, "开始", "结束时间"), natural_deadline(value.ends_at)),
+            (text(copy, "开始", "预计用时"), span(value.started_at, value.ends_at)),
         )
         .small(text(copy, "开始", "说明"))
         .actions(message_actions(actions))

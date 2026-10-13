@@ -7,7 +7,7 @@ from ...presentation import error_document
 from game.features.taofa import RaidFeature, RaidProgress, RaidSettlement, RaidStarted
 from message import DocumentMessage, M
 
-from ...presentation import duration, natural_deadline, sentence
+from ...presentation import duration, sentence, span
 
 
 def started(feature: RaidFeature, value: RaidStarted) -> DocumentMessage:
@@ -20,7 +20,7 @@ def started(feature: RaidFeature, value: RaidStarted) -> DocumentMessage:
             (feature.text("开始", "参与用户"), value.participant_count),
             (feature.text("开始", "敌方编组"), value.enemy_group_count),
         )
-        .field(feature.text("开始", "结束时间"), natural_deadline(value.ends_at))
+        .field(feature.text("开始", "预计用时"), span(value.started_at, value.ends_at))
         .small(feature.text("开始", "说明"))
         .build()
     )
