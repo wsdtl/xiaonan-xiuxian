@@ -112,6 +112,31 @@ def progress(
     return builder.actions(message_actions(actions)).build()
 
 
+def early_page(copy: ExplorationCopy, value: ExplorationSettlement) -> DocumentMessage:
+    """提前结束的卡：没跑满就停，战果与奖励一概不计（那些只在跑满时才揭晓）。"""
+
+    return (
+        M.document()
+        .header(text(copy, "总结", "标题"))
+        .inline_section(
+            text(copy, "总结", "提前"),
+            M.status(text(copy, "总结", "无战果"), tone="warning"),
+            icon="notice",
+        )
+        .section(value.location_name, icon="status")
+        .line(
+            text(
+                copy,
+                "总结",
+                "提前说明",
+                {"场数": value.battle_count, "总场数": value.total_battles},
+            )
+        )
+        .small(text(copy, "总结", "再来一次"))
+        .build()
+    )
+
+
 def settlement_page(
     copy: ExplorationCopy,
     feature: ExplorationFeature,
@@ -119,6 +144,9 @@ def settlement_page(
     page: int,
     actions: tuple[ExplorationAction, ...],
 ) -> DocumentMessage:
+    # 一场都没跑完：别报「战败」（明明没人打），单独给一张说明卡。
+    if value.early and not value.battle_count:
+        return early_page(copy, value)
     total_pages = 1 + len(value.users)
     if page == 1:
         survived = any(
@@ -143,8 +171,10 @@ def settlement_page(
             .field(
                 text(copy, "总结", "结局"),
                 M.status(
-                    text(copy, "总结", "完成" if survived else "战败"),
-                    tone="positive" if survived else "danger",
+                    text(copy, "总结", "提前")
+                    if value.early
+                    else text(copy, "总结", "完成" if survived else "战败"),
+                    tone="warning" if value.early else ("positive" if survived else "danger"),
                 ),
             )
             .row(
@@ -156,6 +186,16 @@ def settlement_page(
             )
             .field(text(copy, "总结", "总物品"), value.total_item_quantity)
         )
+        if value.early:
+            # 提前结束照发已跑完的场次，把「发了几场」说清楚。
+            builder.line(
+                text(
+                    copy,
+                    "总结",
+                    "提前说明",
+                    {"场数": value.battle_count, "总场数": value.total_battles},
+                )
+            )
         if not survived:
             builder.line(text(copy, "总结", "战败处理"))
         builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))

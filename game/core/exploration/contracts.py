@@ -107,6 +107,10 @@ class ExplorationSettlement:
     users: tuple[ExplorationUserSummary, ...]
     settled_at: datetime
     replayed: bool
+    #: 这一轮本来有几场（提前结束时用来报「已结算 N/M 场」）。
+    total_battles: int = 0
+    #: 提前结束（没跑满就停）：战果与奖励一概不计，只把人放出来。
+    early: bool = False
 
 
 __all__ = [

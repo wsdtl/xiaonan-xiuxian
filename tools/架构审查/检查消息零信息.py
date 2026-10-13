@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import itertools
 import io
 import pathlib
 import re
@@ -130,6 +131,9 @@ _SMOKE_FAILURES: list[str] = []
 _DUPLICATE_BUTTONS: list[str] = []
 #: 深页命令：它们必须给出真页面，不能是错误页。
 _DEEP_COMMANDS: list[str] = []
+
+#: 判据派发的请求编号序号：同一条命令发多次也要各不相同。
+_派发序号 = itertools.count(1)
 #: 每条命令自报的**具体例子**（不含占位词）被自己拒掉的记录。
 _USAGE_EXAMPLE_FAILURES: list[str] = []
 #: 名字/编号槽位填「中文假名」与「数字假编号」时收到用法错或崩溃的记录。
@@ -514,7 +518,9 @@ async def _扫裸命令(deep_failures, heads, user_id) -> None:
         command = head + " 乱写参数"
         try:
             await dispatch(
-                user_id=user_id, raw_message=command, event_id="烟囱-" + head
+                user_id=user_id,
+                raw_message=command,
+                event_id=f"烟囱-{next(_派发序号)}-{head}",
             )
         except Exception as exc:  # noqa: BLE001 - 乱写参数不该把命令打成异常
             deep_failures.append(
@@ -529,7 +535,9 @@ async def _扫无参(deep_failures, heads, user_id) -> None:
     for head in sorted(set(heads)):
         try:
             result = await dispatch(
-                user_id=user_id, raw_message=head, event_id="烟囱裸-" + head
+                user_id=user_id,
+                raw_message=head,
+                event_id=f"烟囱裸-{next(_派发序号)}-{head}",
             )
         except Exception as exc:  # noqa: BLE001 - 命令本身不该把命令打成异常
             deep_failures.append(
@@ -551,7 +559,9 @@ async def _扫最佳用法(deep_failures, heads, user_id) -> None:
             best = head + " " + " ".join(best.split()[1:])
         try:
             result = await dispatch(
-                user_id=user_id, raw_message=best, event_id="烟囱usage-" + head
+                user_id=user_id,
+                raw_message=best,
+                event_id=f"烟囱usage-{next(_派发序号)}-{head}",
             )
         except Exception as exc:  # noqa: BLE001 - 声明过的用法不该把命令打成异常
             deep_failures.append(
@@ -607,8 +617,12 @@ async def _扫用法举例(usage_failures, user_id) -> None:
             if not phrase:
                 continue
             try:
+                # 同一条用法短语会按**每个别名**各发一遍（别名共享同一份 usage），
+                # 编号必须每次唯一：共用一个编号会撞幂等，那不是被测命令的问题。
                 result = await dispatch(
-                    user_id=user_id, raw_message=phrase, event_id="用法判据-" + phrase
+                    user_id=user_id,
+                    raw_message=phrase,
+                    event_id=f"用法判据-{next(_派发序号)}-{phrase}",
                 )
             except Exception as exc:  # noqa: BLE001 - 例子被自己炸掉也是缺陷
                 usage_failures.append(
@@ -793,8 +807,12 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
 
     async def send(text: str, *, user: str = "", strict: bool = False) -> None:
         try:
+            # 请求编号每次都要唯一：判据会把同一条命令发好几遍（裸命令/无参/用法），
+            # 现实里每条消息各有编号；共用一个编号会撞幂等，而且那不是被测命令的问题。
             result = await dispatch(
-                user_id=user or user_id, raw_message=text, event_id="判据-" + text
+                user_id=user or user_id,
+                raw_message=text,
+                event_id=f"判据-{next(_派发序号)}-{text}",
             )
         except Exception as exc:  # noqa: BLE001 - 参数不合适的命令本来就会报错
             if strict:

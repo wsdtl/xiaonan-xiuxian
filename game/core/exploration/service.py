@@ -479,9 +479,23 @@ class ExplorationService:
             allocations = _allocate_rewards(
                 defeated, living_users, tuple(user_results)
             )
+            # 本场每人的明细：提前结束要按「已跑完的场次」发奖，而聚合结果只有终局值、拆不出来，
+            # 所以逐场把每人这一场的所得与**该场结束时的状态快照**记下来。
+            detail: dict[str, dict[str, object]] = {
+                user_id: {"灵石": 0, "掉落": {}, "消耗": {}, "状态快照": {}}
+                for user_id in participants
+            }
             for user_id, allocation in allocations.items():
                 user_results[user_id]["灵石"] += allocation["灵石"]
                 user_results[user_id]["掉落"].update(allocation["掉落"])
+                detail[user_id]["灵石"] = int(allocation["灵石"])
+                # 明细要过 JSON，键只能是字符串：把 (编号, 品级) 拼成「编号:品级」。
+                detail[user_id]["掉落"] = {
+                    (f"{key[0]}:{key[1]}" if isinstance(key, tuple) else str(key)): int(
+                        quantity
+                    )
+                    for key, quantity in allocation["掉落"].items()
+                }
             weapon_experience = sum(
                 value.reward.weapon_experience for value in defeated
             )
@@ -547,25 +561,29 @@ class ExplorationService:
                     dict(item) for item in self._injury.summary(evolution.state).entries
                 ]
                 user_results[value.owner_id]["消耗"].update(value.consumed_items)
+                detail[value.owner_id]["消耗"].update(value.consumed_items)
             for user_id in participants:
                 owner_results = [
                     value for value in formal_left_results if value.owner_id == user_id
                 ]
                 if owner_results:
                     virtual_inventory[user_id] = dict(owner_results[0].inventory)
-            battle_values.append(
-                _battle_value(
-                    session_id,
-                    battle_index,
-                    location.enemy_multiplier,
-                    result,
-                    defeated,
-                    allocations,
-                    formal_left_results,
-                    len(enemies),
-                    enemy_group_specs,
-                )
+            for user_id in participants:
+                # 快照要**深拷贝**：后面几场还会往同一份记录里追加伤势变化，浅拷贝会被改掉。
+                detail[user_id]["状态快照"] = materialize(user_results[user_id]["角色"])
+            battle_record = _battle_value(
+                session_id,
+                battle_index,
+                location.enemy_multiplier,
+                result,
+                defeated,
+                allocations,
+                formal_left_results,
+                len(enemies),
+                enemy_group_specs,
             )
+            battle_record["用户明细"] = materialize(detail)
+            battle_values.append(battle_record)
 
         battle_count = len(battle_values)
         ends_at = started_at + timedelta(
@@ -759,10 +777,12 @@ class ExplorationService:
             raise ExplorationLeaderRequiredError("本次探险由领队统一结算")
         settled_at = _utc(now)
         ends_at = _parse_time(session.get("结束时间"), "探险.结束时间")
-        if settled_at < ends_at:
-            raise ExplorationNotFinishedError("探险尚未结束")
-        user_values = _mapping(session.get("用户结果"), "探险.用户结果")
         participants = _texts(session.get("参与用户"), "探险.参与用户")
+        if settled_at < ends_at:
+            return await self._settle_early(
+                owner, session_id, session, participants, settled_at, request_id
+            )
+        user_values = _mapping(session.get("用户结果"), "探险.用户结果")
         (
             result_operations,
             reward_operations,
@@ -799,6 +819,153 @@ class ExplorationService:
         return self._settlement(
             session_id, settlement_value, replayed=receipt.replayed
         )
+
+    def _unlocked(self, session: Mapping[str, object], now: datetime) -> int:
+        """按时间解锁的场次数：已过秒数 ÷ 每场秒数，封顶总场数（到点就是全部）。"""
+
+        started = _parse_time(session.get("开始时间"), "探险.开始时间")
+        ends = _parse_time(session.get("结束时间"), "探险.结束时间")
+        total = _nonnegative_int(session.get("场数"), "探险.场数")
+        seconds = _positive_int(session.get("每场秒数"), "探险.每场秒数")
+        if now >= ends:
+            return total
+        elapsed = max(0, int((now - started).total_seconds()))
+        return min(total, elapsed // seconds)
+
+    def _prefix_results(
+        self,
+        battles: tuple[Mapping[str, object], ...],
+        participants: tuple[str, ...],
+        base: Mapping[str, object],
+    ) -> dict[str, object]:
+        """把前几场的**每人明细**聚成「用户结果」的形状（跑满时就是全量，与原路等价）。"""
+
+        stones = {user_id: 0 for user_id in participants}
+        drops: dict[str, dict[tuple[str, str], int]] = {user_id: {} for user_id in participants}
+        stacks: dict[str, dict[str, int]] = {user_id: {} for user_id in participants}
+        characters: dict[str, dict[str, dict[str, object]]] = {
+            user_id: {} for user_id in participants
+        }
+        for battle in battles:
+            detail = _mapping(battle.get("用户明细") or {}, "战斗.用户明细")
+            for user_id in participants:
+                per = _mapping(detail.get(user_id) or {}, "战斗.用户明细[用户]")
+                stones[user_id] += _nonnegative_int(per.get("灵石"), "明细.灵石")
+                for key, quantity in _mapping(
+                    per.get("掉落") or {}, "明细.掉落"
+                ).items():
+                    item_id, _, grade_id = str(key).partition(":")
+                    spot = (item_id, grade_id)
+                    drops[user_id][spot] = drops[user_id].get(spot, 0) + int(quantity)
+                for key, quantity in _mapping(
+                    per.get("消耗") or {}, "明细.消耗"
+                ).items():
+                    stacks[user_id][str(key)] = stacks[user_id].get(str(key), 0) + int(
+                        quantity
+                    )
+                snapshot = _mapping(per.get("状态快照") or {}, "明细.状态快照")
+                if snapshot:
+                    # 快照本身就是「累计到这一场为止」的，取最后一场的就是前缀的终局。
+                    characters[user_id] = {
+                        key: dict(value)
+                        for key, value in snapshot.items()
+                        if isinstance(value, Mapping)
+                    }
+        raw: dict[str, dict[str, object]] = {}
+        for user_id in participants:
+            template = _mapping(base.get(user_id) or {}, "用户结果[用户]")
+            raw[user_id] = {
+                "用户编号": user_id,
+                "人物": str(template.get("人物") or ""),
+                "角色": characters[user_id],
+                "消耗": stacks[user_id],
+                "掉落": drops[user_id],
+                "灵石": stones[user_id],
+                "先天灵宝": template.get("先天灵宝"),
+            }
+        return _normalize_user_results(raw, {})
+
+    async def _settle_early(
+        self,
+        owner: str,
+        session_id: str,
+        session: Mapping[str, object],
+        participants: tuple[str, ...],
+        settled_at: datetime,
+        request_id: str,
+    ) -> ExplorationSettlement:
+        """**提前结束**：按「已经跑完的场次」发奖，没跑完的那几场不发。
+
+        场次按时间解锁（已过秒数 ÷ 每场秒数），所以「满足轮次的还是照发」；
+        一场都没跑完就什么都不发，只把人从探险状态里放出来——随时能停，也不留刷奖励的口子。
+        """
+
+        total = _nonnegative_int(session.get("场数"), "探险.场数")
+        unlocked = self._unlocked(session, settled_at)
+        result: list[StateMutation] = []
+        reward: list[StateMutation] = []
+        summaries: list[dict[str, object]] = []
+        defeated = 0
+        if unlocked:
+            battles = await self._battles(owner, session_id, unlocked)
+            values = self._prefix_results(
+                battles, participants, _mapping(session.get("用户结果") or {}, "探险.用户结果")
+            )
+            result, reward, _released, summaries = await self._plan_participant_settlements(
+                values, participants
+            )
+            defeated = sum(
+                _nonnegative_int(battle.get("战败敌人"), "战斗.战败敌人")
+                for battle in battles
+            )
+        else:
+            # 一场都没跑完：写一条**零变化**的角色结算（结算事务要求必须有结果写入）。
+            for participant in participants:
+                profile = await self._character.profile(participant)
+                resources = dict(profile.resources)
+                zero = await self._character.plan_battle_settlement(
+                    participant,
+                    health=float(resources.get("血气", 0)),
+                    spirit=float(resources.get("精神", 0)),
+                    spirit_stones_delta=0,
+                    weapon_experience=0,
+                )
+                result.extend(zero.operations)
+        release: list[StateMutation] = []
+        for participant in participants:
+            release.append(
+                (await self._player_state.plan_finish_behavior(participant)).mutation
+            )
+        record = {
+            "地点": session["地点"],
+            "场数": unlocked,
+            "总场数": total,
+            "战败敌人": defeated,
+            "参与用户": list(participants),
+            "用户结果": [materialize(value) for value in summaries],
+            "结算时间": settled_at.isoformat(),
+            "提前结束": True,
+        }
+        plan = SettlementTransactionPlan(
+            result_operations=tuple(result),
+            reward_operations=tuple(reward),
+            release_operations=tuple(release),
+            record_operations=(
+                StateMutation(owner, SETTLEMENT_STATE, session_id, record, 0),
+            ),
+        )
+        try:
+            receipt = await self._database.commit(
+                plan.command(
+                    user_id=owner,
+                    request_id=request_id,
+                    business_type="普通探险结算",
+                    payload={"探险编号": session_id},
+                )
+            )
+        except StateConflictError as exc:
+            raise ExplorationConflictError(str(exc)) from exc
+        return self._settlement(session_id, record, replayed=receipt.replayed)
 
     async def _plan_participant_settlements(
         self,
@@ -982,19 +1149,32 @@ class ExplorationService:
     ) -> ExplorationSettlement:
         users = tuple(
             _user_summary(_mapping(raw, "结算.用户结果[]"))
-            for raw in _sequence(value.get("用户结果"), "结算.用户结果")
+            # 提前结束没有战果，用户结果就是空表——这里必须允许空。
+            for raw in _sequence(
+                value.get("用户结果"), "结算.用户结果", allow_empty=True
+            )
         )
+        # 一律按关键字传：字段一多，位置参数错位是静默的（我这一版就把 early 与总场数传反了）。
         return ExplorationSettlement(
-            session_id,
-            _text(value.get("地点"), "结算.地点"),
-            _nonnegative_int(value.get("场数"), "结算.场数"),
-            _nonnegative_int(value.get("战败敌人"), "结算.战败敌人"),
-            len(users),
-            sum(user.spirit_stones for user in users),
-            sum(quantity for user in users for _, _, quantity in user.drops),
-            users,
-            _parse_time(value.get("结算时间"), "结算.结算时间"),
-            replayed,
+            session_id=session_id,
+            location_name=_text(value.get("地点"), "结算.地点"),
+            battle_count=_nonnegative_int(value.get("场数"), "结算.场数"),
+            defeated_enemies=_nonnegative_int(
+                value.get("战败敌人"), "结算.战败敌人"
+            ),
+            participant_count=len(users),
+            total_spirit_stones=sum(user.spirit_stones for user in users),
+            total_item_quantity=sum(
+                quantity for user in users for _, _, quantity in user.drops
+            ),
+            users=users,
+            settled_at=_parse_time(value.get("结算时间"), "结算.结算时间"),
+            replayed=replayed,
+            early=bool(value.get("提前结束")),
+            # 跑满的那条路没写总场数（场数就是总场数），只有提前结束才两者不同。
+            total_battles=_nonnegative_int(
+                value.get("总场数", value.get("场数")), "结算.总场数"
+            ),
         )
 
     def _require_initialized(self) -> None:
