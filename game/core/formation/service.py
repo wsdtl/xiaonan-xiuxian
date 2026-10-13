@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
 
+from game.core.asset import ItemRefError, parse_item_ref
 from game.core.asset import (
     AssetEntry,
     AssetService,
@@ -724,34 +725,49 @@ class FormationService:
         direct = next((entry for entry in entries if entry.instance_key == query), None)
         if direct is not None:
             return direct.instance_key
-        # 玩家写法与网页一致：`阵法名[灵宝名]`（品级可另给）。
-        # 状态键只是内部身份，绝不回给玩家当输入格式。
+        # 统一语法：品级可并进阵法名（`黄品周天星斗大阵[乾坤鼎]`）——先拆成品级与
+        # 灵宝两个独立的槽；旧的「阵法名 品级」与「阵法名[灵宝名]」仍然受理。
         name_part = query
-        qualifier = ""
-        if name_part.endswith("]") and "[" in name_part:
-            name_part, _, qualifier = name_part[:-1].partition("[")
+        grade_word = ""
+        treasure_word = ""
+        try:
+            ref = parse_item_ref(query)
+        except ItemRefError:
+            ref = None
+        if ref is not None and (ref.grade or ref.treasure):
+            name_part, grade_word, treasure_word = ref.item, ref.grade, ref.treasure
+        elif name_part.endswith("]") and "[" in name_part:
+            name_part, _, treasure_word = name_part[:-1].partition("[")
             name_part = name_part.strip()
-            qualifier = qualifier.strip()
+            treasure_word = treasure_word.strip()
         elif " " in query:
-            name_part, _, qualifier = query.rpartition(" ")
+            name_part, _, grade_word = query.rpartition(" ")
             name_part = name_part.strip()
-            qualifier = qualifier.strip()
+            grade_word = grade_word.strip()
         matches = []
         for entry in entries:
             if entry.name != name_part:
                 continue
-            if qualifier:
+            if grade_word or treasure_word:
                 treasure_name = self._treasure_name(getattr(entry, "treasure_id", ""))
                 # 品级有短名（黄）与长名（黄品）两种写法，玩家写哪个都认；
                 # 比对用双向前缀，免得「黄品」被「黄」挡住。
-                words = {
-                    _formation_grade_name(entry.grade_id),
-                    str(getattr(entry, "grade_name", "") or ""),
-                    treasure_name,
-                }
-                if not any(
-                    word and (word.startswith(qualifier) or qualifier.startswith(word))
-                    for word in words
+                if grade_word:
+                    grades = {
+                        _formation_grade_name(entry.grade_id),
+                        str(getattr(entry, "grade_name", "") or ""),
+                    }
+                    if not any(
+                        word and (word.startswith(grade_word) or grade_word.startswith(word))
+                        for word in grades
+                    ):
+                        continue
+                if treasure_word and not (
+                    treasure_name
+                    and (
+                        treasure_name.startswith(treasure_word)
+                        or treasure_word.startswith(treasure_name)
+                    )
                 ):
                     continue
             matches.append(entry)
