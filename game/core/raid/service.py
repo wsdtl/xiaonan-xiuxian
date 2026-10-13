@@ -379,8 +379,17 @@ class RaidService:
         if user_id != owner:
             raise RaidLeaderRequiredError("本次讨伐由发起者统一结算")
         settled_at = _time(now or datetime.now(UTC))
-        if settled_at < _time(session["结束时间"]):
-            raise RaidNotFinishedError("讨伐尚未结束")
+        ends_at = _time(session["结束时间"])
+        blood = session.get("首领血条")
+        total_phases = positive_int(
+            (blood.get("总段数") if isinstance(blood, Mapping) else None) or 3,
+            "讨伐.首领血条.总段数",
+        )
+        if settled_at < ends_at:
+            # 随时可以停：按**已经打完的血段**发赏（没打完的那几段不发）。
+            return await self._settle_early(
+                owner, session_id, session, settled_at, request_id, total_phases
+            )
         result_ops = []
         release_ops = []
         for participant in _users(session["参与用户"]):
@@ -405,6 +414,94 @@ class RaidService:
         plan = SettlementTransactionPlan(tuple(result_ops), tuple(reward_ops), tuple(release_ops), (StateMutation(owner, SETTLEMENT_STATE, session_id, value, 0),))
         try:
             receipt = await self._database.commit(plan.command(user_id=owner, request_id=request_id, business_type="讨伐结算", payload={"讨伐编号": session_id}))
+        except StateConflictError as exc:
+            raise RaidError(str(exc)) from exc
+        return _settlement(value, replayed=receipt.replayed)
+
+    async def _settle_early(
+        self,
+        owner: str,
+        session_id: str,
+        session: Mapping[str, object],
+        settled_at: datetime,
+        request_id: str,
+        total_phases: int,
+    ) -> RaidSettlement:
+        """**提前结束**：按已经打完的血段发赏——灵石按段比例、物品按段档取前 N 件，
+
+        人物状态按**开打前**保留（一场连续的仗没有分段终局可写）；一段都没打完就什么都不发。
+        """
+
+        started_at = _time(session["开始时间"])
+        ends_at = _time(session["结束时间"])
+        duration = max(1.0, (ends_at - started_at).total_seconds())
+        elapsed = max(0.0, (settled_at - started_at).total_seconds())
+        done = min(total_phases, int(elapsed // (duration / total_phases)))
+        result_ops: list[StateMutation] = []
+        release_ops: list[StateMutation] = []
+        reward_ops: list[StateMutation] = []
+        rewards_value = session.get("奖励")
+        rewards = dict(rewards_value) if isinstance(rewards_value, Mapping) else {}
+        for participant in _users(session["参与用户"]):
+            profile = await self._character.profile(participant)
+            resources = dict(profile.resources)
+            zero = await self._character.plan_battle_settlement(
+                participant,
+                health=float(resources.get("血气", 0)),
+                spirit=float(resources.get("精神", 0)),
+                weapon_experience=0,
+            )
+            result_ops.extend(zero.operations)
+            release_ops.append(
+                (await self._player_state.plan_finish_behavior(participant)).mutation
+            )
+            if not done:
+                continue
+            raw_reward = rewards.get(participant)
+            reward = dict(raw_reward) if isinstance(raw_reward, Mapping) else {}
+            stones = int(reward.get("灵石", 0) or 0) * done // total_phases
+            if stones:
+                reward_ops.append(
+                    await self._asset.plan_spirit_stone_change(participant, stones)
+                )
+            # 段档：打完几段就给前几件（奖励列表按段排）。
+            keep = tuple(reward.get("基础物品") or ())[:done]
+            if keep:
+                reward_ops.extend(
+                    (
+                        await self._asset.plan_inventory_changes(
+                            participant,
+                            tuple(
+                                InventoryAdjustment(item_id, grade_id, quantity)
+                                for item_id, grade_id, quantity in keep
+                            ),
+                        )
+                    ).operations
+                )
+        value = {
+            "讨伐编号": session_id,
+            "地点": session["地点"],
+            "参与用户": session["参与用户"],
+            "战败敌人": 0,
+            "胜负": session.get("胜负", "平局"),
+            "结算时间": settled_at.isoformat(),
+            "提前结束": True,
+            "已完成段数": done,
+            "总段数": total_phases,
+        }
+        plan = SettlementTransactionPlan(
+            tuple(result_ops), tuple(reward_ops), tuple(release_ops),
+            (StateMutation(owner, SETTLEMENT_STATE, session_id, value, 0),),
+        )
+        try:
+            receipt = await self._database.commit(
+                plan.command(
+                    user_id=owner,
+                    request_id=request_id,
+                    business_type="讨伐结算",
+                    payload={"讨伐编号": session_id},
+                )
+            )
         except StateConflictError as exc:
             raise RaidError(str(exc)) from exc
         return _settlement(value, replayed=receipt.replayed)
@@ -510,13 +607,16 @@ def _started(value: Mapping[str, object], *, replayed: bool) -> RaidStarted:
 
 def _settlement(value: Mapping[str, object], *, replayed: bool) -> RaidSettlement:
     return RaidSettlement(
-        str(value.get("讨伐编号") or value.get("地点") or ""),
-        str(value.get("地点") or ""),
-        str(value.get("胜负") or ""),
-        len(_users(value.get("参与用户"))),
-        int(value.get("战败敌人", 0) or 0),
-        _time(value.get("结算时间")),
-        replayed,
+        session_id=str(value.get("讨伐编号") or value.get("地点") or ""),
+        location_name=str(value.get("地点") or ""),
+        winner=str(value.get("胜负") or ""),
+        participant_count=len(_users(value.get("参与用户"))),
+        defeated_enemies=int(value.get("战败敌人", 0) or 0),
+        settled_at=_time(value.get("结算时间")),
+        replayed=replayed,
+        early=bool(value.get("提前结束")),
+        completed_phases=int(value.get("已完成段数", 0) or 0),
+        total_phases=int(value.get("总段数", 0) or 0),
     )
 
 

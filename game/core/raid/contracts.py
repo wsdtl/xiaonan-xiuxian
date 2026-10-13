@@ -87,6 +87,11 @@ class RaidSettlement:
     defeated_enemies: int
     settled_at: datetime
     replayed: bool
+    #: 提前结束（没打满时段）：按已完成的血段发赏，人物状态按开打前保留。
+    early: bool = False
+    #: 已完成的血段 / 总段数（提前结束时用来报「N/M 段」）。
+    completed_phases: int = 0
+    total_phases: int = 0
 
 
 __all__ = [

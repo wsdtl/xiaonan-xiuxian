@@ -58,7 +58,7 @@ def progress(feature: RaidFeature, value: RaidProgress) -> DocumentMessage:
 def settlement(feature: RaidFeature, value: RaidSettlement) -> DocumentMessage:
     won = value.winner == "left"
     result = feature.result_label(value.winner)
-    return (
+    builder = (
         M.document()
         .header(feature.text("结算", "标题"))
         .inline_section(
@@ -68,9 +68,17 @@ def settlement(feature: RaidFeature, value: RaidSettlement) -> DocumentMessage:
         )
         .section(value.location_name, icon="status")
         .field(feature.text("结算", "战败敌人"), value.defeated_enemies)
-        .small(feature.reward_note(value.winner))
-        .build()
     )
+    if value.early:
+        # 提前结束：按已经打完的血段发赏，把「发了几段」说清楚。
+        builder.small(
+            feature.text(
+                "结算",
+                "提前说明",
+                {"段数": value.completed_phases, "总段数": value.total_phases},
+            )
+        )
+    return builder.small(feature.reward_note(value.winner)).build()
 
 
 def error(feature: RaidFeature, message: str) -> DocumentMessage:
