@@ -74,12 +74,12 @@ def recipe_list(
             index,
             M.command(
                 M.text(entry.recipe.medicine_name),
-                f"查看 {entry.recipe.recipe_id}",
+                f"查看 {entry.recipe.medicine_name}",
             ),
             " · ",
             M.status(state, tone="positive" if entry.can_refine else "warning"),
         ).small(
-            f"丹药：{entry.recipe.recipe_id} · 难度：{entry.recipe.difficulty} · 炉法：{entry.recipe.method}"
+            f"难度：{entry.recipe.difficulty} · 炉法：{entry.recipe.method}"
         )
     builder.small(
         text(copy, "列表", "页码", {"当前页": value.page, "总页数": value.page_count})
@@ -107,7 +107,6 @@ def preview(
         .small(alchemist.speech["审材"].format_map({"主持": alchemist.name}))
         .section(value.recipe.medicine_name, icon="inventory")
         .row(
-            (text(copy, "预览", "丹药"), value.recipe.recipe_id),
             (
                 text(copy, "预览", "成丹"),
                 f"{value.medicine_grade_name}{value.recipe.medicine_name}",
