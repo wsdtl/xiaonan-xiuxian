@@ -72,7 +72,11 @@ class ItemInspectionFeature:
                 normalized,
                 detail=detail,
                 related_details=self._related_details(detail),
-                rendered=_rendered_lines(detail, self._combat.rule_layer()),
+                # 突破丹把「从哪到哪」写在正文最前——境界名与来源都由这一层从数据取。
+                rendered=(
+                    *self._breakthrough_realm_lines(detail),
+                    *_rendered_lines(detail, self._combat.rule_layer()),
+                ),
                 held_grades=await self._held_grades(user_id, detail.item_id),
             )
         except ItemNameAmbiguousError as exc:
@@ -346,7 +350,57 @@ class ItemInspectionFeature:
                 continue
             resolved.append(related)
             pending.extend(_entity_references(related.fields))
+        # 境界链是单向的（每个境界只写「下一境界」），要显示「从哪一段突破过来」得反查一次：
+        # 扫全库找出 `下一境界` 指向已解析境界的那一条，一并放进 related 供渲染层用。
+        for one in tuple(resolved):
+            previous_id = self._previous_realm_id(one.item_id)
+            if previous_id and previous_id not in seen:
+                seen.add(previous_id)
+                try:
+                    resolved.append(self._catalog.inspect_entity(previous_id))
+                except ItemNotFoundError:
+                    continue
         return tuple(resolved)
+
+    def _breakthrough_realm_lines(self, detail: ItemDetail) -> tuple[str, ...]:
+        """突破丹：把「从哪个境界到哪个」写在正文最前面。
+
+        境界链单向（每个境界只写「下一境界」），来源得反查；名称一律从目录取，不写死。
+        """
+
+        effect = detail.fields.get("使用效果")
+        if not isinstance(effect, Mapping):
+            return ()
+        if str(effect.get("类型") or "") != "境界突破":
+            return ()
+        target_id = str(effect.get("目标境界") or "").strip()
+        if not target_id:
+            return ()
+        target = self._entity_name(target_id)
+        source = self._entity_name(self._previous_realm_id(target_id))
+        if not (source and target):
+            return ()
+        return (f"境界突破：{source} → {target}",)
+
+    def _entity_name(self, entity_id: str) -> str:
+        """编号实体的显示名；查不到就给空串（渲染层据此决定印不印那一行）。"""
+
+        if not entity_id:
+            return ""
+        try:
+            return str(self._catalog.inspect_entity(entity_id).name)
+        except (ItemNotFoundError, ItemNameAmbiguousError):
+            return ""
+
+    def _previous_realm_id(self, realm_id: str) -> str:
+        """反查 `下一境界` 指向 `realm_id` 的那一条境界（数据驱动，不写死编号）。"""
+
+        for record in self._data.numbered_entities():
+            if str(record.section) != "境界":
+                continue
+            if str(record.value.get("下一境界") or "") == realm_id:
+                return str(record.entity_id)
+        return ""
 
 
 def _entity_references(value: object) -> Iterator[str]:

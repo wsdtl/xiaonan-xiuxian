@@ -443,6 +443,19 @@ _SECTION_LINES = {
     "阵师": _artisan_lines,
     "敌人": _enemy_lines,
 }
+def _previous_realm_name(target: object, related: Mapping[str, object]) -> str:
+    """找出「下一境界」指向目标的那个境界名——境界链单向，只能反查。"""
+
+    key = str(target or "").strip()
+    if not key:
+        return ""
+    for one in related.values():
+        fields = getattr(one, "fields", None)
+        if isinstance(fields, Mapping) and str(fields.get("下一境界") or "") == key:
+            return str(getattr(one, "name", "") or "")
+    return ""
+
+
 def _item_effect_lines(
     effect: Mapping[str, object], related: Mapping[str, object]
 ) -> tuple[str, ...]:
@@ -464,7 +477,12 @@ def _item_effect_lines(
         lines.append(f"恢复：{effect['恢复百分比']}%")
     target_realm = _related_name(effect.get("目标境界"), related)
     if target_realm:
-        lines.append(f"可突破至：{target_realm}")
+        # 境界链单向，来源要反查：谁写了「下一境界」指到目标，谁就是这一段。
+        source_realm = _previous_realm_name(effect.get("目标境界"), related)
+        if source_realm:
+            lines.append(f"境界突破：{source_realm} → {target_realm}")
+        else:
+            lines.append(f"可突破至：{target_realm}")
     permanent = effect.get("永久属性")
     if isinstance(permanent, Mapping) and permanent:
         lines.append(

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from ...actions import CommandAction
-from ...presentation import error_document
+from ...presentation import candidate_lines, error_document
 
 from typing import Sequence
 
 from game.features.renwu_peiyang import (
+    BreakthroughOffer,
     CharacterCultivationFeature,
     CharacterBreakthroughResult,
     CharacterCultivationView,
@@ -16,6 +17,43 @@ from game.features.renwu_peiyang import (
 )
 
 from message import Status, Progress, DocumentMessage, M
+
+
+def _render_candidates(
+    feature: CharacterCultivationFeature,
+    builder: object,
+    offer: BreakthroughOffer | None,
+    *,
+    title_key: str,
+) -> bool:
+    """把「本境界全部可用突破丹」铺进卡片——查看页与失败卡共用这一段，只有文案键不同。
+
+    丹名是无边框按钮：名字只作显示、句柄一律用编号（`查看 <编号>`）。
+    放在 `line` 的槽位而不是 `field` 的标签位——后者会把 CommandLink 打回 repr。
+    """
+
+    if offer is None or not offer.preview.can_breakthrough or not offer.candidates:
+        return False
+    preview = offer.preview
+    candidate_lines(
+        builder,
+        title=feature.copy("突破", title_key).format_map(
+            {"来源": preview.realm_name, "目标": preview.next_realm_name}
+        ),
+        entries=tuple(
+            (
+                candidate.name,
+                f"查看 {candidate.medicine_id}",
+                "、".join(f"{name}+{value}" for name, value in candidate.permanent)
+                or feature.copy("突破", "无永久属性"),
+            )
+            for candidate in offer.candidates
+        ),
+        footer=feature.copy("突破", "候选共").format_map(
+            {"数量": len(offer.candidates)}
+        ),
+    )
+    return True
 
 
 def view(feature: CharacterCultivationFeature, result: CharacterCultivationView) -> DocumentMessage:
@@ -29,8 +67,9 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
             + (_progress(profile.experience, result.next_experience),),
             icon="status",
         )
-        .section(feature.copy("人物", "修行构筑"), icon="skill")
     )
+    _render_candidates(feature, builder, result.breakthrough, title_key="可突破标题")
+    builder.section(feature.copy("人物", "修行构筑"), icon="skill")
     equipped = {
         (entry.category, entry.slot): entry for entry in profile.equipped_content
     }
@@ -118,9 +157,19 @@ def forged(feature: CharacterCultivationFeature, result: CharacterLawResult) -> 
 
 
 def error(
-    feature: RenwuPeiyangFeature, message: str, actions: Sequence[CommandAction] = ()
+    feature: RenwuPeiyangFeature,
+    message: str,
+    actions: Sequence[CommandAction] = (),
+    offer: BreakthroughOffer | None = None,
 ) -> DocumentMessage:
-    """失败回执：标题与状态词取自展示数据集，动作由玩法层给。"""
+    """失败回执：标题与状态词取自展示数据集，动作由玩法层给。
+
+    突破失败时顺带把本境界**全部**候选丹列出来（`offer` 由命令层算好传进来）——
+    名字写错的人不用猜，照着点就行。
+    """
+
+    def add_candidates(builder: object) -> None:
+        _render_candidates(feature, builder, offer, title_key="失败候选")
 
     return error_document(
         feature.copy("错误", "标题"),
@@ -130,6 +179,7 @@ def error(
         tone="danger",
         actions=actions,
         hint=feature.copy("错误", "格式"),
+        render=add_candidates if offer is not None else None,
     )
 
 

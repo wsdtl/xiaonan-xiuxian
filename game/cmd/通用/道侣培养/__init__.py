@@ -63,7 +63,14 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
         )
         await manager.send(reply.breakthrough(feature, result))
     except (CompanionCultivationFeatureError, CompanionCultivationConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        # 与人物突破同款：名字写错时把本境界的候选丹一并端出来。
+        try:
+            offer = await feature.breakthrough_offer(user_id)
+        except (CompanionCultivationFeatureError, CompanionCultivationConflictError):
+            offer = None
+        await manager.send(
+            reply.error(feature, str(exc), feature.format_actions(), offer)
+        )
 
 
 @GameCommand.command(

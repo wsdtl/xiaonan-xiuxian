@@ -25,7 +25,7 @@ from game.core.data import (
 )
 from game.core.database import DatabaseService, StateAddress, StateMutation
 from game.core.forging import ForgingService
-from game.core.growth import GrowthService
+from game.core.growth import GrowthError, GrowthService
 from game.core.medicine import PreparedBattleMedicine
 from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
 
@@ -36,6 +36,7 @@ from .contracts import (
     CompanionBattlePlan,
     CompanionBreakthroughCorrectionPlan,
     CompanionBreakthroughPlan,
+    CompanionBreakthroughPreview,
     CompanionBuildResetPlan,
     CompanionCultivationError,
     CompanionCultivationResetPlan,
@@ -511,6 +512,68 @@ class CompanionService:
             before.weapon_level,
             after.weapon_level,
             self._active_instance_operations(user_id, current, after),
+        )
+
+    async def breakthrough_preview(self, user_id: str) -> CompanionBreakthroughPreview:
+        """只读：当前同行道侣的境界、下一境界与「能不能突破」。
+
+        口径与 `plan_breakthrough` 的校验逐条一致（满级 → 有下一境界 → 该道侣还没突破过），
+        不能突破时给出带道侣名的原因，供卡片照直说。
+        """
+
+        current = await self.active_instance(user_id)
+        before = current.instance
+        definition = self.definition(before.companion_id)
+        realm = self._growth.realm(before.realm_id)
+        if before.level != realm.maximum_level:
+            return CompanionBreakthroughPreview(
+                companion_id=before.companion_id,
+                name=definition.name,
+                realm_id=before.realm_id,
+                realm_name=realm.name,
+                level=before.level,
+                maximum_level=realm.maximum_level,
+                reason=(
+                    f"{definition.name}达到{realm.maximum_level}级后才能突破{realm.name}"
+                ),
+            )
+        try:
+            next_realm = self._growth.next_realm(before.realm_id)
+        except GrowthError:
+            return CompanionBreakthroughPreview(
+                companion_id=before.companion_id,
+                name=definition.name,
+                realm_id=before.realm_id,
+                realm_name=realm.name,
+                level=before.level,
+                maximum_level=realm.maximum_level,
+                reason="已至当前修行尽头",
+            )
+        if any(
+            record.get("目标境界") == next_realm.realm_id
+            for record in before.breakthrough_records
+        ):
+            return CompanionBreakthroughPreview(
+                companion_id=before.companion_id,
+                name=definition.name,
+                realm_id=before.realm_id,
+                realm_name=realm.name,
+                level=before.level,
+                maximum_level=realm.maximum_level,
+                next_realm_id=next_realm.realm_id,
+                next_realm_name=next_realm.name,
+                reason="该道侣已经完成此次境界突破",
+            )
+        return CompanionBreakthroughPreview(
+            companion_id=before.companion_id,
+            name=definition.name,
+            realm_id=before.realm_id,
+            realm_name=realm.name,
+            level=before.level,
+            maximum_level=realm.maximum_level,
+            next_realm_id=next_realm.realm_id,
+            next_realm_name=next_realm.name,
+            can_breakthrough=True,
         )
 
     async def plan_breakthrough(

@@ -303,6 +303,25 @@ class CompanionFarewellPlan:
     operation: StateMutation
 
 
+@dataclass(frozen=True)
+class CompanionBreakthroughPreview:
+    """「当前同行道侣能不能突破、下一境界是什么」的只读预览。
+
+    口径与 `CompanionService.plan_breakthrough` 的校验逐条一致；不能突破时给原因（带道侣名）。
+    """
+
+    companion_id: str
+    name: str
+    realm_id: str
+    realm_name: str
+    level: int
+    maximum_level: int
+    next_realm_id: str = ""
+    next_realm_name: str = ""
+    can_breakthrough: bool = False
+    reason: str = ""
+
+
 __all__ = [
     "ActiveCompanion",
     "ActiveCompanionInstance",
@@ -310,6 +329,7 @@ __all__ = [
     "CompanionBattlePlan",
     "CompanionBreakthroughCorrectionPlan",
     "CompanionBreakthroughPlan",
+    "CompanionBreakthroughPreview",
     "CompanionBuildResetPlan",
     "CompanionCultivationError",
     "CompanionCultivationResetPlan",

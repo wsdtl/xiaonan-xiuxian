@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from game.core.companion import CompanionDefinition, CompanionInstance
+from game.core.companion import (
+    CompanionBreakthroughPreview,
+    CompanionDefinition,
+    CompanionInstance,
+)
 
 
 class CompanionCultivationFeatureError(ValueError):
@@ -13,6 +17,23 @@ class CompanionCultivationFeatureError(ValueError):
 
 class CompanionCultivationConflictError(RuntimeError):
     """道侣培养期间同行事实或实例已经变化。"""
+
+
+@dataclass(frozen=True)
+class CompanionBreakthroughCandidate:
+    """一颗候选突破丹：编号是句柄、名称只作显示，永久属性照数据原样带出。"""
+
+    medicine_id: str
+    name: str
+    permanent: tuple[tuple[str, int | float], ...] = ()
+
+
+@dataclass(frozen=True)
+class CompanionBreakthroughOffer:
+    """「道侣能不能突破、下一境界是什么、有哪些丹可用」——与人物培养同一套形状。"""
+
+    preview: CompanionBreakthroughPreview
+    candidates: tuple[CompanionBreakthroughCandidate, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -26,6 +47,8 @@ class CompanionCultivationView:
     weapon_law_names: tuple[tuple[int, str], ...]
     next_experience: int
     weapon_next_experience: int
+    #: 突破预览与候选丹药；没有下一境界时也在，用 `preview.reason` 说话。
+    breakthrough: CompanionBreakthroughOffer | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +97,8 @@ class DaolvPeiyangAction:
 
 
 __all__ = [
+    "CompanionBreakthroughCandidate",
+    "CompanionBreakthroughOffer",
     "CompanionBreakthroughRequest",
     "CompanionBreakthroughResult",
     "CompanionCultivationConflictError",

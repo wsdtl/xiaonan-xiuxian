@@ -61,8 +61,21 @@ class BattleMedicine:
     grade_order: int
 
 
+@dataclass(frozen=True)
+class BreakthroughMedicine:
+    """一颗突破丹的只读摘要（给「可突破」清单用）。
+
+    候选一律从丹药实体里扫出来（`使用效果.目标境界` 相等），**不写死任何编号**。
+    """
+
+    medicine_id: str
+    name: str
+    permanent: tuple[tuple[str, int | float], ...] = ()
+
+
 __all__ = [
     "BattleMedicine",
+    "BreakthroughMedicine",
     "MedicineError",
     "MedicineStatus",
     "PreparedBattleMedicine",

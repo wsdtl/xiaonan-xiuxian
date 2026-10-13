@@ -17,6 +17,7 @@ from game.core.data import (
 
 from .contracts import (
     BattleMedicine,
+    BreakthroughMedicine,
     MedicineError,
     MedicineStatus,
     RecoveryMedicine,
@@ -317,6 +318,38 @@ class MedicineService:
 
     def is_special(self, medicine_id: str) -> bool:
         return self._required_id(medicine_id) in self._special
+
+    def breakthrough_medicines(self, realm_id: str) -> tuple[BreakthroughMedicine, ...]:
+        """列出目标境界为 `realm_id` 的全部突破丹——扫丹药实体，数据驱动。
+
+        不写死编号：谁指向这个境界，谁就上清单；境界链本身也来自数据。
+        """
+
+        self._require_initialized()
+        target = _text(realm_id, "突破丹.目标境界")
+        found: list[BreakthroughMedicine] = []
+        for medicine_id, raw in self._medicines.items():
+            effect_value = raw.get("使用效果")
+            if not isinstance(effect_value, Mapping):
+                continue
+            effect = dict(effect_value)
+            if effect.get("类型") != "境界突破" or effect.get("目标境界") != target:
+                continue
+            permanent_value = effect.get("永久属性")
+            permanent: list[tuple[str, int | float]] = []
+            if isinstance(permanent_value, Mapping):
+                for name, value in dict(permanent_value).items():
+                    if isinstance(value, bool) or not isinstance(value, (int, float)):
+                        raise MedicineError(f"突破丹.永久属性.{name} 必须是数值")
+                    permanent.append((str(name), value))
+            found.append(
+                BreakthroughMedicine(
+                    medicine_id=medicine_id,
+                    name=str(raw.get("名称") or ""),
+                    permanent=tuple(permanent),
+                )
+            )
+        return tuple(sorted(found, key=lambda one: one.medicine_id))
 
     def _index_medicines(self) -> None:
         """按物品契约索引丹药，并校验每个实体真的符合契约。

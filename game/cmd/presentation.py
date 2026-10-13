@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 
@@ -36,6 +37,27 @@ def duration(seconds: int) -> str:
     if not remainder:
         return f"{minutes}分钟"
     return f"{minutes}分{remainder}秒"
+
+
+def candidate_lines(
+    builder: object,
+    *,
+    title: str,
+    entries: Sequence[tuple[str, str, str]],
+    footer: str,
+) -> None:
+    """把「候选丹药」一节铺进卡片：丹名是无边框按钮（名字只作显示、句柄用编号）。
+
+    放 `line` 的槽位、不放 `field` 的标签位——后者会把 CommandLink 打回 repr。
+    人物培养与道侣培养共用这一段，只有标题/条目/尾注由各自的数据集给。
+    """
+
+    from message import M
+
+    builder.section(title, icon="success")
+    for name, command, detail in entries:
+        builder.line(M.command(name, command), " ", M.text(detail, tone="muted"))
+    builder.small(footer)
 
 
 def sentence(value: object) -> str:
@@ -71,6 +93,7 @@ def error_document(
     tone: str = "danger",
     hint: object = "",
     actions: object = (),
+    render: object = None,
 ) -> object:
     """失败回执的统一形状：一节标题 + 一行状态 + 逐行铺开的说明。
 
@@ -90,10 +113,15 @@ def error_document(
         from game.cmd.actions import message_actions
 
         builder.actions(message_actions(actions))
+    # 需要往失败卡里补内容的调用方（例如突破失败时列出全部候选丹）在这里追加，
+    # 形状仍然只有这一处定义。
+    if render is not None:
+        render(builder)
     return builder.build()
 
 
 __all__ = [
+    "candidate_lines",
     "duration",
     "error_document",
     "format_lines",

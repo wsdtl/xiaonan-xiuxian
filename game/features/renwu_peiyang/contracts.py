@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from game.core.character import CharacterProfile
+from game.core.character import CharacterBreakthroughPreview, CharacterProfile
 from game.core.innate_treasure import InnateTreasureActivation
 
 
@@ -42,10 +42,29 @@ class CharacterLawRequest:
 
 
 @dataclass(frozen=True)
+class BreakthroughCandidate:
+    """一颗候选突破丹：编号是句柄、名称只作显示，永久属性照数据原样带出。"""
+
+    medicine_id: str
+    name: str
+    permanent: tuple[tuple[str, int | float], ...] = ()
+
+
+@dataclass(frozen=True)
+class BreakthroughOffer:
+    """「能不能突破、下一境界是什么、本境界有哪些丹可用」——查看页与失败卡共用一份。"""
+
+    preview: CharacterBreakthroughPreview
+    candidates: tuple[BreakthroughCandidate, ...] = ()
+
+
+@dataclass(frozen=True)
 class CharacterCultivationView:
     profile: CharacterProfile
     next_experience: int
     weapon_next_experience: int
+    #: 突破预览与候选丹药；没有下一境界时也在，用 `preview.reason` 说话。
+    breakthrough: BreakthroughOffer | None = None
 
 
 @dataclass(frozen=True)
@@ -91,6 +110,8 @@ class PeiyangAction:
 
 
 __all__ = [
+    "BreakthroughCandidate",
+    "BreakthroughOffer",
     "CharacterBreakthroughRequest",
     "CharacterBreakthroughResult",
     "CharacterCultivationConflictError",

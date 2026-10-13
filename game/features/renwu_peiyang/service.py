@@ -35,6 +35,8 @@ from game.core.medicine import MedicineError, MedicineService
 from game.features.presentation import require_mapping
 
 from .contracts import (
+    BreakthroughCandidate,
+    BreakthroughOffer,
     PeiyangAction,
     CharacterBreakthroughRequest,
     CharacterBreakthroughResult,
@@ -130,9 +132,32 @@ class CharacterCultivationFeature:
                 profile,
                 self._growth.experience_required(profile.level),
                 self._forging.weapon_experience_required(profile.weapon.level),
+                breakthrough=await self.breakthrough_offer(user_id),
             )
         except (CharacterStateError, ValueError) as exc:
             raise CharacterCultivationFeatureError(str(exc)) from exc
+
+    async def breakthrough_offer(self, user_id: str) -> BreakthroughOffer:
+        """能不能突破、下一境界是什么、本境界有哪些突破丹可用。
+
+        规则（满级／下一境界／是否已突破）问角色核心，候选丹药问丹药核心——两边都是数据驱动，
+        这一层只把两半拼成一份给卡片，不写死任何编号或境界名。
+        """
+
+        try:
+            preview = await self._character.breakthrough_preview(user_id)
+        except (CharacterStateError, CharacterCultivationError, ValueError) as exc:
+            raise CharacterCultivationFeatureError(str(exc)) from exc
+        if not preview.can_breakthrough:
+            return BreakthroughOffer(preview)
+        medicines = self._medicine.breakthrough_medicines(preview.next_realm_id)
+        return BreakthroughOffer(
+            preview,
+            tuple(
+                BreakthroughCandidate(one.medicine_id, one.name, one.permanent)
+                for one in medicines
+            ),
+        )
 
     async def equip(self, request: CharacterEquipRequest) -> CharacterEquipResult:
         self._require_initialized()

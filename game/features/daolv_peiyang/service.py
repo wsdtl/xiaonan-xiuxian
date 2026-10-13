@@ -28,9 +28,12 @@ from game.core.database import (
 )
 from game.core.forging import ForgingService
 from game.core.growth import GrowthService
+from game.core.medicine import MedicineService
 from game.features.presentation import require_mapping
 
 from .contracts import (
+    CompanionBreakthroughCandidate,
+    CompanionBreakthroughOffer,
     DaolvPeiyangAction,
     CompanionBreakthroughRequest,
     CompanionBreakthroughResult,
@@ -51,6 +54,7 @@ class CompanionCultivationFeature:
         companion: CompanionService,
         assets: AssetService,
         items: ItemCatalogService,
+        medicine: MedicineService,
         growth: GrowthService,
         forging: ForgingService,
         database: DatabaseService,
@@ -58,6 +62,7 @@ class CompanionCultivationFeature:
         self._data = data
         self._companion = companion
         self._assets = assets
+        self._medicine = medicine
         self._items = items
         self._growth = growth
         self._forging = forging
@@ -144,9 +149,31 @@ class CompanionCultivationFeature:
                 ),
                 self._growth.experience_required(active.instance.level),
                 self._forging.weapon_experience_required(active.instance.weapon_level),
+                breakthrough=await self.breakthrough_offer(user_id),
             )
         except (CompanionStateError, CompanionCultivationError, ValueError) as exc:
             raise CompanionCultivationFeatureError(str(exc)) from exc
+
+    async def breakthrough_offer(self, user_id: str) -> CompanionBreakthroughOffer:
+        """道侣能不能突破、下一境界是什么、有哪些突破丹可用。
+
+        与人物培养同一套分法：规则问道侣核心，候选问丹药核心，这一层只拼装。
+        """
+
+        try:
+            preview = await self._companion.breakthrough_preview(user_id)
+        except (CompanionStateError, CompanionCultivationError, ValueError) as exc:
+            raise CompanionCultivationFeatureError(str(exc)) from exc
+        if not preview.can_breakthrough:
+            return CompanionBreakthroughOffer(preview)
+        medicines = self._medicine.breakthrough_medicines(preview.next_realm_id)
+        return CompanionBreakthroughOffer(
+            preview,
+            tuple(
+                CompanionBreakthroughCandidate(one.medicine_id, one.name, one.permanent)
+                for one in medicines
+            ),
+        )
 
     async def breakthrough(
         self, request: CompanionBreakthroughRequest

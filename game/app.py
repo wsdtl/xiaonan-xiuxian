@@ -878,6 +878,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         companion,
         asset,
         item_catalog,
+        medicine,
         growth,
         forging,
         database,

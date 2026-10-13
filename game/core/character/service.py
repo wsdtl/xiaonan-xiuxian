@@ -59,6 +59,7 @@ from .contracts import (
     CharacterBattlePlan,
     CharacterBreakthroughCorrectionPlan,
     CharacterBreakthroughPlan,
+    CharacterBreakthroughPreview,
     CharacterContributionPlan,
     CharacterCreateCommand,
     CharacterCreationResult,
@@ -1548,6 +1549,66 @@ class CharacterService:
                 cultivation,
                 snapshot.version,
             ),
+        )
+
+    async def breakthrough_preview(self, user_id: str) -> CharacterBreakthroughPreview:
+        """只读：当前境界、下一境界与「能不能突破」。
+
+        口径与 `plan_breakthrough` 的校验逐条一致（满级 → 有下一境界 → 该境界还没突破过），
+        不能突破时给出原因，供卡片照直说。
+        """
+
+        self._require_initialized()
+        normalized_user_id = _required_user_id(user_id)
+        snapshot = await self._database.get(
+            StateAddress(normalized_user_id, "character", "main")
+        )
+        if snapshot is None:
+            raise CharacterNotFoundError("尚未创建人物")
+        character = dict(_state_mapping(snapshot.value, "character/main"))
+        realm_id = _state_text(character.get("境界"), "人物.境界")
+        realm = self._growth.realm(realm_id)
+        level = _state_positive_int(character.get("等级"), "人物.等级")
+        if level != realm.maximum_level:
+            return CharacterBreakthroughPreview(
+                realm_id=realm_id,
+                realm_name=realm.name,
+                level=level,
+                maximum_level=realm.maximum_level,
+                reason=f"达到{realm.maximum_level}级后才能突破{realm.name}",
+            )
+        try:
+            next_realm = self._growth.next_realm(realm_id)
+        except GrowthError:
+            return CharacterBreakthroughPreview(
+                realm_id=realm_id,
+                realm_name=realm.name,
+                level=level,
+                maximum_level=realm.maximum_level,
+                reason="已至当前修行尽头",
+            )
+        records = [
+            dict(record)
+            for record in _state_records(character.get("突破记录"), "人物.突破记录")
+        ]
+        if any(record.get("目标境界") == next_realm.realm_id for record in records):
+            return CharacterBreakthroughPreview(
+                realm_id=realm_id,
+                realm_name=realm.name,
+                level=level,
+                maximum_level=realm.maximum_level,
+                next_realm_id=next_realm.realm_id,
+                next_realm_name=next_realm.name,
+                reason="该境界已经完成突破",
+            )
+        return CharacterBreakthroughPreview(
+            realm_id=realm_id,
+            realm_name=realm.name,
+            level=level,
+            maximum_level=realm.maximum_level,
+            next_realm_id=next_realm.realm_id,
+            next_realm_name=next_realm.name,
+            can_breakthrough=True,
         )
 
     async def plan_breakthrough(

@@ -100,7 +100,14 @@ async def breakthrough_character(user_id: str, message: str, message_context: Me
         )
         await manager.send(reply.breakthrough(feature, result))
     except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        # 名字写错时别让人猜：把本境界的候选丹一并端出来（算不出来就照旧只报错）。
+        try:
+            offer = await feature.breakthrough_offer(user_id)
+        except (CharacterCultivationFeatureError, CharacterCultivationConflictError):
+            offer = None
+        await manager.send(
+            reply.error(feature, str(exc), feature.format_actions(), offer)
+        )
 
 
 @GameCommand.command(

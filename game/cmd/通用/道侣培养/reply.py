@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from ...actions import CommandAction
-from ...presentation import error_document
+from ...presentation import candidate_lines, error_document
 
 from typing import Sequence
 
 from game.features.daolv_peiyang import (
+    CompanionBreakthroughOffer,
     CompanionCultivationFeature,
     CompanionBreakthroughResult,
     CompanionCultivationView,
@@ -15,6 +16,39 @@ from game.features.daolv_peiyang import (
 )
 
 from message import Status, Progress, DocumentMessage, M
+
+
+def _render_candidates(
+    feature: CompanionCultivationFeature,
+    builder: object,
+    offer: CompanionBreakthroughOffer | None,
+    *,
+    title_key: str,
+) -> bool:
+    """把「本境界全部可用突破丹」铺进卡片——与人物培养共用同一段渲染。"""
+
+    if offer is None or not offer.preview.can_breakthrough or not offer.candidates:
+        return False
+    preview = offer.preview
+    candidate_lines(
+        builder,
+        title=feature.copy("突破", title_key).format_map(
+            {"来源": preview.realm_name, "目标": preview.next_realm_name}
+        ),
+        entries=tuple(
+            (
+                candidate.name,
+                f"查看 {candidate.medicine_id}",
+                "、".join(f"{name}+{value}" for name, value in candidate.permanent)
+                or feature.copy("突破", "无永久属性"),
+            )
+            for candidate in offer.candidates
+        ),
+        footer=feature.copy("突破", "候选共").format_map(
+            {"数量": len(offer.candidates)}
+        ),
+    )
+    return True
 
 
 def view(feature: CompanionCultivationFeature, result: CompanionCultivationView) -> DocumentMessage:
@@ -33,8 +67,9 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
             feature.copy("道侣", "经验"),
             _progress(instance.experience, result.next_experience),
         )
-        .section(feature.copy("道侣", "修行构筑"), icon="skill")
     )
+    _render_candidates(feature, builder, result.breakthrough, title_key="可突破标题")
+    builder.section(feature.copy("道侣", "修行构筑"), icon="skill")
     for category, names in result.cultivation_names:
         builder.field(category, "、".join(names))
     builder.section(feature.copy("道侣", "本命武器"), icon="weapon")
@@ -89,9 +124,18 @@ def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> 
 
 
 def error(
-    feature: DaolvPeiyangFeature, message: str, actions: Sequence[CommandAction] = ()
+    feature: DaolvPeiyangFeature,
+    message: str,
+    actions: Sequence[CommandAction] = (),
+    offer: CompanionBreakthroughOffer | None = None,
 ) -> DocumentMessage:
-    """失败回执：标题与状态词取自展示数据集，动作由玩法层给。"""
+    """失败回执：标题与状态词取自展示数据集，动作由玩法层给。
+
+    突破失败时顺带把本境界全部候选丹列出来（`offer` 由命令层算好传进来）。
+    """
+
+    def add_candidates(builder: object) -> None:
+        _render_candidates(feature, builder, offer, title_key="失败候选")
 
     return error_document(
         feature.copy("道侣培养", "标题"),
@@ -100,6 +144,7 @@ def error(
         message,
         tone="danger",
         actions=actions,
+        render=add_candidates if offer is not None else None,
     )
 
 
