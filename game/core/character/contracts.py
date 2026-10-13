@@ -144,6 +144,17 @@ class CharacterYijingPlan:
 
 
 @dataclass(frozen=True)
+class CharacterYijingRefundPlan:
+    """一次意境退点（坐忘）的结果：六条路练过的阶全部抹去，道行退回到**已发总额**。"""
+
+    #: 退点前各路的阶（编号 → 阶，按编号排序）。
+    tiers_before: tuple[tuple[str, int], ...]
+    points_before: int
+    points_after: int
+    mutation: StateMutation
+
+
+@dataclass(frozen=True)
 class CharacterProfile:
     user_id: str
     name: str

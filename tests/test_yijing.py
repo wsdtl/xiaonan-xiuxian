@@ -17,7 +17,14 @@ import itertools
 
 import pytest
 
-from game.core.database import StateAddress, StateMutation, TransactionCommand
+from game.core.asset import InventoryAdjustment
+from game.core.database import (
+    LocationMutation,
+    StateAddress,
+    StateMutation,
+    TransactionCommand,
+)
+from game.core.world import LocationQuery
 from game.features.chuangjian_renwu import CreateCharacterRequest
 from game.features.yijing import YijingError
 
@@ -199,3 +206,140 @@ def test_同一条请求重放稳定(services) -> None:
     _点(services, 'y-回放', 长江, '意境:回放')
     assert _阶(services, 'y-回放', 长江) == 1, '重放不许再点一阶'
     assert _道行(services, 'y-回放') == 0
+
+
+# ── 坐忘（退点）：到坐忘台服一枚忘境丹，六路清零、道行退回已发总额 ──
+
+忘境丹 = "160007"
+坐忘台 = "坐忘台"
+
+
+def _发丹(services, user_id: str, code: str, count: int = 1) -> None:
+    plan = asyncio.run(
+        services.core.asset.plan_inventory_changes(
+            user_id, (InventoryAdjustment(code, "01", count),)
+        )
+    )
+    asyncio.run(
+        services.core.database.commit(
+            TransactionCommand(
+                user_id, f"发丹:{user_id}:{code}:{count}", "测试置备", plan.operations, {}
+            )
+        )
+    )
+
+
+def _挪到(services, user_id: str, place: str) -> None:
+    xy = services.core.world.locate(LocationQuery(location_name=place)).xy
+    current = asyncio.run(services.core.location.current(user_id))
+    asyncio.run(
+        services.core.database.commit(
+            TransactionCommand(
+                user_id,
+                f"挪:{user_id}:{place}",
+                "测试置备",
+                (LocationMutation(user_id, xy, current.version),),
+                {},
+            )
+        )
+    )
+
+
+def _丹数(services, user_id: str) -> int:
+    stacks = asyncio.run(services.core.asset.inventory_stacks(user_id, 忘境丹))
+    return sum(stack.quantity for stack in stacks)
+
+
+def _已发总额(services, user_id: str) -> int:
+    """按当前境界的阶上限算已发道行：阶价 1..上限 的累计（突破就是这么发的）。"""
+
+    profile = asyncio.run(services.core.character.profile(user_id))
+    cap = services.core.character.yijing_cap(profile.realm_id)
+    return sum(services.core.character.yijing_cost(tier) for tier in range(1, cap + 1))
+
+
+def test_坐忘把六路清零并退回已发道行(services) -> None:
+    """两路各一阶、道行已花光：在坐忘台退点后，六路清空、道行回到已发总额、丹被扣掉。"""
+
+    _创建(services, "y-坐忘", "坐忘修士")
+    _写状态(
+        services, "y-坐忘", {"路": {长江: 1, 山尘: 1}, "道行": 0}, "置备:y-坐忘"
+    )
+    _发丹(services, "y-坐忘", 忘境丹)
+    _挪到(services, "y-坐忘", 坐忘台)
+    result = asyncio.run(services.features.yijing.refund("y-坐忘", "坐忘:1"))
+    assert _档案(services, "y-坐忘") == (), "六路必须全清"
+    assert _道行(services, "y-坐忘") == _已发总额(services, "y-坐忘"), "道行要退回已发总额"
+    assert _丹数(services, "y-坐忘") == 0, "忘境丹要被扣掉"
+    assert "不尽长江意境" in result.before and "山不让尘意境" in result.before, result.before
+    assert result.medicine == "忘境丹", result.medicine
+    assert result.replayed is False
+
+
+def test_坐忘失败时丹和状态都不动(services) -> None:
+    """没有丹就被拒，而且**状态一点没变**——这条证明扣丹与退点写在同一笔事务里。"""
+
+    _创建(services, "y-坐忘无丹", "无丹修士")
+    _写状态(
+        services, "y-坐忘无丹", {"路": {长江: 2}, "道行": 1}, "置备:y-坐忘无丹"
+    )
+    _挪到(services, "y-坐忘无丹", 坐忘台)
+    with pytest.raises(YijingError) as error:
+        asyncio.run(services.features.yijing.refund("y-坐忘无丹", "坐忘:无丹"))
+    assert "忘境丹" in str(error.value)
+    assert _阶(services, "y-坐忘无丹", 长江) == 2, "失败不许动状态"
+    assert _道行(services, "y-坐忘无丹") == 1, "失败不许动道行"
+
+
+def test_坐忘重放不重复扣丹(services) -> None:
+    _创建(services, "y-坐忘回放", "回放修士")
+    _写状态(
+        services, "y-坐忘回放", {"路": {长江: 1}, "道行": 0}, "置备:y-坐忘回放"
+    )
+    _发丹(services, "y-坐忘回放", 忘境丹, 2)
+    _挪到(services, "y-坐忘回放", 坐忘台)
+    first = asyncio.run(services.features.yijing.refund("y-坐忘回放", "坐忘:回放"))
+    second = asyncio.run(services.features.yijing.refund("y-坐忘回放", "坐忘:回放"))
+    assert second.replayed is True
+    assert _丹数(services, "y-坐忘回放") == 1, "重放不许再扣一枚丹"
+    assert first.points_after == second.points_after
+
+
+def test_不在坐忘台不能坐忘(services) -> None:
+    _创建(services, "y-坐忘别处", "别处修士")
+    _写状态(
+        services, "y-坐忘别处", {"路": {长江: 1}, "道行": 0}, "置备:y-坐忘别处"
+    )
+    _发丹(services, "y-坐忘别处", 忘境丹)
+    with pytest.raises(YijingError) as error:
+        asyncio.run(services.features.yijing.refund("y-坐忘别处", "坐忘:别处"))
+    assert "坐忘台" in str(error.value)
+
+
+def test_没点过意境不必坐忘(services) -> None:
+    _创建(services, "y-坐忘空", "空手修士")
+    _发丹(services, "y-坐忘空", 忘境丹)
+    _挪到(services, "y-坐忘空", 坐忘台)
+    with pytest.raises(YijingError) as error:
+        asyncio.run(services.features.yijing.refund("y-坐忘空", "坐忘:空"))
+    assert "一条都没点过" in str(error.value)
+
+
+def test_坐忘的成功回执能真的渲染出来(services) -> None:
+    """盯住玩家真正看到的那张卡：图标分类要登记、文案键要齐。
+
+    兑换码那次就是只验了返回值、从没渲染卡片，上线才炸在没登记的图标上；这里先把卡渲染一遍。
+    """
+
+    from game.cmd.专属.坐忘台 import reply as 坐忘回复
+    from launch.adapter.qq_protocol.render import render_qq_message
+
+    _创建(services, "y-坐忘卡", "卡片修士")
+    _写状态(services, "y-坐忘卡", {"路": {长江: 1}, "道行": 0}, "置备:y-坐忘卡")
+    _发丹(services, "y-坐忘卡", 忘境丹)
+    _挪到(services, "y-坐忘卡", 坐忘台)
+    result = asyncio.run(services.features.yijing.refund("y-坐忘卡", "坐忘:卡"))
+    payload = render_qq_message(坐忘回复.refund_result(services.features.yijing, result))
+    content = payload["content"] if isinstance(payload, dict) else str(payload)
+    assert "忘境丹" in content, content
+    assert "不尽长江意境" in content, content

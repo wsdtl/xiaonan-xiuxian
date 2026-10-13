@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 class YijingError(ValueError):
-    """意境请求不符合当前人物状态（境界不够、道行不足、已满九阶）。"""
+    """意境请求不符合当前人物状态（境界不够、道行不足、已满九阶、不在坐忘台、没有忘境丹）。"""
 
 
 class YijingConflictError(RuntimeError):
@@ -35,4 +35,23 @@ class YijingView:
     routes: tuple[YijingRoute, ...]
 
 
-__all__ = ["YijingConflictError", "YijingError", "YijingRoute", "YijingView"]
+@dataclass(frozen=True)
+class YijingRefundResult:
+    """一次坐忘（退点）的结果。"""
+
+    name: str
+    medicine: str
+    #: 退点前各路练到的阶（人读得懂的一行）；退点后六路皆空。
+    before: str
+    points_before: int
+    points_after: int
+    replayed: bool
+
+
+__all__ = [
+    "YijingConflictError",
+    "YijingError",
+    "YijingRefundResult",
+    "YijingRoute",
+    "YijingView",
+]

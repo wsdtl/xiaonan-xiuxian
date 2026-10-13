@@ -68,6 +68,7 @@ from .contracts import (
     CharacterGrowthPlan,
     CharacterFiveElementsPlan,
     CharacterYijingPlan,
+    CharacterYijingRefundPlan,
     YijingProfile,
     CharacterRedemptionPlan,
     CharacterIdentityPlan,
@@ -937,6 +938,33 @@ class CharacterService:
         character["意境"] = cell
         return CharacterYijingPlan(
             content_id, tier, tier + 1, cost, points - cost,
+            StateMutation(user, "character", "main", character, snapshot.version),
+        )
+
+    async def plan_yijing_refund(self, user_id: str) -> CharacterYijingRefundPlan:
+        """坐忘：把六条路练过的阶全部抹去，道行退回到**已发总额**（按当前境界的阶上限算累计价）。
+
+        道行只来自境界突破，所以「已发总额」＝阶价 1..阶上限 的累计，与突破实际发下来的数一致；
+        退点不惩罚、不抽成，玩家可以重新分配。一条路都没点过就没有可退的，直接拒。
+        """
+
+        user, snapshot, character = await self._medicine_state(user_id)
+        cell = dict(character.get("意境") or {})
+        paths, points = _state_yijing(cell) or ({}, 0)
+        if not paths:
+            raise CharacterCultivationError("六条意境一条都没点过，无需坐忘")
+        realm_id = _state_text(character.get("境界"), "人物.境界")
+        cap = self.yijing_cap(realm_id)
+        granted = sum(_yijing_tier_cost(tier) for tier in range(1, cap + 1))
+        cell.pop("编号", None)
+        cell.pop("阶", None)
+        cell["路"] = {}
+        cell["道行"] = granted
+        character["意境"] = cell
+        return CharacterYijingRefundPlan(
+            tuple(sorted(paths.items())),
+            points,
+            granted,
             StateMutation(user, "character", "main", character, snapshot.version),
         )
 
