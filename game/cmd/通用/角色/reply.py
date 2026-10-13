@@ -208,7 +208,7 @@ def overview(
         builder.field(
             f"{content.category}{content.slot}",
             M.text(f"{content.grade_name} · " if content.grade_name else "")
-            + (M.command(content.name, f"查看 {content.content_id}"),),
+            + (M.command(content.name, f"查看 {content.name}"),),
         )
     if result.innate_treasure is None:
         builder.inline_section(
@@ -234,7 +234,7 @@ def overview(
     builder.row(("攻击", _display_number(weapon.attack)), ("经验", weapon.experience))
     builder.field("器律", f"{len(weapon.equipped_laws)}/{weapon.open_law_slots}")
     for law in weapon.equipped_laws:
-        builder.item(law.slot, M.command(law.name, f"查看 {law.content_id}"))
+        builder.item(law.slot, M.command(law.name, f"查看 {law.name}"))
     builder.section("随身物资", icon="inventory").row(
         ("种类", character.inventory.stack_count),
         ("总数", character.inventory.total_quantity),

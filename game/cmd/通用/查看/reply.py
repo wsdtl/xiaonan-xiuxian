@@ -82,7 +82,8 @@ def inspection(result: ItemInspectionResult, baike_url: str = "") -> DocumentMes
         # 构筑正文已按说明字段逐行放入详情区，避免引言重复出现。
         description = ""
     if description:
-        reply.section(title, icon=icon).field("编号", detail.item_id)
+        # 结构上仍是「段 + 行」，只是不再打印编号（编号只在 help 里出现）。
+        reply.section(title, icon=icon)
         reply.line(description)
     else:
         reply.inline_section(

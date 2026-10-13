@@ -38,7 +38,7 @@ def view(feature: InnateTreasureFeature, result: InnateTreasureView) -> Document
                 index,
                 M.command(
                     M.text(treasure.name),
-                    f"查看 {treasure.treasure_id}",
+                    f"查看 {treasure.name}",
                 ),
                 f" · {treasure.authority}",
             )
@@ -60,7 +60,7 @@ def catalog(feature: InnateTreasureFeature, result: InnateTreasureView) -> Docum
     for index, treasure in enumerate(result.owned, start=1):
         builder.item(
             index,
-            M.command(M.text(treasure.name), f"查看 {treasure.treasure_id}"),
+            M.command(M.text(treasure.name), f"查看 {treasure.name}"),
         )
         builder.small(f"· {feature.copy('谱行权柄')}：{treasure.authority}")
         builder.small(f"· {feature.copy('谱行加成')}：{_effect(treasure)}")
@@ -107,7 +107,7 @@ def _append_treasure(builder: DocumentBuilder, treasure: InnateTreasure) -> None
         "名称",
         M.command(
             M.text(treasure.name),
-            f"查看 {treasure.treasure_id}",
+            f"查看 {treasure.name}",
         ),
     )
     builder.field("权柄", treasure.authority)

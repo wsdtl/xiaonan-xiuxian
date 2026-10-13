@@ -86,7 +86,7 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
             builder.field(
                 f"{category}{value.slot}",
                 M.text(f"{value.grade_name} · " if value.grade_name else "")
-                + (M.command(value.name, f"查看 {value.content_id}"),),
+                + (M.command(value.name, f"查看 {value.name}"),),
             )
     weapon = profile.weapon
     builder.section(feature.copy("人物", "本命武器"), icon="weapon")
@@ -100,7 +100,7 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
         _progress(weapon.experience, result.weapon_next_experience, tone="emphasis"),
     )
     for law in weapon.equipped_laws:
-        builder.item(law.slot, M.command(law.name, f"查看 {law.content_id}"))
+        builder.item(law.slot, M.command(law.name, f"查看 {law.name}"))
     return builder.build()
 
 

@@ -115,7 +115,7 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
             f"{category} · ",
             M.command(
                 M.text(material.name),
-                f"查看 {material.item_id}",
+                f"查看 {material.name}",
             ),
             f" × {material.quantity}",
         )

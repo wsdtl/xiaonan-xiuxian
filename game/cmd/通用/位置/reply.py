@@ -117,7 +117,7 @@ def nearby_cultivators(
         builder.section(copy.cultivators_local_section, icon=copy.cultivator_icon)
         for local in result.local_cultivators:
             builder.line(
-                M.command(local.name, f"查看 {local.companion_id}"),
+                M.command(local.name, f"查看 {local.name}"),
                 " · ",
                 copy.cultivator_summary.format_map(
                     {"境界": local.realm_name, "等级": local.level, "性别": local.gender, "状态": ""}

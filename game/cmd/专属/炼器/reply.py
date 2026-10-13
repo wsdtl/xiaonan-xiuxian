@@ -173,7 +173,7 @@ def _materials(builder: DocumentBuilder, materials: Sequence[ForgingMaterial], *
             index,
             M.command(
                 M.text(f"{material.grade_name}{material.name}"),
-                f"查看 {material.item_id}",
+                f"查看 {material.name}",
             ),
             f" × {material.quantity} · {material.trait}{relation}",
         )

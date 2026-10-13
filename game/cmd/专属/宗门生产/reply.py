@@ -100,7 +100,7 @@ def collected(
             index,
             M.command(
                 M.text(f"{output.grade_name}{output.name}"),
-                f"查看 {output.content_id}",
+                f"查看 {output.name}",
             ),
             f" × {output.quantity}",
         )

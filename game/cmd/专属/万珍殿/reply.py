@@ -44,9 +44,8 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]
         builder.item(
             index,
             f"{grade}",
-            M.command(M.text(shown), f"查看 {entry.content_id}"),
+            M.command(M.text(shown), f"查看 {entry.name}"),
             f" × {entry.quantity} · ",
-            M.command(entry.content_id, f"查看 {entry.content_id}"),
         )
         if entry.materials:
             builder.small(
@@ -66,7 +65,6 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMess
         .header(_text(copy, "标题"))
         .section(value.action, icon="success")
         .line(M.status("完成", tone="positive"), " ", _text(copy, key, values))
-        .field("编号", value.entry.content_id)
         .build()
     )
 

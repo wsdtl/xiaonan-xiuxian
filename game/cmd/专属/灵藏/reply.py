@@ -31,7 +31,7 @@ def page(copy: LingcangCopy, value: LingcangPage, actions: Sequence[CommandActio
             index,
             M.command(
                 M.text(f"{entry.grade_name}{entry.name}"),
-                f"查看 {entry.content_id}",
+                f"查看 {entry.name}",
             ),
             f" × {entry.quantity}",
         ).small(f"{entry.category} · {entry.content_id}")

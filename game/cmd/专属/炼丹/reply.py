@@ -190,7 +190,7 @@ def _material(builder: DocumentBuilder, index: int, material: AlchemyMaterial) -
         index,
         M.command(
             M.text(f"{material.grade_name}{material.name}"),
-            f"查看 {material.item_id}",
+            f"查看 {material.name}",
         ),
         f" × {material.quantity} · {material.trait} · {material.relation}",
     )

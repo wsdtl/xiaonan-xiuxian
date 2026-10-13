@@ -36,7 +36,7 @@ def item(
             "基础物品",
             M.command(
                 M.text(f"{grade_name}{item_name}"),
-                f"查看 {value.item_id}",
+                f"查看 {item_name}",
             ),
         )
         .field("数量", value.quantity)
