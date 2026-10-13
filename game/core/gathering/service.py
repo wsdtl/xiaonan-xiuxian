@@ -266,6 +266,8 @@ class GatheringService:
             started_at,
             maximum_ends_at,
             receipt.replayed,
+            # 每人最多一位相助道侣，所以「总单位数 − 参与人数」就是道侣数。
+            companion_count=total_units - len(participants),
         )
 
     async def _plan_gathering_participants(self, draft: _GatheringDraft) -> int:

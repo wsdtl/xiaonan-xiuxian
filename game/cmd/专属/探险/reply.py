@@ -40,16 +40,24 @@ def started(
     value: ExplorationStarted,
     actions: tuple[ExplorationAction, ...],
 ) -> DocumentMessage:
-    return (
+    builder = (
         M.document()
         .header(text(copy, "开始", "标题"))
         .inline_section("探险状态", M.status("进行中", tone="positive"), icon="status")
         .section(value.location_name, icon="navigation")
         .row(
-            (text(copy, "开始", "同行用户"), value.participant_count),
-            (text(copy, "开始", "正式单位"), value.formal_unit_count),
+            (text(copy, "开始", "参与用户"), value.participant_count),
+            # 人物与道侣分开数：单位数里含道侣，减掉才是人物。
+            (
+                text(copy, "开始", "出战人物"),
+                value.formal_unit_count - value.companion_count,
+            ),
         )
-        .row(
+    )
+    if value.companion_count:
+        builder.field(text(copy, "开始", "同行道侣"), value.companion_count)
+    return (
+        builder.row(
             (text(copy, "开始", "预计场数"), value.battle_count),
             (text(copy, "开始", "预计用时"), span(value.started_at, value.ends_at)),
         )
@@ -178,7 +186,7 @@ def settlement_page(
                 ),
             )
             .row(
-                (text(copy, "总结", "同行用户"), value.participant_count),
+                (text(copy, "总结", "参与用户"), value.participant_count),
                 (
                     text(copy, "总结", "总灵石"),
                     M.text(value.total_spirit_stones, tone="cultivation"),

@@ -40,20 +40,31 @@ def started(
     value: RetreatStarted,
     actions: tuple[RetreatAction, ...],
 ) -> DocumentMessage:
-    return (
+    builder = (
         M.document()
         .header(text(copy, "开始", "标题"))
         .inline_section("闭关状态", M.status("进行中", tone="positive"), icon="status")
         .section(value.location_name, icon="player")
         .row(
-            (text(copy, "开始", "同行用户"), value.participant_count),
-            (text(copy, "开始", "正式角色"), value.formal_character_count),
+            (text(copy, "开始", "参与用户"), value.participant_count),
+            # 人物与道侣分开数：正式角色数里含道侣，减掉才是人物。
+            (
+                text(copy, "开始", "共修人物"),
+                value.formal_character_count - value.companion_count,
+            ),
         )
         .row(
             (text(copy, "开始", "轮次"), value.maximum_rounds),
-            (text(copy, "开始", "预计用时"), span(value.started_at, value.maximum_ends_at)),
+            (
+                text(copy, "开始", "预计用时"),
+                span(value.started_at, value.maximum_ends_at),
+            ),
         )
-        .small(text(copy, "开始", "说明"))
+    )
+    if value.companion_count:
+        builder.field(text(copy, "开始", "同行道侣"), value.companion_count)
+    return (
+        builder.small(text(copy, "开始", "说明"))
         .actions(message_actions(actions))
         .build()
     )
@@ -92,7 +103,7 @@ def progress(
             progress_tail,
         )
         .row(
-            (text(copy, "进度", "同行用户"), value.participant_count),
+            (text(copy, "进度", "参与用户"), value.participant_count),
             (text(copy, "进度", "累计感悟"), value.group_insight_count),
         )
         .section(text(copy, "进度", "本人感悟"), icon="skill")
@@ -153,7 +164,7 @@ def settlement_page(
                         display="value",
                     ),
                 ),
-                (text(copy, "总结", "同行用户"), value.participant_count),
+                (text(copy, "总结", "参与用户"), value.participant_count),
             )
             .field(text(copy, "总结", "感悟次数"), insight_count)
             .small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))

@@ -55,6 +55,8 @@ class ExplorationStarted:
     started_at: datetime
     ends_at: datetime
     replayed: bool
+    #: 同行道侣数（正式名单里「并肩」的那部分）；人物数 = 正式单位数 − 道侣数。
+    companion_count: int = 0
 
 
 @dataclass(frozen=True)

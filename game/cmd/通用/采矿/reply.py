@@ -42,21 +42,32 @@ def started(
     value: GatheringStarted,
     actions: tuple[OreGatheringAction, ...],
 ) -> DocumentMessage:
-    return (
+    builder = (
         M.document()
         .header(text(copy, "开始", "标题"))
         .inline_section("采集状态", M.status("进行中", tone="positive"), icon="status")
         .section(value.place_name, icon="item")
         .field(text(copy, "开始", "地形"), value.terrain)
         .row(
-            (text(copy, "开始", "同行用户"), value.participant_count),
-            (text(copy, "开始", "采集单位"), value.gathering_unit_count),
+            (text(copy, "开始", "参与用户"), value.participant_count),
+            # 人物与道侣分开数：采集单位里含相助道侣，减掉才是人物。
+            (
+                text(copy, "开始", "采集人物"),
+                value.gathering_unit_count - value.companion_count,
+            ),
         )
         .row(
             (text(copy, "开始", "轮次"), value.maximum_rounds),
-            (text(copy, "开始", "预计用时"), span(value.started_at, value.maximum_ends_at)),
+            (
+                text(copy, "开始", "预计用时"),
+                span(value.started_at, value.maximum_ends_at),
+            ),
         )
-        .small(text(copy, "开始", "说明"))
+    )
+    if value.companion_count:
+        builder.field(text(copy, "开始", "同行道侣"), value.companion_count)
+    return (
+        builder.small(text(copy, "开始", "说明"))
         .actions(message_actions(actions))
         .build()
     )
@@ -86,7 +97,7 @@ def progress(
             (text(copy, "进度", "剩余时间"), duration(value.remaining_seconds)),
         )
         .row(
-            (text(copy, "进度", "同行用户"), value.participant_count),
+            (text(copy, "进度", "参与用户"), value.participant_count),
             (text(copy, "进度", "累计数量"), value.group_quantity),
         )
         .section(text(copy, "进度", "本人所得"), icon="item")
@@ -146,7 +157,7 @@ def settlement_page(
                         display="value",
                     ),
                 ),
-                (text(copy, "总结", "同行用户"), value.participant_count),
+                (text(copy, "总结", "参与用户"), value.participant_count),
             )
             .field(
                 text(copy, "总结", "灵矿总数"),

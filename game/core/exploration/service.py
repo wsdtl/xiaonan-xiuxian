@@ -688,6 +688,8 @@ class ExplorationService:
             started_at,
             ends_at,
             receipt.replayed,
+            # 每人最多一位同行道侣，所以「单位数 − 参与人数」就是道侣数。
+            companion_count=initial_unit_count - len(participants),
         )
 
     async def progress(

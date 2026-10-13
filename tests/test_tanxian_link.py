@@ -132,3 +132,85 @@ def test_讨伐随时可停_按打完的血段发(services) -> None:
         feature.settle(user3, '结满:早停讨伐三', now=now + timedelta(hours=3))
     )
     assert full.early is False, '打满走完整结算，与原来一致'
+
+
+def test_活动卡片把人物与道侣分开数(services) -> None:
+    """卡片上三个数必须对得上：人物 = 单位数 − 道侣数；独行时道侣数为 0（不印那一栏）。"""
+
+    import asyncio
+
+    from game.core.asset import InventoryAdjustment
+    from game.core.database import TransactionCommand
+    from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
+    from game.features.daolv_jiejiao.contracts import (
+        CompanionGiftRequest,
+        CompanionInvitationRequest,
+    )
+    from game.features.xinglu.contracts import TravelRequest
+
+    def 造(名字, 带道侣, 终点):
+        用户 = 'P:' + 名字
+        asyncio.run(
+            services.features.chuangjian_renwu.create(
+                CreateCharacterRequest(
+                    user_id=用户, request_id='建:' + 名字, name=名字, gender='男'
+                )
+            )
+        )
+        if 带道侣:
+            asyncio.run(
+                services.features.xinglu.travel(
+                    TravelRequest(user_id=用户, request_id='丹:' + 名字, destination='丹霞城')
+                )
+            )
+            plan = asyncio.run(
+                services.core.asset.plan_inventory_changes(
+                    用户, (InventoryAdjustment('200023', '01', 12),)
+                )
+            )
+            asyncio.run(
+                services.core.database.commit(
+                    TransactionCommand(
+                        用户, '花:' + 名字, '测试', tuple(plan.operations), {'物品': '200023'}
+                    )
+                )
+            )
+            for index in range(12):
+                asyncio.run(
+                    services.features.daolv_jiejiao.gift(
+                        CompanionGiftRequest(
+                            用户, f'礼{index}:' + 名字, '谢若棠', '200023', '01', 1
+                        )
+                    )
+                )
+            asyncio.run(
+                services.features.daolv_jiejiao.invite(
+                    CompanionInvitationRequest(用户, '邀:' + 名字, '谢若棠')
+                )
+            )
+        if 终点:
+            asyncio.run(
+                services.features.xinglu.travel(
+                    TravelRequest(user_id=用户, request_id='去:' + 名字, destination=终点)
+                )
+            )
+        return 用户
+
+    # 独行：一个玩家、一个人物、没有道侣
+    独 = 造('独行修士', False, '玉泉涧')
+    v = asyncio.run(services.features.tanxian.start(独, '探:独'))
+    assert (v.participant_count, v.formal_unit_count, v.companion_count) == (1, 1, 0)
+
+    # 带道侣：还是一个玩家，但单位数 2 —— 拆开就是「人物 1 ＋ 道侣 1」
+    侣 = 造('带侣修士', True, '玉泉涧')
+    v = asyncio.run(services.features.tanxian.start(侣, '探:侣'))
+    assert (v.participant_count, v.formal_unit_count, v.companion_count) == (1, 2, 1)
+    assert v.formal_unit_count - v.companion_count == 1, '人物数不能被道侣顶高'
+
+    拽子 = 造('闭关带侣', True, '玉泉涧')
+    v = asyncio.run(services.features.biguan.start(拽子, '闭:侣'))
+    assert v.companion_count == 1 and v.formal_character_count == 2
+
+    采侣 = 造('采药带侣', True, '')
+    v = asyncio.run(services.features.caiyao.start(采侣, '药:侣'))
+    assert v.companion_count == 1 and v.gathering_unit_count == 2

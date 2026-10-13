@@ -262,6 +262,7 @@ class RaidService:
             value.user_id: value
             for value in await self._player_state.current_many(participants)
         }
+        companion_count = 0
         for user_id in participants:
             transition_operations.append(
                 (await self._player_state.plan_transition(StateTransitionCommand(
@@ -280,6 +281,7 @@ class RaidService:
                 companion = replace(companion, group_id=f"玩家编组:{user_id}")
                 allies.append(companion)
                 members.append(companion.id)
+                companion_count += 1
             user_character_ids[user_id] = members
             ally_groups.append(CombatGroupSpec(f"玩家编组:{user_id}", tuple(members), tuple(members)))
         groups = self.generate(
@@ -329,6 +331,7 @@ class RaidService:
             "结束时间": (started_at + timedelta(seconds=_positive_int(self._rules.get("持续秒数", 120), "讨伐.持续秒数"))).isoformat(),
             "用户角色": user_character_ids,
             "编组数量": len(groups.groups),
+            "同行道侣": companion_count,
             "战果": {item.id: {"用户编号": item.owner_id, "道侣": item.id.startswith("companion:"), "血气": item.health, "精神": item.spirit, "武器经验": weapon_experience} for item in result.left_results},
             "奖励": rewards,
             "战败敌人": len(defeated),
@@ -602,6 +605,7 @@ def _started(value: Mapping[str, object], *, replayed: bool) -> RaidStarted:
         _time(value.get("开始时间")),
         _time(value.get("结束时间")),
         replayed,
+        companion_count=int(value.get("同行道侣", 0) or 0),
     )
 
 

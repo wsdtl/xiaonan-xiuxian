@@ -11,7 +11,7 @@ from ...presentation import duration, sentence, span
 
 
 def started(feature: RaidFeature, value: RaidStarted) -> DocumentMessage:
-    return (
+    builder = (
         M.document()
         .header(feature.text("开始", "标题"))
         .inline_section("讨伐状态", M.status("进行中", tone="danger"), icon="combat")
@@ -20,7 +20,13 @@ def started(feature: RaidFeature, value: RaidStarted) -> DocumentMessage:
             (feature.text("开始", "参与用户"), value.participant_count),
             (feature.text("开始", "敌方编组"), value.enemy_group_count),
         )
-        .field(feature.text("开始", "预计用时"), span(value.started_at, value.ends_at))
+    )
+    if value.companion_count:
+        builder.field(feature.text("开始", "同行道侣"), value.companion_count)
+    return (
+        builder.field(
+            feature.text("开始", "预计用时"), span(value.started_at, value.ends_at)
+        )
         .small(feature.text("开始", "说明"))
         .build()
     )

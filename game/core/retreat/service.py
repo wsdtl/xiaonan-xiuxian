@@ -312,6 +312,8 @@ class RetreatService:
             started_at,
             maximum_ends_at,
             receipt.replayed,
+            # 每人最多一位同行道侣，所以「正式角色数 − 参与人数」就是道侣数。
+            companion_count=formal_count - len(participants),
         )
 
     async def _plan_retreat_participants(self, draft: _RetreatDraft) -> int:
