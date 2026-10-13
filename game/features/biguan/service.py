@@ -99,6 +99,10 @@ class RetreatFeature:
     ) -> tuple[RetreatAction, ...]:
         return paged_settlement_actions(actions, self._buttons, page=page, total_pages=total_pages)
 
+    def cultivation_name(self, content_id: str) -> str:
+        """只取名字（不带品级），给「查看」这类联动当参数用。"""
+        return str(self._data.entity("功法", content_id).get("名称") or content_id)
+
     def cultivation_label(self, content_id: str, grade_id: str) -> str:
         name = str(self._data.entity("功法", content_id).get("名称") or content_id)
         return f"{self._asset.grade(grade_id).name}{name}"

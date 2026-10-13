@@ -201,7 +201,7 @@ def _item_parts(feature: HerbGatheringFeature, item: GatheredItem) -> tuple[obje
     return (
         M.command(
             M.text(feature.item_label(item.item_id, item.grade_id)),
-            f"查看 {item.item_id}",
+            f"查看 {feature.item_name(item.item_id)}",
         ),
         f" × {item.quantity}",
     )

@@ -104,6 +104,11 @@ class HerbGatheringFeature:
     ) -> tuple[HerbGatheringAction, ...]:
         return paged_settlement_actions(actions, self._buttons, page=page, total_pages=total_pages)
 
+    def item_name(self, item_id: str) -> str:
+        """只取名字（不带品级），给「查看」这类联动当参数用。"""
+        item = self._data.entity("基础物品", item_id)
+        return str(item.get("名称") or item_id)
+
     def item_label(self, item_id: str, grade_id: str) -> str:
         item = self._data.entity("基础物品", item_id)
         return f"{self._asset.grade(grade_id).name}{item.get('名称') or item_id}"

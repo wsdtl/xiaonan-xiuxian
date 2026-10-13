@@ -237,7 +237,7 @@ def _user_page(
                     M.text(
                         feature.cultivation_label(insight.content_id, insight.grade_id),
                     ),
-                    f"查看 {insight.content_id}",
+                    f"查看 {feature.cultivation_name(insight.content_id)}",
                 ),
             )
     else:
