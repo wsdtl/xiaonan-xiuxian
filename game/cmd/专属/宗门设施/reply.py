@@ -64,7 +64,6 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
         assessment = value.assessment
         title = assessment.law.name
         rows = [
-            ("器律", assessment.law.law_id),
             ("器阶", assessment.law.stage),
             ("铸法", assessment.law.method),
         ]
@@ -74,7 +73,6 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
         assessment = value.assessment
         title = assessment.recipe.medicine_name
         rows = [
-            ("丹药", assessment.recipe.recipe_id),
             (
                 "成丹",
                 f"{assessment.medicine_grade_name}{assessment.recipe.medicine_name}",
@@ -90,7 +88,6 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
         assessment = value.assessment
         title = assessment.formation.name
         rows = [
-            ("阵法", assessment.formation.formation_id),
             ("品级", assessment.grade_name),
             ("阵基", f"承载 {assessment.capacity:g}"),
             ("阵眼", f"冲击 {assessment.impact:g}"),
