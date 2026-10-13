@@ -5,6 +5,8 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.jiaoyi import TradeFeatureError, TradePurchaseCommand
 
+from game.features.presentation import ItemRefError, parse_item_and_grade
+
 from ...command import GameCommand
 from . import reply
 from .site import router
@@ -55,7 +57,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "资源",
             "summary": "从当前位置货架购买真意或气机",
-            "usage": ("购买 抢刻 黄品", "购买 编号或名称 品级", "购买 编号或名称 品级 数量"),
+            "usage": ("购买 黄品抢刻", "购买 黄品抢刻 3", "购买 <品级><物品> [数量]"),
             "side_effect": "扣除灵石，把对应数量收入修行资粮；单次最多买 50 个",
             "order": 56,
         },
@@ -63,20 +65,26 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
 )
 async def purchase_trade(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.jiaoyi
-    parts = str(message or "").split()
-    if len(parts) not in {2, 3} or (len(parts) == 3 and not parts[2].isdecimal()):
-        await manager.send(reply.error(
-                feature, feature.copy("错误", "购买写法"), feature.format_actions(), command="购买"
-            ))
+    try:
+        # 统一语法：<品级><物品> [数量]；旧的「物品 品级」仍受理（见 game/cmd/item_ref.py）。
+        item, grade, quantity = parse_item_and_grade(str(message or "").split())
+    except ItemRefError as exc:
+        await manager.send(
+            reply.error(
+                feature,
+                feature.copy("错误", "购买写法"),
+                feature.format_actions(),
+                command="购买",
+            )
+        )
         return
-    quantity = int(parts[2]) if len(parts) == 3 else 1
     try:
         value = await feature.purchase(
             TradePurchaseCommand(
                 user_id,
                 message_context.request_id,
-                parts[0],
-                parts[1],
+                item,
+                grade,
                 quantity,
             )
         )

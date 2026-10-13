@@ -52,7 +52,7 @@ def format_item_ref(ref: ItemRef) -> str:
     return text
 
 
-def parse_item_ref(text: str, *, grades: Mapping[str, str]) -> ItemRef:
+def parse_item_ref(text: str, *, grades: Mapping[str, str] | None = None) -> ItemRef:
     """按统一语法解析；`grades` 是「品级名 → 编号」，用来认出中文品级。
 
     认不出品级就当作「没写品级」（物品名本身可能以汉字开头）。
@@ -73,7 +73,9 @@ def parse_item_ref(text: str, *, grades: Mapping[str, str]) -> ItemRef:
     grade = ""
     prefix = item[:GRADE_WIDTH]
     if len(item) > GRADE_WIDTH:
-        if prefix.isdigit() or prefix in grades:
+        # 认品级：给了表就按表（名称→编号）；没给就按定长约定——2 位数字，或以「品」结尾的 2 字前缀。
+        known = (prefix in grades) if grades is not None else prefix.endswith("品")
+        if prefix.isdigit() or known:
             grade = prefix
             item = item[GRADE_WIDTH:].strip()
     if not item:

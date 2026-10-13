@@ -167,6 +167,35 @@ def format_command(button: Button, variables: Mapping[str, object] | None) -> st
     return button["命令"].format_map(values)
 
 
+from collections.abc import Sequence
+from game.core.asset import ItemRefError, parse_item_ref
+
+
+def split_quantity(parts: Sequence[str]) -> tuple[list[str], int]:
+    """末尾的纯数字当数量；不写就是 1。"""
+
+    words = [one for one in parts if one]
+    if len(words) > 1 and words[-1].isdecimal():
+        return words[:-1], int(words[-1])
+    return words, 1
+
+
+def parse_item_and_grade(parts: Sequence[str]) -> tuple[str, str, int]:
+    """解成 (物品, 品级, 数量)。
+
+    一段＝新语法 `<品级><物品>`；两段＝旧语法 `<物品> <品级>`（仍受理）。
+    品级可以没有（物品名本身不写品级时）。
+    """
+
+    words, quantity = split_quantity(parts)
+    if len(words) == 1:
+        ref = parse_item_ref(words[0])
+        return ref.item, ref.grade, quantity
+    if len(words) == 2:
+        return words[0], words[1], quantity
+    raise ItemRefError("格式：<品级><物品> [数量]，例：玄品枯海锁元 3")
+
+
 __all__ = [
     "BUTTON_KEYS",
     "BUTTON_KEYS_WITHOUT_CONDITION",
