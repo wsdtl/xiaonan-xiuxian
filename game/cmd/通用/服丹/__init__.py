@@ -117,7 +117,7 @@ async def _setting(
         "scope": "通用",
         "guard_rule": "已创建",
         "help": {
-            "category": "修行",
+            "category": "系统",
             "summary": "单独设置人物的战斗自动用药开关",
             "usage": ("人物自动用药 开", "人物自动用药 开或关",),
             "side_effect": "只改变人物开关，不影响道侣",
@@ -141,7 +141,7 @@ async def set_character_automatic(user_id: str, message: str, message_context: M
         "scope": "通用",
         "guard_rule": "已创建",
         "help": {
-            "category": "修行",
+            "category": "系统",
             "summary": "单独设置当前同行道侣的战斗自动用药开关",
             "usage": ("道侣自动用药 开", "道侣自动用药 开或关",),
             "side_effect": "只改变当前同行道侣开关，不影响人物",

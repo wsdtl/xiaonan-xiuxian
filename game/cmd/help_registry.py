@@ -6,6 +6,9 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 HELP_CATEGORY_ORDER = (
+    #: 系统自成一类：菜单本身（帮助）、网页读取开关、兑换码、自动用药这类**账号级设置**，
+    #: 不是角色在游戏里做的动作。放最前，玩家一进菜单先看见「帮助」。
+    "系统",
     "角色",
     "道侣",
     #: 宗门自成一类：山门、洞天设施、灵藏/万珍殿/灵田/灵脉、藏经阁这些都在这里。
