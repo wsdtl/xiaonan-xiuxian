@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from game.features.zhanbao.battle_log import BATTLE_RETENTION_SECONDS, BattleReportStore
 from game.features.tiandao_houtai import MessageFlowRow, MessageFlowStore
 from launch.adapter.local import LocalDispatchResult
 
@@ -326,7 +325,11 @@ def _replace_queue_tail(queue: asyncio.Queue, value: Any) -> None:
 def _runtime_log_database_path() -> Path:
     """解析消息流水库路径（与战报同库；解析规则单一来源在 `launch/battle_log.py`）。"""
 
-    from game.features.zhanbao.battle_log import runtime_log_database_path
+    from launch import config
+
+    raw = (config.custom.get("RUNTIME_LOG_DATABASE_PATH", "") or "").strip()
+    path = Path(raw or "database/runtime_log.db").expanduser()
+    return path if path.is_absolute() else config.base_dir / path
 
     return runtime_log_database_path()
 
@@ -338,13 +341,6 @@ service = MessageConsoleService(
     ),
     media_dir=config.base_dir / ".runtime" / "runtime_log_media",
 )
-
-#: 战报是非资产数据：与消息流水同住这一个库，按战报编号对外分享，到期由定时任务清理。
-battle_reports = BattleReportStore(
-    _runtime_log_database_path(),
-    retention_seconds=BATTLE_RETENTION_SECONDS,
-)
-
 
 def _record_from_row(row: MessageFlowRow) -> ConsoleFlowRecord:
     interactions: list[MessageInteraction] = []

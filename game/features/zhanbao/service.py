@@ -14,26 +14,58 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from game.core.combat import VIEW_PARTS, CombatService
+from game.core.data import JsonDataService
 from game.core.duel import DuelService
 from game.core.sect_war import SectWarService
+
+#: 本玩法命令文案所在的数据集（登记在 data/战斗/组件.json）。
+COPY_DATASET = "我的战报展示"
 
 #: 一次调用要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应（核心定的名单）。
 VIEWS = VIEW_PARTS
 
+#: `my_reports` 一次最多拉多少条：列表只给最近的一段时间，够翻几页就行。
+FETCH_LIMIT = 200
+
 
 class BattleReportLog(Protocol):
-    """非资产战报库的**读**契约（由天道后台的非资产仓储实现）。
+    """非资产战报库的**读**契约（由战报日志仓储 `battle_log/service.py` 实现）。
 
     战报是非资产数据：不归玩家所有、按编号对外分享、只留一段时间。`load` 只给未过期的，
-    `peek` 连过期的也给——页面要能把「已过期」和「从来没有过」分开说。
+    `peek` 连过期的也给——页面要能把「已过期」和「从来没有过」分开说；
+    `recent` 按参与者列最近的未过期战报，供「我的战报」列表用。
     """
 
     def load(self, report_id: str) -> Any | None: ...
 
     def peek(self, report_id: str) -> Any | None: ...
+
+    def recent(self, participant: str, *, kind: str = "", limit: int) -> Any: ...
+
+
+@dataclass(frozen=True)
+class MyReport:
+    """列表里的一条战报：只够画一行，不带整份本体。"""
+
+    report_id: str
+    kind: str
+    finished_at: str
+    finished_timestamp: float
+    participants: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class MyReportPage:
+    """「我的战报」的一页：entries ＋ 页码信息。"""
+
+    entries: tuple[MyReport, ...]
+    page: int
+    size: int
+    total: int
 
 
 class BattleReportFeature:
@@ -45,12 +77,25 @@ class BattleReportFeature:
         sect_war: SectWarService,
         duel: DuelService,
         battle_log: BattleReportLog | None = None,
+        data: JsonDataService | None = None,
     ) -> None:
         self._combat = combat
         self._sect_war = sect_war
         self._duel = duel
         self._battle_log = battle_log
+        self._data = data
+        self._copy: Mapping[str, str] | None = None
         self._initialized = False
+        if data is not None:
+            self._copy = {
+                str(key): str(value)
+                for key, value in dict(data.dataset(COPY_DATASET)).items()
+            }
+
+    def copy(self) -> Mapping[str, str]:
+        """命令文案；没接数据集的旧装配会拿到空表（命令侧会自行回退）。"""
+
+        return self._copy or {}
 
     def initialize(self) -> None:
         if self._initialized:
@@ -60,6 +105,32 @@ class BattleReportFeature:
         if not self._sect_war.status().initialized:
             raise RuntimeError("宗门战核心必须先于战报页面玩法启动")
         self._initialized = True
+
+    async def my_reports(
+        self, participant: str, *, kind: str = "", page: int = 1, size: int = 5
+    ) -> MyReportPage:
+        """列这个玩家最近**尚未过期**的战报，按结束时间倒序（分页）；`kind` 非空时只留该类型。"""
+
+        self._require_initialized()
+        name = str(participant or "").strip()
+        page_size = max(1, int(size))
+        page_index = max(1, int(page))
+        if not name or self._battle_log is None:
+            return MyReportPage((), page_index, page_size, 0)
+        rows = list(self._battle_log.recent(name, kind=kind, limit=FETCH_LIMIT))
+        entries = tuple(
+            MyReport(
+                report_id=str(row.report_id),
+                kind=str(row.kind),
+                finished_at=str(row.finished_at),
+                finished_timestamp=float(row.finished_timestamp),
+                participants=tuple(
+                    part for part in str(row.participants).splitlines() if part
+                ),
+            )
+            for row in rows[(page_index - 1) * page_size : page_index * page_size]
+        )
+        return MyReportPage(entries, page_index, page_size, len(rows))
 
     async def view(
         self,

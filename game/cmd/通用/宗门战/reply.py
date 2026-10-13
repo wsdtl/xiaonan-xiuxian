@@ -7,6 +7,7 @@ from ...presentation import duration, error_document
 from datetime import UTC, datetime
 from typing import Sequence
 
+from game.features.zhanbao import MyReportPage
 from game.features.zongmen_zhan import SectWarFeature, SectWarHistoryPage, SectWarView
 from launch.paths import public_url
 from message import DocumentMessage, M
@@ -106,6 +107,42 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessa
     if value.page_count > 1:
         builder.small(
             feature.text("格式", "页码", {"当前页": value.page, "总页数": value.page_count})
+        )
+    return builder.build()
+
+
+def recent_reports(feature: SectWarFeature, page: MyReportPage) -> DocumentMessage:
+    """最近**尚未过期**的宗门战报：倒序、每条一个打开链接、末行页码。
+
+    与「战报」组件的「我的战报」同款——数据同出一处（非资产战报库），只是这里只留宗门战。
+    """
+
+    builder = M.document().header(feature.text("查看", "最近战报")).section(
+        feature.text("查看", "记录标题"), icon="combat"
+    )
+    if not page.entries:
+        builder.line(
+            M.status("空", tone="muted"), " ", feature.text("结果", "最近为空")
+        )
+        return builder.build()
+    builder.field(
+        feature.text("查看", "总数"),
+        feature.text("查看", "最近总数", {"数量": page.total}),
+    )
+    for entry in page.entries:
+        builder.line(
+            entry.finished_at,
+            M.link(
+                feature.text("查看", "打开战报"),
+                public_url("battle", entry.report_id),
+            ),
+        )
+    if page.total > max(1, page.size):
+        page_size = max(1, page.size)
+        builder.small(
+            feature.text(
+                "格式", "页码", {"当前页": page.page, "总页数": max(1, (page.total + page_size - 1) // page_size)}
+            )
         )
     return builder.build()
 

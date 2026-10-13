@@ -5,19 +5,16 @@ from __future__ import annotations
 import time
 
 from launch import C, OnEvent, Scheduler, logger
-from game.features.zhanbao.battle_log import BATTLE_MAX_ROWS
 from launch.message_events import subscribe_message_events, unsubscribe_message_events
 
-from .console import battle_reports, service
+from .console import service
 
 
 @Scheduler.job("interval", minutes=30, id="cleanup_runtime_logs")
 def cleanup_runtime_logs() -> None:
-    """统一清理所有带到期时间的运行记录：消息流水与战报。"""
+    """清理消息流水（后台只留这一个非资产日志微服务）。"""
 
     service.cleanup()
-    battle_reports.initialize()
-    battle_reports.cleanup(now_timestamp=time.time(), max_rows=BATTLE_MAX_ROWS)
 
 
 @OnEvent.connect(priority=180)

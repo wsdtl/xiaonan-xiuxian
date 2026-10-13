@@ -876,7 +876,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     qiecuo.initialize()
     zengsong = GiftFeature(data, gift, item_catalog, character)
     zengsong.initialize()
-    zhanbao = BattleReportFeature(combat, sect_war, duel, battle_reports)
+    zhanbao = BattleReportFeature(combat, sect_war, duel, battle_reports, data=data)
     zhanbao.initialize()
     wangye = WangyeFeature(data, character, database)
     wangye.initialize()

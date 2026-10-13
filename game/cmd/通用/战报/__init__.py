@@ -1,7 +1,54 @@
-"""战报页面（分享地址）与它的五份数据接口。"""
+"""战报通用命令：查看我的最近未过期战报（页面仍由 .site 提供 router）。"""
 
 from __future__ import annotations
 
+from typing import Any
+
+from game.app import current_game_services
+
+from ...command import GameCommand
+from . import reply
 from .site import router
+
+
+@GameCommand.fullmatch(
+    cmd="战报",
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "战斗",
+            "summary": "查看我的最近未过期战报",
+            "usage": ("战报",),
+            "side_effect": "只查看，不会改变任何状态",
+            "order": 10,
+        },
+    },
+)
+async def show_my_reports(user_id: str, manager: Any) -> None:
+    feature = current_game_services().features.zhanbao
+    await manager.send(reply.view(feature, await feature.my_reports(user_id)))
+
+
+@GameCommand.command(
+    cmd="战报",
+    metadata={
+        "scope": "通用",
+        "guard_rule": "自主空闲或休息",
+        "help": {
+            "category": "战斗",
+            "summary": "翻页查看我的最近未过期战报",
+            "usage": ("战报 2",),
+            "side_effect": "只查看，不会改变任何状态",
+            "order": 11,
+        },
+    },
+)
+async def show_my_reports_page(user_id: str, message: str, manager: Any) -> None:
+    feature = current_game_services().features.zhanbao
+    raw = str(message or "").strip()
+    page = int(raw) if raw.isdecimal() and int(raw) > 0 else 1
+    await manager.send(reply.view(feature, await feature.my_reports(user_id, page=page)))
+
 
 __all__ = ["router"]

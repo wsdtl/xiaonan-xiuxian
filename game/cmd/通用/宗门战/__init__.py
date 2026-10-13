@@ -268,6 +268,42 @@ async def history(user_id: str, message: str, manager: Any) -> None:
         await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
+@GameCommand.command(
+    cmd=("宗门战报", "最近宗门战报"),
+    metadata={
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "战斗",
+            "summary": "分页查看最近尚未过期的宗门战报",
+            "usage": ("最近宗门战报", "最近宗门战报 2"),
+            "side_effect": "只读，按页查看最近战报",
+            "order": 11,
+        },
+    },
+)
+async def recent_reports(user_id: str, message: str, manager: Any) -> None:
+    try:
+        raw = str(message or "").strip()
+        if raw and (not raw.isdecimal() or int(raw) < 1):
+            raise ValueError
+        report_feature = current_game_services().features.zhanbao
+        await manager.send(
+            reply.recent_reports(
+                _feature(),
+                await report_feature.my_reports(user_id, kind="宗门战", page=int(raw or 1)),
+            )
+        )
+    except ValueError:
+        await manager.send(
+            reply.error(
+                _feature(),
+                _feature().text("错误", "战况写法"),
+                _feature().format_actions("战录格式"),
+            )
+        )
+
+
 async def _run(manager: Any, operation: Awaitable[SectWarView]) -> None:
     try:
         await manager.send(reply.view(_feature(), await operation))

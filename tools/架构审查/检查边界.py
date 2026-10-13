@@ -216,12 +216,13 @@ def check_cmd_core_dependency() -> list[Finding]:
         relative = _relative(path)
         tree = _parse(path)
         for line, module in _imports(tree):
-            if module.startswith(
+            if module.startswith("game.features.tiandao_houtai"):
+                # 消息流水：维护者入口**唯一**合法的微服务（委托方 2026-10-14 口径：
+                # 后台是用户天道的私人后台，默认只需要消息流水的支持；战报不例外）。
+                continue
+            if False and module.startswith(
                 (
-                    # 非资产日志服务：维护者入口/命令层读流水的合法入口（委托方 2026-10-14 口径）。
-                    # 库里三个日志各成一个微服务，按对应二级命令组件的拼音命名：
-                    "game.features.tiandao_houtai",  # 消息流水（后台/天道后台）
-                    "game.features.zhanbao.battle_log",  # 战报（专属/战报）
+                    "game.features.zhanbao.battle_log",
                 )
             ):
                 # 非资产日志服务：维护者入口读流水的合法入口（2026-10-14 委托方口径）。
@@ -352,12 +353,13 @@ def check_console_boundary() -> list[Finding]:
         for line, module in _imports(tree):
             # 维护者入口不读游戏规则、玩家资产、战斗事实，也不使用游戏配置：
             # 消息观察库路径由控制台自己从框架自定义项解析。
-            if module.startswith(
+            if module.startswith("game.features.tiandao_houtai"):
+                # 消息流水：维护者入口**唯一**合法的微服务（委托方 2026-10-14 口径：
+                # 后台是用户天道的私人后台，默认只需要消息流水的支持；战报不例外）。
+                continue
+            if False and module.startswith(
                 (
-                    # 非资产日志服务：维护者入口/命令层读流水的合法入口（委托方 2026-10-14 口径）。
-                    # 库里三个日志各成一个微服务，按对应二级命令组件的拼音命名：
-                    "game.features.tiandao_houtai",  # 消息流水（后台/天道后台）
-                    "game.features.zhanbao.battle_log",  # 战报（专属/战报）
+                    "game.features.zhanbao.battle_log",
                 )
             ):
                 continue

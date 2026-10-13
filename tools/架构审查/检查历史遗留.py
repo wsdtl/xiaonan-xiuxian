@@ -317,6 +317,24 @@ def check_stray_temp_dirs() -> list[str]:
     return problems
 
 
+def check_stray_bytecode() -> list[str]:
+    """源码目录里不许躺编译产物（`.pyc`／`.pyo`）。
+
+    `compileall` 会把它们写进 `__pycache__`；直接躺在源码目录里的，多半是手工拷贝或历史遗留，
+    既容易被误提交，也说明当时的运行方式不合规范。
+    """
+
+    problems: list[str] = []
+    for path in sorted(ROOT.rglob("*.py[co]")):
+        if set(path.parts) & _WALK_SKIP:
+            continue
+        problems.append(
+            f"{path.relative_to(ROOT).as_posix()} 是编译产物，不该躺在源码目录"
+            "（compileall 会把它们写进 __pycache__）"
+        )
+    return problems
+
+
 def check_self_mapping_tables() -> list[str]:
     """整表 {"A": "A"} 的字典就是空转，等价于 get(key, key)。"""
 
@@ -353,6 +371,7 @@ CHECKS = (
     ("未使用的导入", check_unused_imports),
     ("未使用的定义", check_unused_definitions),
     ("临时件不入根", check_stray_temp_dirs),
+    ("编译产物不入源码目录", check_stray_bytecode),
 )
 
 

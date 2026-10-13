@@ -159,6 +159,9 @@ class BattleReportStore:
             ).fetchone()
         if row is None:
             raise RuntimeError("战报写入后无法读取")
+        # 清理搬到战报自己身上（原来挂在天道后台的定时任务里；后台已不再碰战报）。
+        # 顺手做：删掉过期的，再按条数上限裁掉最旧的——不依赖谁来起定时。
+        self.cleanup(now_timestamp=time.time(), max_rows=BATTLE_MAX_ROWS)
         return _row(row)
 
     def load(self, report_id: str) -> BattleReportRow | None:
@@ -183,6 +186,39 @@ class BattleReportStore:
                 (str(report_id or "").strip(),),
             ).fetchone()
         return _row(row) if row is not None else None
+
+    def recent(
+        self, participant: str, *, kind: str = "", limit: int
+    ) -> list[BattleReportRow]:
+        """按参与者列最近**尚未过期**的战报，按结束时间倒序；`kind` 非空时只留该类型。
+
+        `participants` 存的是换行连接的名单，这里按整行匹配，免得「甲」误中「甲甲」。
+        """
+
+        name = str(participant or "").strip()
+        if not name:
+            return []
+        kind_text = str(kind or "").strip()
+        separator = chr(10)
+        candidates = (name, name + separator + "%", "%" + separator + name, "%" + separator + name + separator + "%")
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM log_battle_reports
+                WHERE expires_at > ?
+                  AND (? = '' OR kind = ?)
+                  AND (
+                      participants = ?
+                      OR participants LIKE ?
+                      OR participants LIKE ?
+                      OR participants LIKE ?
+                  )
+                ORDER BY finished_timestamp DESC
+                LIMIT ?
+                """,
+                (time.time(), kind_text, kind_text, *candidates, max(1, int(limit))),
+            ).fetchall()
+        return [_row(row) for row in rows]
 
     def cleanup(self, *, now_timestamp: float, max_rows: int) -> None:
         with self._lock, self._connect() as connection:
