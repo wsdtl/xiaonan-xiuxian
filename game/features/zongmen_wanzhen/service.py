@@ -362,14 +362,14 @@ class WanzhenFeature:
         return any(word and word.startswith(text) for word in words)
 
     def _formation_label(self, entry: AssetEntry, names: Mapping[str, str]) -> str:
-        """「品级 名称[灵宝名]」——回绝文案里摆候选用的写法。"""
+        """「品级名称[灵宝名]」——回绝文案里摆候选用的写法（统一语法：连写不分隔）。"""
 
         grade = str(getattr(entry, "grade_name", "") or "")
         shown = str(getattr(entry, "name", "") or "")
         identifier = str(getattr(entry, "treasure_id", "") or "")
         if identifier:
             shown = shown + "[" + names.get(identifier, identifier) + "]"
-        return (grade + " " + shown).strip() if grade else shown
+        return (grade + shown).strip()
 
     async def donate(
         self,
