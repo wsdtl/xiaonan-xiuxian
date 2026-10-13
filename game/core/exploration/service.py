@@ -495,7 +495,7 @@ class ExplorationService:
                 user_results[user_id]["灵石"] += allocation["灵石"]
                 user_results[user_id]["掉落"].update(allocation["掉落"])
                 detail[user_id]["灵石"] = int(allocation["灵石"])
-                # 明细要过 JSON，键只能是字符串：把 (编号, 品级) 拼成「编号:品级」。
+                # 明细要过 JSON，键只能是字符串：把 (编号, 品级) 拼成统一形式「品级编号＋物品编号」。
                 detail[user_id]["掉落"] = {
                     (
                         format_item_ref(ItemRef(item=key[0], grade=key[1]))

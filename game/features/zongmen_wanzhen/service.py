@@ -313,9 +313,6 @@ class WanzhenFeature:
         """
 
         text = str(wanted or "").strip()
-        if ":" in text:
-            # 整条条目键（`阵法编号:品级:灵宝编号`）原汁原味受理。
-            return text
         entries = await self._asset.formation_entries(user_id)
         names = self._treasure_names(entries)
         matched = [

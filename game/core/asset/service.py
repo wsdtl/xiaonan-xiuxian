@@ -682,7 +682,7 @@ class AssetService:
             )
         if materials:
             raise AssetStateError("天地玄黄阵法不能保存额外材料投入")
-        # 固定品的身份就是「阵法编号:品级」，带增幅灵宝的再缀上灵宝编号——
+        # 固定品的身份就是「品级编号＋阵法编号」，带增幅灵宝的再挂方括号灵宝编号——
         # 键**照玩家看到的那套写法写**（物品[灵宝]、品级在前），所以可读、可推、能按数量堆叠；
         # 不带灵宝的就没有第三段，因此「无灵宝」这种占位永远不会出现。
         state_key = format_item_ref(
@@ -839,7 +839,7 @@ class AssetService:
             )
             quantity = 1
         else:
-            # 固定品的键就是「阵法编号:品级」，带增幅灵宝的再缀灵宝编号；
+            # 固定品的键就是「品级编号＋阵法编号」，带增幅灵宝的再挂方括号灵宝编号；
             # 不带灵宝的没有第三段——所以「无灵宝」这种占位永远不会出现在键里。
             expected = format_item_ref(
                 ItemRef(item=formation_id, grade=grade.grade_id, treasure=treasure_id)

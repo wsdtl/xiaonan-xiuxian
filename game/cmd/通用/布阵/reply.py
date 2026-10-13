@@ -22,7 +22,7 @@ def completed(
         .line(text["过程"])
         .field(text["结果"], "下一场正式战斗")
     )
-    # 阵藏条目是代码内部的键（阵法编号:品级:灵宝编号），不给玩家看；
+    # 阵藏条目是代码内部的键（品级编号＋阵法编号[灵宝编号]），不给玩家看；
     # 有没有灵宝加成也不写「无灵宝」三个字——没有就不显示这一段。
     if treasure:
         builder = builder.field(text["灵宝"], treasure)
