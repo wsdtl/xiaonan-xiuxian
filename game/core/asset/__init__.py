@@ -28,10 +28,16 @@ from .contracts import (
     LawReserveStack,
 )
 from .matching import Choice, Edge, minimum_cost_matching
+from .ref import GRADE_WIDTH, ItemRef, ItemRefError, format_item_ref, parse_item_ref
 from .service import AssetService
 
 __all__ = [
     "AssetCategory",
+    "ItemRef",
+    "ItemRefError",
+    "format_item_ref",
+    "GRADE_WIDTH",
+    "parse_item_ref",
     "AssetEntry",
     "AssetGrade",
     "AssetService",
