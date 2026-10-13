@@ -205,7 +205,7 @@ class TradeService:
             and (product.content_id == identifier or product.name == identifier)
         )
         if len(matches) != 1:
-            raise TradeError(f"当前货架未找到唯一商品：{identifier} {grade_id}")
+            raise TradeError(f"当前货架未找到唯一商品：{grade_id}{identifier}")
         product = matches[0]
         total_price = product.unit_price * command.quantity
         try:

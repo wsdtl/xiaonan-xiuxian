@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
-from uuid import uuid4
 
 from game.core.data import JsonDataError, JsonDataService, mapping, nonempty_text, positive_int
 from game.core.database import (
@@ -670,6 +669,26 @@ class AssetService:
         if bool(normalized_treasure_id) != bool(normalized_modifiers):
             raise AssetStateError("阵法灵宝编号和效果必须同时存在或同时为空")
         if grade.grade_id == "05":
+            holy_key = format_item_ref(
+                ItemRef(
+                    item=normalized_formation_id,
+                    grade=grade.grade_id,
+                    treasure=normalized_treasure_id,
+                    extra=tuple(
+                        (str(key), str(value))
+                        for key, value in sorted((materials or {}).items())
+                    ),
+                )
+            )
+            snapshot = await self._database.get(
+                StateAddress(normalized_user_id, "formation_reserve", holy_key)
+            )
+            before = 0
+            version = 0
+            if snapshot is not None:
+                value = _mapping(snapshot.value, f"formation_reserve/{holy_key}")
+                before = _positive_int(value.get("数量"), "阵藏.数量")
+                version = snapshot.version
             return self._holy_formation_plan(
                 normalized_user_id,
                 normalized_formation_id,
@@ -679,6 +698,8 @@ class AssetService:
                 materials,
                 normalized_treasure_id,
                 normalized_modifiers,
+                before=before,
+                version=version,
             )
         if materials:
             raise AssetStateError("天地玄黄阵法不能保存额外材料投入")
@@ -754,6 +775,9 @@ class AssetService:
         materials: Mapping[str, str] | None,
         treasure_id: str,
         modifiers: Mapping[str, str],
+        *,
+        before: int = 0,
+        version: int = 0,
     ) -> FormationReserveAcquisitionPlan:
         """圣品（05）走独立实例：每次一件、身份用一次性键，投入三项必须齐。""",
 
@@ -763,23 +787,35 @@ class AssetService:
         }
         if set(values) != {"兽宝", "灵矿", "灵植"}:
             raise AssetStateError("圣品阵法必须完整保存兽宝、灵矿和灵植投入")
-        state_key = uuid4().hex
+        # 同键堆叠：同样的（阵法＋品级＋灵宝＋投入）就是同一件东西，第二件把数量加上去。
+        after = before + 1
+        # 键就是统一形式＋扩展位：品级＋阵法编号[灵宝]{投入}——光看键就能解析出这一件的全部身份。
+        state_key = format_item_ref(
+            ItemRef(
+                item=normalized_formation_id,
+                grade=grade.grade_id,
+                treasure=normalized_treasure_id,
+                extra=tuple(
+                    (key, values[key]) for key in ("兽宝", "灵矿", "灵植")
+                ),
+            )
+        )
         stack = FormationReserveStack(
             state_key,
             normalized_formation_id,
             name,
             grade.grade_id,
             grade.name,
-            1,
+            after,
             tuple((key, values[key]) for key in ("兽宝", "灵矿", "灵植")),
             normalized_treasure_id,
             tuple(sorted(normalized_modifiers.items())),
-            0,
+            version,
         )
         return FormationReserveAcquisitionPlan(
             stack,
-            0,
-            1,
+            before,
+            after,
             StateMutation(
                 normalized_user_id,
                 "formation_reserve",
@@ -787,11 +823,12 @@ class AssetService:
                 {
                     "阵法编号": normalized_formation_id,
                     "品级": grade.grade_id,
+                    "数量": after,
                     "投入": values,
                     "灵宝编号": normalized_treasure_id,
                     "灵宝效果": normalized_modifiers,
                 },
-                0,
+                version,
             ),
         )
 

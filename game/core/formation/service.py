@@ -7,13 +7,16 @@ from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
 
-from game.core.asset import ItemRefError, parse_item_ref
 from game.core.asset import (
     AssetEntry,
     AssetService,
     AssetStateError,
     InventoryAdjustment,
     InventoryChangeError,
+    ItemRef,
+    ItemRefError,
+    format_item_ref,
+    parse_item_ref,
 )
 from game.core.data import (
     ContractSet,
@@ -259,8 +262,8 @@ class FormationService:
         if _grade_order(value.grade_name) > _grade_order(self._town_max_grade_name):
             raise FormationUnavailableError("城镇炼阵最高支持天品")
         request_text = _request_expression(
-            value.formation.name,
-            value.grade_name,
+            value.formation.formation_id,
+            _GRADE_IDS[value.grade_name],
             {item.category: item.required for item in value.requirements},
         )
         return FormationPreview(
@@ -780,7 +783,6 @@ class FormationService:
                 + "」，请补上[灵宝名]或品级："
                 + "、".join(
                     _formation_grade_name(entry.grade_id)
-                    + " "
                     + entry.name
                     + (
                         "[" + self._treasure_name(entry.treasure_id) + "]"
@@ -945,7 +947,7 @@ class FormationService:
             formation,
             grade.grade_id,
             grade_name,
-            _request_expression(formation.name, grade_name, actual),
+            _request_expression(formation.formation_id, grade.grade_id, actual),
             materials,
             tuple(FormationRequirement(key, actual[key], actual[key]) for key in _CATEGORIES),
             profile.capacity,
@@ -982,11 +984,19 @@ class FormationService:
             raise RuntimeError("阵法核心微服务尚未初始化")
 
 
-def _request_expression(name: str, grade: str, materials: Mapping[str, int]) -> str:
-    base = f"{name} {grade}"
-    if grade != "圣":
-        return base
-    return f"{base} {materials['兽宝']} {materials['灵矿']} {materials['灵植']}"
+def _request_expression(formation_id: str, grade_id: str, materials: Mapping[str, object]) -> str:
+    """炼阵请求的表达式：**统一形式**（品级＋阵法编号[灵宝]{投入}），与存档键同一套写法。
+
+    以前是「名字 空格 品级」那一套（属第二写法），2026-10-14 收到统一形式；
+    圣品的投入进扩展位，于是**请求表达式与阵藏键逐字相同**。
+    """
+
+    extra = tuple(
+        (str(name), str(amount)) for name, amount in sorted(materials.items())
+    )
+    return format_item_ref(
+        ItemRef(item=formation_id, grade=grade_id, extra=extra if grade_id == "05" else ())
+    )
 
 
 def _material_payload(value: FormationMaterial) -> dict[str, object]:

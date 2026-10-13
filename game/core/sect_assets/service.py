@@ -770,7 +770,18 @@ class SectAssetService:
         if category == "阵法" and grade_id == "05" and not str(instance_key or "").strip():
             raise SectAssetError("圣品阵法产出必须具有独立实例编号")
         key = (
-            format_item_ref(ItemRef(item=content_id, grade=grade_id, treasure=instance_key))
+            # 圣品走独立实例：身份进扩展位（实际投入），**不用请求编号**——
+            # 请求编号不在资产库里，光看它解析不出这一件东西。
+            format_item_ref(
+                ItemRef(
+                    item=content_id,
+                    grade=grade_id,
+                    extra=tuple(
+                        (str(name), str(amount))
+                        for name, amount in sorted(materials.items())
+                    ),
+                )
+            )
             if instanced
             else format_item_ref(ItemRef(item=content_id, grade=grade_id))
         )

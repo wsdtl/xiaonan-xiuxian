@@ -771,3 +771,18 @@ def test_物品指称语法可往返且六位编号不被误读() -> None:
     assert plain.item == "410137" and plain.grade == ""
     graded = parse_item_ref("02410137")
     assert graded.grade == "02" and graded.item == "410137"
+
+def test_扩展位可解析并且按名称字典序规范化() -> None:
+    """扩展位＝自描述键值对：同一件东西必须永远得到同一个键（名称按字典序）。"""
+
+    from game.core.asset import ItemRefError, format_item_ref, parse_item_ref
+
+    ref = parse_item_ref("05530002{灵植=3888,兽宝=1944,灵矿=5832}")
+    assert ref.item == "530002" and ref.grade == "05"
+    assert dict(ref.extra) == {"兽宝": "1944", "灵矿": "5832", "灵植": "3888"}
+    assert format_item_ref(ref) == format_item_ref(
+        parse_item_ref("05530002{兽宝=1944,灵矿=5832,灵植=3888}")
+    )
+    with pytest.raises(ItemRefError):
+        parse_item_ref("05530002{兽宝=1,兽宝=2}")
+
