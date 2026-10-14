@@ -125,16 +125,33 @@ def main() -> int:
     # 可点名跑：`全量核对.py 文档计数 静态资源` 只跑名字里含这些字的项。
     # 平时改一处只验相关的几项，收口时再跑一次全量。
     wanted = tuple(value for value in sys.argv[1:] if value.strip())
+    # 快车道：`全量核对.py --快` 或 `--除 消息零信息 边界审查` 跳过最慢的几项，只作过程自查。
+    # 提交前仍必须跑一次**不带参数**的完整闸门（退出码把关就在下面同一处，不另开通道）。
+    excluded: tuple[str, ...] = ()
+    if wanted and wanted[0] in ("--快", "--除"):
+        excluded = (
+            ("消息零信息", "边界审查")
+            if wanted[0] == "--快"
+            else tuple(value for value in wanted[1:] if value.strip())
+        )
+        wanted = ()
     chosen = (
         tuple(item for item in REQUIRED if any(word in item[0] for word in wanted))
         if wanted
-        else REQUIRED
+        else tuple(
+            item for item in REQUIRED if not any(word in item[0] for word in excluded)
+        )
     )
     if not chosen:
         print('总账：没有匹配的项 —— ' + '、'.join(wanted))
         return 1
     if wanted:
         print(f'（点名跑 {len(chosen)}/{len(REQUIRED)} 项：' + '、'.join(item[0] for item in chosen) + '）')
+    if excluded:
+        print(
+            f'（快车道：跳过 {"、".join(excluded)}，本次 {len(chosen)}/{len(REQUIRED)} 项；'
+            '非全量 —— 提交前必须跑一次完整闸门）'
+        )
     # 两阶段跑：单元测试自己会开分片，和别的项抢核只会互相拖（实测它内部墙钟从 23 秒
     # 涨到 46 秒），所以先让它独占跑完，其余项再并发。并发上限按核数取一半——全开满
     # 会超订，实测墙钟反而更慢。
