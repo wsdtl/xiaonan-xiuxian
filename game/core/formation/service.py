@@ -725,7 +725,23 @@ class FormationService:
         query = _request_text(identifier, "阵藏条目")
         snapshot = await self._asset.snapshot(user_id)
         entries = tuple(entry for entry in snapshot.entries if entry.category == "阵藏")
-        direct = next((entry for entry in entries if entry.instance_key == query), None)
+        # 直中之前先把玩家写法翻成「条目键」那一套 id 形态：阵法名→阵法编号、品级名→品级编号、
+        # 扩展位按名称字典序。条目键存的是编号（05530002{兽宝=…}），玩家写的是中文名，
+        # 直接比字符串永远不相等——翻不出编号就退回原串比，不报错，交给下面的过滤兜住。
+        canonical = query
+        try:
+            ref = parse_item_ref(query)
+            formation_id = self._formation_by_name.get(ref.item, "")
+            # 品级表用的是短名（黄/玄/地/天/圣），玩家写的是长名（黄品/圣品）——两种都认。
+            grade_short = ref.grade[:-1] if ref.grade.endswith("品") else ref.grade
+            grade_id = _GRADE_IDS.get(grade_short, "") or _GRADE_IDS.get(ref.grade, "")
+            if formation_id and (not ref.grade or grade_id):
+                canonical = format_item_ref(
+                    ItemRef(item=formation_id, grade=grade_id, extra=ref.extra)
+                )
+        except ItemRefError:
+            canonical = query
+        direct = next((entry for entry in entries if entry.instance_key == canonical), None)
         if direct is not None:
             return direct.instance_key
         # 统一语法：品级可并进阵法名（`黄品周天星斗大阵[乾坤鼎]`）——先拆成品级与
@@ -780,7 +796,7 @@ class FormationService:
             raise FormationError(
                 "阵藏里有多条「"
                 + name_part
-                + "」，请补上[灵宝名]或品级："
+                + "」，请补上[灵宝名]、品级，或照下面任意一条写出完整写法："
                 + "、".join(
                     _formation_grade_name(entry.grade_id)
                     + entry.name
@@ -789,6 +805,7 @@ class FormationService:
                         if getattr(entry, "treasure_id", "")
                         else ""
                     )
+                    + _materials_hint(entry)
                     for entry in matches[:4]
                 )
             )
@@ -982,6 +999,19 @@ class FormationService:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("阵法核心微服务尚未初始化")
+
+
+def _materials_hint(entry: object) -> str:
+    """候选提示里补出圣品的**投入**，否则「同名字、同品级、同灵宝、投入不同」的几件分不出。
+
+    条目契约只暴露 `material_total`、不暴露投入明细，而明细就写在条目键的扩展位里
+    （`05430001{兽宝=1944,灵矿=5832,灵植=3888}`），所以直接从键里截它。
+    """
+
+    key = str(getattr(entry, "instance_key", "") or "")
+    if "{" not in key or not key.endswith("}"):
+        return ""
+    return key[key.index("{") :]
 
 
 def _request_expression(formation_id: str, grade_id: str, materials: Mapping[str, object]) -> str:

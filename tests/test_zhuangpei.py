@@ -812,4 +812,28 @@ def test_同一指称里不许混搭编号与中文名() -> None:
     # 数量（个数）不是编号：它只落在值或扩展位里，不会被当成指称。
     assert parse_item_ref("兽宝=1944").item == "兽宝=1944"
 
+def test_圣品候选提示必须能分辨不同投入() -> None:
+    """同名同品级同灵宝、投入不同的两件圣品，候选文案必须不同，否则玩家挑不动。"""
+
+    from game.core.formation.service import _materials_hint
+    from game.core.asset import ItemRef, format_item_ref
+
+    def 条目(兽宝: str, 灵矿: str, 灵植: str) -> object:
+        key = format_item_ref(
+            ItemRef(
+                item="530002",
+                grade="05",
+                extra=(("兽宝", 兽宝), ("灵矿", 灵矿), ("灵植", 灵植)),
+            )
+        )
+        return type("E", (), {"instance_key": key})()
+
+    甲 = _materials_hint(条目("1944", "5832", "3888"))
+    乙 = _materials_hint(条目("1500", "4000", "3000"))
+    assert 甲 and 乙 and 甲 != 乙
+    assert 甲 == "{兽宝=1944,灵矿=5832,灵植=3888}" or 甲.startswith("{兽宝=1944,")
+    # 没有投入的普通阵法（键里没有扩展位）不补后缀。
+    assert _materials_hint(type("E", (), {"instance_key": "01530002"})()) == ""
+
+
 
