@@ -98,8 +98,9 @@ def result(copy: HostingCopy, value: HostingResult) -> DocumentMessage:
         f"{session.cycle_count}{_text(copy, '结果', '循环单位')}",
     )
     if session.last_error:
+        # 暂停状态那一段做成**一枚分支按钮**：点一下回「继续托管／取消托管」二选一菜单，只填入。
         document.section(_text(copy, "结果", "暂停原因")).line(
-            M.status("已暂停", tone="danger"), " ", session.last_error
+            M.command("继续托管", "继续托管|取消托管"), " ", session.last_error
         )
     elif session.last_message:
         document.section(_text(copy, "结果", "最近提示")).line(session.last_message)
