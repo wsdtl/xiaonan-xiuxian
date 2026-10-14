@@ -114,4 +114,26 @@ async def finish_ore_gathering(user_id: str, message: str, message_context: Mess
         await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
+
+@GameCommand.command(
+    cmd=("采矿结果",),
+    metadata={
+        # 只读翻页：**故意不带 hosting 元数据**。托管中的玩法命令会被守卫拦下，手点的请求号
+        # 与托管记录对不上就没反应（2026-10-14 全局排查后照探险同款修）。
+        "scope": "通用",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "行动",
+            "summary": "查看采矿结算结果的指定页（只读，不重复发奖）",
+            "usage": ("采矿结果", "采矿结果 页码"),
+            "side_effect": "只读查询；结算仍由结算命令在首次调用时完成",
+            "order": 33,
+        },
+    },
+)
+async def show_ore_settlement(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+    # 复用结算处理体（核心幂等：已结算只会回放，不重复发奖）。
+    await finish_ore_gathering(user_id, message, message_context, manager)
+
+
 __all__ = []

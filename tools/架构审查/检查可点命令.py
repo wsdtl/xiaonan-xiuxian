@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import sys
@@ -486,12 +487,63 @@ def check_icons_are_registered() -> list[str]:
                     problems.append(f"{path.relative_to(ROOT).as_posix()}:{line} 用了没登记的图标分类「{key}」")
     return problems
 
+def check_paging_buttons_avoid_hosting_commands() -> list:
+    """名称含「页」的按钮，其命令不得指向带 hosting 元数据的命令。
+
+    托管中的玩法命令要过 authorize_execution，而它要求请求号等于托管记录里的那一次；
+    玩家手点翻页时请求号是新的，于是点了没反应（2026-10-14 探险实测）。翻页是只读的，
+    应当走不带 hosting 元数据的独立入口。
+    """
+
+    带托管: set = set()
+    for path in GAME.rglob("__init__.py"):
+        text = path.read_text(encoding="utf-8")
+        if '"hosting"' not in text:
+            continue
+        for match in re.finditer(r'cmd=(\([^)]*\)|"[^"]*")([\s\S]{0,900}?)"hosting"', text):
+            names = re.findall(r'"([^"]+)"', match.group(1))
+            if names:
+                带托管.add(names[0])
+
+    def 走(node: object, 命中: list) -> None:
+        if isinstance(node, dict):
+            if "命令" in node:
+                命中.append(node)
+            for value in node.values():
+                走(value, 命中)
+        elif isinstance(node, list):
+            for value in node:
+                走(value, 命中)
+
+    problems: list = []
+    for path in (ROOT / "data").rglob("*.json"):
+        if "按钮" not in path.name:
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        命中: list = []
+        走(data, 命中)
+        for 条目 in 命中:
+            名称 = str(条目.get("名称") or "")
+            命令 = str(条目.get("命令") or "")
+            首个 = 命令.split()
+            if "页" in 名称 and 首个 and 首个[0] in 带托管:
+                problems.append(
+                    f"{path.relative_to(ROOT)} 的「{名称}」按钮发的是带 hosting 的命令「{命令}」"
+                    "——托管中会被守卫拦下（手点请求号对不上），翻页请指向不带 hosting 的只读命令"
+                )
+    return problems
+
+
 CHECKS = (
     ("标签不带 tone", check_labels_have_no_tone),
     ("链接文本无公式", check_rendered_links_are_plain),
     ("多分支解析", check_branches_resolve),
     ("按钮目标已注册", check_commands_are_registered),
     ("按钮数据命令已注册", check_button_data_commands_are_registered),
+    ("翻页按钮不带托管命令", check_paging_buttons_avoid_hosting_commands),
     ("地点面板只许位置/行路取", check_location_panel_callers),
     ("翻页页必须有返回", check_paged_pages_have_way_back),
     ("用法不露机器词", check_usages_have_no_machine_words),
