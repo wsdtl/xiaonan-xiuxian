@@ -310,6 +310,20 @@ class MedicineService:
             metadata=(("丹药编号", medicine.medicine_id), ("品级编号", medicine.grade_id)),
         )
 
+    def medicine_name(self, medicine_id: str) -> str:
+        """按编号取丹药名（名称与品级无关，编号自带）。查不到抛 MedicineError。
+
+        丹药数据的归属在本核心；玩法要显示丹药名就走这一口——别拿去查只装基础物品的物品目录
+        （那 582 条里只有兽宝/灵植/灵矿，查丹药必抛 ItemNotFoundError，2026-10-14 探险结算页实测）。
+        """
+
+        self._require_initialized()
+        normalized = self._required_id(medicine_id)
+        raw = self._all().get(normalized)
+        if raw is None:
+            raise MedicineError(f"未找到丹药编号：{normalized}")
+        return _text(raw.get("名称"), f"丹药.{normalized}.名称")
+
     def is_recovery(self, medicine_id: str) -> bool:
         return self._required_id(medicine_id) in self._recovery
 

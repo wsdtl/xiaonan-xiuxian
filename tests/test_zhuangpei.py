@@ -939,4 +939,33 @@ def test_炼阵圣品两条候选能点着挑(services) -> None:
 
 
 
+def test_结算物品名分两路取(services) -> None:
+    """丹药走丹药核心、基础物品走物品目录——混用必炸（2026-10-14 探险结算页实测）。
+
+    原先 item_label 一律拿物品目录查，而那个目录只装兽宝/灵植/灵矿；
+    结算的"消耗"里是丹药（100005 小还丹），于是一渲染就 ItemNotFoundError。
+    """
+
+    tanxian = services.features.tanxian
+    assert tanxian.item_label("100005", "01").endswith("小还丹")
+    assert tanxian.item_label("210044", "01").endswith("回声溪听水翼")
+
+
+def test_物品目录只装基础物品(services) -> None:
+    """物品目录只认兽宝/灵植/灵矿：丹药与阵法编号拿它查必然失败。
+
+    这条把"目录的边界"钉成断言——将来谁往目录里塞了别的类别、或谁再拿它查丹药，
+    这里会先红，而不是等玩家点开结算页崩掉。
+    """
+
+    import pytest as _pytest
+
+    catalog = services.core.item_catalog
+    assert catalog.get("210044").name == "回声溪听水翼"
+    for bad in ("100005", "530001"):
+        with _pytest.raises(Exception):
+            catalog.get(bad)
+
+
+
 

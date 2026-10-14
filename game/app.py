@@ -902,7 +902,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     daolv_peiyang.initialize()
     duiwu = TeamFeature(data, team, character, location, player_state)
     duiwu.initialize()
-    tanxian = ExplorationFeature(data, exploration, item_catalog, asset, action_group)
+    tanxian = ExplorationFeature(
+        data, exploration, item_catalog, asset, action_group, medicine
+    )
     tanxian.initialize()
     taofa = RaidFeature(data, raid, action_group)
     taofa.initialize()

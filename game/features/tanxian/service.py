@@ -16,6 +16,7 @@ from game.core.exploration import (
     ExplorationStarted,
 )
 from game.core.item_catalog import ItemCatalogService
+from game.core.medicine import MedicineError, MedicineService
 
 from .contracts import ExplorationAction, ExplorationCopy, ExplorationFeatureError
 from game.features.presentation import paged_settlement_actions
@@ -30,12 +31,14 @@ class ExplorationFeature:
         items: ItemCatalogService,
         asset: AssetService,
         action_group: ActionGroupService,
+        medicine: MedicineService | None = None,
     ) -> None:
         self._data = data
         self._enemy_numbers: dict[str, str] = {}
         self._exploration = exploration
         self._items = items
         self._asset = asset
+        self._medicine = medicine
         self._action_group = action_group
         self._copy: ExplorationCopy | None = None
         self._buttons = ()
@@ -125,7 +128,17 @@ class ExplorationFeature:
         return self._enemy_numbers.get(wanted, "")
 
     def item_label(self, item_id: str, grade_id: str) -> str:
-        return f"{self._asset.grade(grade_id).name}{self._items.get(item_id).name}"
+        """结算页的"消耗/所得"里既有丹药也有基础物品，所以要分开取名字。
+
+        丹药走丹药核心（它才是丹药数据的归属），基础物品才走物品目录；
+        物品目录只装兽宝/灵植/灵矿那 582 条，拿它查丹药必炸（2026-10-14 实测）。
+        """
+
+        grade = self._asset.grade(grade_id).name
+        try:
+            return f"{grade}{self._medicine.medicine_name(item_id)}"
+        except MedicineError:
+            return f"{grade}{self._items.get(item_id).name}"
 
 
 __all__ = ["ExplorationFeature"]
