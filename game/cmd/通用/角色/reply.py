@@ -246,17 +246,13 @@ def overview(
             ),
         ),
     )
-    if character.automatic_medicine:
-        # 用药开着才联动：人物与道侣各两个分支（开/关），一行四枚只填入的行内按钮（15 字符 ≤ 18）。
-        builder.line(
-            M.command("人药开", "人药 开"),
-            "　",
-            M.command("人药关", "人药 关"),
-            "　",
-            M.command("侣药开", "侣药 开"),
-            "　",
-            M.command("侣药关", "侣药 关"),
+    # 用药联动：一枚分支按钮，四个支线（人药 开/关、侣药 开/关）；标签显示当前态，只填入。
+    builder.line(
+        M.command(
+            "自动用药: 开启" if character.automatic_medicine else "自动用药:关闭",
+            "人药 开|人药 关|侣药 开|侣药 关",
         )
+    )
     return builder.build()
 
 
