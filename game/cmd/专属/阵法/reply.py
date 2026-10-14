@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ...presentation import candidate_lines, error_document
 
 from game.features.lianzhen import FormationOverview, FormationPreview, FormationResult
 
@@ -10,7 +10,7 @@ from message import DocumentMessage, M
 
 from collections.abc import Mapping
 
-from game.features.lianzhen import FormationAction, FormationCopy
+from game.features.lianzhen import FormationAction, FormationChoiceError, FormationCopy
 
 from ...actions import message_actions
 from ...presentation import sentence
@@ -133,6 +133,27 @@ def completed(copy: FormationCopy, value: FormationResult, actions: tuple[Format
     return builder.actions(message_actions(actions)).build()
 
 
+def choose(
+    copy: FormationCopy, exc: FormationChoiceError, *, command: str = "炼阵"
+) -> DocumentMessage:
+    """阵藏里有多条同名阵法：铺成选择卡，候选可点，点一下精确选中。
+
+    与「布阵」同一形态：显示名带投入、命令用规定的旧写法（品级阵法名 + 三个投入数），
+    点下去就是合法输入，玩家不必手打扩展位。
+    """
+
+    builder = M.document().header(text(copy, "错误", "标题"))
+    candidate_lines(
+        builder,
+        title=text(copy, "错误", "选择标题"),
+        entries=tuple(
+            (name, f"{command} {tail}", detail) for name, tail, detail in exc.candidates
+        ),
+        footer=text(copy, "错误", "选择尾注"),
+    )
+    return builder.build()
+
+
 def error(
     copy: FormationCopy, message: str, actions: Sequence[CommandAction] = (),
     *,
@@ -144,4 +165,4 @@ def error(
     )
 
 
-__all__ = ["completed", "error", "overview", "preview", "text"]
+__all__ = ["choose", "completed", "error", "overview", "preview", "text"]

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ...presentation import candidate_lines, error_document
 
-from game.features.buzhen import FormationArmCopy, FormationArmResult
+from game.features.buzhen import (
+    FormationArmCopy,
+    FormationArmResult,
+    FormationChoiceError,
+)
 
 from message import DocumentMessage, M
 
@@ -39,4 +43,26 @@ def error(copy: FormationArmCopy, message: str) -> DocumentMessage:
     )
 
 
-__all__ = ["completed", "error"]
+def choose(
+    copy: FormationArmCopy, exc: FormationChoiceError, *, command: str = "布阵"
+) -> DocumentMessage:
+    """阵藏里有多条同名阵法：铺成选择卡，候选可点，点一下精确选中。
+
+    显示名带投入——玩家一眼看出同名同品级同灵宝的那几件差在哪；命令用规定的旧写法
+    （品级阵法名 + 三个投入数），点下去就是合法输入。
+    """
+
+    text = copy.text["错误"]
+    builder = M.document().header(text["标题"])
+    candidate_lines(
+        builder,
+        title=text["选择标题"],
+        entries=tuple(
+            (name, f"{command} {tail}", detail) for name, tail, detail in exc.candidates
+        ),
+        footer=text["选择尾注"],
+    )
+    return builder.build()
+
+
+__all__ = ["choose", "completed", "error"]

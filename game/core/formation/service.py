@@ -55,6 +55,7 @@ from .contracts import (
     FormationConflictError,
     FormationDefinition,
     FormationEntry,
+    FormationChoiceError,
     FormationError,
     FormationMaster,
     FormationMaterial,
@@ -725,23 +726,9 @@ class FormationService:
         query = _request_text(identifier, "阵藏条目")
         snapshot = await self._asset.snapshot(user_id)
         entries = tuple(entry for entry in snapshot.entries if entry.category == "阵藏")
-        # 直中之前先把玩家写法翻成「条目键」那一套 id 形态：阵法名→阵法编号、品级名→品级编号、
-        # 扩展位按名称字典序。条目键存的是编号（05530002{兽宝=…}），玩家写的是中文名，
-        # 直接比字符串永远不相等——翻不出编号就退回原串比，不报错，交给下面的过滤兜住。
-        canonical = query
-        try:
-            ref = parse_item_ref(query)
-            formation_id = self._formation_by_name.get(ref.item, "")
-            # 品级表用的是短名（黄/玄/地/天/圣），玩家写的是长名（黄品/圣品）——两种都认。
-            grade_short = ref.grade[:-1] if ref.grade.endswith("品") else ref.grade
-            grade_id = _GRADE_IDS.get(grade_short, "") or _GRADE_IDS.get(ref.grade, "")
-            if formation_id and (not ref.grade or grade_id):
-                canonical = format_item_ref(
-                    ItemRef(item=formation_id, grade=grade_id, extra=ref.extra)
-                )
-        except ItemRefError:
-            canonical = query
-        direct = next((entry for entry in entries if entry.instance_key == canonical), None)
+        # 直中：内部拿的就是条目键（state_key），原样比即可。玩家手打的是中文名/旧写法，走下面的过滤；
+        # 扩展位（花括号）只用于存储，不作为输入面。
+        direct = next((entry for entry in entries if entry.instance_key == query), None)
         if direct is not None:
             return direct.instance_key
         # 统一语法：品级可并进阵法名（`黄品周天星斗大阵[乾坤鼎]`）——先拆成品级与
@@ -793,21 +780,32 @@ class FormationService:
         if not matches:
             raise FormationError("阵藏里没有「" + name_part + "」这座阵法。")
         if len(matches) > 1:
-            raise FormationError(
-                "阵藏里有多条「"
-                + name_part
-                + "」，请补上[灵宝名]、品级，或照下面任意一条写出完整写法："
-                + "、".join(
-                    _formation_grade_name(entry.grade_id)
-                    + entry.name
-                    + (
-                        "[" + self._treasure_name(entry.treasure_id) + "]"
-                        if getattr(entry, "treasure_id", "")
-                        else ""
+            # 交给命令层铺「选择卡」：显示名带投入（玩家一眼看出差别），中项是**命令尾串**
+            # （品级阵法名 + 三个投入数，即规定的旧写法），命令词由各命令自己拼。
+            raise FormationChoiceError(
+                "阵藏里有多条「" + name_part + "」，请点一条：",
+                tuple(
+                    (
+                        _formation_grade_name(entry.grade_id)
+                        + entry.name
+                        + (
+                            "[" + self._treasure_name(entry.treasure_id) + "]"
+                            if getattr(entry, "treasure_id", "")
+                            else ""
+                        )
+                        + _materials_hint(entry),
+                        _formation_grade_name(entry.grade_id)
+                        + entry.name
+                        + (
+                            "[" + self._treasure_name(entry.treasure_id) + "]"
+                            if getattr(entry, "treasure_id", "")
+                            else ""
+                        )
+                        + _materials_tail(entry),
+                        _materials_hint(entry).strip("{}") or "无投入",
                     )
-                    + _materials_hint(entry)
                     for entry in matches[:4]
-                )
+                ),
             )
         return matches[0].instance_key
 
@@ -1012,6 +1010,25 @@ def _materials_hint(entry: object) -> str:
     if "{" not in key or not key.endswith("}"):
         return ""
     return key[key.index("{") :]
+
+
+def _materials_tail(entry: object) -> str:
+    """候选命令的**投入尾串**：按 兽宝 灵矿 灵植 固定顺序给三个数（空格分隔），与手打写法一致。
+
+    条目键里的扩展位已按名称字典序规范化，这里只取三项、按规定顺序排。
+    """
+
+    key = str(getattr(entry, "instance_key", "") or "")
+    if "{" not in key or not key.endswith("}"):
+        return ""
+    pairs = dict(
+        piece.split("=", 1)
+        for piece in key[key.index("{") + 1 : -1].split(",")
+        if "=" in piece
+    )
+    if not all(name in pairs for name in ("兽宝", "灵矿", "灵植")):
+        return ""
+    return " " + " ".join(pairs[name] for name in ("兽宝", "灵矿", "灵植"))
 
 
 def _request_expression(formation_id: str, grade_id: str, materials: Mapping[str, object]) -> str:

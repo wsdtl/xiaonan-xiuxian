@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.features.buzhen import FormationArmFeatureError
+from game.features.buzhen import FormationArmFeatureError, FormationChoiceError
 
 from ...command import GameCommand
 from . import reply
@@ -38,6 +38,8 @@ async def arm_formation(user_id: str, message: str, message_context: MessageCont
         await manager.send(
             reply.completed(feature.copy(), value, value.prepared.treasure_line)
         )
+    except FormationChoiceError as exc:
+        await manager.send(reply.choose(feature.copy(), exc))
     except FormationArmFeatureError as exc:
         await manager.send(reply.error(feature.copy(), str(exc)))
 

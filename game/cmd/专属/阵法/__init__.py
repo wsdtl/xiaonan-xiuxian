@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.features.lianzhen import FormationCraftFeatureError
-from game.features.presentation import ItemRefError, parse_item_ref
+from game.features.lianzhen import FormationChoiceError, FormationCraftFeatureError
 
 from ...command import GameCommand
 from . import reply
@@ -23,30 +22,9 @@ def _grade_prefix(feature: Any, value: str) -> str:
 def _request(
     message: str, usage: str
 ) -> tuple[str, str, dict[str, int] | None]:
-    raw = str(message or "").strip()
-    # 统一写法：整串就是一条指称，投入写在扩展位里
-    # （例：圣品周天星斗大阵{兽宝=1944,灵矿=5832,灵植=3888}）——中文名与编号都受理。
-    if "{" in raw and " " not in raw:
-        try:
-            ref = parse_item_ref(raw)
-            materials = {
-                name: int(value)
-                for name, value in ref.extra
-                if name in ("兽宝", "灵矿", "灵植")
-            }
-        except (ItemRefError, ValueError, KeyError, TypeError) as exc:
-            # 扩展位写得不合规范（含模板占位符「数」这种）一律当用法错，回同一句提示，不炸。
-            raise ValueError(usage) from exc
-        if set(materials) != {"兽宝", "灵矿", "灵植"} or any(
-            value < 1 for value in materials.values()
-        ):
-            raise ValueError(usage)
-        return (
-            ref.item,
-            _grade_prefix(current_game_services().features.lianzhen, ref.grade),
-            materials,
-        )
-    parts = raw.split()
+    # 输入只有一种：品级阵法名，后面三个空格分出的投入数（兽宝 灵矿 灵植）。
+    # 扩展位（花括号）**只用于存储**，不接受手打——挑选靠候选点选。
+    parts = str(message or "").strip().split()
     if len(parts) not in {2, 5}:
         raise ValueError(usage)
     try:
@@ -99,6 +77,8 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
         await manager.send(
             reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
+    except FormationChoiceError as exc:
+        await manager.send(reply.choose(feature.copy(), exc, command="阵法审查"))
     except (FormationCraftFeatureError, ValueError) as exc:
         await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="阵法审查"))
 
@@ -111,11 +91,7 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地阵师把三相材料炼成一份一次性阵法",
-            "usage": (
-                "炼阵 圣品周天星斗大阵{兽宝=1944,灵矿=5832,灵植=3888}",
-                "炼阵 <品级><阵法名>[{兽宝=数,灵矿=数,灵植=数}]",
-                "炼阵 圣品周天星斗大阵 1944 5832 3888",  # 旧写法继续受理
-            ),
+            "usage": ("炼阵 圣品周天星斗大阵 1944 5832 3888", "炼阵 <品级><阵法名> 兽宝数 灵矿数 灵植数",),
             "side_effect": "消耗兽宝、灵矿和灵植，把阵法收入阵藏",
             "order": 66,
         },
@@ -133,6 +109,8 @@ async def commit_formation(user_id: str, message: str, message_context: MessageC
         await manager.send(
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
+    except FormationChoiceError as exc:
+        await manager.send(reply.choose(feature.copy(), exc, command="炼阵"))
     except (FormationCraftFeatureError, ValueError) as exc:
         await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼阵"))
 

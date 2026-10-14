@@ -21,6 +21,20 @@ class FormationMaterialError(FormationError):
     """三相材料不足。"""
 
 
+class FormationChoiceError(FormationError):
+    """阵藏里有多条同名阵法，需要玩家挑一件。
+
+    `candidates` 是「显示名, 命令, 说明」三元组：命令层照它铺选择卡，点一下即精确选中。
+    显示名里带投入，玩家才分得出同名同品级同灵宝的那几件。
+    """
+
+    def __init__(
+        self, message: str, candidates: tuple[tuple[str, str, str], ...]
+    ) -> None:
+        super().__init__(message)
+        self.candidates = candidates
+
+
 class FormationConflictError(FormationError):
     """阵法提交时相关状态已经变化。"""
 
@@ -198,6 +212,7 @@ __all__ = [
     "FormationAssessment",
     "FormationBattleProfile",
     "FormationConflictError",
+    "FormationChoiceError",
     "FormationDefinition",
     "FormationEntry",
     "FormationError",
