@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from game.core.formation import FormationArmResult, FormationError, FormationService
+from game.core.formation import (
+    FormationArmResult,
+    FormationChoiceError,
+    FormationError,
+    FormationService,
+)
 
 from collections.abc import Mapping
 from types import MappingProxyType
@@ -51,6 +56,9 @@ class FormationArmFeature:
     async def arm(self, user_id: str, request_id: str, identifier: str) -> FormationArmResult:
         try:
             return await self._formation.arm(user_id, request_id, identifier)
+        except FormationChoiceError:
+            # 「阵藏里有多条」不是错误，是要玩家挑一件：原样放行，让命令层铺选择卡。
+            raise
         except FormationError as exc:
             raise FormationArmFeatureError(str(exc)) from exc
 

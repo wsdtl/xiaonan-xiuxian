@@ -708,9 +708,9 @@ class AssetService:
         # 不带灵宝的就没有第三段，因此「无灵宝」这种占位永远不会出现。
         state_key = format_item_ref(
             ItemRef(
-                item=normalized_formation_id,
-                grade=grade.grade_id,
-                treasure=normalized_treasure_id,
+                item=formation_id,
+                grade=grade_id,
+                treasure=treasure_id,
             )
         )
         snapshot = await self._database.get(
@@ -737,9 +737,9 @@ class AssetService:
         after = before + 1
         stack = FormationReserveStack(
             state_key,
-            normalized_formation_id,
+            formation_id,
             name,
-            grade.grade_id,
+            grade_id,
             grade.name,
             after,
             (),
@@ -792,9 +792,9 @@ class AssetService:
         # 键就是统一形式＋扩展位：品级＋阵法编号[灵宝]{投入}——光看键就能解析出这一件的全部身份。
         state_key = format_item_ref(
             ItemRef(
-                item=normalized_formation_id,
-                grade=grade.grade_id,
-                treasure=normalized_treasure_id,
+                item=formation_id,
+                grade=grade_id,
+                treasure=treasure_id,
                 extra=tuple(
                     (key, values[key]) for key in ("兽宝", "灵矿", "灵植")
                 ),
@@ -802,14 +802,14 @@ class AssetService:
         )
         stack = FormationReserveStack(
             state_key,
-            normalized_formation_id,
+            formation_id,
             name,
-            grade.grade_id,
-            grade.name,
+            grade_id,
+            grade_name,
             after,
             tuple((key, values[key]) for key in ("兽宝", "灵矿", "灵植")),
-            normalized_treasure_id,
-            tuple(sorted(normalized_modifiers.items())),
+            treasure_id,
+            tuple(sorted(modifiers.items())),
             version,
         )
         return FormationReserveAcquisitionPlan(
@@ -817,16 +817,16 @@ class AssetService:
             before,
             after,
             StateMutation(
-                normalized_user_id,
+                user_id,
                 "formation_reserve",
                 state_key,
                 {
-                    "阵法编号": normalized_formation_id,
-                    "品级": grade.grade_id,
+                    "阵法编号": formation_id,
+                    "品级": grade_id,
                     "数量": after,
                     "投入": values,
-                    "灵宝编号": normalized_treasure_id,
-                    "灵宝效果": normalized_modifiers,
+                    "灵宝编号": treasure_id,
+                    "灵宝效果": modifiers,
                 },
                 version,
             ),

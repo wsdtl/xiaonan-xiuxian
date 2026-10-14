@@ -835,5 +835,108 @@ def test_圣品候选提示必须能分辨不同投入() -> None:
     # 没有投入的普通阵法（键里没有扩展位）不补后缀。
     assert _materials_hint(type("E", (), {"instance_key": "01530002"})()) == ""
 
+def test_炼阵圣品两条候选能点着挑(services) -> None:
+    """真链路：连炼两炉同阵法同品级的圣品（投入不同）→ 布阵不带投入要给出可挑的候选。
+
+    验的是真服务、真临时库、真提交：创建角色、发三相材料、挪到有阵师的地点，
+    然后走 features.lianzhen.form 与 features.buzhen.arm 的公开入口。
+    """
+
+    import asyncio
+
+    from game.core.database import LocationMutation, TransactionCommand
+    from game.core.formation import FormationChoiceError
+    from game.core.world import LocationQuery
+    from game.features.chuangjian_renwu import CreateCharacterRequest
+
+    uid = '测试-炼阵候选'
+
+    def 提交(请求: str, 操作: object) -> None:
+        asyncio.run(
+            services.core.database.commit(
+                TransactionCommand(uid, 请求, '测试置备', 操作, {})
+            )
+        )
+
+    asyncio.run(
+        services.features.chuangjian_renwu.create(
+            CreateCharacterRequest(
+                user_id=uid, request_id='创建:炼阵候选', name='试阵人', gender='男'
+            )
+        )
+    )
+    # 圣品门槛按每门阵法各自定（530007 的兽宝门槛是 3888，不是周天星斗大阵的 1944），
+    # 所以从数据里读，不写死数字。
+    import json
+    import pathlib
+
+    阵法数据 = json.loads(
+        (
+            pathlib.Path(__file__).resolve().parents[1]
+            / 'data'
+            / '物品'
+            / '阵法'
+            / '内容'
+            / '阵法.json'
+        ).read_text(encoding='utf-8')
+    )
+
+    def 找定义(节点: object, 想要: str) -> dict | None:
+        if isinstance(节点, dict):
+            if 节点.get('编号') == 想要:
+                return 节点
+            for 子 in 节点.values():
+                命中 = 找定义(子, 想要)
+                if 命中 is not None:
+                    return 命中
+        elif isinstance(节点, list):
+            for 子 in 节点:
+                命中 = 找定义(子, 想要)
+                if 命中 is not None:
+                    return 命中
+        return None
+
+    定义 = 找定义(阵法数据, '530007')
+    assert 定义 is not None
+    门槛 = next(x for x in 定义['品级'] if x['品级'] == '圣')['最低消耗']
+    assert set(门槛) == {'兽宝', '灵矿', '灵植'}
+
+    # 圣品入库走核心自己的入库 API（真计划 + 真提交），不是手搓 SQL、也不走城镇阵台：
+    # 规则里「城镇最高品级＝天」，圣品本来就不能在城镇炼，只能由宗门演阵台那条路炼出来。
+    for 序号, 投入 in (('入库1', dict(门槛)), ('入库2', {k: v + 500 for k, v in 门槛.items()})):
+        计划 = asyncio.run(
+            services.core.asset.plan_formation_reserve_acquisition(
+                uid, '530007', '05', materials={k: str(v) for k, v in 投入.items()}
+            )
+        )
+        提交(序号, (计划.operation,))
+    # 云水观虽有炼阵功能，却没有阵师文件；归元观的玄玑子开放 530007 等阵法。
+    xy = services.core.world.locate(LocationQuery(location_name='归元观')).xy
+    位置 = asyncio.run(services.core.location.current(uid))
+    提交('挪:归元观', (LocationMutation(uid, xy, 位置.version),))
+
+
+
+    阵藏 = asyncio.run(services.core.asset.formation_entries(uid))
+    同名 = [e for e in 阵藏 if e.instance_key.startswith('05530007')]
+    assert len(同名) == 2, [e.instance_key for e in 同名]
+    assert 同名[0].instance_key != 同名[1].instance_key
+
+    with pytest.raises(FormationChoiceError) as 抓到的:
+        asyncio.run(
+            services.features.buzhen.arm(
+                uid, '布1:炼阵候选', '圣品' + str(定义['名称'])
+            )
+        )
+    候选 = 抓到的.value.candidates
+    assert len(候选) == 2
+    assert all('兽宝=' in c.label for c in 候选), [c.label for c in 候选]
+    assert all(c.tail and c.hall_tail and c.key_tail for c in 候选)
+    assert 候选[0].label != 候选[1].label
+
+    # 照候选自己给的写法再布一次：等价于玩家点那一条，必须精确选中。
+    asyncio.run(services.features.buzhen.arm(uid, '布2:炼阵候选', 候选[0].key_tail))
+
+
 
 

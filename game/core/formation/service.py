@@ -1010,6 +1010,7 @@ def _candidate(entry: object, treasure: str) -> FormationCandidate:
         tail=grade_name + entry.name + suffix + _materials_tail(entry),
         detail=_materials_hint(entry).strip("{}") or "无投入",
         hall_tail=entry.name + " " + grade_name + _materials_tail(entry),
+        key_tail=str(getattr(entry, "instance_key", "") or ""),
     )
 
 

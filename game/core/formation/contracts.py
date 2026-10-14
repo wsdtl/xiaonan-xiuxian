@@ -33,6 +33,8 @@ class FormationCandidate(NamedTuple):
     tail: str
     detail: str
     hall_tail: str = ""
+    #: 条目键本身（如 05530007{兽宝=…}）——「布阵」没有投入位，靠它原样直中挑中那一件。
+    key_tail: str = ""
 
 
 class FormationChoiceError(FormationError):
