@@ -332,6 +332,7 @@ def test_坐忘的成功回执能真的渲染出来(services) -> None:
     """
 
     from game.cmd.专属.坐忘台 import reply as 坐忘回复
+    from launch.adapter.qq_protocol.payload import payload_text
     from launch.adapter.qq_protocol.render import render_qq_message
 
     _创建(services, "y-坐忘卡", "卡片修士")
@@ -340,7 +341,8 @@ def test_坐忘的成功回执能真的渲染出来(services) -> None:
     _挪到(services, "y-坐忘卡", 坐忘台)
     result = asyncio.run(services.features.yijing.refund("y-坐忘卡", "坐忘:卡"))
     payload = render_qq_message(坐忘回复.refund_result(services.features.yijing, result))
-    content = payload["content"] if isinstance(payload, dict) else str(payload)
+    # markdown 消息的正文在 markdown.content 里（官方要求传了 markdown 后 content 必须为空）。
+    content = payload_text(payload)
     assert "忘境丹" in content, content
     assert "不尽长江意境" in content, content
 

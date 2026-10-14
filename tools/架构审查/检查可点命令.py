@@ -23,6 +23,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from launch.adapter.qq_protocol import payload as qq_payload  # noqa: E402
+
 GAME = ROOT / "game"
 COMMAND_CALL = re.compile(r"M\.command\(")
 TONE_IN_LABEL = re.compile(r'tone\s*=\s*"[a-z]+"')
@@ -243,7 +245,7 @@ def _render(message: object) -> str:
     from launch.adapter.qq_protocol.render import render_qq_message
 
     payload = render_qq_message(message)
-    return payload["content"] if isinstance(payload, dict) else str(payload)
+    return qq_payload.payload_text(payload)
 
 
 def check_rendered_links_are_plain() -> list[str]:

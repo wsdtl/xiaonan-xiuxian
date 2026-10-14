@@ -15,6 +15,7 @@ from urllib.parse import unquote
 from game.cmd.通用.位置 import reply
 from game.core.companion.contracts import LocalCultivator
 from game.features.weizhi.contracts import NearbyCultivatorPage
+from launch.adapter.qq_protocol.payload import payload_text
 from launch.adapter.qq_protocol.render import render_qq_message
 
 _LINK = re.compile(r'\[[^\]]*\]\(mqqapi://[^)]*')
@@ -41,7 +42,9 @@ def _clickable(services, **replaced) -> list[str]:
     feature = services.features.weizhi
     message = reply.nearby_cultivators(feature.copy(), _page(**replaced), ())
     payload = render_qq_message(message)
-    content = payload['content'] if isinstance(payload, dict) else str(payload)
+        # markdown 消息的正文在 markdown.content 里：官方要求「传了 markdown 后 content 必须为空」，
+    # 所以统一走 payload_text 取值，别写死 payload['content']。
+    content = payload_text(payload)
     return _LINK.findall(content)
 
 

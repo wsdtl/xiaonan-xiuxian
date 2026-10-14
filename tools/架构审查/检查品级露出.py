@@ -28,6 +28,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from launch.adapter.qq_protocol import payload as qq_payload  # noqa: E402
+
 GRADE_WORD = "品级："
 SAMPLES = ("400001", "100001", "200001")
 
@@ -72,7 +74,7 @@ async def check_view_shows_grade() -> list[str]:
         for entity_id in SAMPLES:
             result = await services.features.chakan_wupin.inspect(entity_id, "")
             payload = render_qq_message(view_reply.inspection(result))
-            content = payload["content"] if isinstance(payload, dict) else str(payload)
+            content = qq_payload.payload_text(payload)
             if GRADE_WORD not in content:
                 problems.append("查看 " + entity_id + " 的页面里没有品级行")
     finally:

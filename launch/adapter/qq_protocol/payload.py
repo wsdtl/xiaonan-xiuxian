@@ -54,8 +54,9 @@ def markdown(
         markdown_obj["params"] = params
 
     payload = _reply("markdown", markdown=markdown_obj, **extra)
-    if content_text:
-        payload["content"] = content_text
+    # 不再附带纯文本 content：官方要求「传了 markdown 后 content 必须为空」
+    # （见 v2 发送单聊/群聊消息接口表）。此前两个字段带同一份正文，
+    # 桌面端客户端可能因此多渲染出一块空白框（手机端忽略，所以只在电脑端可见）。
     if keyboard is not None:
         payload["keyboard"] = keyboard
     return payload
@@ -94,6 +95,23 @@ def raw(payload: dict[str, Any]) -> QqReplyPayload:
     """构造 QQ 原始 OpenAPI payload，用于驱动器调试或官方新增能力。"""
 
     return _reply("raw", payload=dict(payload or {}))
+
+
+def payload_text(payload: object) -> str:
+    """从 QQ 载荷里取正文：markdown 消息取 markdown.content，其余取 content。
+
+    官方要求「传了 markdown 后 content 必须为空」，所以 markdown 消息的正文只在
+    markdown.content 里；各处读正文统一走这一口，免得各写一套、形态一变就炸。
+    """
+
+    if isinstance(payload, dict):
+        markdown = payload.get("markdown")
+        if isinstance(markdown, dict) and markdown.get("content"):
+            return str(markdown["content"])
+        if payload.get("content"):
+            return str(payload["content"])
+        return ""
+    return "" if payload is None else str(payload)
 
 
 def _reply(kind: QqReplyKind, **fields: Any) -> QqReplyPayload:

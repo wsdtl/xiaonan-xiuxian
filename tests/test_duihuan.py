@@ -165,6 +165,7 @@ def test_成功回执能真的渲染出来(services) -> None:
     '''
 
     from game.cmd.通用.兑换码 import reply as 兑换回复
+    from launch.adapter.qq_protocol.payload import payload_text
     from launch.adapter.qq_protocol.render import render_qq_message
 
     _创建(services, 'd-卡片', '卡片修士')
@@ -173,7 +174,8 @@ def test_成功回执能真的渲染出来(services) -> None:
     )
     document = 兑换回复.result(services.features.duihuan, result)
     payload = render_qq_message(document)
-    content = payload['content'] if isinstance(payload, dict) else str(payload)
+    # markdown 消息的正文在 markdown.content 里（官方要求传了 markdown 后 content 必须为空）。
+    content = payload_text(payload)
     assert result.name in content, '卡片上要出现礼包名'
     assert '清心散' in content, '卡片上要出现到手的东西'
 
