@@ -46,7 +46,7 @@ def view(copy: CompanionCopy, value: CompanionView, actions: tuple[CommandAction
     )
     return (
         M.document()
-        .header(text(copy, "查看", "标题", {"名称": definition.name}))
+
         .section(text(copy, "查看", "身份"), icon=copy.icons["身份"])
         .row(
             (text(copy, "查看", "称号"), definition.title),
@@ -98,7 +98,7 @@ def conversation(
     definition = result.view.definition
     return (
         M.document()
-        .header(text(copy, "交谈", "标题", {"名称": definition.name}))
+
         .section(definition.title, icon=copy.icons["交谈"])
         .small(f"“{result.line}”")
         .small(definition.dialogue.preference)
@@ -113,7 +113,7 @@ def gift(
     actions: tuple[CommandAction, ...],
 ) -> DocumentMessage:
     definition = result.view.definition
-    builder = M.document().header(text(copy, "赠礼", "标题", {"名称": definition.name}))
+    builder = M.document()
     if not result.accepted:
         return (
             builder.section(definition.title, icon=copy.icons["赠礼"])
@@ -204,7 +204,7 @@ def invitation(
     definition = result.view.definition
     builder = (
         M.document()
-        .header(text(copy, "邀约", "标题", {"名称": definition.name}))
+
         .section(definition.title, icon=copy.icons["邀约"])
         .small(f"“{result.dialogue}”")
     )
@@ -235,7 +235,7 @@ def farewell(
     definition = result.definition
     return (
         M.document()
-        .header(text(copy, "暂别", "标题", {"名称": definition.name}))
+
         .section(definition.title, icon=copy.icons["暂别"])
         .line(M.status("已经暂别", tone="muted"))
         .small(f"“{result.dialogue}”")

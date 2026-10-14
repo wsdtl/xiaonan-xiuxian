@@ -45,7 +45,7 @@ def started(
 ) -> DocumentMessage:
     builder = (
         M.document()
-        .header(text(copy, "开始", "标题"))
+
         .inline_section("闭关状态", M.status("进行中", tone="positive"), icon="status")
         .section(value.location_name, icon="player")
         .row(
@@ -91,7 +91,7 @@ def progress(
         )
     builder = (
         M.document()
-        .header(text(copy, "进度", "标题"))
+
         .section(value.location_name, icon="status")
         .row(
             (
@@ -152,7 +152,7 @@ def settlement_page(
         insight_count = sum(len(user.insights) for user in value.users)
         builder = (
             M.document()
-            .header(text(copy, "总结", "标题"))
+
             .inline_section(
                 "闭关状态", M.status("已出关", tone="positive"), icon="success"
             )
@@ -184,7 +184,7 @@ def _user_page(
     page: int,
     total_pages: int,
 ) -> DocumentBuilder:
-    builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
+    builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
         builder.section("先天灵宝", icon="item").field(

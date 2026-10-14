@@ -17,7 +17,7 @@ from ...presentation import sentence
 def overview(feature: TradeFeature, value: TradeOverview) -> DocumentMessage:
     builder = (
         M.document()
-        .header(feature.copy("总览", "标题", {"地点": value.location_name}))
+
         .section(feature.copy("总览", "货架"), icon="inventory")
         .field(
             feature.copy("总览", "货币"),
@@ -35,9 +35,7 @@ def overview(feature: TradeFeature, value: TradeOverview) -> DocumentMessage:
 def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
     builder = (
         M.document()
-        .header(
-            feature.copy("列表", "标题", {"地点": value.location_name, "类别": value.category})
-        )
+
         .section(
             feature.copy("列表", "页码", {"当前页": value.page, "总页数": value.total_pages}),
             icon="inventory",

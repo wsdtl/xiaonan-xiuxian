@@ -17,7 +17,7 @@ from ...presentation import natural_deadline, sentence
 def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.text("发起", "标题"))
+
         .inline_section("切磋状态", M.status("待应战", tone="warning"), icon="combat")
         .section("邀约内容", icon="player")
         .field("邀约对象", M.text(target_name, tone="emphasis"))
@@ -54,7 +54,7 @@ def result(
     winner = feature.winner_label(value.winner, challenger_name, target_name)
     return (
         M.document()
-        .header(feature.text("结果", "标题"))
+
         .inline_section("切磋状态", M.status("已结束", tone="positive"), icon="combat")
         .section("战果", icon="status")
         .field("胜方", M.text(winner, tone="positive"))
@@ -74,7 +74,7 @@ def result(
 def rejected() -> DocumentMessage:
     return (
         M.document()
-        .header("切磋邀约")
+
         .inline_section("邀约状态", M.status("已拒绝", tone="muted"), icon="status")
         .build()
     )

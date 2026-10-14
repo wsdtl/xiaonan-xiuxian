@@ -15,7 +15,7 @@ def _has_content(item: object) -> bool:
 
 
 def home(view: NajieHome) -> DocumentMessage:
-    builder = M.document().header("纳戒")
+    builder = M.document()
     empty = 0
     for category in view.categories:
         # 空分项不做成可点条目：点进去只有一页空清单，等于白翻一页。
@@ -43,7 +43,7 @@ def home(view: NajieHome) -> DocumentMessage:
 
 def category(view: NajieCategoryView) -> DocumentMessage:
     value = view.category
-    builder = M.document().header(value.name).section("分项", icon=value.icon)
+    builder = M.document().section("分项", icon=value.icon)
     filled = tuple(item for item in value.subcategories if _has_content(item))
     for subcategory in filled:
         builder.line(
@@ -62,7 +62,7 @@ def page(view: NajiePage) -> DocumentMessage:
         if view.total_pages == 1
         else f"清单 · 第{view.page}/{view.total_pages}页"
     )
-    builder = M.document().header(view.subcategory).section(section, icon=view.icon)
+    builder = M.document().section(section, icon=view.icon)
     if view.total_pages == 1:
         builder.field(
             "合计",

@@ -267,12 +267,12 @@ def _wide_cases() -> list[tuple[str, object]]:
 
     # ④ 出站渲染
     def simple_document():
-        return M.document().header("五岳镇界镇岳诀").section("功法", icon="skill").line("编号 400503").build()
+        return M.document().section("功法", icon="skill").line("编号 400503").build()
 
     def document_with_actions():
         return (
             M.document()
-            .header("查看结果")
+            
             .section("候选", icon="notice")
             .item(1, M.command(M.text("功法 · 五岳镇界镇岳诀"), "查看 400503", submit=False), " · 400503")
             .build()

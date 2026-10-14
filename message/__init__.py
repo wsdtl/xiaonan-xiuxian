@@ -1,6 +1,13 @@
 """所有业务与驱动器共同遵守的消息语义协议。"""
 
-from .builder import DocumentBuilder, M, reset_identity, set_identity
+from .builder import (
+    DocumentBuilder,
+    M,
+    reset_command_title,
+    reset_identity,
+    set_command_title,
+    set_identity,
+)
 from .icons import SECTION_ICONS, icon_for, register_icons
 from .render import coerce_message, render_local_message
 from .schema import (
@@ -37,7 +44,9 @@ __all__ = (
     "coerce_message",
     "icon_for",
     "register_icons",
+    "reset_command_title",
     "reset_identity",
+    "set_command_title",
     "set_identity",
     "render_local_message",
 )

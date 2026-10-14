@@ -46,7 +46,7 @@ def page(
     *,
     notice: str = "",
 ) -> DocumentMessage:
-    builder = M.document().header(_text(copy, "查看", "标题"))
+    builder = M.document()
     if notice:
         builder.inline_section(
             _text(copy, "查看", "状态"),

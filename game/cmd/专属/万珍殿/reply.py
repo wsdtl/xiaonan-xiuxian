@@ -29,7 +29,7 @@ def _treasure_name(entry: object, names: Mapping[str, str]) -> str:
 def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]) -> DocumentMessage:
     builder = (
         M.document()
-        .header(_text(copy, "标题"))
+
         .section(value.category, icon="inventory")
     )
     # 计数为 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
@@ -62,7 +62,7 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMess
     values = {"name": value.entry.name, "目标": value.target_name}
     return (
         M.document()
-        .header(_text(copy, "标题"))
+
         .section(value.action, icon="success")
         .line(M.status("完成", tone="positive"), " ", _text(copy, key, values))
         .build()

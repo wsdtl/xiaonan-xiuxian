@@ -122,21 +122,6 @@ class ContentLine:
 
 
 @dataclass(frozen=True)
-class HeaderBlock:
-    """消息顶部的主标题。"""
-
-    content: RichText
-
-    def __post_init__(self) -> None:
-        if not self.content or any(not isinstance(span, Text) for span in self.content):
-            raise ValueError("消息主标题只允许普通文本")
-        if any(
-            character in span.value for span in self.content for character in "\r\n"
-        ):
-            raise ValueError("消息主标题必须保持单行")
-
-
-@dataclass(frozen=True)
 class InlineBlock:
     """标题与内容位于同一行的短信息，例如通知和状态。"""
 
@@ -184,7 +169,7 @@ class NoteBlock:
 
 
 DocumentBlock: TypeAlias = (
-    HeaderBlock | InlineBlock | SectionBlock | ImageBlock | NoteBlock
+    InlineBlock | SectionBlock | ImageBlock | NoteBlock
 )
 
 
@@ -230,6 +215,12 @@ class Document:
     actions: tuple[Action, ...] = ()
     #: 人物头（昵称 境界 等级）。由命令层统一注入，业务不得手写。
     identity: RichText = ()
+    #: 主标题＝触发这条回复的命令原文（含参数）。由命令层统一注入，业务不得手写。
+    command_title: RichText = ()
+    #: 主标题的图标分类（取自命令 help.category 的映射表）。
+    command_icon: str = ""
+    #: 主标题是否做成无边框按钮；与底部按钮提交同一条命令时为 False（退回纯文本）。
+    command_button: bool = True
 
 
 @dataclass(frozen=True)

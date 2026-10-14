@@ -15,7 +15,7 @@ from message import DocumentMessage, Action, M
 def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMessage:
     builder = (
         M.document()
-        .header(feature.copy("预览", "标题"))
+
         .inline_section("夺元状态", M.status("待确认", tone="warning"), icon="notice")
         .section(value.location_name, icon="location")
         .line(feature.copy("预览", "登台"))
@@ -80,7 +80,7 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
 def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> DocumentMessage:
     builder = (
         M.document()
-        .header(feature.copy("结算", "标题"))
+
         .inline_section("夺元结果", M.status("完成", tone="positive"), icon="success")
         .section(value.location_name, icon="notice")
         .line(feature.copy("结算", "剥离", {"名称": value.companion_name}))

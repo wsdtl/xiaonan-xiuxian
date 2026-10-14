@@ -11,7 +11,7 @@ from ...presentation import error_document
 def refund_result(feature: YijingFeature, value: YijingRefundResult) -> DocumentMessage:
     """坐忘成功的回复：退点前练到几阶、道行从多少退回多少。"""
 
-    builder = M.document().header(feature.copy("结算", "标题"))
+    builder = M.document()
     builder.section(value.name, icon="status")
     builder.line(
         M.status("坐忘完成", tone="positive"),

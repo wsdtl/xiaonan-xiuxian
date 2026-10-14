@@ -14,7 +14,7 @@ def page(copy: ZhongzuCopy, overview: RaceOverview, index: int) -> DocumentMessa
     """一页一个族系：族系名 + 该族全部种族 + 提示。"""
 
     lineage = overview.lineages[index - 1]
-    builder = M.document().header(_text(copy, "总览", "标题"))
+    builder = M.document()
     builder.section(
         lineage.name
         + " · "
@@ -57,9 +57,7 @@ def page(copy: ZhongzuCopy, overview: RaceOverview, index: int) -> DocumentMessa
 def detail(copy: ZhongzuCopy, race: RaceEntry, baike_url: str = "") -> DocumentMessage:
     """单个种族详情：基础事实 + 天生规则 + 说明，全部来自登记表。"""
 
-    builder = M.document().header(
-        _text(copy, "详情", "标题").format_map({"种族": race.name})
-    )
+    builder = M.document()
     builder.section(_text(copy, "详情", "基础"), icon="character").field(
         _text(copy, "详情", "编号"), M.text(race.number, tone="emphasis")
     ).field(

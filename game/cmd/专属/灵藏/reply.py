@@ -17,7 +17,7 @@ from ...presentation import sentence
 
 
 def page(copy: LingcangCopy, value: LingcangPage, actions: Sequence[CommandAction]) -> DocumentMessage:
-    builder = M.document().header(_text(copy, "标题")).section(value.category, icon="inventory")
+    builder = M.document().section(value.category, icon="inventory")
     # 两个数都是 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
     if value.spirit_stones or value.total_entries:
         builder.row(
@@ -46,7 +46,7 @@ def donated_material(copy: LingcangCopy, result: SectAssetTransfer) -> DocumentM
         return error(copy, "灵藏捐献结果缺少材料条目")
     builder = (
         M.document()
-        .header(_text(copy, "标题"))
+
         .section("捐入灵藏", icon="success")
         .line(M.status("捐献完成", tone="positive"))
         .line(
@@ -69,7 +69,7 @@ def donated_material(copy: LingcangCopy, result: SectAssetTransfer) -> DocumentM
 def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer) -> DocumentMessage:
     builder = (
         M.document()
-        .header(_text(copy, "标题"))
+
         .section("捐入灵藏", icon="success")
         .line(M.status("捐献完成", tone="positive"))
         .line(_text(copy, "捐入灵石", {"数量": quantity, "余额": result.spirit_stones}))

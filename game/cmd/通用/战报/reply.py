@@ -17,7 +17,7 @@ def _t(feature: BattleReportFeature, key: str) -> str:
 def view(feature: BattleReportFeature, page: MyReportPage) -> DocumentMessage:
     """把一页「我的战报」拼成卡：倒序条目、每条一个打开链接、页码与总数。"""
 
-    builder = M.document().header(_t(feature, "标题"))
+    builder = M.document()
     # line/row/item 必须属于 section；分节恒定存在（标题用有信息的一句），
     # 空列表走 line＋状态点，照宗门战 history 的成品写法——不另开空栏目。
     builder.section(_t(feature, "说明"), icon="combat")

@@ -53,7 +53,7 @@ def page(
         if value.page not in {"未加入", "待处理邀请"}
         else _text(copy, "查看", "标题")
     )
-    builder = M.document().header(title)
+    builder = M.document()
     if notice:
         builder.inline_section(
             _text(copy, "查看", "状态"),

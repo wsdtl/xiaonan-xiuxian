@@ -255,13 +255,13 @@ def check_rendered_links_are_plain() -> list[str]:
 
     hazard = M.command(M.text("透甲", tone="mystic"), "查看 400001")
     samples = {
-        "带 tone 的标签": M.document().header("判据").section("栏").line(hazard).build(),
+        "带 tone 的标签": M.document().section("栏").line(hazard).build(),
         "纯文本标签": (
-            M.document().header("判据").section("栏")
+            M.document().section("栏")
             .line(M.command("透甲", "查看 400001")).build()
         ),
         "caption 行里的命令": (
-            M.document().header("判据").section("栏")
+            M.document().section("栏")
             .small(M.command(M.text("透甲", tone="mystic"), "查看 400001")).build()
         ),
     }

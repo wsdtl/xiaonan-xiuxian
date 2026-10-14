@@ -15,7 +15,6 @@ from .schema import (
     DocumentBlock,
     DocumentMessage,
     FieldSeparator,
-    HeaderBlock,
     ImageBlock,
     ImageMessage,
     InlineBlock,
@@ -68,6 +67,24 @@ def reset_identity(token: object) -> None:
     _IDENTITY.reset(token)  # type: ignore[arg-type]
 
 
+#: 本次回复的主标题＝触发它的命令原文（含参数）。由命令层统一设置，业务函数不得手写。
+_COMMAND_TITLE: ContextVar[tuple[tuple[object, ...], str, bool] | None] = ContextVar(
+    "message_command_title", default=None
+)
+
+
+def set_command_title(*parts: object, icon: str = "", button: bool = True):
+    """设置本次回复的主标题（命令原文）与图标，返回可还原的 token。"""
+
+    return _COMMAND_TITLE.set((tuple(parts), icon, button) if parts else None)
+
+
+def reset_command_title(token: object) -> None:
+    """还原主标题设置。"""
+
+    _COMMAND_TITLE.reset(token)  # type: ignore[arg-type]
+
+
 class DocumentBuilder:
     """按内容顺序构建不可变 DocumentMessage。"""
 
@@ -76,12 +93,7 @@ class DocumentBuilder:
         self._actions: list[Action] = []
         self._section_index: int | None = None
 
-    def header(self, *parts: object) -> DocumentBuilder:
-        """添加消息主标题。"""
-
-        self._blocks.append(HeaderBlock(_rich(*parts)))
-        self._section_index = None
-        return self
+    # 主标题不再由业务添加：统一回复层按触发命令注入（见 Document.command_title）。
 
     def inline_section(
         self,
@@ -196,11 +208,26 @@ class DocumentBuilder:
                 "正文联动不能与底部按钮重复：" + "、".join(sorted(overlap))
             )
         identity = _IDENTITY.get()
+        title = _COMMAND_TITLE.get()
+        title_parts: tuple[object, ...] = ()
+        title_icon = ""
+        title_button = True
+        if title is not None:
+            title_parts, title_icon, title_button = title
+            title_text = "".join(
+                str(getattr(span, "value", "")) for span in _rich(*title_parts)
+            )
+            # 与底部按钮提交同一条命令时退回纯文本：既印出原文，也不撞上面那条重复校验。
+            if title_text in bottom_commands:
+                title_button = False
         return DocumentMessage(
             Document(
                 tuple(self._blocks),
                 tuple(self._actions),
                 _rich(*identity) if identity else (),
+                _rich(*title_parts) if title_parts else (),
+                title_icon,
+                title_button,
             )
         )
 
@@ -230,9 +257,7 @@ def _inline_commands(blocks: Iterable[DocumentBlock]) -> set[str]:
     commands: set[str] = set()
     for block in blocks:
         values: Iterable[RichText]
-        if isinstance(block, HeaderBlock):
-            values = (block.content,)
-        elif isinstance(block, InlineBlock):
+        if isinstance(block, InlineBlock):
             values = (block.title, block.content)
         elif isinstance(block, SectionBlock):
             values = (block.title, *(line.content for line in block.lines))

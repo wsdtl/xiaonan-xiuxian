@@ -6,7 +6,7 @@ from ...presentation import error_document
 def result(feature: ButianFeature, value: ButianResult) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.copy("结算", "标题"))
+
         .section(value.target_name, icon="cultivation")
         .line(M.status("补天完成", tone="positive"))
         .field("补正境界", value.realm_name)

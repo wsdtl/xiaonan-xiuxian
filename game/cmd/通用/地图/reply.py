@@ -25,7 +25,7 @@ def entry(overview: WorldMapOverview, url: str, index: int = 1) -> DocumentMessa
     total = max(1, len(overview.regions))
     index = min(max(1, index), total)
     region = overview.regions[index - 1]
-    builder = M.document().header(overview.name).section(
+    builder = M.document().section(
         f"{region.category} · {region.name} · 第 {index} / {total} 页", icon="location"
     )
     if index == 1:
@@ -54,7 +54,7 @@ def invalid_page(overview: WorldMapOverview, url: str) -> DocumentMessage:
     total = max(1, len(overview.regions))
     return (
         M.document()
-        .header(overview.name)
+
         .section("没有这一页", icon="notice")
         .line(M.status("页码超出", tone="warning"), f" 共 {total} 页，发「地图 1」到「地图 {total}」。")
         .action(Action("world_map.open", "打开地图", url, behavior="link", style="primary"))

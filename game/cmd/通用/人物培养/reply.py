@@ -71,7 +71,7 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
     profile = result.profile
     builder = (
         M.document()
-        .header(f"{profile.name} · {feature.copy('人物', '标题')}")
+
         .inline_section(
             "修为",
             M.text(f"{profile.realm_name}{profile.level}级 · 经验")

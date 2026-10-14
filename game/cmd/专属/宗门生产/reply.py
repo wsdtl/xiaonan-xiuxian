@@ -28,7 +28,7 @@ def viewed(
     text = copy[value.facility.kind]
     builder = (
         M.document()
-        .header(text["标题"])
+
         .section("生产状态", icon="location")
         .field(
             "周期",
@@ -65,7 +65,7 @@ def started(
     text = copy[value.view.facility.kind]
     return (
         M.document()
-        .header(text["标题"])
+
         .section(text["开启"], icon="success")
         .line(M.status("生产已开启", tone="positive"))
         .small(
@@ -85,7 +85,7 @@ def collected(
     text = copy[value.view.facility.kind]
     builder = (
         M.document()
-        .header(text["标题"])
+
         .section(text["收取"], icon="success")
         .line(M.status("收取完成", tone="positive"))
         .field("收取轮次", common["结算轮数"].format_map({"轮数": value.settled_cycles}))
@@ -125,7 +125,7 @@ def placed(
     selected = bool(value.terrain)
     builder = (
         M.document()
-        .header(text["标题"])
+
         .section(common["选地形"], icon="success")
         .line(
             M.status("地形已定" if selected else "已回全随机", tone="positive"),
@@ -150,7 +150,7 @@ def terrains(
     text = copy[value.facility.kind]
     builder = (
         M.document()
-        .header(text["标题"])
+
         .section(common["选地形"], icon="location")
         .field(common["地形"], _terrain(common, value.terrain))
     )

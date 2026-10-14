@@ -10,7 +10,6 @@ from game.cmd.help_registry import CommandHelpEntry, help_registry
 
 from launch.paths import public_url
 
-GAME_NAME = "晓楠修仙"
 
 
 def help_message(
@@ -86,7 +85,7 @@ def _usage_rows(
 
 
 def _category_message(category: str, *, id_converter=None, nav: str = "帮助") -> DocumentMessage:
-    builder = M.document().header(GAME_NAME).section(category, icon="system")
+    builder = M.document().section(category, icon="system")
     entries = help_registry.in_category(category)
     _usage_rows(builder, entries, nav=nav, id_converter=id_converter)
     if not entries:
@@ -97,7 +96,7 @@ def _category_message(category: str, *, id_converter=None, nav: str = "帮助") 
 def _detail_message(entry: CommandHelpEntry, *, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
-        .header(entry.command)
+
         .section("说明", icon="guide")
         .line(entry.spec.summary)
     )

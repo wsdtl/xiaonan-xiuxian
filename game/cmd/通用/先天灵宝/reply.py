@@ -20,7 +20,7 @@ from game.features.xiantian_lingbao import (
 
 
 def view(feature: InnateTreasureFeature, result: InnateTreasureView) -> DocumentMessage:
-    builder = M.document().header(feature.copy("标题"))
+    builder = M.document()
     if result.active is None:
         builder.section(feature.copy("当前执掌"), icon="status").line(
             M.status("未执掌", tone="muted"), " ", feature.copy("未执掌")
@@ -54,7 +54,7 @@ def view(feature: InnateTreasureFeature, result: InnateTreasureView) -> Document
 def catalog(feature: InnateTreasureFeature, result: InnateTreasureView) -> DocumentMessage:
     """灵宝谱：列这个世界里**一共存在**的先天灵宝（与玩家有没有无关）。"""
 
-    builder = M.document().header(feature.copy("谱标题"))
+    builder = M.document()
     builder.section(feature.copy("谱标题"), icon="inventory").line(
         feature.copy("谱说明", {"总数": result.total_count})
     )

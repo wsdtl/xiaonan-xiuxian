@@ -27,13 +27,7 @@ def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[Forma
     master = value.master
     builder = (
         M.document()
-        .header(
-            text(
-                copy,
-                "总览",
-                "标题", {"地点": value.location_name, "阵台": master.platform_name},
-            )
-        )
+
         .section(master.title, icon="combat")
         .field(text(copy, "总览", "阵师"), master.name)
         .field(text(copy, "总览", "传承"), master.heritage)
@@ -61,13 +55,7 @@ def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[Formati
     master = value.master
     builder = (
         M.document()
-        .header(
-            text(
-                copy,
-                "预览",
-                "标题", {"地点": value.location_name, "阵台": master.platform_name},
-            )
-        )
+
         .section(master.title, icon="combat")
         .field(text(copy, "预览", "阵师"), master.name)
         .small(master.speech["审材"].format_map({"主持": master.name}))
@@ -116,7 +104,7 @@ def completed(copy: FormationCopy, value: FormationResult, actions: tuple[Format
     master = preview_value.master
     builder = (
         M.document()
-        .header(text(copy, "完成", "标题", {"地点": preview_value.location_name}))
+
         .inline_section("炼阵结果", M.status("完成", tone="positive"), icon="success")
         .section(master.title, icon="combat")
         .field(text(copy, "完成", "阵师"), master.name)
@@ -145,7 +133,7 @@ def choose(
     点下去就是合法输入，玩家不必手打扩展位。
     """
 
-    builder = M.document().header(text(copy, "错误", "标题"))
+    builder = M.document()
     candidate_lines(
         builder,
         title=text(copy, "错误", "选择标题"),

@@ -7,7 +7,7 @@ from ...presentation import error_document
 def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:
     builder = (
         M.document()
-        .header(feature.copy("预览", "标题"))
+
         .inline_section("归元状态", M.status("待确认", tone="warning"), icon="status")
         .section(value.location_name, icon="location")
         .field("同行道侣", M.text(value.companion_name, tone="companion"))
@@ -28,7 +28,7 @@ def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:
 def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.copy("结算", "标题"))
+
         .section(value.companion_name, icon="companion")
         .line(
             M.status("归元完成", tone="positive"),
@@ -48,7 +48,7 @@ def error(feature: GuiyuanFeature, message: str) -> DocumentMessage:
 def xigen_result(feature: XigenFeature, value: XigenResult) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.copy('结算', '标题'))
+
         .section(value.name, icon='character')
         .line(M.status('洗根完成', tone='positive'))
         .row(

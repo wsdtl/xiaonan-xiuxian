@@ -20,7 +20,7 @@ def completed(
     prepared = value.prepared
     builder = (
         M.document()
-        .header(text["标题"])
+
         .section(f"{prepared.grade_name}{prepared.name}", icon="combat")
         .line(M.status("布阵完成", tone="positive"))
         .line(text["过程"])
@@ -53,7 +53,7 @@ def choose(
     """
 
     text = copy.text["错误"]
-    builder = M.document().header(text["标题"])
+    builder = M.document()
     candidate_lines(
         builder,
         title=text["选择标题"],

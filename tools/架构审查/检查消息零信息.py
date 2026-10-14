@@ -210,13 +210,18 @@ def _sections(body: str) -> list[tuple[str, list[str]]]:
 
     sections: list[tuple[str, list[str]]] = []
     current: list[str] | None = None
+    title_seen = False
     for depth, item in _depth_lines(body):
         if not item:
             continue
         if depth == 1:
-            # 主标题（整行加粗，如「> **晓楠修仙**」）和自带内容的行都不是栏目标题。
-            is_title_line = item.startswith("**") and item.endswith("**") and len(item) > 4
-            current = None if (":" in item or "：" in item or is_title_line) else []
+            # 主标题＝触发这条回复的命令原文，排在正文最前、单独一行，不是栏目。
+            # （它由统一回复层注入；缺了主标题由 检查命令标题 那条判据正面抓，这里不再兜。）
+            if not title_seen:
+                title_seen = True
+                continue
+            # 其余一层行里，自带内容的行（同一行有冒号）也不是栏目标题。
+            current = None if (":" in item or "：" in item) else []
             if current is not None:
                 sections.append((item, current))
         elif depth >= 2 and current is not None:

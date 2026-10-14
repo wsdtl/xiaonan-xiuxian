@@ -37,7 +37,7 @@ def inspection(
     if result.detail is None and result.candidates:
         reply = (
             M.document()
-            .header("查看结果")
+
             .section("名称不唯一", icon="notice")
             .line(
                 M.status("需要选择", tone="warning"),
@@ -83,7 +83,7 @@ def inspection(
         )
     )
     lines = _with_held_grade(detail.section, result, lines)
-    reply = M.document().header(detail.name)
+    reply = M.document()
     # 构筑正文统一从说明字段进入详情区；其他实体仍使用短引言加结构化详情。
     description = _player_description(detail)
     if detail.section in {"功法", "真意", "气机", "器律"}:
@@ -200,7 +200,7 @@ def companion(
 ) -> DocumentMessage:
     """看「我名下」这个道侣现在的样子：字段名直接用数据里的键，不另造词。"""
 
-    builder = M.document().header(copy.cultivator_view)
+    builder = M.document()
     section = builder.section(view.name, icon=copy.cultivator_icon)
     section.line(f"{view.realm_name} {view.level} 级 · 经验 {view.experience}")
     for key, value in view.attributes.items():
@@ -219,7 +219,7 @@ def cultivator(
 ) -> DocumentMessage:
     """看一个人：只给公开摘要那几项，名字仍是可点的无边框按钮。"""
 
-    builder = M.document().header(copy.cultivator_view)
+    builder = M.document()
     builder.section(copy.cultivator_view, icon=copy.cultivator_icon).line(
         M.command(profile.name, f"查看 {profile.user_id}"),
         " · ",

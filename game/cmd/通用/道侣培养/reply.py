@@ -68,7 +68,7 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
     title = feature.copy("道侣", "标题").format_map({"名称": definition.name})
     builder = (
         M.document()
-        .header(title)
+
         .section("修为", icon="status")
         .row(
             (feature.copy("道侣", "境界"), result.realm_name),

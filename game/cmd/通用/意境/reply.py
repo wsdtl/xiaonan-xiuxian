@@ -22,7 +22,7 @@ def _route_line(route, cap: int) -> str:
 def yijing_view(view) -> DocumentMessage:
     """`意境` 的回复：六条路各自的阶与六路共享的道行。"""
 
-    builder = M.document().header("意境")
+    builder = M.document()
     builder.section("意境", icon="status")
     builder.row(("道行", view.points), ("境界可点", f"{view.cap} 阶"))
     for route in view.routes:
@@ -35,7 +35,7 @@ def yijing_pointed(view, content_id: str) -> DocumentMessage:
     """点阶成功的回复：只印刚点的那一路，外加共享的道行。"""
 
     route = next(item for item in view.routes if item.content_id == content_id)
-    builder = M.document().header("意境")
+    builder = M.document()
     builder.section(route.name, icon="cultivation")
     builder.row(("阶", f"{route.tier} / {view.cap}"), ("道行", view.points))
     if route.tier >= 9:
@@ -52,4 +52,4 @@ def yijing_pointed(view, content_id: str) -> DocumentMessage:
 def yijing_refused(reason: str) -> DocumentMessage:
     """被拒的回复（理由用人物核心给出的原文）。"""
 
-    return M.document().header("意境").section("意境", icon="notice").line(reason).build()
+    return M.document().section("意境", icon="notice").line(reason).build()

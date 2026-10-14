@@ -8,7 +8,6 @@ from ..schema import (
     ContentLine,
     Document,
     FieldSeparator,
-    HeaderBlock,
     ImageBlock,
     InlineBlock,
     Link,
@@ -26,13 +25,17 @@ def render_plain_text(document: Document) -> str:
     if document.identity:
         lines.append(_render_rich(document.identity))
         lines.append("")
+    # 主标题＝触发这条回复的命令原文：纯文本出口没有按钮，把原文印出来才抄得走（见协议说明）。
+    if document.command_title:
+        title = _render_rich(document.command_title)
+        icon = document.command_icon
+        lines.append(_title(title, icon) if icon else title)
+        lines.append("")
     previous_block = None
     for block in document.blocks:
         if lines and _needs_block_separator(previous_block, block):
             lines.append("")
-        if isinstance(block, HeaderBlock):
-            lines.append(_render_rich(block.content))
-        elif isinstance(block, InlineBlock):
+        if isinstance(block, InlineBlock):
             title = _title(block.title, block.icon)
             lines.append(f"{title}: {_render_rich(block.content)}".rstrip(": "))
         elif isinstance(block, SectionBlock):

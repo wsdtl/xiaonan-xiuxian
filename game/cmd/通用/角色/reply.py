@@ -44,7 +44,7 @@ def created(
 ) -> DocumentMessage:
     builder = (
         M.document()
-        .header("人物创建完成")
+
         .inline_section("创建结果", M.status("成功", tone="positive"), icon="success")
         .section("身份")
         .row(("姓名", M.text(result.name, tone="emphasis")), ("性别", result.gender))

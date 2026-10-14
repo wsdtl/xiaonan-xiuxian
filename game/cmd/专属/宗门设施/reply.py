@@ -18,7 +18,7 @@ def page(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessage:
     text = copy[value.facility.name]
     builder = (
         M.document()
-        .header(value.facility.name)
+
         .section(text["场景"], icon="location")
         .line(text["总览"])
         .row((common["职位"], value.role), (common["材料来源"], value.material_source))
@@ -98,7 +98,7 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
         materials = list(assessment.materials)
     builder = (
         M.document()
-        .header(f"{value.facility.name} · {title}")
+
         .section(facility_text["审材"], icon="item")
         .row((common["职位"], value.role), (common["材料来源"], value.material_source))
         .section(title, icon="item")
@@ -139,7 +139,7 @@ def completed(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMess
     text = copy[value.facility.name]
     return (
         M.document()
-        .header(f"{value.facility.name} · 炼成")
+
         .section(text["完成"], icon="item")
         .line(M.status("炼制完成", tone="positive"))
         .row(("产出", value.product_name), ("品级或器阶", value.grade_or_stage))
@@ -172,7 +172,7 @@ def choose(
     """
 
     text = copy["错误"]
-    builder = M.document().header(text.get("标题", "宗门洞天"))
+    builder = M.document()
     candidate_lines(
         builder,
         title=text["选择标题"],

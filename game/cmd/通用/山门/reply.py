@@ -24,7 +24,7 @@ def result(copy: GateCopy, value: GateResult) -> DocumentMessage:
     key = "进入" if value.action == "进入" else "离开"
     return (
         M.document()
-        .header(_text(copy, "结果", "标题"))
+
         .inline_section(
             _text(copy, "结果", "空间"),
             M.status(_text(copy, "结果", key), tone="positive"),

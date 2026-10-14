@@ -17,7 +17,7 @@ from ...presentation import sentence
 def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandAction]) -> DocumentMessage:
     builder = (
         M.document()
-        .header(_text(copy, "标题"))
+
         .section("本宗道藏", icon="cultivation")
     )
     # 计数为 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
@@ -43,7 +43,7 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
 def borrowed(copy: CangjingCopy, value: CangjingPage) -> DocumentMessage:
     return (
         M.document()
-        .header(_text(copy, "标题"))
+
         .section("借阅完成", icon="success")
         .line(M.status("借阅完成", tone="positive"))
         .line(

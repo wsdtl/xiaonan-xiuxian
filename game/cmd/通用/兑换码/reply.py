@@ -9,7 +9,7 @@ from ...presentation import error_document
 def result(feature: DuihuanFeature, value: DuihuanResult) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.copy('兑换', '标题'))
+
         .section(value.name or value.code, icon='reward')
         .line(M.status('兑换成功', tone='positive'), ' ', M.text(value.code, tone='emphasis'))
         .small(

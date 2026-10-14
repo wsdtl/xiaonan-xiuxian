@@ -46,7 +46,7 @@ def started(
 ) -> DocumentMessage:
     builder = (
         M.document()
-        .header(text(copy, "开始", "标题"))
+
         .inline_section("探险状态", M.status("进行中", tone="positive"), icon="status")
         .section(value.location_name, icon="navigation")
         .row(
@@ -78,7 +78,7 @@ def progress(
 ) -> DocumentMessage:
     builder = (
         M.document()
-        .header(text(copy, "进度", "标题"))
+
         .section(value.location_name, icon="status")
         .row(
             (
@@ -129,7 +129,7 @@ def early_page(copy: ExplorationCopy, value: ExplorationSettlement) -> DocumentM
 
     return (
         M.document()
-        .header(text(copy, "总结", "标题"))
+
         .inline_section(
             text(copy, "总结", "提前"),
             M.status(text(copy, "总结", "无战果"), tone="warning"),
@@ -166,7 +166,7 @@ def settlement_page(
         )
         builder = (
             M.document()
-            .header(text(copy, "总结", "标题"))
+
             .inline_section(
                 "探险结局",
                 M.status(
@@ -223,7 +223,7 @@ def _user_page(
     page: int,
     total_pages: int,
 ) -> DocumentBuilder:
-    builder = M.document().header(text(copy, "用户", "标题", {"人物": value.character_name}))
+    builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
         builder.section("先天灵宝", icon="item").field(

@@ -7,7 +7,7 @@ from ...presentation import error_document
 def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.copy("结算", "标题"))
+
         .section(value.name, icon="character")
         .line(M.status("易形完成", tone="positive"))
         .row(
@@ -28,7 +28,7 @@ def error(feature: YixingFeature, message: str) -> DocumentMessage:
 def fanben_result(feature: FanbenFeature, value: FanbenResult) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.copy("结算", "标题"))
+
         .section(value.name, icon="character")
         .line(M.status("返本完成", tone="positive"))
         .row(

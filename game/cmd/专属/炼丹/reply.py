@@ -37,13 +37,7 @@ def overview(
     alchemist = value.alchemist
     builder = (
         M.document()
-        .header(
-            text(
-                copy,
-                "总览",
-                "标题", {"地点": value.location_name, "炉名": alchemist.furnace_name},
-            )
-        )
+
         .section(alchemist.title, icon="item")
         .field(text(copy, "总览", "丹师"), alchemist.name)
         .field(text(copy, "总览", "丹门"), alchemist.heritage)
@@ -63,9 +57,7 @@ def recipe_list(
 ) -> DocumentMessage:
     builder = (
         M.document()
-        .header(
-            text(copy, "列表", "标题", {"地点": value.location_name, "分类": value.category})
-        )
+
         .section(value.alchemist.title, icon="item")
         .field(text(copy, "列表", "丹师"), value.alchemist.name)
         .section(value.category, icon="inventory")
@@ -97,13 +89,7 @@ def preview(
     alchemist = value.alchemist
     builder = (
         M.document()
-        .header(
-            text(
-                copy,
-                "预览",
-                "标题", {"地点": value.location_name, "炉名": alchemist.furnace_name},
-            )
-        )
+
         .section(alchemist.title, icon="item")
         .field(text(copy, "预览", "丹师"), alchemist.name)
         .small(alchemist.speech["审材"].format_map({"主持": alchemist.name}))
@@ -155,7 +141,7 @@ def completed(
     alchemist = preview_value.alchemist
     builder = (
         M.document()
-        .header(text(copy, "完成", "标题", {"地点": preview_value.location_name}))
+
         .inline_section("炼丹结果", M.status("完成", tone="positive"), icon="success")
         .section(alchemist.title, icon="item")
         .field(text(copy, "完成", "丹师"), alchemist.name)

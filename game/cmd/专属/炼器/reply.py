@@ -35,13 +35,7 @@ def overview(
     artisan = value.artisan
     builder = (
         M.document()
-        .header(
-            text(
-                copy,
-                "总览",
-                "标题", {"地点": value.location_name, "炉名": artisan.furnace_name},
-            )
-        )
+
         .section(artisan.title, icon="weapon")
         .field(text(copy, "总览", "工匠"), artisan.name)
         .field(text(copy, "总览", "流派"), artisan.school)
@@ -57,7 +51,7 @@ def overview(
 def law_list(copy: ForgingCopy, value: ForgingLawList) -> DocumentMessage:
     builder = (
         M.document()
-        .header(text(copy, "列表", "标题", {"地点": value.location_name, "器阶": value.stage}))
+
         .section(value.artisan.title, icon="weapon")
         .field(text(copy, "列表", "工匠"), value.artisan.name)
         .section(value.stage, icon="item")
@@ -85,13 +79,7 @@ def preview(
     artisan = value.artisan
     builder = (
         M.document()
-        .header(
-            text(
-                copy,
-                "预览",
-                "标题", {"地点": value.location_name, "炉名": artisan.furnace_name},
-            )
-        )
+
         .section(artisan.title, icon="weapon")
         .field(text(copy, "预览", "工匠"), artisan.name)
         .small(artisan.speech["审材"].format_map({"主持": artisan.name}))
@@ -134,7 +122,7 @@ def completed(
     artisan = preview_value.artisan
     builder = (
         M.document()
-        .header(text(copy, "完成", "标题", {"地点": preview_value.location_name}))
+
         .inline_section("炼器结果", M.status("完成", tone="positive"), icon="success")
         .section(artisan.title, icon="weapon")
         .field(text(copy, "完成", "工匠"), artisan.name)

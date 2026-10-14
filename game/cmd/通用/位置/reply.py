@@ -26,7 +26,7 @@ def current(
     location = result.location
     builder = (
         M.document()
-        .header(result.space_name or _location_name(copy, location))
+
         .section(copy.current_place_section, icon=copy.location_icon)
     )
     if result.space_type == "地表":
@@ -67,9 +67,7 @@ def nearby_overview(
     surface = result.current.space_type == "地表"
     builder = (
         M.document()
-        .header(
-            copy.overview_title.format_map({"地点": location_name}) if surface else location_name
-        )
+
         .section(copy.overview_cultivators_section, icon=copy.cultivator_icon)
     )
     if surface:
@@ -98,7 +96,7 @@ def nearby_cultivators(
     result: NearbyCultivatorPage,
     actions: tuple[CommandAction, ...],
 ) -> DocumentMessage:
-    builder = M.document().header(copy.cultivators_title)
+    builder = M.document()
     if result.active_companion is not None:
         builder.section(
             copy.cultivators_active_section, icon=copy.cultivator_icon
@@ -171,7 +169,7 @@ def nearby_locations(
 ) -> DocumentMessage:
     builder = (
         M.document()
-        .header(copy.locations_title)
+
         .section(copy.locations_section, icon=copy.location_icon)
     )
     if not result.values:

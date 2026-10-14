@@ -42,7 +42,7 @@ _ERROR_KEYS = {
 
 def result(copy: HostingCopy, value: HostingResult) -> DocumentMessage:
     session = value.session
-    document = M.document().header(_text(copy, "结果", "标题"))
+    document = M.document()
     if session is None:
         return (
             document.section(

@@ -19,7 +19,6 @@ from ..schema import (
     ContentLine,
     Document,
     FieldSeparator,
-    HeaderBlock,
     ImageBlock,
     InlineBlock,
     Link,
@@ -59,15 +58,28 @@ def render_markdown(
             if segment.strip():
                 lines.append(f"**{_escape(segment)}**")
         lines.append("")
+
+    # 主标题＝触发这条回复的命令原文（含参数）：一层引用 ＋ 图标，由命令层统一注入，业务不写。
+    if document.command_title:
+        icon = icon_for(document.command_icon)
+        title = _render_rich(document.command_title, command_renderer)
+        display = f"{icon} {title}".strip()
+        if document.command_button and command_renderer is not None:
+            command = "".join(
+                str(getattr(span, "value", "")) for span in document.command_title
+            )
+            # 回调取的是 RichText（不是字符串，传字符串会渲成空标签）：图标单独一个 Text 段。
+            label: RichText = (
+                (Text(f"{icon} "),) if icon else ()
+            ) + tuple(document.command_title)
+            display = command_renderer(
+                CommandLink(label=label, command=command), "body", "", False
+            )
+        lines.append(f"> {display}")
+        lines.append("")
+
     previous_block = None
     for block in document.blocks:
-        if isinstance(block, HeaderBlock):
-            if lines and lines[-1] != "":
-                lines.append("")
-            lines.append(_render_header(block))
-            previous_block = block
-            continue
-
         should_separate = isinstance(
             previous_block, (InlineBlock, SectionBlock, ImageBlock, NoteBlock)
         ) and not (
@@ -181,16 +193,6 @@ def _progress_text(value: Progress) -> str:
     empty = PROGRESS_SEGMENTS - filled
     bar = PROGRESS_FILLED_GLYPH * filled + PROGRESS_EMPTY_GLYPH * empty
     return f"{bar} {value.label}".rstrip() if value.label else bar
-
-
-def _render_header(block: HeaderBlock) -> str:
-    """业务主标题走引用层。
-
-    整条消息**唯一**不套引用、**唯一**整行加粗的位置留给人物头（昵称 境界 等级）——
-    它由统一回复层生成（见 Document.identity）。业务标题跟正文同层，避免两条加粗行顶在一起。
-    """
-    text = "".join(span.value for span in block.content if isinstance(span, Text))
-    return f"> **{_escape(text)}**"
 
 
 def _escape(value: object) -> str:

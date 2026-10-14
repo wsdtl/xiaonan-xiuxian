@@ -4,14 +4,14 @@ from message import Action, DocumentMessage, M
 
 
 def entry(copy: dict, url: str) -> DocumentMessage:
-    return (M.document().header(copy["标题"]).section("公开工具").line(copy["说明"])
+    return (M.document().section("公开工具").line(copy["说明"])
             .line(copy["公开说明"]).line(copy["导入说明"])
             .line(M.link(copy["入口"], url))
             .action(Action("assembly.open", copy["入口"], url, behavior="link")).build())
 
 
 def scheme(title: str, value: ZhuangpeiResult) -> DocumentMessage:
-    builder = M.document().header(title).section("整套装配")
+    builder = M.document().section("整套装配")
     for line in value.lines or ("所有槽位为空",):
         builder.line(line)
     if value.replayed:
@@ -21,11 +21,11 @@ def scheme(title: str, value: ZhuangpeiResult) -> DocumentMessage:
 
 
 def notice(text: str) -> DocumentMessage:
-    return M.document().header("装配台").section("清单公开").line(text).build()
+    return M.document().section("清单公开").line(text).build()
 
 
 def error(text: str, next_step: str = "") -> DocumentMessage:
-    builder = M.document().header("装配未生效").section("原因").line(text)
+    builder = M.document().section("原因").line(text)
     if next_step:
         builder.line(next_step)
     return builder.build()

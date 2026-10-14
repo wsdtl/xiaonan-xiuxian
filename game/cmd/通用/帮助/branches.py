@@ -80,7 +80,7 @@ async def choose_branch(raw_message: str, manager: Any) -> None:
 
     options = branches_of(raw_message)
     builder = (
-        M.document().header("选择操作").section("这条命令有多个分支", icon="notice")
+        M.document().section("这条命令有多个分支", icon="notice")
     )
     if len(options) < 2:
         builder.line(M.status("认不出", tone="warning"), " 分支词必须是已注册的命令。")

@@ -21,7 +21,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
     status = feature.text("状态", value.status)
     builder = (
         M.document()
-        .header(feature.text("查看", "标题"))
+
         .inline_section(
             "宗门战状态",
             M.status(status, tone=_status_tone(value.status)),
@@ -84,7 +84,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
 
 
 def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessage:
-    builder = M.document().header(feature.text("查看", "记录标题")).section(
+    builder = M.document().section(
         "历史战录", icon="combat"
     )
     # 总数为 0 时下面那句「记录为空」已经把同一件事说过了，不必再说一遍。
@@ -120,7 +120,7 @@ def recent_reports(feature: SectWarFeature, page: MyReportPage) -> DocumentMessa
     与「战报」组件的「我的战报」同款——数据同出一处（非资产战报库），只是这里只留宗门战。
     """
 
-    builder = M.document().header(feature.text("查看", "最近战报")).section(
+    builder = M.document().section(
         feature.text("查看", "记录标题"), icon="combat"
     )
     if not page.entries:

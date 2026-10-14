@@ -48,7 +48,7 @@ def success(
     destination = plan.destination
     reply = (
         M.document()
-        .header("抵达 · ", _location_name(destination))
+
         .inline_section("行路结果", M.status("已抵达", tone="positive"), icon="success")
         .section(f"行路 · {plan.travel_method}", icon="navigation")
     )

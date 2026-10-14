@@ -13,7 +13,7 @@ from ...presentation import duration, sentence, span
 def started(feature: RaidFeature, value: RaidStarted) -> DocumentMessage:
     builder = (
         M.document()
-        .header(feature.text("开始", "标题"))
+
         .inline_section("讨伐状态", M.status("进行中", tone="danger"), icon="combat")
         .section(value.location_name, icon="status")
         .row(
@@ -35,7 +35,7 @@ def started(feature: RaidFeature, value: RaidStarted) -> DocumentMessage:
 def progress(feature: RaidFeature, value: RaidProgress) -> DocumentMessage:
     return (
         M.document()
-        .header(feature.text("进度", "标题"))
+
         .inline_section(
             "讨伐状态",
             M.status(
@@ -66,7 +66,7 @@ def settlement(feature: RaidFeature, value: RaidSettlement) -> DocumentMessage:
     result = feature.result_label(value.winner)
     builder = (
         M.document()
-        .header(feature.text("结算", "标题"))
+
         .inline_section(
             "讨伐结果",
             M.status(result, tone="positive" if won else "danger"),

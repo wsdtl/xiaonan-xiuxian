@@ -43,7 +43,7 @@ def page(
     title = (
         f"{value.sect_name} · 同行" if value.sect_name else _text(copy, "查看", "标题")
     )
-    builder = M.document().header(title)
+    builder = M.document()
     if notice:
         builder.inline_section(
             _text(copy, "查看", "状态"),

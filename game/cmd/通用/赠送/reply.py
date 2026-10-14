@@ -56,7 +56,7 @@ def error(
 def _result(feature: GiftFeature, target_name: str) -> DocumentBuilder:
     return (
         M.document()
-        .header(feature.text("", "标题"))
+
         .inline_section("赠礼结果", M.status("完成", tone="positive"), icon="success")
         .section("赠礼去向", icon="player")
         .field("接收者", M.text(target_name, tone="emphasis"))
