@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from ...presentation import error_document
 
-from game.features.zongmen_shanmen import GateCopy, GateResult
-from message import DocumentMessage, M
+from game.features.zongmen_shanmen import GateAction, GateCopy, GateResult
+from message import Action, DocumentMessage, M
 
 _ERROR_KEYS = {
     "not_member": "未加入宗门",
@@ -20,9 +20,15 @@ _ERROR_KEYS = {
 }
 
 
-def result(copy: GateCopy, value: GateResult) -> DocumentMessage:
+def result(
+    copy: GateCopy,
+    value: GateResult,
+    actions: tuple[GateAction, ...] = (),
+) -> DocumentMessage:
+    """进出结果卡。洞天里的建筑菜单随卡发（位置面板那一类底部按钮）。"""
+
     key = "进入" if value.action == "进入" else "离开"
-    return (
+    builder = (
         M.document()
 
         .inline_section(
@@ -32,8 +38,18 @@ def result(copy: GateCopy, value: GateResult) -> DocumentMessage:
         )
         .section(_text(copy, "结果", "空间"), icon=_text(copy, "图标", "空间"))
         .field(_text(copy, "结果", "人数"), value.participant_count)
-        .build()
     )
+    for item in actions:
+        builder = builder.action(
+            Action(
+                action_id=item.action_id,
+                label=item.label,
+                data=item.command,
+                behavior=item.behavior,
+                style=item.style,
+            )
+        )
+    return builder.build()
 
 
 def error(copy: GateCopy, code: str) -> DocumentMessage:

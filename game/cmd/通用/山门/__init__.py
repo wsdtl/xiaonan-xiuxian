@@ -29,7 +29,8 @@ async def enter_gate(user_id: str, message_context: MessageContext, manager: Any
     feature = current_game_services().features.zongmen_shanmen
     try:
         result = await feature.enter(user_id, message_context.request_id)
-        await manager.send(reply.result(feature.copy(), result))
+        buttons = await feature.gate_actions(user_id)
+        await manager.send(reply.result(feature.copy(), result, buttons))
     except GateFeatureError as exc:
         await manager.send(reply.error(feature.copy(), exc.code))
 
@@ -52,7 +53,8 @@ async def leave_gate(user_id: str, message_context: MessageContext, manager: Any
     feature = current_game_services().features.zongmen_shanmen
     try:
         result = await feature.leave(user_id, message_context.request_id)
-        await manager.send(reply.result(feature.copy(), result))
+        buttons = await feature.gate_actions(user_id)
+        await manager.send(reply.result(feature.copy(), result, buttons))
     except GateFeatureError as exc:
         await manager.send(reply.error(feature.copy(), exc.code))
 

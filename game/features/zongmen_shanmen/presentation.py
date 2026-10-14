@@ -52,7 +52,7 @@ def load_presentation(
 def actions(
     buttons: tuple[Mapping[str, str], ...], position: str
 ) -> tuple[GateAction, ...]:
-    return tuple(
+    picked = [
         GateAction(
             button["编号"],
             button["名称"],
@@ -62,7 +62,9 @@ def actions(
         )
         for button in buttons
         if button["位置"] == position
-    )
+    ]
+    # 「出山门」是离开动作，固定排最后：以后往洞天里加建筑也不会把它挤到中间。
+    return tuple(sorted(picked, key=lambda item: item.command == "出山门"))
 
 
 __all__ = ["actions", "load_presentation"]
