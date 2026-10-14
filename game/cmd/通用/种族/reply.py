@@ -31,7 +31,7 @@ def page(copy: ZhongzuCopy, overview: RaceOverview, index: int) -> DocumentMessa
         # 名字本身即入口：与角色页的物件/构筑一致，标签保持正文（带 tone 会被推进公式，
         # 而 QQ 不解析公式里的链接）。
         builder.line(
-            M.command(race.name, f"种族 {race.number}"),
+            M.command(race.name, f"种族 {race.name}"),
             " · " + "/".join(race.tiers),
         )
     # 整句提示用正文行：一是 small 会被推进公式（不渲染公式的客户端会露出 LaTeX 源码），
@@ -58,9 +58,8 @@ def detail(copy: ZhongzuCopy, race: RaceEntry, baike_url: str = "") -> DocumentM
     """单个种族详情：基础事实 + 天生规则 + 说明，全部来自登记表。"""
 
     builder = M.document()
+    # 卡面不印编号（编号只在 help 里出现）。
     builder.section(_text(copy, "详情", "基础"), icon="character").field(
-        _text(copy, "详情", "编号"), M.text(race.number, tone="emphasis")
-    ).field(
         _text(copy, "详情", "族系"), race.lineage
     ).field(
         _text(copy, "详情", "档次"), "/".join(race.tiers)

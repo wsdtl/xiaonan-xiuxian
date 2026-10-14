@@ -34,7 +34,7 @@ def page(copy: LingcangCopy, value: LingcangPage, actions: Sequence[CommandActio
                 f"查看 {entry.name}",
             ),
             f" × {entry.quantity}",
-        ).small(f"{entry.category} · {entry.content_id}")
+        ).small(entry.category)
     if value.page_count > 1:
         builder.small(_text(copy, "页码", {"当前页": value.page, "总页数": value.page_count}))
     return builder.actions(message_actions(actions)).build()

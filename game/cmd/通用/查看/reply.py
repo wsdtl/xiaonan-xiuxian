@@ -24,7 +24,7 @@ def missing_query() -> DocumentMessage:
         M.document()
         .section("查看", icon="item")
         .line(M.status("缺少目标", tone="warning"), " 请提供编号或完整名称。")
-        .small("例如：查看 100005 · 查看 小还丹")
+        .small("例如：查看 清心散")
         .build()
     )
 
@@ -90,15 +90,11 @@ def inspection(
         # 构筑正文已按说明字段逐行放入详情区，避免引言重复出现。
         description = ""
     if description:
-        # 结构上仍是「段 + 行」，只是不再打印编号（编号只在 help 里出现）。
+        # 结构上仍是「段 + 行」，不再打印编号（编号只在 help 里出现）。
         reply.section(title, icon=icon)
         reply.line(description)
-    else:
-        reply.inline_section(
-            title,
-            f"编号 {detail.item_id}",
-            icon=icon,
-        )
+    # 没有说明就**不建这一节**：判据要求「栏目必须有内容」，
+    # 只留标题的空壳会被判成空栏目（实测被挡下）。
     if lines:
         reply.section(_detail_title(detail.category), icon=icon)
         for line in lines:
