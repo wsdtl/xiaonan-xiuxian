@@ -74,7 +74,10 @@ class CharacterOverviewFeature:
         except Exception:  # noqa: BLE001 - 没建档不该挡住回复
             return "未建档"
         realm = str(getattr(profile, "realm_name", "") or "").strip()
-        return f"{profile.name} {realm} Lv{profile.level}".strip()
+        # 人物头正文：昵称 境界 Lv.等级。第一行那个 QQ at 由适配层补
+        # （SendOptions.mention=MENTION_SENDER），正文里**不许**写 @昵称——
+        # 判据「补 @ 不改动正文」就是防这件事的。
+        return f"{profile.name} {realm} Lv.{profile.level}".strip()
 
     async def inspect(self, user_id: str) -> CharacterOverviewResult:
         if not self._initialized:

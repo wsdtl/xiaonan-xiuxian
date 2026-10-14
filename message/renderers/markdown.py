@@ -48,7 +48,16 @@ def render_markdown(
     lines: list[str] = []
     # 人物头（昵称 境界 等级）：统一回复层印在第一行，业务不写。
     if document.identity:
-        lines.append(f"**{_render_rich(document.identity, command_renderer)}**")
+        # 人物头可能多行（第一行是 @昵称，第二行以昵称开头：昵称 境界 Lv.等级）。
+        # 必须先按换行拆、再逐段转义——先转义会被 _escape 把换行折掉，就永远是一行了。
+        raw = "".join(
+            str(getattr(span, "value", ""))
+            for span in document.identity
+            if isinstance(span, Text)
+        )
+        for segment in raw.split("\n"):
+            if segment.strip():
+                lines.append(f"**{_escape(segment)}**")
         lines.append("")
     previous_block = None
     for block in document.blocks:
