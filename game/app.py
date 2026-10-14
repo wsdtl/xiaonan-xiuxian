@@ -1031,7 +1031,6 @@ def shutdown_game_services() -> None:
 
     from .cmd.access_guard import unregister_game_access_guard
     from .core.database import open_request_connections
-
     unregister_request_scope(open_request_connections)
     unregister_game_access_guard()
     if _services is not None:

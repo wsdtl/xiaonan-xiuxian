@@ -16,8 +16,13 @@ from launch.log import C, logger
 from message import coerce_message
 
 from .base_handler import BaseMessageHandler
+from .command_cooldown import register_command_cooldown_guard
 from .context import SendRequest, current_message_context
 from .depends import call_with_dependencies
+
+#: 命令冷却是框架能力：框架一被加载就生效，与游戏是否启动无关。
+#: 没给任何命令设 cooldown 时该守卫一律放行，所以这是**行为中性**的一段。
+register_command_cooldown_guard()
 
 _current_manager: ContextVar[Any | None] = ContextVar(
     "adapter_current_manager",

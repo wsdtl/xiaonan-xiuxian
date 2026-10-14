@@ -104,6 +104,7 @@ async def _settle_and_show(
 
 @GameCommand.command(
     cmd=("探险结束", "结算探险", "探险结算", "结束探险", "探结"),
+    cooldown=3,
     metadata={
         "hosting": {"activity": "探险", "phase": "end"},
         "scope": "专属",

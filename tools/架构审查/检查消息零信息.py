@@ -46,7 +46,17 @@ from game.features.daolv_jiejiao import CompanionGiftRequest
 from game.core.database import TransactionCommand
 from game.features.chuangjian_renwu.contracts import CreateCharacterRequest
 from game.features.xinglu.contracts import TravelRequest
-from launch.adapter.local import dispatch
+from launch.adapter.command_cooldown import clear_command_cooldowns
+from launch.adapter.local import dispatch as _raw_dispatch
+
+async def _dispatch(*args, **kwargs):
+    """本判据要卡片信息量的确定性结论：每次分发前清一次命令冷却表。
+
+    命令冷却是按时间的框架能力，间隔不够久会把回复变成静默空条目，
+    于是判定结果随运行快慢漂移（实测 31/32 处来回跳）——那不是被测命令的问题。
+    """
+    clear_command_cooldowns()
+    return await _raw_dispatch(*args, **kwargs)
 from launch.adapter.local.handler import LocalEventHandler
 from loguru import logger
 from game.cmd.command import registered_command_routes
@@ -517,7 +527,7 @@ async def _扫裸命令(deep_failures, heads, user_id) -> None:
     for head in sorted(set(heads)):
         command = head + " 乱写参数"
         try:
-            await dispatch(
+            await _dispatch(
                 user_id=user_id,
                 raw_message=command,
                 event_id=f"烟囱-{next(_派发序号)}-{head}",
@@ -534,7 +544,7 @@ async def _扫裸命令(deep_failures, heads, user_id) -> None:
 async def _扫无参(deep_failures, heads, user_id) -> None:
     for head in sorted(set(heads)):
         try:
-            result = await dispatch(
+            result = await _dispatch(
                 user_id=user_id,
                 raw_message=head,
                 event_id=f"烟囱裸-{next(_派发序号)}-{head}",
@@ -558,7 +568,7 @@ async def _扫最佳用法(deep_failures, heads, user_id) -> None:
         if not best.startswith(head) and len(best.split()) > 1:
             best = head + " " + " ".join(best.split()[1:])
         try:
-            result = await dispatch(
+            result = await _dispatch(
                 user_id=user_id,
                 raw_message=best,
                 event_id=f"烟囱usage-{next(_派发序号)}-{head}",
@@ -619,7 +629,7 @@ async def _扫用法举例(usage_failures, user_id) -> None:
             try:
                 # 同一条用法短语会按**每个别名**各发一遍（别名共享同一份 usage），
                 # 编号必须每次唯一：共用一个编号会撞幂等，那不是被测命令的问题。
-                result = await dispatch(
+                result = await _dispatch(
                     user_id=user_id,
                     raw_message=phrase,
                     event_id=f"用法判据-{next(_派发序号)}-{phrase}",
@@ -674,7 +684,7 @@ async def _扫撞墙(heads, user_id, wall_failures) -> None:
         for bad in ("乱写", "乱写 乱写 乱写"):
             wall_cmd = head + " " + bad
             try:
-                wall_result = await dispatch(
+                wall_result = await _dispatch(
                     user_id=user_id, raw_message=wall_cmd, event_id="墙判据-" + wall_cmd
                 )
             except Exception:  # noqa: BLE001 - 崩溃另有判据管
@@ -739,7 +749,7 @@ async def _扫中文名与编号(heads, name_id_failures, user_id) -> None:
                 if not filled or filled == usage:
                     continue
                 try:
-                    result = await dispatch(
+                    result = await _dispatch(
                         user_id=user_id, raw_message=filled, event_id="名字判据-" + filled
                     )
                 except Exception as exc:  # noqa: BLE001 - 崩溃也是缺陷
@@ -809,7 +819,7 @@ def _corpus() -> tuple[dict[str, str], dict[str, float]]:
         try:
             # 请求编号每次都要唯一：判据会把同一条命令发好几遍（裸命令/无参/用法），
             # 现实里每条消息各有编号；共用一个编号会撞幂等，而且那不是被测命令的问题。
-            result = await dispatch(
+            result = await _dispatch(
                 user_id=user or user_id,
                 raw_message=text,
                 event_id=f"判据-{next(_派发序号)}-{text}",

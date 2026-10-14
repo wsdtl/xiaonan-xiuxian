@@ -6,9 +6,15 @@ from __future__ import annotations
 import re
 import functools
 from collections.abc import Callable, Mapping, Sequence
+from itertools import count
 from typing import Any
 
 from launch.adapter import MessageHandler
+from launch.adapter.command_cooldown import (
+    COOLDOWN_FIELD,
+    COOLDOWN_KEY_FIELD,
+    COOLDOWN_NAME_FIELD,
+)
 from launch.adapter.depends import current_message_context
 
 from message import reset_identity, set_identity
@@ -16,6 +22,8 @@ from message import reset_identity, set_identity
 from .help_registry import HelpSpec, help_registry
 
 COMMAND_SCOPES = frozenset({"通用", "专属", "后台"})
+#: 命令冷却键的序号源：装饰器每条注册取一个，与名字/别名/模块/适配器全都无关，天然唯一。
+_cooldown_serial = count()
 _registered_commands: list[tuple[str, str, str, str]] = []
 _registered_command_routes: list[tuple[str, str, str, str, str]] = []
 
@@ -29,6 +37,7 @@ class GameCommand:
         *,
         priority: int = 100,
         block: bool = True,
+        cooldown: float = 0,
         metadata: dict[str, Any] | None = None,
     ) -> Callable:
         return _register(
@@ -36,6 +45,7 @@ class GameCommand:
             cmd,
             priority=priority,
             block=block,
+            cooldown=cooldown,
             metadata=metadata,
         )
 
@@ -45,6 +55,7 @@ class GameCommand:
         *,
         priority: int = 100,
         block: bool = True,
+        cooldown: float = 0,
         metadata: dict[str, Any] | None = None,
     ) -> Callable:
         return _register(
@@ -52,6 +63,7 @@ class GameCommand:
             cmd,
             priority=priority,
             block=block,
+            cooldown=cooldown,
             metadata=metadata,
         )
 
@@ -61,10 +73,16 @@ class GameCommand:
         *,
         priority: int = 100,
         block: bool = True,
+        cooldown: float = 0,
         metadata: dict[str, Any] | None = None,
     ) -> Callable:
         return _register(
-            MessageHandler.regex, cmd, priority=priority, block=block, metadata=metadata
+            MessageHandler.regex,
+            cmd,
+            priority=priority,
+            block=block,
+            cooldown=cooldown,
+            metadata=metadata,
         )
 
 
@@ -104,6 +122,7 @@ def _register(
     *,
     priority: int,
     block: bool,
+    cooldown: float = 0,
     metadata: dict[str, Any] | None,
 ) -> Callable:
     is_regex = registrar is MessageHandler.regex
@@ -120,6 +139,12 @@ def _register(
         routes = route_names = _command_routes(cmd)
     command_key = route_names[0]
     command_metadata = dict(metadata or {})
+    # 命令冷却：只在这一处写保留键。同一份 metadata 会交给这条命令的**每个别名**与**每个适配器**，
+    # 所以别名之间自动共用同一个冷却键（换别名绕不过去）。没设冷却（cooldown=0）的命令不碰这份 dict。
+    if cooldown > 0:
+        command_metadata[COOLDOWN_FIELD] = float(cooldown)
+        command_metadata[COOLDOWN_KEY_FIELD] = f"cd-{next(_cooldown_serial)}"
+        command_metadata[COOLDOWN_NAME_FIELD] = command_key
     scope = _required_text(command_metadata, "scope")
     if scope not in COMMAND_SCOPES:
         raise ValueError(f"游戏命令 scope 必须是：{'、'.join(sorted(COMMAND_SCOPES))}")
