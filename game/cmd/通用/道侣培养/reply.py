@@ -27,8 +27,18 @@ def _render_candidates(
 ) -> bool:
     """把「本境界全部可用突破丹」铺进卡片——与人物培养共用同一段渲染。"""
 
-    if offer is None or not offer.preview.can_breakthrough or not offer.candidates:
+    if offer is None or not offer.preview.can_breakthrough:
         return False
+    if not offer.candidates:
+        # 满级了、身上却没有对应突破丹：原先把整段掐掉，玩家看不出自己已经顶到头。
+        # 用 inline_section：自带栏目、不会留下空栏目，也不需要额外开一个 section。
+        builder.inline_section(
+            feature.copy("突破", "缺丹").format_map(
+                {"来源": offer.preview.realm_name, "目标": offer.preview.next_realm_name}
+            ),
+            icon="status",
+        )
+        return True
     preview = offer.preview
     candidate_lines(
         builder,
