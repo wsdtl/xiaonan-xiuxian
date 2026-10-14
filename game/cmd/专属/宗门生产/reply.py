@@ -128,7 +128,11 @@ def placed(
 
         .section(common["选地形"], icon="success")
         .line(
-            M.status("地形已定" if selected else "已回全随机", tone="positive"),
+            # 地形状态做成一枚分支按钮：点一下回「选地形／清地形」二选一菜单，只填入。
+            M.command(
+                "地形已定" if selected else "已回全随机",
+                "灵田 选地形|灵田 清地形",
+            ),
         )
     )
     if selected:
