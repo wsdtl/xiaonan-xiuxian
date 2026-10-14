@@ -50,12 +50,15 @@ def branches_of(value: object) -> tuple[tuple[str, str], ...]:
         if not segment:
             continue
         word, _, tail = segment.partition(" ")
-        if word in seen:
-            continue
-        seen.add(word)
         if help_registry.find(word) is None:
             continue
-        result.append((word, (word + " " + (tail.strip() or shared)).strip()))
+        command = (word + " " + (tail.strip() or shared)).strip()
+        # 去重键是**完整命令**，不是命令词：同一命令词的不同参数是不同支线
+        #（人药 开 与 人药 关）；按命令词去重会把后一条吃掉。
+        if command in seen:
+            continue
+        seen.add(command)
+        result.append((word, command))
     return tuple(result)
 
 
@@ -87,8 +90,8 @@ async def choose_branch(raw_message: str, manager: Any) -> None:
         await manager.send(builder.build())
         return
     # 带序号：2~5 条都一眼数得清（与列表卡同款）。
-    for index, (word, command) in enumerate(options, start=1):
-        builder.item(index, M.command(word, command))
+    for index, (_word, command) in enumerate(options, start=1):
+        builder.item(index, M.command(command, command))
     if len(options) > 2:
         builder.small(f"共 {len(options)} 条分支 · 点一条执行")
     await manager.send(builder.build())
