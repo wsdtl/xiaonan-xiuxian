@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from game.core.transaction_log import TransactionLogService
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -139,6 +141,7 @@ class CoreServices:
     trade: TradeService
     duel: DuelService
     gift: GiftService
+    transaction_log: TransactionLogService
 
 
 @dataclass(frozen=True)
@@ -658,8 +661,12 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("modes", len(gathering_status.modes)),
         )
     )
+    transaction_log = TransactionLogService()
+    transaction_log.initialize()
+    logger.opt(colors=True).success(C.ok("事务流水核心微服务已启动"))
     core = CoreServices(
         data=data,
+        transaction_log=transaction_log,
         item_catalog=item_catalog,
         combat=combat,
         pool=pool,

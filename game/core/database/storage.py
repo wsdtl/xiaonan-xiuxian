@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from game.core import transaction_log
+
+
 import base64
 import hashlib
 import json
 import zlib
-import pathlib
 import sqlite3
 import time
 import threading
@@ -170,112 +172,20 @@ _RECEIPT_LIMIT_PER_USER = 100
 _RECEIPT_TTL_SECONDS = 7 * 24 * 3600
 
 
-def _log_db_path() -> pathlib.Path:
-    from game.core.database.battle_report import runtime_log_database_path
-
-    return pathlib.Path(runtime_log_database_path())
-
-
-def _log_connection() -> sqlite3.Connection:
-    connection = sqlite3.connect(_log_db_path())
-    connection.execute(
-        """
-        CREATE TABLE IF NOT EXISTS log_committed_transactions (
-            transaction_id TEXT PRIMARY KEY,
-            user_id        TEXT NOT NULL,
-            request_id     TEXT NOT NULL,
-            business_type  TEXT NOT NULL,
-            changes_json   TEXT NOT NULL,
-            committed_at   TEXT NOT NULL,
-            expires_at     REAL NOT NULL,
-            scope          TEXT NOT NULL DEFAULT ''
-        )
-        """
-    )
-    connection.execute(
-        "CREATE INDEX IF NOT EXISTS ix_log_committed_user_request "
-        "ON log_committed_transactions(scope, user_id, request_id)"
-    )
-    return connection
+# 事务流水已归位为独立核心微服务（game/core/transaction_log，2026-10-14）。
+# 这里只做**名字转接**：表结构、SQL 原语与保留策略都在那边；别处不要再往这个文件里加日志代码。
+_log_db_path = transaction_log.log_db_path
+_log_connection = transaction_log.log_connection
+_read_log_receipt = transaction_log.read_receipt
+_read_log_receipt_on = transaction_log.read_receipt_on
+_write_log_receipt = transaction_log.write_receipt
+_write_log_receipt_on = transaction_log.write_receipt_on
+_count_log_receipts = transaction_log.count_receipts
+_prune_log_receipts = transaction_log.prune_receipts
+_RECEIPT_TTL_SECONDS = transaction_log.RECEIPT_TTL_SECONDS
 
 
-def _read_log_receipt_on(connection, scope: str, user_id: str, request_id: str):
-    return connection.execute(
-        "SELECT transaction_id, business_type, changes_json, committed_at "
-        "FROM log_committed_transactions "
-        "WHERE scope = ? AND user_id = ? AND request_id = ? AND expires_at > ?",
-        (scope, user_id, request_id, time.time()),
-    ).fetchone()
 
-
-def _write_log_receipt_on(connection, scope, transaction_id, user_id, request_id, business_type, changes_json, committed_at) -> None:
-    connection.execute(
-        "INSERT OR REPLACE INTO log_committed_transactions "
-        "(transaction_id, user_id, request_id, business_type, changes_json, committed_at, expires_at, scope) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (transaction_id, user_id, request_id, business_type, changes_json,
-         committed_at, time.time() + _RECEIPT_TTL_SECONDS, scope),
-    )
-
-
-def _read_log_receipt(scope: str, user_id: str, request_id: str):
-    connection = _log_connection()
-    try:
-        return connection.execute(
-            "SELECT transaction_id, business_type, changes_json, committed_at "
-            "FROM log_committed_transactions "
-            "WHERE scope = ? AND user_id = ? AND request_id = ? AND expires_at > ?",
-            (scope, user_id, request_id, time.time()),
-        ).fetchone()
-    finally:
-        connection.close()
-
-
-def _write_log_receipt(scope, transaction_id, user_id, request_id, business_type, changes_json, committed_at) -> None:
-    connection = _log_connection()
-    try:
-        connection.execute(
-            "INSERT OR REPLACE INTO log_committed_transactions "
-            "(transaction_id, user_id, request_id, business_type, changes_json, committed_at, expires_at, scope) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (transaction_id, user_id, request_id, business_type, changes_json,
-             committed_at, time.time() + _RECEIPT_TTL_SECONDS, scope),
-        )
-        connection.commit()
-    finally:
-        connection.close()
-
-
-def _count_log_receipts(scope: str) -> int:
-    connection = _log_connection()
-    try:
-        return int(connection.execute(
-            "SELECT COUNT(*) FROM log_committed_transactions WHERE scope = ?", (scope,)).fetchone()[0])
-    finally:
-        connection.close()
-
-
-def _prune_log_receipts(scope: str, keep_per_user: int) -> int:
-    connection = _log_connection()
-    removed = 0
-    try:
-        owners = [str(r[0]) for r in connection.execute(
-            "SELECT DISTINCT user_id FROM log_committed_transactions WHERE scope = ?", (scope,)).fetchall()]
-        for owner in owners:
-            found = int(connection.execute(
-                "SELECT COUNT(*) FROM log_committed_transactions WHERE scope = ? AND user_id = ?",
-                (scope, owner)).fetchone()[0])
-            if found <= keep_per_user:
-                continue
-            connection.execute(
-                "DELETE FROM log_committed_transactions WHERE scope = ? AND user_id = ? AND rowid NOT IN "
-                "(SELECT rowid FROM log_committed_transactions WHERE scope = ? AND user_id = ? ORDER BY rowid DESC LIMIT ?)",
-                (scope, owner, scope, owner, keep_per_user))
-            removed += found - keep_per_user
-        connection.commit()
-    finally:
-        connection.close()
-    return removed
 
 
 def _pack_json(text: str) -> str:
