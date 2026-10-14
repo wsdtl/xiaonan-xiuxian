@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from game.core.world import WorldMapView, WorldService
 
-from .contracts import WorldMapOverview
+from .contracts import WorldMapOverview, WorldMapRegion
 
 
 class WorldMapFeature:
@@ -47,6 +47,27 @@ def _overview(view: WorldMapView) -> WorldMapOverview:
         region_count=len(view.regions),
         location_count=len(view.locations),
         road_count=len(view.roads),
+        regions=_by_region(view),
+    )
+
+
+def _by_region(view: WorldMapView) -> tuple[WorldMapRegion, ...]:
+    """把地点按区域名分组：区域顺序照世界数据，组内顺序也照世界数据。
+
+    地点的 `region` 理应就是区域名；真出现对不上的，就按它原样另起一组，
+    免得那种地点从卡上凭空消失（宁可多一节，不可漏一个）。
+    """
+
+    grouped: dict[str, list[str]] = {region.name: [] for region in view.regions}
+    for location in view.locations:
+        grouped.setdefault(str(location.region), []).append(str(location.name))
+    order = [region.name for region in view.regions]
+    order += [key for key in grouped if key not in order]
+    categories = {region.name: region.category for region in view.regions}
+    return tuple(
+        WorldMapRegion(key, categories.get(key, ""), tuple(grouped[key]))
+        for key in order
+        if grouped[key]
     )
 
 
