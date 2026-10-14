@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 
 from game.features.chakan_wupin import ItemInspectionResult
 from message import Action, DocumentMessage, M
+
+from ...actions import message_actions
 
 from .items import (
     _build_description_lines,
@@ -25,7 +28,11 @@ def missing_query() -> DocumentMessage:
     )
 
 
-def inspection(result: ItemInspectionResult, baike_url: str = "") -> DocumentMessage:
+def inspection(
+    result: ItemInspectionResult,
+    baike_url: str = "",
+    actions: Sequence[Action] = (),
+) -> DocumentMessage:
     if result.detail is None and result.candidates:
         reply = (
             M.document()
@@ -100,6 +107,9 @@ def inspection(result: ItemInspectionResult, baike_url: str = "") -> DocumentMes
             M.status("暂无", tone="muted"), " 暂无更多记载。"
         )
     _append_baike(reply, baike_url, detail.item_id)
+    # 联动按钮由实体自己的玩法给（如道侣的交谈/赠予/邀约/暂别），查看这一层不写死任何按钮。
+    if actions:
+        reply.actions(message_actions(actions))
     return reply.build()
 
 

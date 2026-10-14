@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from game.app import current_game_services
 from game.features.chakan_wupin import ItemInspectionResult
+from game.features.daolv_jiejiao import CompanionAccessError
 from launch.paths import public_url
 
 from ...command import GameCommand
@@ -44,7 +45,20 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
         await manager.send(reply.inspection(result, public_url("baike")))
         return
     result = await current_game_services().features.chakan_wupin.inspect(query, user_id)
-    await manager.send(reply.inspection(result, public_url("baike")))
+    actions: tuple[Any, ...] = ()
+    detail = result.detail
+    if detail is not None and detail.section == "道侣":
+        # 道侣卡的联动按钮由道侣互动玩法按目标给（交谈/赠予/邀约/暂别，条件也由展示数据定）。
+        # 互动那边要玩家人在道侣所在地；查看是只读且随处可用，所以取不到就退回「没有按钮」，
+        # 不能让它把查看整条命令弄成报错。
+        companions = current_game_services().features.daolv_jiejiao
+        try:
+            view = await companions.inspect(user_id, detail.item_id)
+        except CompanionAccessError:
+            view = None
+        if view is not None:
+            actions = companions.actions("查看", view)
+    await manager.send(reply.inspection(result, public_url("baike"), actions))
 
 
 __all__ = ["router"]
