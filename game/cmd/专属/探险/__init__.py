@@ -66,6 +66,42 @@ async def exploration_progress(user_id: str, manager: Any) -> None:
         await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
+async def _settle_and_show(
+    user_id: str, message: str, request_id: str, manager: Any
+) -> None:
+    """结算一次（核心幂等：已结算就回放旧结果）并把指定页回给玩家。"""
+
+    feature = current_game_services().features.tanxian
+    page_text = str(message or "").strip()
+    try:
+        page = 1 if not page_text else int(page_text)
+    except ValueError:
+        await manager.send(
+            reply.error(
+                feature.copy(),
+                reply.text(feature.copy(), "错误", "写法"),
+                feature.format_actions(),
+            )
+        )
+        return
+    try:
+        result = await feature.settle(user_id, request_id)
+        total_pages = 1 + len(result.users)
+        if page < 1 or page > total_pages:
+            raise ExplorationFeatureError(f"页码必须在1至{total_pages}之间")
+        await manager.send(
+            reply.settlement_page(
+                feature.copy(),
+                feature,
+                result,
+                page,
+                feature.settlement_actions(page, total_pages),
+            )
+        )
+    except ExplorationFeatureError as exc:
+        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+
+
 @GameCommand.command(
     cmd=("探险结束", "结算探险", "探险结算", "结束探险", "探结"),
     metadata={
@@ -88,35 +124,27 @@ async def exploration_progress(user_id: str, manager: Any) -> None:
     },
 )
 async def settle_exploration(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.tanxian
-    page_text = str(message or "").strip()
-    try:
-        page = 1 if not page_text else int(page_text)
-    except ValueError:
-        await manager.send(
-            reply.error(
-                feature.copy(),
-                reply.text(feature.copy(), "错误", "写法"),
-                feature.format_actions(),
-            )
-        )
-        return
-    try:
-        result = await feature.settle(user_id, message_context.request_id)
-        total_pages = 1 + len(result.users)
-        if page < 1 or page > total_pages:
-            raise ExplorationFeatureError(f"页码必须在1至{total_pages}之间")
-        await manager.send(
-            reply.settlement_page(
-                feature.copy(),
-                feature,
-                result,
-                page,
-                feature.settlement_actions(page, total_pages),
-            )
-        )
-    except ExplorationFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+    await _settle_and_show(user_id, message, message_context.request_id, manager)
+
+
+@GameCommand.command(
+    cmd=("探险结果", "查看探险", "探险结算页"),
+    metadata={
+        # 只读翻页：**故意不带 hosting 元数据**。托管中的玩法命令会被守卫拦下，而手点
+        # 「下一页」的请求号是新的、与托管记录对不上，于是点了没反应（2026-10-14 实修）。
+        "scope": "专属",
+        "guard_rule": "已创建",
+        "help": {
+            "category": "行动",
+            "summary": "查看探险结算结果的指定页（只读，不重复发奖）",
+            "usage": ("探险结果", "探险结果 页码"),
+            "side_effect": "只读查询；结算仍由「结算探险」在首次调用时完成",
+            "order": 33,
+        },
+    },
+)
+async def show_settlement_page(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+    await _settle_and_show(user_id, message, message_context.request_id, manager)
 
 
 __all__ = []
