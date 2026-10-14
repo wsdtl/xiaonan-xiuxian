@@ -18,8 +18,8 @@ from typing import Any
         "guard_rule": "始终可用",
         "help": {
             "category": "世界",
-            "summary": "按区域分页查看晓楠修仙界全部地点，或打开公开舆图",
-            "usage": ("地图", "地图 页码"),
+            "summary": "查看晓楠修仙界的大区域与地点，或打开公开舆图",
+            "usage": ("地图", "地图 州名"),
             "side_effect": "只读展示，不改变人物位置或世界状态",
             "order": 10,
         },
@@ -29,12 +29,9 @@ async def show_world_map(user_id: str, message: str, manager: Any) -> None:
     overview = current_game_services().features.ditu.overview()
     url = public_url("world-map")
     query = " ".join(str(message or "").split())
-    if query.isdigit() and len(query) <= 2:
-        index = int(query)
-        if not 1 <= index <= len(overview.regions):
-            await manager.send(reply.invalid_page(overview, url))
-            return
-        await manager.send(reply.entry(overview, url, index))
+    if query:
+        # 参数是**州名**（不再是页码）：州名不认识时 reply 会给提示卡。
+        await manager.send(reply.region(overview, query, url))
         return
     await manager.send(reply.entry(overview, url))
 

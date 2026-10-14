@@ -1,4 +1,9 @@
-"""公开地图命令回复构造。"""
+"""公开地图命令回复构造。
+
+单页可点（委托方 2026-10-15）：`地图` 一页列全部大区域，每个区域做成**行内无边框按钮**
+（只填入，点一下变成 `地图 <州名>`）；`地图 <州名>` 列该州地点，地点同样行内可点
+（填入 `行路 <地点>`）。各层底部保留「打开地图」网页按钮。
+"""
 
 from __future__ import annotations
 
@@ -16,50 +21,56 @@ def _counts(builder: object, overview: WorldMapOverview) -> None:
     )
 
 
-def entry(overview: WorldMapOverview, url: str, index: int = 1) -> DocumentMessage:
-    """一页一个区域：区域名 + 该区全部地点；引言与计数只在第 1 页。
-
-    底部保留「打开地图」链接按钮；正文里不放同类的无边框超链接（重复，委托方 2026-10-14）。
-    """
-
-    total = max(1, len(overview.regions))
-    index = min(max(1, index), total)
-    region = overview.regions[index - 1]
-    builder = M.document().section(
-        f"{region.category} · {region.name} · 第 {index} / {total} 页", icon="location"
-    )
-    if index == 1:
-        if overview.description:
-            builder.line(overview.description)
-        _counts(builder, overview)
-    builder.line("、".join(region.locations))
-    actions: list[Action] = []
-    if index > 1:
-        actions.append(
-            Action("world_map.previous", "上一页", f"地图 {index - 1}",
-                   behavior="callback", style="secondary")
-        )
-    if index < total:
-        actions.append(
-            Action("world_map.next", "下一页", f"地图 {index + 1}",
-                   behavior="callback", style="secondary")
-        )
-    actions.append(
-        Action("world_map.open", "打开地图", url, behavior="link", style="primary")
-    )
-    return builder.actions(tuple(actions)).build()
+def _open_map(url: str) -> Action:
+    return Action("world_map.open", "打开地图", url, behavior="link", style="primary")
 
 
-def invalid_page(overview: WorldMapOverview, url: str) -> DocumentMessage:
-    total = max(1, len(overview.regions))
-    return (
-        M.document()
+def entry(overview: WorldMapOverview, url: str) -> DocumentMessage:
+    """一页列全部大区域：每个区域一个行内按钮，点了把「地图 <州名>」填进输入框。"""
 
-        .section("没有这一页", icon="notice")
-        .line(M.status("页码超出", tone="warning"), f" 共 {total} 页，发「地图 1」到「地图 {total}」。")
-        .action(Action("world_map.open", "打开地图", url, behavior="link", style="primary"))
-        .build()
-    )
+    builder = M.document().section("大区域", icon="location")
+    if overview.description:
+        builder.line(overview.description)
+    _counts(builder, overview)
+    for region in overview.regions:
+        builder.line(M.command(region.name, f"地图 {region.name}"))
+    return builder.action(_open_map(url)).build()
 
 
-__all__ = ["entry", "invalid_page"]
+def region(overview: WorldMapOverview, name: str, url: str) -> DocumentMessage:
+    """一个州的细节：该州地点逐个行内可点（填入「行路 <地点>」）。"""
+
+    for region in overview.regions:
+        if region.name == name:
+            builder = M.document().section(f"州 · {name}", icon="location")
+            builder.line(f"地点 {len(region.locations)} 处")
+            for location in region.locations:
+                builder.line(M.command(location, f"去 {location}"))
+            return (
+                builder.action(
+                    Action(
+                        "world_map.back",
+                        "全部区域",
+                        "地图",
+                        behavior="callback",
+                        style="secondary",
+                    )
+                )
+                .action(_open_map(url))
+                .build()
+            )
+    return unknown_region(overview, name, url)
+
+
+def unknown_region(overview: WorldMapOverview, name: str, url: str) -> DocumentMessage:
+    """州名不认识时的提示卡：把现有大区域列出来，照样可点。"""
+
+    builder = M.document().section("没有这个州", icon="notice")
+    builder.line(M.status("未找到", tone="warning"), f" 没有登记过这个州：{name}")
+    builder.line("现有大区域：")
+    for region in overview.regions:
+        builder.line(M.command(region.name, f"地图 {region.name}"))
+    return builder.action(_open_map(url)).build()
+
+
+__all__ = ["entry", "region", "unknown_region"]
