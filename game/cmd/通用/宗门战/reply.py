@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ...actions import CommandAction
+
 from ...presentation import duration, error_document
 
 from datetime import UTC, datetime

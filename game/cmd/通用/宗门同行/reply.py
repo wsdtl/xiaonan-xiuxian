@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from game.features.zongmen_tongxing import (
     SectFollowAction,
     SectFollowCopy,

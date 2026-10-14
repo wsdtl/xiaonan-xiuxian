@@ -59,7 +59,7 @@ def setting(feature: MedicineFeature, result: AutoMedicineResult) -> DocumentMes
 
 
 def error(
-    feature: FudanCopyFeature, message: str, actions: Sequence[CommandAction] = ()
+    feature: MedicineFeature, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
     """失败回执：标题与状态词都取自展示数据集，动作由玩法层给。"""
 

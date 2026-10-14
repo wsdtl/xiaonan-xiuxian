@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from ...presentation import error_document
 
 from game.features.liandan import AlchemyMaterial

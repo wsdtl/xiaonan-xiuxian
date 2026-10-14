@@ -6,7 +6,11 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from game.core.data import JsonDataError, JsonDataService
-from game.features.presentation import project_buttons, require_mapping, validate_page_buttons, validate_page_buttons
+from game.features.presentation import (
+    project_buttons,
+    require_mapping,
+    validate_page_buttons,
+)
 
 from .contracts import HerbGatheringAction, HerbGatheringCopy
 

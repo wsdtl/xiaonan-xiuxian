@@ -167,7 +167,6 @@ def format_command(button: Button, variables: Mapping[str, object] | None) -> st
     return button["命令"].format_map(values)
 
 
-from collections.abc import Sequence
 from game.core.asset import ItemRef, ItemRefError, format_item_ref, parse_item_ref
 
 

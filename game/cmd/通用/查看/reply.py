@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from game.features.chakan_wupin import ItemInspectionResult
+from game.features.weizhi import CharacterPublicProfile, CompanionView, PositionCopy
 from message import Action, DocumentMessage, M
 
-from ...actions import message_actions
+from ...actions import CommandAction, message_actions
 
 from .items import (
     _build_description_lines,

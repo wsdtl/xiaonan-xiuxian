@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from game.features.duiwu import TeamAction, TeamCopy, TeamOperationResult, TeamPage
 from message import DocumentMessage, M
 

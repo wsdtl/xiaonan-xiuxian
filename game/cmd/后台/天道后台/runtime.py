@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 
 from launch import C, OnEvent, Scheduler, logger
 from launch.message_events import subscribe_message_events, unsubscribe_message_events

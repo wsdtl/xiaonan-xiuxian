@@ -10,7 +10,6 @@ import hashlib
 import json
 import zlib
 import sqlite3
-import time
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from random import Random
+
 import hashlib
 import math
 import random
@@ -90,7 +92,7 @@ class _Mode:
 @dataclass(frozen=True)
 class _GatheringDraft:
     """一次采集里，逐位参与者那一段要用的全部输入。"""
-    mode: GatheringMode
+    mode: _Mode
     owner: str
     participants: tuple[str, ...]
     pool_names: Mapping[str, str]

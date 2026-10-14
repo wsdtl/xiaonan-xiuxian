@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
+from typing import Any
+
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType

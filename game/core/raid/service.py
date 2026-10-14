@@ -38,7 +38,6 @@ from .contracts import (
     RaidError,
     RaidGroupResult,
     RaidLeaderRequiredError,
-    RaidNotFinishedError,
     RaidProgress,
     RaidSettlement,
     RaidStartCommand,

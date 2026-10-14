@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 from ...actions import CommandAction
 from ...presentation import error_document
 
@@ -87,7 +88,7 @@ def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult) 
 
 
 def error(
-    feature: XiantianLingbaoFeature, message: str, actions: Sequence[CommandAction] = ()
+    feature: InnateTreasureFeature, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
     """失败回执：标题与状态词取自展示数据集，动作由玩法层给。"""
 

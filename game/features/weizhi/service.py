@@ -11,6 +11,8 @@ from dataclasses import replace
 
 from game.core.character import CharacterService
 from game.core.companion import CompanionError
+from game.core.character.contracts import CharacterPublicProfile
+
 from .contracts import CompanionView
 from game.core.companion import CompanionService, LocalCultivator
 from game.core.data import JsonDataService, positive_int as _positive_int

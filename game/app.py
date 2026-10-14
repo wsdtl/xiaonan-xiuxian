@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from game.features.tiandao_houtai import MessageFlowStore
+
 from game.core.transaction_log import TransactionLogService
 
 from dataclasses import dataclass
@@ -993,7 +995,10 @@ def initialize_game_services() -> None:
     global _services
     if _services is not None:
         raise RuntimeError("游戏微服务已经初始化")
-    from launch.adapter.request_scope import register_request_scope
+    from launch.adapter.request_scope import (
+    register_request_scope,
+    unregister_request_scope,
+)
 
     from .cmd.access_guard import (
         register_game_access_guard,
@@ -1021,6 +1026,7 @@ def shutdown_game_services() -> None:
     """在具体玩法停止后释放本进程的游戏微服务集合。"""
 
     global _services
+
     from launch.adapter.request_scope import unregister_request_scope
 
     from .cmd.access_guard import unregister_game_access_guard

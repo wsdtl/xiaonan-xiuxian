@@ -68,7 +68,7 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
     try:
         # 统一语法：<品级><物品> [数量]；旧的「物品 品级」仍受理（见 game/cmd/item_ref.py）。
         item, grade, quantity = parse_item_and_grade(str(message or "").split())
-    except ItemRefError as exc:
+    except ItemRefError:
         await manager.send(
             reply.error(
                 feature,

@@ -64,7 +64,7 @@ from .contracts import (
     CompanionStatus,
     LocalCultivator,
 )
-from game.core.data import boolean, boolean as _bool, sequence as _sequence, strict_text as _text
+from game.core.data import boolean, boolean as _bool, strict_text as _text
 
 RELATION_STATE = "companion_relation"
 ACTIVE_STATE = "companion_active"

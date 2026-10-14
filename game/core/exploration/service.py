@@ -72,7 +72,6 @@ from .contracts import (
     ExplorationCharacterSummary,
     ExplorationConflictError,
     ExplorationLeaderRequiredError,
-    ExplorationNotFinishedError,
     ExplorationProgress,
     ExplorationSettlement,
     ExplorationStartCommand,

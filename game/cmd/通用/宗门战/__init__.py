@@ -144,7 +144,6 @@ async def _formation_key(user_id: str, wanted: str) -> str:
 )
 
 async def lock(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    services = current_game_services()
     raw = str(message or "").strip()
     try:
         key = await _formation_key(user_id, raw) if raw else ""

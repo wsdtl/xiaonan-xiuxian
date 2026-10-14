@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 from ...actions import CommandAction
 from ...presentation import candidate_lines, error_document
 
@@ -134,7 +135,7 @@ def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> 
 
 
 def error(
-    feature: DaolvPeiyangFeature,
+    feature: CompanionCultivationFeature,
     message: str,
     actions: Sequence[CommandAction] = (),
     offer: CompanionBreakthroughOffer | None = None,

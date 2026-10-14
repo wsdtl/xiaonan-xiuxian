@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from ...actions import CommandAction
+
 from ...presentation import candidate_lines, error_document
 
 from game.features.lianzhen import FormationOverview, FormationPreview, FormationResult
