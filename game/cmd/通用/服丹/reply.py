@@ -48,9 +48,12 @@ def setting(feature: MedicineFeature, result: AutoMedicineResult) -> DocumentMes
         M.document()
         .section(feature.copy("自动用药", "标题"), icon="status")
         .line(
-            M.status(
+            # 状态那行做成**分支按钮**：按这次设置的主体给分支（人药/侣药），点了回二选一菜单，只填入。
+            M.command(
                 "已开启" if result.enabled else "已关闭",
-                tone="positive" if result.enabled else "muted",
+                (
+                    ("侣药 开|侣药 关" if result.target == "道侣" else "人药 开|人药 关")
+                ),
             )
         )
         .line(line)
