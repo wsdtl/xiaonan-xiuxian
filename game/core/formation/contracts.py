@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from game.core.database import StateMutation
 from game.core.innate_treasure import InnateTreasureActivation
@@ -21,6 +22,19 @@ class FormationMaterialError(FormationError):
     """三相材料不足。"""
 
 
+class FormationCandidate(NamedTuple):
+    """一条候选项：显示名（带投入）＋ 两种命令写法各自的尾串 ＋ 一句 muted 说明。
+
+    两种尾串是因为命令语法不同：`布阵`／`炼阵` 是「品级阵法名 + 三个投入数」，
+    `演阵台` 是「阵法名 + 品级 + 三个投入数」。各命令取自己那一份，别互相猜。
+    """
+
+    label: str
+    tail: str
+    detail: str
+    hall_tail: str = ""
+
+
 class FormationChoiceError(FormationError):
     """阵藏里有多条同名阵法，需要玩家挑一件。
 
@@ -29,7 +43,7 @@ class FormationChoiceError(FormationError):
     """
 
     def __init__(
-        self, message: str, candidates: tuple[tuple[str, str, str], ...]
+        self, message: str, candidates: tuple[FormationCandidate, ...]
     ) -> None:
         super().__init__(message)
         self.candidates = candidates

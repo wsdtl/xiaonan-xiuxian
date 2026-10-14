@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from ...actions import CommandAction
-from ...presentation import error_document
+from ...presentation import candidate_lines, error_document
+
+from game.features.zongmen_sheshi import FormationChoiceError
 
 from collections.abc import Mapping
 from typing import Any, Sequence
@@ -157,6 +159,32 @@ def completed(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMess
     )
 
 
+def choose(
+    copy: Mapping[str, Mapping[str, str]],
+    exc: FormationChoiceError,
+    *,
+    command: str = "演阵台 炼阵",
+) -> DocumentMessage:
+    """阵藏里有多条同名阵法：铺成选择卡，候选可点，点一下精确选中。
+
+    与「布阵」「炼阵」同一形态（显示名带投入、点一下精确选中），但命令语法不同：
+    演阵台是「阵法名 + 品级 + 三个投入数」，所以取候选里的 `hall_tail`。
+    """
+
+    text = copy["错误"]
+    builder = M.document().header(text.get("标题", "宗门洞天"))
+    candidate_lines(
+        builder,
+        title=text["选择标题"],
+        entries=tuple(
+            (candidate.label, f"{command} {candidate.hall_tail}", candidate.detail)
+            for candidate in exc.candidates
+        ),
+        footer=text["选择尾注"],
+    )
+    return builder.build()
+
+
 def error(
     copy: Mapping[str, Mapping[str, str]],
     message: str,
@@ -173,4 +201,4 @@ def error(
     )
 
 
-__all__ = ["completed", "error", "page", "preview"]
+__all__ = ["choose", "completed", "error", "page", "preview"]

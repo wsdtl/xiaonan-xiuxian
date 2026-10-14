@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.features.zongmen_sheshi import SectFacilityFeatureError
+from game.features.zongmen_sheshi import FormationChoiceError, SectFacilityFeatureError
 
 from ...command import GameCommand
 from . import reply
@@ -157,6 +157,8 @@ async def _dispatch(
             facility, user_id, source, identifier, grade, investments
         )
         await manager.send(reply.preview(feature.copy(), value))
+    except FormationChoiceError as exc:
+        await manager.send(reply.choose(feature.copy(), exc))
     except (SectFacilityFeatureError, ValueError) as exc:
         await manager.send(
             reply.error(

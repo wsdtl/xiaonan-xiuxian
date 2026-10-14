@@ -15,6 +15,8 @@ class _SheshiAction:
     behavior: str
     style: str
 
+from game.core.formation import FormationChoiceError
+
 from game.core.sect_facilities import (
     SectForgingPreview,
     SectAlchemyPreview,
@@ -105,6 +107,9 @@ class SectFacilityFeature:
                 return await self._facilities.alchemy_page(user_id, source, section, page)
             if facility == "炼阵":
                 return await self._facilities.formation_page(user_id, source, page)
+        except FormationChoiceError:
+            # 「阵藏里有多条」不是错误，是要玩家挑一件：原样放行给命令层铺选择卡。
+            raise
         except (SectFacilityError, ValueError) as exc:
             raise SectFacilityFeatureError(str(exc)) from exc
         raise SectFacilityFeatureError("未知宗门设施")
@@ -122,6 +127,9 @@ class SectFacilityFeature:
                 return await self._facilities.preview_formation(
                     user_id, identifier, grade, source, investments
                 )
+        except FormationChoiceError:
+            # 「阵藏里有多条」不是错误，是要玩家挑一件：原样放行给命令层铺选择卡。
+            raise
         except (SectFacilityError, ValueError) as exc:
             raise SectFacilityFeatureError(str(exc)) from exc
         raise SectFacilityFeatureError("未知宗门设施")
@@ -137,6 +145,9 @@ class SectFacilityFeature:
                 return await self._facilities.form(
                     user_id, request_id, identifier, grade, source, investments
                 )
+        except FormationChoiceError:
+            # 「阵藏里有多条」不是错误，是要玩家挑一件：原样放行给命令层铺选择卡。
+            raise
         except (SectFacilityError, ValueError) as exc:
             raise SectFacilityFeatureError(str(exc)) from exc
         raise SectFacilityFeatureError("未知宗门设施")

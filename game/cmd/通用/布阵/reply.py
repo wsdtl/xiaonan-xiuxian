@@ -58,7 +58,8 @@ def choose(
         builder,
         title=text["选择标题"],
         entries=tuple(
-            (name, f"{command} {tail}", detail) for name, tail, detail in exc.candidates
+            (candidate.label, f"{command} {candidate.tail}", candidate.detail)
+            for candidate in exc.candidates
         ),
         footer=text["选择尾注"],
     )

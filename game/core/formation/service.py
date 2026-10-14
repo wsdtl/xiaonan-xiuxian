@@ -55,6 +55,7 @@ from .contracts import (
     FormationConflictError,
     FormationDefinition,
     FormationEntry,
+    FormationCandidate,
     FormationChoiceError,
     FormationError,
     FormationMaster,
@@ -785,24 +786,11 @@ class FormationService:
             raise FormationChoiceError(
                 "阵藏里有多条「" + name_part + "」，请点一条：",
                 tuple(
-                    (
-                        _formation_grade_name(entry.grade_id)
-                        + entry.name
-                        + (
-                            "[" + self._treasure_name(entry.treasure_id) + "]"
-                            if getattr(entry, "treasure_id", "")
-                            else ""
-                        )
-                        + _materials_hint(entry),
-                        _formation_grade_name(entry.grade_id)
-                        + entry.name
-                        + (
-                            "[" + self._treasure_name(entry.treasure_id) + "]"
-                            if getattr(entry, "treasure_id", "")
-                            else ""
-                        )
-                        + _materials_tail(entry),
-                        _materials_hint(entry).strip("{}") or "无投入",
+                    _candidate(
+                        entry,
+                        self._treasure_name(entry.treasure_id)
+                        if getattr(entry, "treasure_id", "")
+                        else "",
                     )
                     for entry in matches[:4]
                 ),
@@ -1010,6 +998,19 @@ def _materials_hint(entry: object) -> str:
     if "{" not in key or not key.endswith("}"):
         return ""
     return key[key.index("{") :]
+
+
+def _candidate(entry: object, treasure: str) -> FormationCandidate:
+    """把一条阵藏条目做成候选：显示名带投入，两种命令语法各自的尾串都备好。"""
+
+    grade_name = _formation_grade_name(entry.grade_id)
+    suffix = ("[" + treasure + "]") if treasure else ""
+    return FormationCandidate(
+        label=grade_name + entry.name + suffix + _materials_hint(entry),
+        tail=grade_name + entry.name + suffix + _materials_tail(entry),
+        detail=_materials_hint(entry).strip("{}") or "无投入",
+        hall_tail=entry.name + " " + grade_name + _materials_tail(entry),
+    )
 
 
 def _materials_tail(entry: object) -> str:
