@@ -54,17 +54,16 @@ def result(copy: HostingCopy, value: HostingResult) -> DocumentMessage:
             .build()
         )
     mode_key = _MODE_KEYS[session.mode]
-    document.inline_section(
-        _text(copy, "结果", "标题"),
-        M.status(
+    # 状态不放在 inline_section 里（那里走 _rich，塞不进按钮）：挪到独立一行，做成**分支按钮**。
+    document.section(_text(copy, "结果", "标题"), icon=_text(copy, "图标", "结果")).line(
+        M.command(
             (
                 _text(copy, "结果", "最近托管")
                 if value.action == "查看" and not value.active
                 else _text(copy, "结果", value.action)
             ),
-            tone="info" if value.active else "muted",
-        ),
-        icon=_text(copy, "图标", "结果"),
+            "继续托管|取消托管",
+        )
     )
     document.section(_text(copy, "结果", mode_key), icon=_text(copy, "图标", "状态"))
     document.field(_text(copy, "结果", "人数"), len(session.participant_user_ids))
