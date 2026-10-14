@@ -11,6 +11,7 @@ from game.core.database import (
     TransactionCommand,
 )
 from game.core.asset import AssetGrade, AssetService, AssetStateError
+from game.core.asset.ref import ItemRefError, parse_item_ref
 
 import copy
 import math
@@ -1989,6 +1990,19 @@ class CharacterService:
         pattern = str(name_rule["匹配"])
         if re.fullmatch(pattern, name) is None:
             raise CharacterInputError("姓名只能使用中文、字母或数字")
+        # 名字不许"长得像指称"：像了就会和编号撞车（查看 100005 到底是人还是丹药）。
+        # 编号是 6 位（项目规范：2 位前缀 + 4 位流水），所以名字里出现 6 位以上连续数字即算 id 化；
+        # 中文数字混排（如"晓楠3号"）不算。
+        name_id_width = 6
+        if name.isdigit() or re.search(rf"\d{{{name_id_width},}}", name):
+            raise CharacterInputError("姓名不能写成编号或物品指称的样子")
+        # 再让唯一解析口兜一层：能解析成指称、且带品级/灵宝/扩展位的名字同样拒掉。
+        try:
+            parsed = parse_item_ref(name)
+        except ItemRefError:
+            parsed = None
+        if parsed is not None and (parsed.grade or parsed.treasure or parsed.extra):
+            raise CharacterInputError("姓名不能写成编号或物品指称的样子")
         if command.gender not in self._gender_values:
             choices = "或".join(self._gender_values)
             raise CharacterInputError(f"性别只能填写{choices}")

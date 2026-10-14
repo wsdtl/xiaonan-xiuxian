@@ -1,4 +1,4 @@
-"""道侣查看、交谈、赠礼、邀约和暂别命令。"""
+"""道侣交谈、赠礼、邀约和暂别命令。"""
 
 from __future__ import annotations
 
@@ -14,36 +14,6 @@ from ...command import GameCommand
 from . import input as command_input, reply
 from launch.adapter import MessageContext
 from typing import Any
-
-
-@GameCommand.command(
-    cmd=("查看道侣", "道侣查看"),
-    metadata={
-        "scope": "专属",
-        "guard_rule": "自主空闲或休息",
-        "help": {
-            "category": "道侣",
-            "summary": "查看身边道侣的身份、性情、喜好与当前关系",
-            "usage": ("查看道侣 苏药尘", "查看道侣 名称", "查看道侣 编号或名称"),
-            "side_effect": "只读查询，不改变关系或物品",
-            "order": 10,
-        },
-    },
-)
-async def inspect_companion(user_id: str, message: str, manager: Any) -> None:
-    services = current_game_services()
-    feature = services.features.daolv_jiejiao
-    copy = feature.copy()
-    query = str(message or "").strip()
-    if not query:
-        await manager.send(reply.error(copy, reply.text(copy, "命令", "查看格式"), feature.format_actions("格式查看")))
-        return
-    try:
-        view = await feature.inspect(user_id, query)
-        actions = feature.actions("查看", view)
-        await manager.send(reply.view(copy, view, actions))
-    except CompanionInteractionError as exc:
-        await manager.send(reply.error(copy, str(exc), feature.format_actions("格式查看")))
 
 
 @GameCommand.command(

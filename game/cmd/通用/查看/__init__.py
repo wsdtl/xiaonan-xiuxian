@@ -44,6 +44,20 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
         )
         await manager.send(reply.inspection(result, public_url("baike")))
         return
+    #: 6 位、50 开头 = 我自己名下的道侣（实例化道侣），不要求在附近——就是原位置组件那条按编号看名下道侣的路子。
+    weizhi = current_game_services().features.weizhi
+    if len(query) == 6 and query.isdigit() and query[:2] == "50":
+        companion_view = await weizhi.inspect_companion(user_id, query)
+        if companion_view is not None:
+            await manager.send(
+                reply.companion(
+                    weizhi.copy(),
+                    companion_view,
+                    weizhi.nearby_cultivator_actions(1, False),
+                )
+            )
+            return
+
     result = await current_game_services().features.chakan_wupin.inspect(query, user_id)
     actions: tuple[Any, ...] = ()
     detail = result.detail
@@ -58,6 +72,16 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
             view = None
         if view is not None:
             actions = companions.actions("查看", view)
+    #: 静态数据实体（物品/功法/道侣模板/敌人）优先于动态在场者，认不出才当"附近的人"。
+    if result.detail is None:
+        person = await weizhi.inspect_cultivator(user_id, query)
+        if person is not None:
+            await manager.send(
+                reply.cultivator(
+                    weizhi.copy(), person, weizhi.nearby_cultivator_actions(1, False)
+                )
+            )
+            return
     await manager.send(reply.inspection(result, public_url("baike"), actions))
 
 

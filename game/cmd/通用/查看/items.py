@@ -182,9 +182,12 @@ def _daolv_lines(
             )
         reward = relationship.get("圆满回礼")
         if isinstance(reward, Mapping):
-            lines.append(
-                f"圆满回礼：达成圆满后可得专属回礼 × {reward.get('数量', 1)}"
+            #: 数量为 1 或缺省就不印「× 1」——那是中性倍率，等于零信息（判据：没有中性倍率）。
+            reward_quantity = reward.get("数量")
+            reward_suffix = (
+                f" × {reward_quantity}" if reward_quantity not in (None, 1) else ""
             )
+            lines.append(f"圆满回礼：达成圆满后可得专属回礼{reward_suffix}")
     weapon = source.fields.get("本命武器")
     if isinstance(weapon, Mapping) and weapon.get("名称"):
         lines.append(f"本命武器：{weapon['名称']}")
