@@ -49,7 +49,7 @@ def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
             index,
             M.command(
                 M.text(f"{product.grade_name}{product.name}"),
-                f"查看 {product.name} | 购买 {product.name} {product.grade_name}",
+                f"查看 {product.name} | 购买 {product.grade_name}{product.name}",
                 submit=False,
             ),
             f" · {product.unit_price}灵石",
