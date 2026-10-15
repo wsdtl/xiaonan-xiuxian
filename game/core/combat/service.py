@@ -34,29 +34,6 @@ from .models import (
 )
 from .presentation import build_battle_report_presentation
 from .report import RuntimeBattleReportParticipant, build_battle_report
-from .templates import expand_in_place
-
-
-def _template_library() -> dict[str, Any]:
-    """本进程唯一的构筑模板库。
-
-    `template_data.library()` 每次都现造一份 1299 份模板的嵌套常量（实测 ~4.5 ms），
-    而 `expand_build_section` 会被装载期逐段调用（实测 25 次），`CombatService.initialize`
-    还要再一次——同一份只读常量因此被反复构造。这里单例装载：**只有第一次付构造开销**。
-
-    安全性：模板库是纯只读常量，唯一的消费方是 `expand_in_place`，它对模板主体只读、
-    把展开结果写进引用节点自己的新容器（见 `templates._substitute`），不会改模板库。
-    """
-
-    global _TEMPLATES
-    if _TEMPLATES is None:
-        from .template_data import library as _templates
-
-        _TEMPLATES = _templates()
-    return _TEMPLATES
-
-
-_TEMPLATES: Any = None
 
 
 def expand_build_section(section: str, values: Any) -> Any:

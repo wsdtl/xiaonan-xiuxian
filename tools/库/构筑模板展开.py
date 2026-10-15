@@ -33,28 +33,19 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from game.core.combat.templates import expand_in_place  # noqa: E402
-
-_LIBRARY: dict[str, dict[str, Any]] | None = None
+# 构筑模板机制已退役：数据里所有引用都展开成了原子能力节点，判据直接读 JSON 也看不到引用节点了。
+# 这里保留同名入口（10 支卡形判据与 3 个总闸项都 import 它），但不再需要加载模板库。
 
 
 def library() -> dict[str, dict[str, Any]]:
-    """构筑模板库；只加载一次。"""
+    """构筑模板库；机制已退役，恒为空。"""
 
-    global _LIBRARY
-    if _LIBRARY is None:
-        from game.core.combat.template_data import library as _load
-
-        _LIBRARY = _load()
-    return _LIBRARY
+    return {}
 
 
 def expand_build_document(value: Any) -> Any:
-    """就地展开一棵（或一列）实体里的模板引用，返回同一个对象。"""
+    """就地展开模板引用，返回同一个对象；机制已退役，这里直通。"""
 
-    lib = library()
-    if lib:
-        expand_in_place(value, lib)
     return value
 
 
@@ -65,11 +56,7 @@ def load_build_json(path: pathlib.Path) -> Any:
 
 
 def template_name(template_id: str) -> str:
-    """模板 ID 对应的机制说明；没有该模板时返回空串。
-
-    模板库是代码（`template_data.py`），它自己带 `说明`——这份说明是从**模板主体**
-    现算的，只讲机制形状、不含任何词条字眼，所以不会因为某张卡改名而失效。
-    """
+    """模板 ID 对应的机制说明；机制已退役，恒返回空串。"""
 
     return str(library().get(str(template_id), {}).get("说明") or "")
 

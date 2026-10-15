@@ -37,7 +37,7 @@ REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("启动契约", ("tools/架构审查/校验启动契约.py",)),
     ("命令目录", ("tools/架构审查/校验命令目录.py",)),
     ("数据驱动", ("tools/架构审查/检查数据驱动.py",)),
-    ("卡形判据（14 支）", ("tools/架构审查/检查卡形.py",)),
+    ("卡形判据（13 支）", ("tools/架构审查/检查卡形.py",)),
     ("战报展示", ("tools/架构审查/检查战报展示.py",)),
     ("启动顺序", ("tools/行为验证/验证启动顺序.py",)),
     ("语法（game/tools/launch/message/tests）", ("-m", "compileall", "-q", "game", "tools", "launch", "message", "tests")),
