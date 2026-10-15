@@ -79,7 +79,8 @@ from game.core.data import (
 )
 
 _CATEGORIES = ("兽宝", "灵矿", "灵植")
-_GRADES = ("黄", "玄", "地", "天", "圣")
+# 品级名一律写全（规则：不许用短名，黄 要写 黄品）；编号映射见下一行，与 data/基础/定义/品级.json 对齐。
+_GRADES = ("黄品", "玄品", "地品", "天品", "圣品")
 _GRADE_IDS = dict(zip(_GRADES, ("01", "02", "03", "04", "05"), strict=True))
 _GRADE_NAMES_BY_ID = {grade_id: name for name, grade_id in _GRADE_IDS.items()}
 _PREPARED_STATE = "prepared_formation"
@@ -169,7 +170,7 @@ class FormationService:
             "阵法.每页上限",
         )
         if _texts(paging.get("品级顺序"), "阵法分页.品级顺序") != _GRADES:
-            raise JsonDataError("阵法品级顺序必须为黄、玄、地、天、圣")
+            raise JsonDataError("阵法品级顺序必须为黄品、玄品、地品、天品、圣品")
         self._validate_static_rules()
         self._initialized = True
         return self.status()
@@ -534,7 +535,7 @@ class FormationService:
         unknown_effects = set(effect_values) - {"总势倍率", "材料", "材料倍率"}
         if unknown_effects:
             raise FormationError(f"阵法灵宝效果包含未知字段：{sorted(unknown_effects)}")
-        if grade_name == "圣":
+        if grade_name == "圣品":
             minimum = {
                 str(key): float(value)
                 for key, value in _mapping(grade_raw.get("最低消耗"), "圣品.最低消耗").items()
@@ -649,7 +650,7 @@ class FormationService:
         investments: Mapping[str, int] | None,
     ) -> dict[str, int]:
         raw = self._grade_raw(self._raw_formations[formation_id], grade_name)
-        if grade_name != "圣":
+        if grade_name != "圣品":
             if investments:
                 raise FormationError("天地玄黄阵法使用固定投入，不能追加材料")
             source = _mapping(raw.get("消耗"), "阵法.消耗")
@@ -902,9 +903,9 @@ class FormationService:
             if grades != _GRADES:
                 raise JsonDataError(f"阵法五品不完整或顺序错误：{formation_id}")
         if _texts(self._rules.get("固定品级"), "阵法规则.固定品级") != _GRADES[:4]:
-            raise JsonDataError("阵法固定品级必须为黄、玄、地、天")
-        if self._rules.get("无上限品级") != "圣":
-            raise JsonDataError("阵法无上限品级必须为圣")
+            raise JsonDataError("阵法固定品级必须为黄品、玄品、地品、天品")
+        if self._rules.get("无上限品级") != "圣品":
+            raise JsonDataError("阵法无上限品级必须为圣品")
         # 圣品投势按「加权几何乘势」连乘（算法本身写在 `_grade_derived` 里）。声明在数据里，
         # 这里读死，免得数据说一套、实现做另一套。
         if _mapping(self._rules.get("圣品增长"), "阵法规则.圣品增长").get("算法") != "加权几何乘势":
@@ -1134,15 +1135,23 @@ def _decimal_text(value: object, label: str) -> str:
 
 
 def _grade_name(value: object) -> str:
-    result = str(value or "").strip().removesuffix("品")
-    if result not in _GRADES:
-        raise FormationError(f"阵法品级必须是{'、'.join(_GRADES)}")
-    return result
+    """品级名一律以**全名**为准（黄品…）；旧数据/旧调用里的短名（黄…）一并受理。"""
+
+    text = str(value or "").strip()
+    if text in _GRADES:
+        return text
+    full = text + "品"
+    if full in _GRADES:
+        return full
+    raise FormationError(f"阵法品级必须是{'、'.join(_GRADES)}")
 
 
 def _grade_order(value: str) -> int:
+    # 与 _grade_name 同一口径：以全名为准，旧短名一并受理。
+    text = str(value or "").strip()
+    key = text if text in _GRADES else text + "品"
     try:
-        return _GRADES.index(value)
+        return _GRADES.index(key)
     except ValueError as exc:
         raise JsonDataError(f"未知阵法品级：{value}") from exc
 

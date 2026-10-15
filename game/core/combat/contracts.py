@@ -36,7 +36,7 @@ class CombatFormationSpec:
     """战场级阵法引用；阵法不占角色修行槽位。"""
 
     formation_id: str
-    grade: str = "黄"
+    grade: str = "黄品"
     position: int = 0
     materials: Mapping[str, float] = field(default_factory=dict)
 
