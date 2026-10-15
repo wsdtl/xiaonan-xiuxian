@@ -139,6 +139,10 @@ class CombatantSpec:
     inherent_rules: tuple[Mapping[str, Any], ...] = ()
     #: **计不计胜负**：讨伐的属从不算（斩首即胜，也把「打赢了还在磨」的时间砍掉）。默认计。
     counts_for_victory: bool = True
+    #: 血脉的 DNA（12 位）：从角色存档带进战斗，供「行动开始按气血重算血脉」用。
+    dna: str = ""
+    #: 种族：血脉的成长倍率按它取（见 character.race_growth_factors）。
+    race: str = ""
 
 
     content_id: str = ""

@@ -701,6 +701,12 @@ class Fighter(RuntimeExtensions):
     counts_for_victory: bool = True
     five_elements: dict[str, float] = dataclass_field(default_factory=dict)
     team_synergy: dict[str, int] = dataclass_field(default_factory=dict)
+    #: 上一轮行动加进去的血脉量：重算时先减掉，避免叠加。
+    bloodline_applied: dict[str, float] = dataclass_field(default_factory=dict)
+    #: 血脉的 DNA（12 位）：从参战者快照带进来，供「行动开始按气血重算血脉」用。
+    dna: str = ""
+    #: 种族：血脉的成长倍率按它取。
+    race: str = ""
     #: 按拦截点分好的规则表 + 它对应的版本号（见 `mechanics._container_rules`）。
     rules_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     rules_cache_version: int = dataclass_field(default=-1, init=False, repr=False)
@@ -886,6 +892,10 @@ class RuntimeCombatantSnapshot:
     inherent_rules: tuple[Mapping[str, Any], ...] = ()
     #: 计不计胜负（讨伐属从不计）。
     counts_for_victory: bool = True
+    #: 血脉的 DNA（12 位）：随快照进战斗。
+    dna: str = ""
+    #: 种族：血脉的成长倍率按它取。
+    race: str = ""
     tags: tuple[str, ...] = ()
     tactic: tuple[Mapping[str, Any], ...] = ()
     battle_profile: Mapping[str, Any] = dataclass_field(default_factory=dict)

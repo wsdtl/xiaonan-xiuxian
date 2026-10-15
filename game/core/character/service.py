@@ -106,6 +106,7 @@ class CharacterService:
         growth: GrowthService,
         forging: ForgingService,
         sect_library: SectLibraryService | None = None,
+        bloodline_growth: object | None = None,
     ) -> None:
         self._data = data
         self._database = database
@@ -115,6 +116,9 @@ class CharacterService:
         self._growth = growth
         self._forging = forging
         self._sect_library = sect_library
+        #: 血脉基础加法回调（玩法注入，async）：(用户, 种族) -> {属性: 数值}。
+        #: 它给的是【基础加法】，乘成长倍率由下面的 _race_growth 负责，正好是铁律。
+        self._bloodline_growth = bloodline_growth
         self._initialized = False
         self._role_rule: Mapping[str, object] = {}
         self._gender_values: tuple[str, ...] = ()
@@ -751,11 +755,21 @@ class CharacterService:
             raise CharacterCultivationError(str(exc)) from exc
         character["等级"] = cultivator_advance.level_after
         character["经验"] = cultivator_advance.experience_after
+        gains = self._growth.cultivator_attribute_growth(cultivator_advance.levels_gained)
+        bloodline_fn = self._bloodline_growth
+        if bloodline_fn is not None:
+            # 铁律：血脉加法与等级成长【并列】，一起被下面的 _race_growth 乘。
+            # 这里只并入基础加法；觉醒随战内气血，归战斗的「行动开始」。
+            bloodline = await bloodline_fn(
+                normalized_user_id, _state_text(character.get("种族"), "人物.种族")
+            )
+            if bloodline:
+                gains = _add_numbers(gains, bloodline)
         character["属性"] = _add_numbers(
             _state_mapping(character.get("属性"), "人物.属性"),
             self._race_growth(
                 _state_text(character.get("种族"), "人物.种族"),
-                self._growth.cultivator_attribute_growth(cultivator_advance.levels_gained),
+                gains,
             ),
         )
         weapon["等级"] = weapon_advance.level_after

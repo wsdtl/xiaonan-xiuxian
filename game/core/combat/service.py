@@ -121,9 +121,16 @@ def _holds_template(node: Any) -> bool:
 class CombatService:
     """消费 JSON 数据微服务，统一提供战斗执行与战报生成。"""
 
-    def __init__(self, data: JsonDataService, formation: FormationService) -> None:
+    def __init__(
+        self,
+        data: JsonDataService,
+        formation: FormationService,
+        bloodline_growth: object | None = None,
+    ) -> None:
         self._data = data
         self._formation = formation
+        #: 血脉成长回调（玩法注入），透传给引擎；None = 没接线。
+        self._bloodline_growth = bloodline_growth
         self._engine: BattleEngine | None = None
         self._report_catalog: BattleReportCatalog | None = None
         self._build_count = 0
@@ -152,7 +159,11 @@ class CombatService:
         )
         # 记录事实名单来自展示配置，所以先把展示目录建好，再把它接给引擎：日志在
         # **记录那一刻**就按它筛（见 `mechanics._recorded_facts`），存储与战报都不带杂物。
-        self._engine = BattleEngine(foundation, recorded_facts=report_catalog.recorded_facts)
+        self._engine = BattleEngine(
+            foundation,
+            recorded_facts=report_catalog.recorded_facts,
+            bloodline_growth=self._bloodline_growth,
+        )
         report_catalog.validate_event_kinds(tuple(self._engine.catalog.events))
         self._report_catalog = report_catalog
         return self.status()
@@ -415,6 +426,8 @@ class CombatService:
             tags=tuple(value.tags),
             tactic=tuple(copy.deepcopy(value.tactic)),
             battle_profile=copy.deepcopy(dict(value.battle_profile)),
+            dna=value.dna,
+            race=value.race,
             five_elements=copy.deepcopy(dict(value.five_elements)),
         )
 

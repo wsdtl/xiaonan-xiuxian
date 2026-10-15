@@ -68,12 +68,16 @@ class BattleEngine(AbilityRuntime):
         self,
         combat_rules: Mapping[str, Any] | None = None,
         recorded_facts: frozenset[str] | None = None,
+        bloodline_growth: object | None = None,
     ) -> None:
         rules = dict(combat_rules or {})
         #: 战斗日志记哪些事实键（`展示/战报.json` 的 `标准化.记录事实`），见 `_recorded_facts`。
         #: `None` = 不筛（没接线时照旧全记）：这个方向的默认值是安全的——忘了接线只会
         #: 「没省下来」，不会把该记的东西丢掉；漏记由 `战报记录通道` 判据兜。
         self.recorded_facts = None if recorded_facts is None else frozenset(recorded_facts)
+        #: 血脉成长回调（玩法注入）：(DNA, 气血百分比, 种族) -> {属性: 数值}。
+        #: None = 没接线（照旧不算血脉）；默认值是安全的。
+        self._bloodline_growth = bloodline_growth
         # 事件与能力是**递归派发**的：一层连锁要吃掉好几个 Python 帧。两条链的上限写在
         # 数据里（`规则/行动.json`），所以进程的递归上限必须跟着抬——否则一条合法但很深的
         # 连锁（返照家族的 `资变` ↔ `伤后` 自环，15 组讨伐实测到事件 141 层 / 能力 244 层）
@@ -1099,6 +1103,8 @@ class BattleEngine(AbilityRuntime):
             tags=set(snapshot.tags),
             tactic=copy.deepcopy(list(snapshot.tactic)),
             battle_profile=self._normalize_battle_profile(snapshot.battle_profile),
+            dna=str(snapshot.dna or ""),
+            race=str(snapshot.race or ""),
             five_elements=self._normalize_five_elements(snapshot.five_elements),
         )
 
@@ -1427,7 +1433,27 @@ class BattleEngine(AbilityRuntime):
             result[str(key)] = value
         return result
 
+    def _bloodline_at_action_start(self, context, actor) -> None:
+        """铁律的中括号：行动开始时按当前气血重算血脉那一份（替换，不是叠加）。"""
+
+        del context
+        applied = actor.bloodline_applied
+        for key in tuple(applied):
+            if key in actor.attributes:
+                actor.attributes[key] = float(actor.attributes[key]) - float(applied[key])
+        applied.clear()
+        growth_fn = self._bloodline_growth
+        if growth_fn is None or not actor.dna:
+            return
+        limit = float(actor.value("血气上限", 0.0)) or 1.0
+        percent = float(actor.health) / limit * 100.0
+        for key, value in dict(growth_fn(actor.dna, percent, actor.race) or {}).items():
+            name = str(key)
+            amount = float(value)
+            actor.attributes[name] = float(actor.attributes.get(name, 0.0)) + amount
+            applied[name] = amount
     def _recover_at_action_start(self, context: BattleContext, actor: Fighter) -> None:
+        self._bloodline_at_action_start(context, actor)
         for resource, attribute in dict(
             self.catalog.action_rules.get("行动开始恢复") or {}
         ).items():
