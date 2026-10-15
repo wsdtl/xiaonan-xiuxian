@@ -87,23 +87,9 @@ def expand_build_section(section: str, values: Any) -> Any:
     ):
         return values
 
-    templates = _template_library()
-    if not templates:
-        return values
-    # 引用是否存在的判据与容器类型无关（只看键），所以在**不可变原文**上先扫一遍，
-    # 结果与在 materialize 之后扫完全一致，但省掉了「先深拷贝再发现没有引用」。
-    hits = tuple(
-        content_id for content_id, raw in values.items() if _holds_template(raw)
-    )
-    if not hits:
-        return values
-    expanded: dict[str, Any] = {
-        str(content_id): {str(key): materialize(item) for key, item in raw.items()}
-        for content_id, raw in values.items()
-    }
-    for content_id in hits:
-        expand_in_place(expanded[str(content_id)], templates)
-    return expanded
+    # 构筑模板机制已退役（数据里所有引用都展开成了原子能力节点），这里不再需要展开。
+    # 保留段名白名单与函数签名，调用方与装载期契约不变。
+    return values
 
 
 def _holds_template(node: Any) -> bool:
