@@ -49,7 +49,7 @@ async def show_character_cultivation(user_id: str, manager: Any) -> None:
         "help": {
             "category": "修行",
             "summary": "把功法或一份真意、气机装入人物槽位",
-            "usage": ("人物装配 功法 黄品五岳镇界镇岳诀 1", "人物装配 类别 <品级><物品> 孔位",),
+            "usage": ("人物装配 功法 01400503 1", "人物装配 类别 <品级><物品> 孔位",),
             "side_effect": "功法保留所有权；真意和气机消耗一份。有「保留被替换资粮」的先天灵宝时，被替换的那份回修行资粮；否则原槽内容消失",
             "order": 20,
         },
