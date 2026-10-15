@@ -96,7 +96,7 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
         for value in values:
             builder.field(
                 f"{category}{value.slot}",
-                M.text(f"{value.grade_name} · " if value.grade_name else "")
+                M.text(value.grade_name or "")
                 + (M.command(value.name, f"查看 {value.name}"),),
             )
     weapon = profile.weapon

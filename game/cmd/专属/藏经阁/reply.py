@@ -30,8 +30,7 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
             index,
             # 卡面全中文、不印编号；名字只作显示，点它出「查看 | 借阅功法」两条分支。
             # 分支参数用名字（聊天命令本来就收名字），编号只在 help 里出现、不参与联动。
-            M.command(entry.name, f"查看 {entry.name} | 借阅功法 {entry.name}"),
-            f" · {entry.grade_name}",
+            M.command(f"{entry.grade_name}{entry.name}", f"查看 {entry.name} | 借阅功法 {entry.name}"),
         )
     # 只有一页就不报页码——灵藏与万珍殿本来就是这个口径，藏经阁跟上。
     if value.page_count > 1:

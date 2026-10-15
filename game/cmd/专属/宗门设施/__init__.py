@@ -64,7 +64,7 @@ async def dandingge(user_id: str, message: str, message_context: MessageContext,
         "help": {
             "category": "炼制",
             "summary": "在演阵台炼制一次性阵法（宗门洞天·宗门设施）",
-            "usage": ("演阵台", "演阵台 宗门", "演阵台 1", "演阵台 炼阵 阵法编号或名称 圣"),
+            "usage": ("演阵台", "演阵台 宗门", "演阵台 1", "演阵台 炼阵 圣品<阵法名>"),
             "side_effect": "按次消耗宗门灵石；圣品按实际三相投入追加消耗；走宗门材料与炼制圣品限宗主或长老",
             "order": 76,
         },

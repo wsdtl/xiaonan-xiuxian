@@ -846,7 +846,7 @@ class FormationService:
         try:
             return grades[grade_name]
         except KeyError as exc:
-            raise FormationError(f"阵法没有{grade_name}品配置") from exc
+            raise FormationError(f"阵法没有{grade_name}配置") from exc
 
     def _load_masters(self) -> dict[str, FormationMaster]:
         result: dict[str, FormationMaster] = {}

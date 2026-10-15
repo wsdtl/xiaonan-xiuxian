@@ -207,7 +207,7 @@ def overview(
     for content in character.equipped_content:
         builder.field(
             f"{content.category}{content.slot}",
-            M.text(f"{content.grade_name} · " if content.grade_name else "")
+            M.text(content.grade_name or "")
             + (M.command(content.name, f"查看 {content.name}"),),
         )
     if result.innate_treasure is None:
