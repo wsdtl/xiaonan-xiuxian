@@ -62,10 +62,31 @@ class ItemInspectionFeature:
             raise RuntimeError("角色核心必须先于查看实体玩法启动")
         self._initialized = True
 
+    def _split_grade(self, query: str) -> tuple[str, str]:
+        """把「品级＋名称」拆开：认得出开头是品级就剥掉，认不出就整串照旧。
+
+        口径（委托方 2026-10-15）：交互区写「品级＋名称」连写（天品七星草），
+        省略品级默认黄品；无品级物品只有物品名。这里先只负责"拆得开、查得到"。
+        """
+
+        for length in (2, 1):
+            if len(query) <= length:
+                continue
+            candidate = query[:length]
+            try:
+                self._asset.grade(candidate)
+            except Exception:  # noqa: BLE001 - 认不出就换下一种长度
+                continue
+            rest = query[length:].strip()
+            if rest:
+                return candidate, rest
+        return "", query
+
     async def inspect(self, query: str, user_id: str = "") -> ItemInspectionResult:
         if not self._initialized:
             raise RuntimeError("查看实体玩法微服务尚未初始化")
         normalized = " ".join(str(query or "").split())
+        _grade_word, normalized = self._split_grade(normalized)
         try:
             detail = self._catalog.inspect_entity(normalized)
             return ItemInspectionResult(
