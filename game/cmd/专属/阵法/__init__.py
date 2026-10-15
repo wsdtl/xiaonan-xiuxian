@@ -19,25 +19,51 @@ def _grade_prefix(feature: Any, value: str) -> str:
     return feature.grade_prefix(value)
 
 
+def _split_prefix(feature: Any, head: str) -> tuple[str, str]:
+    """把「品级阵法名」拆成（品级写法, 阵法名）。
+
+    品级按**从长到短**试：先试前 2 字（圣品），再试前 1 字（圣），最后试前 2 位（01）；
+    认不出就当作没有品级前缀（阵法名本身→玩法层按名字查）。
+    """
+
+    for length in (2, 1):
+        if len(head) > length:
+            candidate = head[:length]
+            try:
+                _grade_prefix(feature, candidate)
+                return candidate, head[length:]
+            except Exception:  # noqa: BLE001 - 认不出就继续试下一种长度
+                continue
+    return "", head
+
+
 def _request(
     message: str, usage: str
 ) -> tuple[str, str, dict[str, int] | None]:
-    # 输入只有一种：品级阵法名，后面三个空格分出的投入数（兽宝 灵矿 灵植）。
+    # 正规写法：品级阵法名（连写），后面可跟三个投入数（兽宝 灵矿 灵植）。
+    # 旧写法「名称 品级 [三个数]」一并受理，照顾老习惯。
     # 扩展位（花括号）**只用于存储**，不接受手打——挑选靠候选点选。
     parts = str(message or "").strip().split()
-    if len(parts) not in {2, 5}:
-        raise ValueError(usage)
+    feature = current_game_services().features.lianzhen
     try:
-        grade = _grade_prefix(current_game_services().features.lianzhen, parts[1])
+        if len(parts) in {2, 5}:  # 旧：名称 品级 [三个数]
+            identifier, grade_word, tail = parts[0], parts[1], parts[2:]
+        elif len(parts) in {1, 4}:  # 新：品级阵法名 [三个数]
+            prefix, identifier = _split_prefix(feature, parts[0])
+            # 省略品级就默认黄品（口径：没写品级默认黄品；无品级物品才只有物品名）。
+            grade_word, tail = prefix or "黄", parts[1:]
+        else:
+            raise ValueError(usage)
+        grade = _grade_prefix(feature, grade_word)
     except Exception as exc:  # noqa: BLE001 - 品级不认识时仍然给玩家同一句用法提示
         raise ValueError(usage) from exc
     investments = None
-    if len(parts) == 5:
-        values = tuple(int(value) for value in parts[2:])
+    if tail:
+        values = tuple(int(value) for value in tail)
         if any(value < 1 for value in values):
             raise ValueError("圣品三相投入必须是正整数")
         investments = dict(zip(("兽宝", "灵矿", "灵植"), values, strict=True))
-    return parts[0], grade, investments
+    return identifier, grade, investments
 
 
 @GameCommand.command(
