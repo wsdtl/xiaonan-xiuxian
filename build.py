@@ -37,36 +37,36 @@ ROOT = pathlib.Path(__file__).resolve().parent
 BUILD = ROOT / "BUILD"
 
 #: 游戏本体：入口、启动脚本、依赖、四个运行期包与 data。
-本体 = (
+BODY = (
     "game", "launch", "message", "static", "data",
     "main.py", "requirements.txt", "start.bat", "start.sh", ".env.example",
 )
 #: 说明文档（含 `data/` 里各组件与各面的 `说明.md`）默认**不进包**：部署只要干净的代码与数据。
 #: 加 `--含说明` 才带上它们，给需要留档的场合。
-文档 = (
+DOCS = (
     "README.md", "系统架构.md", "微服务边界规范.md", "核心设定.md", "说明模版.md",
 )
 #: 按开关附加。
-可选 = {"tools": "含工具", "tests": "含测试"}
+OPTIONAL = {"tools": "含工具", "tests": "含测试"}
 
 #: 永不进包：运行期状态与私密配置。它们的旧内容在替换时原样保留。
-不进包 = (
+KEEP_OUT = (
     "BUILD", "database", ".runtime", "log", "certs", ".venv", ".env",
     ".git", ".history", ".pytest_cache", "_输出", "__pycache__",
 )
 
 
 #: 落在包内、但属于运行期状态的路径（相对仓库根）：进包就会在替换时顶掉服务器上的那一份。
-包内运行期状态 = ("launch/runtime",)
+RUNTIME_STATE = ("launch/runtime",)
 
 #: 运行期状态的文件后缀：包里出现任何一个都算打包出错。
-运行期后缀 = (".lock", ".db", ".db-wal", ".db-shm", ".bak")
+RUNTIME_SUFFIXES = (".lock", ".db", ".db-wal", ".db-shm", ".bak")
 
 
-def _ignore(含说明: bool):
+def _ignore(with_docs: bool):
     """往 BUILD 拷东西时跳过的：缓存、字节码、（默认还有）说明 md、以及包内运行期状态。"""
 
-    blocked = [ROOT / part for part in 包内运行期状态]
+    blocked = [ROOT / part for part in RUNTIME_STATE]
 
     def _skip(directory: str, names: list[str]) -> set[str]:
         # copytree 是在**父目录**这一层问「哪些名字要跳过」，所以要看的是
@@ -79,15 +79,15 @@ def _ignore(含说明: bool):
                 skipped.add(name)
             elif name.endswith((".pyc", ".pyo")):
                 skipped.add(name)
-            elif not 含说明 and name.endswith(".md"):
+            elif not with_docs and name.endswith(".md"):
                 skipped.add(name)
         return skipped
 
     return _skip
 
 
-def _copytree(name: str, 含说明: bool = False) -> int:
-    """拷一个顶层条目，返回文件数。
+def _copytree(name: str, with_docs: bool = False) -> int:
+    """拷一个顶层条目，返回file_count。
 
     `__pycache__`、`.pyc` 不进包；`含说明` 为假时连 `.md` 一起滤掉——部署只要代码与数据。
     """
@@ -99,67 +99,67 @@ def _copytree(name: str, 含说明: bool = False) -> int:
             source,
             target,
             dirs_exist_ok=True,
-            ignore=_ignore(含说明),
+            ignore=_ignore(with_docs),
         )
         return sum(1 for path in target.rglob("*") if path.is_file())
-    if not 含说明 and source.suffix == ".md":
+    if not with_docs and source.suffix == ".md":
         return 0
     shutil.copy2(source, target)
     return 1
 
 
-def 打包(含工具: bool, 含测试: bool, 含说明: bool) -> dict:
+def pack(with_tools: bool, with_tests: bool, with_docs: bool) -> dict:
     if BUILD.exists():
         shutil.rmtree(BUILD)
     BUILD.mkdir(parents=True)
-    文件数 = 0
-    缺项: list[str] = []
-    for name in 本体:
+    file_count = 0
+    missing: list[str] = []
+    for name in BODY:
         if not (ROOT / name).exists():
-            缺项.append(name)
+            missing.append(name)
             continue
-        文件数 += _copytree(name, 含说明)
-    if 含说明:
-        for name in 文档:
+        file_count += _copytree(name, with_docs)
+    if with_docs:
+        for name in DOCS:
             if (ROOT / name).exists():
-                文件数 += _copytree(name, True)
-    if 含工具:
+                file_count += _copytree(name, True)
+    if with_tools:
         if (ROOT / "tools").exists():
-            文件数 += _copytree("tools", 含说明)
-    if 含测试:
+            file_count += _copytree("tools", with_docs)
+    if with_tests:
         if (ROOT / "tests").exists():
-            文件数 += _copytree("tests", 含说明)
+            file_count += _copytree("tests", with_docs)
     # 安全断言：运行期目录一个都不许进包。
-    泄漏 = [name for name in 不进包 if (BUILD / name).exists()]
-    if 泄漏:
-        raise SystemExit(f"打包出错：运行期目录进了 BUILD：{泄漏}")
-    包内泄漏 = [part for part in 包内运行期状态 if (BUILD / part).exists()]
-    if 包内泄漏:
-        raise SystemExit(f"打包出错：包内运行期状态进了 BUILD：{包内泄漏}")
-    脏文件 = [
+    leaked = [name for name in KEEP_OUT if (BUILD / name).exists()]
+    if leaked:
+        raise SystemExit(f"打包出错：运行期目录进了 BUILD：{leaked}")
+    leaked_state = [part for part in RUNTIME_STATE if (BUILD / part).exists()]
+    if leaked_state:
+        raise SystemExit(f"打包出错：包内运行期状态进了 BUILD：{leaked_state}")
+    dirty_files = [
         path.relative_to(BUILD).as_posix()
         for path in BUILD.rglob("*")
-        if path.is_file() and path.name.endswith(运行期后缀)
+        if path.is_file() and path.name.endswith(RUNTIME_SUFFIXES)
     ]
-    if 脏文件:
-        raise SystemExit(f"打包出错：BUILD 里出现运行期文件（锁/库/备份）：{脏文件[:5]}")
+    if dirty_files:
+        raise SystemExit(f"打包出错：BUILD 里出现运行期文件（锁/库/备份）：{dirty_files[:5]}")
     for name in ("main.py", "game/app.py", "data/基础/读取规则.json"):
         if not (BUILD / name).exists():
             raise SystemExit(f"打包出错：缺关键文件 {name}")
-    钉行尾 = _normalize_shell_scripts()
+    linefeed_fixed = _normalize_shell_scripts()
     for path in BUILD.rglob("*.sh"):
         if b"\r" in path.read_bytes():
             raise SystemExit(f"打包出错：{path.relative_to(BUILD)} 仍含 CR，Linux 下会跑不起来")
-    大小 = sum(path.stat().st_size for path in BUILD.rglob("*") if path.is_file())
-    信息 = {
+    total_bytes = sum(path.stat().st_size for path in BUILD.rglob("*") if path.is_file())
+    info = {
         "打包时间": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "来源提交": _提交(),
-        "文件数": 文件数,
-        "总字节": 大小,
-        "含工具": 含工具,
-        "含测试": 含测试,
-        "含说明": 含说明,
-        "不进包（替换时原样保留）": list(不进包[1:]),
+        "来源提交": _commit(),
+        "file_count": file_count,
+        "总字节": total_bytes,
+        "含工具": with_tools,
+        "含测试": with_tests,
+        "含说明": with_docs,
+        "不进包（替换时原样保留）": list(KEEP_OUT[1:]),
         "首次部署": [
             "把本目录内容复制到服务器上的安装目录",
             "把 .env.example 复制成 .env，按需改端口与密钥——这一步不能省，程序会明确报错要求它",
@@ -172,11 +172,11 @@ def 打包(含工具: bool, 含测试: bool, 含说明: bool) -> dict:
         "包内说明": "只有代码与 data；`.md` 说明默认不进包（--含说明 可带）。",
     }
     (BUILD / "构建信息.json").write_text(
-        json.dumps(信息, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    if 缺项:
-        raise SystemExit(f"打包出错：仓库里找不到 {缺项}")
-    return 信息
+    if missing:
+        raise SystemExit(f"打包出错：仓库里找不到 {missing}")
+    return info
 
 
 def _normalize_shell_scripts() -> int:
@@ -195,7 +195,7 @@ def _normalize_shell_scripts() -> int:
     return fixed
 
 
-def _提交() -> str:
+def _commit() -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -206,7 +206,7 @@ def _提交() -> str:
         return "（未知）"
 
 
-def 压缩() -> pathlib.Path:
+def compress() -> pathlib.Path:
     archive = ROOT / "BUILD.zip"
     if archive.exists():
         archive.unlink()
@@ -217,18 +217,18 @@ def 压缩() -> pathlib.Path:
     return archive
 
 
-自检脚本 = """
+SELF_CHECK_SCRIPT = """
 import pathlib, sys
 root = pathlib.Path.cwd()
 from main import create_app
 create_app()
 import game.app as app
 print("BASE_DIR =", app.game_config.base_dir if hasattr(app.game_config, "base_dir") else "?")
-缺少前 = [name for name in ("database", "log", ".runtime") if not (root / name).exists()]
+missing_before = [name for name in ("database", "log", ".runtime") if not (root / name).exists()]
 services = app.build_game_services()
-缺少后 = [name for name in ("database", "log", ".runtime") if not (root / name).exists()]
-if 缺少后:
-    print("自检失败：这些目录没有被自动创建：" + "、".join(缺少后))
+missing_after = [name for name in ("database", "log", ".runtime") if not (root / name).exists()]
+if missing_after:
+    print("自检失败：这些目录没有被自动创建：" + "、".join(missing_after))
     raise SystemExit(1)
 # 单实例锁走的是 lifespan（真启动服务器时才拿），轻量自检里显式拿一次再放，证明它会自建。
 from launch.runtime_guard import RuntimeGuard
@@ -239,29 +239,29 @@ lock = root / "launch" / "runtime" / "server.lock"
 if not lock.exists():
     print("自检失败：单实例锁没有自建（launch/runtime/server.lock）")
     raise SystemExit(1)
-print("自检通过：启动前缺 " + ("、".join(缺少前) or "无") + "，启动后运行期目录齐全、单实例锁已自建")
+print("自检通过：启动前缺 " + ("、".join(missing_before) or "无") + "，启动后运行期目录齐全、单实例锁已自建")
 services.core.database.close()
 """
 
 
-def 自检() -> None:
+def self_check() -> None:
     """把 BUILD 拷到临时目录，按「全新部署」启动一次。"""
 
     with tempfile.TemporaryDirectory(prefix="build-自检-") as raw:
-        部署 = pathlib.Path(raw) / "install"
-        shutil.copytree(BUILD, 部署)
+        deploy_dir = pathlib.Path(raw) / "install"
+        shutil.copytree(BUILD, deploy_dir)
         # 首次部署要人工做的唯一一步：把 `.env.example` 复制成 `.env`（里面是端口与密钥这类
         # 每台机器不同的东西，**故意不进包**——进包就会在替换时覆盖服务器上的真配置）。
         # 自检把这一步替人做掉，才能证明「除此之外，全新目录直接能跑」。
-        shutil.copy2(部署 / ".env.example", 部署 / ".env")
+        shutil.copy2(deploy_dir / ".env.example", deploy_dir / ".env")
         # 全新部署：运行期目录本来就不该在（万一在，先删掉，才能证明「程序会自己建」）。
         for name in ("database", "log", ".runtime"):
-            目标 = 部署 / name
-            if 目标.exists():
-                shutil.rmtree(目标)
+            target = deploy_dir / name
+            if target.exists():
+                shutil.rmtree(target)
         result = subprocess.run(
-            [sys.executable, "-X", "utf8", "-c", 自检脚本],
-            cwd=部署, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300, check=False,
+            [sys.executable, "-X", "utf8", "-c", SELF_CHECK_SCRIPT],
+            cwd=deploy_dir, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300, check=False,
         )
         tail = (result.stdout or "").strip().splitlines()[-2:]
         print("  自检输出：" + " / ".join(tail))
@@ -272,23 +272,23 @@ def 自检() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="打包游戏本体与 data 到 BUILD/")
-    parser.add_argument("--含工具", action="store_true", help="连 tools/ 一起打包")
-    parser.add_argument("--含测试", action="store_true", help="连 tests/ 一起打包")
-    parser.add_argument("--含说明", action="store_true", help="连 .md 说明一起打包（默认不带）")
-    parser.add_argument("--压缩", action="store_true", help="额外产出 BUILD.zip")
-    parser.add_argument("--跳过自检", action="store_true", help="打完不跑部署自检")
+    parser.add_argument("--含工具", dest="with_tools", action="store_true", help="连 tools/ 一起打包")
+    parser.add_argument("--含测试", dest="with_tests", action="store_true", help="连 tests/ 一起打包")
+    parser.add_argument("--含说明", dest="with_docs", action="store_true", help="连 .md 说明一起打包（默认不带）")
+    parser.add_argument("--压缩", dest="compress", action="store_true", help="额外产出 BUILD.zip")
+    parser.add_argument("--跳过自检", dest="skip_self_check", action="store_true", help="打完不跑部署自检")
     options = parser.parse_args()
 
     print("打包到 " + str(BUILD))
-    信息 = 打包(options.含工具, options.含测试, options.含说明)
-    print("  文件 " + str(信息["文件数"]) + " 个，合计 " + f"{信息['总字节'] / 1048576:.1f} MB" + "，来源提交 " + str(信息["来源提交"]))
-    print("  不进包（替换时原样保留）：" + "、".join(信息["不进包（替换时原样保留）"]))
-    if not options.含说明:
+    info = pack(options.with_tools, options.with_tests, options.with_docs)
+    print("  文件 " + str(info["file_count"]) + " 个，合计 " + f"{info['总字节'] / 1048576:.1f} MB" + "，来源提交 " + str(info["来源提交"]))
+    print("  不进包（替换时原样保留）：" + "、".join(info["不进包（替换时原样保留）"]))
+    if not options.with_docs:
         print("  说明 md 未打包（要带就加 --含说明）")
-    if not options.跳过自检:
-        自检()
-    if options.压缩:
-        print("  压缩包：" + str(压缩()))
+    if not options.skip_self_check:
+        self_check()
+    if options.compress:
+        print("  压缩包：" + str(compress()))
     print("完成。把 BUILD 里的内容复制过去替换即可；database/、log/、.runtime/ 会留在原处。")
     return 0
 
