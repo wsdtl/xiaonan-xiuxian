@@ -171,10 +171,6 @@ class CombatCatalog:
     terrain_pace: Mapping[str, Any] = dataclass_field(default_factory=dict)
     #: 规则层登记表（`data/战斗/定义/规则层.json`）：单位级规则在装配期按它解析。
     rule_layer: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
-    #: 构筑模板库。放在最后并给默认值，让既有构造点不必都改。
-    #: 模板引用在**装载期**已展开（见 `service.expand_build_section`），所以引擎
-    #: 解析时不需要再用它；保留字段是为了让基线与诊断能看到当前模板库。
-    templates: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
     #: 节点解析缓存：`id(节点) -> RuleNode`（见 `parse_node`）。装配期节点不换，按身份缓存安全。
     _node_cache: dict[int, RuleNode] = dataclass_field(
         default_factory=dict, init=False, repr=False, compare=False
@@ -184,7 +180,6 @@ class CombatCatalog:
     def from_mapping(
         cls,
         value: Mapping[str, Any] | None,
-        templates: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> CombatCatalog:
         source = value or {}
         raw_events = source.get("事件") or {}
@@ -206,7 +201,6 @@ class CombatCatalog:
             formation_rules=source["阵法规则"],
             rule_layer=dict(source.get("规则层") or {}),
             terrain_pace=dict(source.get("地形节奏") or {}),
-            templates=dict(templates or {}),
         )
 
     def require_event(self, key: str) -> Mapping[str, Any]:

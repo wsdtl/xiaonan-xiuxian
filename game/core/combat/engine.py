@@ -84,8 +84,7 @@ class BattleEngine(AbilityRuntime):
         # 会先撞上 Python 的 1000 帧上限，报 `RecursionError` 而不是走引擎自己的墙。
         if sys.getrecursionlimit() < RECURSION_LIMIT:
             sys.setrecursionlimit(RECURSION_LIMIT)
-        templates = rules.pop("构筑模板库", None)
-        self.catalog = CombatCatalog.from_mapping(rules, templates)
+        self.catalog = CombatCatalog.from_mapping(rules)
         self._attribute_defaults = {
             name: float(definition.get("默认值", 0.0))
             for name, definition in self.catalog.attributes.items()

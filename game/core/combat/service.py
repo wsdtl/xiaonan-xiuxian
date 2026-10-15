@@ -127,16 +127,12 @@ class CombatService:
         if not self._formation.status().initialized:
             raise RuntimeError("阵法核心必须先于战斗核心启动")
 
-        templates = _template_library()
-        # 构筑模板库是引擎基础设施（生成自真实实例，见 tools/报告与生成/构筑模板代码化.py），
-        # 不进 JSON 快照；交给基石同时用于校验与引擎。
         foundation = load_battle_foundation(
             self._data,
             formation_rules=self._formation.node_rules(),
-            templates=templates,
         )
         build_counts = validate_builds(
-            self._data, load_build_contracts(self._data), templates=templates
+            self._data, load_build_contracts(self._data)
         )
         self._build_count = sum(build_counts.values())
         report_dataset = materialize(self._data.dataset("战斗展示"))
