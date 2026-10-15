@@ -46,15 +46,15 @@ class FormationCraftFeature:
         return self._copy
 
     def grade_prefix(self, value: str) -> str:
-        """受理品级的三种写法（黄品／黄／01），吐阵法内部用的单字。
+        """受理品级的三种写法（黄品／黄／01），吐**全名**（黄品……）。
 
-        资产核心的品级表本来就收全称、单字和编号；这一段原先是命令层自己去问资产核心的。
+        规则：不许用短名（黄 要写 黄品）。资产核心的品级表本来就收全称、单字和编号；
         认不出的写法由核心按自己的话回绝（`InventoryChangeError`）。
         """
 
         resolved = self._asset.grade(value)
         name = str(getattr(resolved, "name", "") or "").strip()
-        return name[:1] if name else str(value)
+        return name or str(value)
 
     async def overview(self, user_id: str, page: int = 1) -> FormationOverview:
         return await self._call(self._formation.overview(user_id, page))
