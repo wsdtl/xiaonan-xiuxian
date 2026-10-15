@@ -54,7 +54,6 @@ def load_battle_foundation(
     data: JsonDataService,
     *,
     formation_rules: FormationNodeRules | None = None,
-    templates: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if not data.status().loaded:
         raise RuntimeError("JSON 数据微服务必须先于战斗微服务启动")
@@ -76,8 +75,7 @@ def load_battle_foundation(
             "阵法规则": formation_rules,
         }
     )
-    validate_battle_foundation(result, templates=templates)
-    result["构筑模板库"] = dict(templates or {})
+    validate_battle_foundation(result)
     return result
 
 
@@ -126,8 +124,6 @@ def rule_validator(value: Mapping[str, Any]) -> RuleSchemaValidator:
 
 def validate_battle_foundation(
     value: Mapping[str, Any],
-    *,
-    templates: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
     abilities = _mapping(value.get("原子能力"), "原子能力")
     events = _mapping(value.get("事件"), "事件")
@@ -161,9 +157,6 @@ def validate_battle_foundation(
         if "类型" in mutable and name not in {"恢复前", "获得护盾前", "资源恢复前"}:
             raise ValueError(f"事件.{name}没有可转化的共同结算语义")
     validator = rule_validator(value)
-    # 校验器要认识构筑模板：卡里的 `{"模板": …}` 引用没有 `能力` 字段，
-    # 不展开就会被当成非法节点挡掉（实测会让启动失败）。
-    validator.templates = dict(templates or {})
     validator.validate_definitions("战斗定义.原子能力")
     validate_rule_layer(value.get("规则层") or {}, abilities, validator)
     _validate_rule_text_carrier(abilities)
