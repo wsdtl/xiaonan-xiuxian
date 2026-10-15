@@ -51,7 +51,7 @@ def _request(
         elif len(parts) in {1, 4}:  # 新：品级阵法名 [三个数]
             prefix, identifier = _split_prefix(feature, parts[0])
             # 省略品级就默认黄品（口径：没写品级默认黄品；无品级物品才只有物品名）。
-            grade_word, tail = prefix or "黄", parts[1:]
+            grade_word, tail = prefix or "黄品", parts[1:]
         else:
             raise ValueError(usage)
         grade = _grade_prefix(feature, grade_word)

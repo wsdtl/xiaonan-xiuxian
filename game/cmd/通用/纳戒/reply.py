@@ -135,9 +135,8 @@ def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
         if has_stable_id
         else entry.name
     )
-    parts: list[object] = [name]
-    if entry.grade_name:
-        parts.extend((" · ", entry.grade_name))
+    # 品级在前连写（规则：品级永远在前、不许加分隔）；没有品级就只留名字。
+    parts: list[object] = [f"{entry.grade_name}{name}" if entry.grade_name else name]
     if entry.category in {"基础物品", "修行资粮", "器藏"} or entry.quantity > 1:
         parts.append(f" × {entry.quantity}")
     if entry.equipped_slots:

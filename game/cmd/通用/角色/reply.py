@@ -61,8 +61,8 @@ def created(
     for index, (item_name, grade, quantity) in enumerate(result.initial_items, start=1):
         builder.item(
             index,
-            M.command(item_name, f"查看 {item_name}"),
-            f" · {grade} × {quantity}",
+            M.command(f"{grade}{item_name}", f"查看 {item_name}"),
+            f" × {quantity}",
         )
     return builder.build()
 

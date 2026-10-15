@@ -396,7 +396,7 @@ def _formation_summary_line(value: Mapping[str, Any]) -> str:
         else f"余承 {value['remaining_capacity']}"
     )
     return (
-        f"{side}: {value['name']} · {value['grade']}品 · "
+        f"{side}: {value['grade']}品{value['name']} · "
         f"轮转 {value['rotations']} 次 · {state}"
     )
 

@@ -107,7 +107,10 @@ class ZhuangpeiFeature:
             "section": section, "id": content_id, "grade": grade,
             "name": str(value["名称"]), "grade_name": grade_name,
             "description": str(value["说明"]),
-            "label": " · ".join(part for part in (str(value["名称"]), grade_name, str(value.get("器阶", ""))) if part),
+            "label": (
+                (f"{grade_name}{value['名称']}" if grade_name else str(value["名称"]))
+                + (f" · {value['器阶']}" if value.get("器阶") else "")
+            ),
             "quantity": None, "equipped": [],
         }
 
