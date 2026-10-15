@@ -57,7 +57,7 @@ async def _use(
         "help": {
             "category": "修行",
             "summary": "为人物服用恢复丹或寄存一枚战丹",
-            "usage": ("人物服丹 01100005", "人物服丹 02100005",),
+            "usage": ("人物服丹 小还丹", "人物服丹 玄品小还丹",),
             "side_effect": "消耗共享纳戒中的一枚丹药；每人最多寄存 1 枚战丹（已有待战战丹会被拒），恢复丹在资源已满时拒绝服用",
             "order": 80,
         },
@@ -81,7 +81,7 @@ async def use_for_character(user_id: str, message: str, message_context: Message
         "help": {
             "category": "修行",
             "summary": "为当前同行道侣服用恢复丹或寄存一枚战丹",
-            "usage": ("道侣服丹 01100005", "道侣服丹 02100005",),
+            "usage": ("道侣服丹 小还丹", "道侣服丹 玄品小还丹",),
             "side_effect": "消耗共享纳戒中的一枚丹药；每人最多寄存 1 枚战丹（已有待战战丹会被拒），恢复丹在资源已满时拒绝服用",
             "order": 90,
         },

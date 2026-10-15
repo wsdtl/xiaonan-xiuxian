@@ -21,7 +21,7 @@ _CATEGORIES = frozenset({"恢复丹", "战丹", "突破丹", "特殊丹"})
         "help": {
             "category": "炼制",
             "summary": "查看当地丹师可炼丹药，或请丹师验看一颗丹药",
-            "usage": ("炼丹", "炼丹 恢复丹", "炼丹 战丹 2", "炼丹 01100005"),
+            "usage": ("炼丹", "炼丹 恢复丹", "炼丹 战丹 2", "炼丹 小还丹"),
             "side_effect": "只验药，不消耗材料",
             "order": 63,
         },
@@ -61,7 +61,7 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地丹师按验药结果炼成一枚丹药",
-            "usage": ("开丹炉 01100005", "开丹炉 丹药编号或丹药名称",),
+            "usage": ("开丹炉 小还丹", "开丹炉 丹药编号或丹药名称",),
             "side_effect": "消耗一件兽宝和所需灵植，把丹药收入纳戒",
             "order": 64,
         },

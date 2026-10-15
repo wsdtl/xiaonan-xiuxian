@@ -30,31 +30,16 @@ async def help_command(message: str, manager: Any) -> None:
     await manager.send(reply.help_message(message))
 
 
-#: 我自己的转换范围：只在这几个实体节里认名称。别去借别的服务的口——各有各的范围。
-_ID_SECTIONS = (
-    "基础物品",
-    "丹药",
-    "阵法",
-    "先天灵宝",
-    "功法",
-    "真意",
-    "气机",
-    "器律",
-    "道侣",
-)
-
-
 def _id_converter():
     """「中文名 → 编号」转换器：名称表向玩法要，再逐词替换。
 
     认不出就原样留着——它只负责把能给编号的地方换成编号，不做校验。
-    要认哪几节由本组件的 `_ID_SECTIONS` 定，玩法只负责取事实。
+    范围用**全库编号实体**（help 是给机器看的，越全越好；按节白名单会漏掉世界内容，
+    例如丹泉苑的炼丹师就不在物品那几节里）。
     """
 
-    # 事实向玩法要（边界：触发层不直接访问数据服务）；**范围仍由本组件自己定**。
-    name_to_id = dict(
-        current_game_services().features.chakan_wupin.id_aliases(_ID_SECTIONS)
-    )
+    # 事实向玩法要（边界：触发层不直接访问数据服务）。
+    name_to_id = dict(current_game_services().features.chakan_wupin.id_alias_table())
 
     def convert(text: str) -> str:
         return " ".join(name_to_id.get(token, token) for token in str(text).split())

@@ -124,6 +124,20 @@ class ItemInspectionFeature:
                 aliases.setdefault(token, grade_id)
         return MappingProxyType(aliases)
 
+    def id_alias_table(self) -> Mapping[str, str]:
+        """**全库**「名称 → 编号」表（不限定节）。
+
+        与 id_aliases 的区别只在一处：范围。id_aliases 由调用方给节名（各组件各有各的范围），
+        这一口给的是"全部编号实体"，给 help 这种"给机器看、越全越好"的视图用。
+        """
+
+        aliases: dict[str, str] = {}
+        for entity in self._data.numbered_entities():
+            name = str(entity.value.get("名称") or "").strip()
+            if name:
+                aliases.setdefault(name, entity.entity_id)
+        return MappingProxyType(aliases)
+
     def is_race(self, entity_id: str) -> bool:
         """这个编号是不是种族（前缀 55）——百科页用它决定缺号时回哪一句。"""
 
