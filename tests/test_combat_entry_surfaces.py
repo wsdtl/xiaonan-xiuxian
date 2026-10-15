@@ -47,7 +47,7 @@ ATTRS = {
     "伤害加成": 100,
     "伤害减免": 0,
 }
-GRADES = ("黄", "玄", "地", "天")
+GRADES = ("黄品", "玄品", "地品", "天品")
 CARD = "400541"
 
 
@@ -186,7 +186,7 @@ def test_every_formation_grade_fights(services) -> None:
             (
                 block
                 for block in entry.get("品级") or ()
-                if str(block.get("品级")) == "圣"
+                if str(block.get("品级")) == "圣品"
             ),
             None,
         )
@@ -202,7 +202,7 @@ def test_every_formation_grade_fights(services) -> None:
                 f"{formation_id} {name} 圣品",
                 {
                     "left_formation": CombatFormationSpec(
-                        formation_id=formation_id, grade="圣", materials=materials
+                        formation_id=formation_id, grade="圣品", materials=materials
                     )
                 },
             )
@@ -296,8 +296,8 @@ def test_entry_surfaces_reach_their_deep_paths(services) -> None:
         limit=120,
         left_team=(sturdy,),
         right_team=(replace(sturdy, id="R", name="R"),),
-        left_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄"),
-        right_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄"),
+        left_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄品"),
+        right_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄品"),
     )
     formation_kinds = {event.kind for event in result.events}
     assert {"阵法展开", "阵法轮转后", "阵法冲击后"} <= formation_kinds, "阵法没有完整轮转"
