@@ -21,7 +21,7 @@ _STAGES = frozenset({"灵器", "法器", "法宝", "后天灵宝"})
         "help": {
             "category": "炼制",
             "summary": "查看可炼器律，或请当地工匠审看一条器律的材料",
-            "usage": ("炼器", "炼器 灵器", "炼器 太白惊鸿", "炼器 700001"),
+            "usage": ("炼器", "炼器 灵器", "炼器 700001"),
             "side_effect": "只审材，不消耗材料",
             "order": 61,
         },
@@ -56,7 +56,7 @@ async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地工匠按审材结果炼成一份器律",
-            "usage": ("开炉 太白惊鸿", "开炉 器律编号或名称",),
+            "usage": ("开炉 700001", "开炉 器律编号或名称",),
             "side_effect": "消耗兽宝和灵矿，把一份器律收入器藏",
             "order": 62,
         },

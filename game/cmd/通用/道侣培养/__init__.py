@@ -81,7 +81,7 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
         "help": {
             "category": "修行",
             "summary": "把器藏中的器律覆入当前同行道侣本命武器",
-            "usage": ("道侣覆炼 太白惊鸿 1", "道侣覆炼 器律编号或名称 孔位",),
+            "usage": ("道侣覆炼 700001 1", "道侣覆炼 器律编号或名称 孔位",),
             "side_effect": "消耗器藏中的一份器律并覆盖道侣武器指定孔位",
             "order": 70,
         },
