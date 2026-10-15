@@ -54,7 +54,7 @@ def _render_candidates(
         entries=tuple(
             (
                 candidate.name,
-                f"查看 {candidate.medicine_id}",
+                f"查看 {candidate.name}",
                 "、".join(f"{name}+{value}" for name, value in candidate.permanent)
                 or feature.copy("突破", "无永久属性"),
             )

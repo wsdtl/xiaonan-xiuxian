@@ -291,7 +291,7 @@ def _item_parts(
     return (
         M.command(
             M.text(feature.item_label(item_id, grade_id)),
-            f"查看 {item_id}",
+            f"查看 {feature.item_label(item_id, grade_id)}",
         ),
         f" × {quantity}",
     )

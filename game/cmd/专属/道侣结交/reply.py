@@ -182,7 +182,7 @@ def gift(
             (
                 M.command(
                     M.text(result.reward_item.name),
-                    f"查看 {result.reward_item.item_id}",
+                    f"查看 {result.reward_item.name}",
                 ),
                 *M.text(f" × {result.reward_quantity}"),
             ),

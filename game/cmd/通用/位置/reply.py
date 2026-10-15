@@ -52,7 +52,7 @@ def current(
             copy.active_companion_section,
             M.command(
                 M.text(result.active_companion.name),
-                f"查看 {result.active_companion.companion_id}",
+                f"查看 {result.active_companion.name}",
             ),
             icon=copy.cultivator_icon,
         )
@@ -103,7 +103,7 @@ def nearby_cultivators(
         ).line(
             M.command(
                 result.active_companion.name,
-                f"查看 {result.active_companion.companion_id}",
+                f"查看 {result.active_companion.name}",
             ),
             " · ",
             copy.cultivator_summary.format_map(
