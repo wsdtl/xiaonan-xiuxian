@@ -209,18 +209,69 @@ _ENTRY_VERSION = "version"
 _ENTRY_UPDATED = "updated_at"
 
 
+#: 存档结构版本。每次「加一种状态」或「改一次状态语义」+1，并在迁移表里补一档。
+#: 迁移函数由组合根注入（核心不 import 玩法），见 `register_migration`。
+SCHEMA_VERSION = 1
+
+#: `player_state` 的期望列：建表 DDL 与「补缺列」都从这里出，只此一处。
+_PLAYER_STATE_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("user_id", "TEXT PRIMARY KEY"),
+    ("state_json", "TEXT NOT NULL"),
+    ("version", "INTEGER NOT NULL CHECK (version > 0)"),
+    ("updated_at", "TEXT NOT NULL"),
+    ("schema_version", "INTEGER NOT NULL DEFAULT 0"),
+)
+
+#: 逐级迁移表：版本号 -> 迁移函数（entries 就地改）。由组合根注入。
+_MIGRATIONS: dict = {}
+
+
+def register_migration(version: int, migrate) -> None:
+    """登记一档迁移（结构版本 1..SCHEMA_VERSION）。组合根启动时调用。"""
+
+    _MIGRATIONS[int(version)] = migrate
+
+
+def _sync_columns(connection, table: str, expected: tuple[tuple[str, str], ...]) -> None:
+    """把表结构对齐到期望列：只补缺列，不删不改（O(表列数)，不碰任何行）。
+
+    `ALTER TABLE ADD COLUMN` 不幂等（重复执行报错），所以先问 `PRAGMA table_info`。
+    只比列名集合：类型与默认值不比——SQLite 改类型要重建表，代价远超收益。
+    """
+
+    actual = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+    for name, ddl in expected:
+        if name not in actual:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+
 def _logical_key(state_type: str, state_key: str) -> str:
     return f"{state_type}/{state_key}"
 
 
-def _load_logical_state(connection: sqlite3.Connection, user_id: str) -> dict[str, dict[str, object]]:
-    """读出某玩家全部逻辑状态（只认 player_state，一人一行）。"""
+def _load_logical_state(
+    connection: sqlite3.Connection, user_id: str, *, migrate: bool = True
+) -> dict[str, dict[str, object]]:
+    """读出某玩家全部逻辑状态（只认 player_state，一人一行）。
+
+    顺手做「结构版本」懒迁移：落后才动，正常路径只多一次整数比较。
+    迁移结果**只补在内存里**，不在此处写库；写路径的调用方随后会用
+    `_store_logical_state` 把 `schema_version` 一并落盘，于是迁移自然生效。
+    """
     entries: dict[str, dict[str, object]] = {}
-    blob = connection.execute("SELECT state_json FROM player_state WHERE user_id = ?", (user_id,)).fetchone()
-    if blob is None:
+    row = connection.execute(
+        "SELECT state_json, schema_version FROM player_state WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    if row is None:
         return entries
-    for key, entry in json.loads(str(blob[0])).items():
+    for key, entry in json.loads(str(row[0])).items():
         entries[str(key)] = entry
+    version = int(row[1])
+    if not migrate or version >= SCHEMA_VERSION:
+        return entries
+    for target in range(version + 1, SCHEMA_VERSION + 1):
+        step = _MIGRATIONS.get(target)
+        if step is not None:
+            step(entries)
     return entries
 
 def _store_logical_state(connection: sqlite3.Connection, user_id: str, payload, committed_at: str) -> None:
@@ -229,8 +280,15 @@ def _store_logical_state(connection: sqlite3.Connection, user_id: str, payload, 
     next_row_version = (int(current[0]) + 1) if current is not None else 1
     connection.execute("DELETE FROM player_state WHERE user_id = ?", (user_id,))
     connection.execute(
-        "INSERT INTO player_state (user_id, state_json, version, updated_at) VALUES (?, ?, ?, ?)",
-        (user_id, json.dumps(payload, ensure_ascii=False, sort_keys=True), next_row_version, committed_at),
+        "INSERT INTO player_state (user_id, state_json, version, updated_at, schema_version)"
+        " VALUES (?, ?, ?, ?, ?)",
+        (
+            user_id,
+            json.dumps(payload, ensure_ascii=False, sort_keys=True),
+            next_row_version,
+            committed_at,
+            SCHEMA_VERSION,
+        ),
     )
 
 class SQLiteStateStore:
@@ -266,7 +324,8 @@ class SQLiteStateStore:
                 user_id TEXT PRIMARY KEY,
                 state_json TEXT NOT NULL,
                 version INTEGER NOT NULL CHECK (version > 0),
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                schema_version INTEGER NOT NULL DEFAULT 0
             );
                 CREATE INDEX IF NOT EXISTS ix_player_location_xy
                 ON player_location(x, y, user_id);
@@ -295,6 +354,8 @@ class SQLiteStateStore:
                 ON shared_member(entity_type, entity_id, join_order, user_id);
                 """
             )
+            # 老库补缺列（新库由上面的 DDL 一次到位）；只补列，O(1)，不碰任何行。
+            _sync_columns(connection, "player_state", _PLAYER_STATE_COLUMNS)
         self._initialized = True
 
     def prune_receipts(self, keep_per_user: int = _RECEIPT_LIMIT_PER_USER) -> int:

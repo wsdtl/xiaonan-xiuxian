@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -12,19 +14,8 @@ from game.core.data import JsonDataError, mapping as require_mapping, strict_tex
 #: DNA 的组数（12 位 = 6 组，每组 0~99）。
 GROUPS = 6
 
-#: 天外的十种数字形态（必须与 data/玩法/血脉/规则/血脉.json 的写法逐字一致）。
-_SHAPES = (
-    "六组全奇",
-    "六组全偶",
-    "六组依次递增（顺子）",
-    "六组依次递减",
-    "首尾相同（G1=G6）",
-    "首尾互补（G1+G6=99）",
-    "G1、G3、G5 个位相同",
-    "回文（G1=G6 且 G2=G5）",
-    "任三组相同",
-    "六组全同（组6 手调触发）",
-)
+#: 形态判定写成 DNA 表达式（住数据）：记号 G1..G6 是 DNA 的六组，
+#: 可用 + - * // % 与比较、且/或/非、链式比较，另有 最多重复数。
 
 
 @dataclass(frozen=True)
@@ -38,8 +29,11 @@ class Bloodline:
     conditions: tuple[tuple[int, int, int], ...]
     """普通血脉的区间条件：(组序号1起, 下限含, 上限不含)。"""
 
-    shape: str
-    """天外的形态名；普通血脉为空串。"""
+    shape_name: str
+    """天外的形态名（给人看的，来自数据）；普通血脉为空串。"""
+
+    judge: str
+    """天外的形态判定表达式（来自数据）；普通血脉为空串。"""
 
     abilities: tuple[Mapping[str, object], ...]
     """战斗原子能力原样保留（固定属性加成 / 条件执行）。
@@ -77,32 +71,95 @@ def format_dna(groups: Sequence[int]) -> str:
     return "".join("%02d" % int(value) for value in groups)
 
 
-def match_shape(groups: Sequence[int], shape: str) -> bool:
-    """按数字形态匹配。"""
+def match_shape(groups: Sequence[int], expression: str) -> bool:
+    """按数据里的 DNA 表达式匹配数字形态。
 
-    g = list(groups)
-    if shape == "六组全奇":
-        return all(v % 2 == 1 for v in g)
-    if shape == "六组全偶":
-        return all(v % 2 == 0 for v in g)
-    if shape == "六组依次递增（顺子）":
-        return all(g[i] < g[i + 1] for i in range(GROUPS - 1))
-    if shape == "六组依次递减":
-        return all(g[i] > g[i + 1] for i in range(GROUPS - 1))
-    if shape == "首尾相同（G1=G6）":
-        return g[0] == g[-1]
-    if shape == "首尾互补（G1+G6=99）":
-        return g[0] + g[-1] == 99
-    if shape == "G1、G3、G5 个位相同":
-        return g[0] % 10 == g[2] % 10 == g[4] % 10
-    if shape == "回文（G1=G6 且 G2=G5）":
-        return g[0] == g[5] and g[1] == g[4]
-    if shape == "任三组相同":
-        return max(Counter(g).values()) >= 3
-    if shape == "六组全同（组6 手调触发）":
-        return len(set(g)) == 1
-    raise JsonDataError("未知血脉形态：%s" % shape)
+    表达式住数据（例如 G1+G6=99 ／ G1<G2<G3<G4<G5<G6 ／ 最多重复数>=3），
+    这里只做解释：记号 G1..G6 是 DNA 的六组，可用 + - * // % 与比较、且/或/非、链式比较。
+    """
 
+    text = str(expression or "").strip()
+    if not text:
+        raise JsonDataError("形态判定不能为空")
+    names = _dna_names(groups)
+    source = text.replace("且", " and ").replace("或", " or ").replace("非", " not ")
+    source = re.sub(r"(?<![<>!=])=(?!=)", "==", source)
+    try:
+        tree = ast.parse(source, mode="eval")
+    except SyntaxError as exc:
+        raise JsonDataError("形态判定写错了：%s" % text) from exc
+    return bool(_eval_node(tree, names))
+
+
+#: 形态表达式里允许出现的记号：
+#:   G1..G6      —— 那一组的整组值
+#:   G11 G12     —— 第 1 组的第 1 个 / 第 2 个数字（即十位 / 个位）
+#:   最多重复数   —— 六组里重复出现最多的次数
+def _dna_names(groups: Sequence[int]) -> dict[str, int]:
+    names: dict[str, int] = {}
+    for index, value in enumerate(groups):
+        number = int(value)
+        names["G%d" % (index + 1)] = number
+        ten, one = divmod(number, 10)
+        names["G%d1" % (index + 1)] = ten
+        names["G%d2" % (index + 1)] = one
+    names["最多重复数"] = max(Counter(int(v) for v in groups).values())
+    return names
+
+
+def _eval_node(node: object, names: Mapping[str, int]) -> object:
+    """按白名单解释形态表达式的一个节点（不用 eval）。"""
+
+    if isinstance(node, ast.Expression):
+        return _eval_node(node.body, names)
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        if node.id not in names:
+            raise JsonDataError("形态判定里出现未知记号：%s" % node.id)
+        return names[node.id]
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return not _eval_node(node.operand, names)
+    if isinstance(node, ast.BoolOp):
+        values = [_eval_node(value, names) for value in node.values]
+        return all(values) if isinstance(node.op, ast.And) else any(values)
+    if isinstance(node, ast.BinOp):
+        left = _eval_node(node.left, names)
+        right = _eval_node(node.right, names)
+        if isinstance(node.op, ast.Add):
+            return left + right
+        if isinstance(node.op, ast.Sub):
+            return left - right
+        if isinstance(node.op, ast.Mult):
+            return left * right
+        if isinstance(node.op, (ast.Div, ast.FloorDiv)):
+            return left // right
+        if isinstance(node.op, ast.Mod):
+            return left % right
+        raise JsonDataError("形态判定里有不允许的运算符")
+    if isinstance(node, ast.Compare):
+        left = _eval_node(node.left, names)
+        for op, comparator in zip(node.ops, node.comparators):
+            right = _eval_node(comparator, names)
+            if isinstance(op, ast.Eq):
+                ok = left == right
+            elif isinstance(op, ast.NotEq):
+                ok = left != right
+            elif isinstance(op, ast.Lt):
+                ok = left < right
+            elif isinstance(op, ast.LtE):
+                ok = left <= right
+            elif isinstance(op, ast.Gt):
+                ok = left > right
+            elif isinstance(op, ast.GtE):
+                ok = left >= right
+            else:
+                raise JsonDataError("形态判定里有不允许的比较")
+            if not ok:
+                return False
+            left = right
+        return True
+    raise JsonDataError("形态判定里有不允许的写法")
 
 def load_bloodline_rules(dataset: Mapping[str, object]) -> BloodlineRules:
     """装载血脉规则：22 条普通 ＋ 10 件天外 ＋ 觉醒档。"""
@@ -124,9 +181,12 @@ def load_bloodline_rules(dataset: Mapping[str, object]) -> BloodlineRules:
                     conditions.append(
                         (int(row.get("组") or 0), int(row.get("下限") or 0), int(row.get("上限") or 0))
                     )
-            shape = "" if not outer else _text(item.get("形态"), "%s[%d].形态" % (block, index))
-            if outer and shape not in _SHAPES:
-                raise JsonDataError("%s[%d] 未知形态：%s" % (block, index, shape))
+            shape_name = "" if not outer else _text(item.get("形态"), "%s[%d].形态" % (block, index))
+            judge = ""
+            if outer:
+                judge = _text(item.get("判定"), "%s[%d].判定" % (block, index))
+                # 装载期就试着解释一次：判定写错了要在这里报，不能带进战斗。
+                match_shape(parse_dna("000000000000"), judge)
             abilities: list[Mapping[str, object]] = []
             for ability in item.get("能力") or ():
                 abilities.append(require_mapping(ability, "%s[%d].能力" % (block, index)))
@@ -137,7 +197,8 @@ def load_bloodline_rules(dataset: Mapping[str, object]) -> BloodlineRules:
                     strength=_text(item.get("强度") or "极强", "%s[%d].强度" % (block, index)),
                     awake=bool(item.get("能觉醒")),
                     conditions=tuple(conditions),
-                    shape=shape,
+                    shape_name=shape_name,
+                    judge=judge,
                     abilities=tuple(abilities),
                     outer=outer,
                 )
@@ -167,7 +228,7 @@ def matched(rules: BloodlineRules, dna: str) -> tuple[Bloodline, ...]:
         if (
             all(lo <= groups[g - 1] < hi for g, lo, hi in b.conditions)
             if not b.outer
-            else match_shape(groups, b.shape)
+            else match_shape(groups, b.judge)
         )
     ]
     order = {"极强": 0, "强": 1, "中": 2, "弱": 3}

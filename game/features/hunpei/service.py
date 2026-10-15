@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Mapping, Sequence
 
+from game.core.asset import AssetService, InventoryAdjustment
 from game.core.character import CharacterNotFoundError, CharacterService
 from game.core.companion import CompanionService
 from game.core.data import JsonDataService
@@ -39,16 +40,22 @@ class HunpeiFeature:
         companion: CompanionService,
         database: DatabaseService,
         xuemai: XuemaiFeature,
+        asset: AssetService,
+        weizhi: object,
     ) -> None:
         self._data = data
         self._character = character
         self._companion = companion
         self._database = database
         self._xuemai = xuemai
+        self._asset = asset
+        #: 位置服务（玩法服务，只用来问「现在站在哪个地点功能上」）。
+        self._weizhi = weizhi
         self._initialized = False
         self._limit = DEFAULT_BIRTH_LIMIT
         self._medicine_code = ""
         self._medicine_cost = 0
+        self._location_function = ""
         self._copy: HunpeiCopy | None = None
         self._buttons: tuple[Mapping[str, str], ...] = ()
         self._random = random.SystemRandom()
@@ -69,8 +76,11 @@ class HunpeiFeature:
             raise RuntimeError("婚配规则数据集缺少「婚配」块")
         self._copy, self._buttons = load_hunpei_presentation(self._data.dataset("婚配展示"))
         self._limit = int(body.get("每代胎数上限") or DEFAULT_BIRTH_LIMIT)
+        #: 生育必须在哪个地点功能上（名字来自规则，代码不硬编码）。
+        self._location_function = str(body.get("地点功能") or "")
         medicine = body.get("生育丹")
         cell = medicine if isinstance(medicine, Mapping) else {}
+        # 「丹药」这一格放的是丹药编号（句柄一律用编号），照既有键名。
         self._medicine_code = str(cell.get("丹药") or "")
         self._medicine_cost = int(cell.get("每次消耗") or 0)
         self._initialized = True
@@ -115,7 +125,7 @@ class HunpeiFeature:
         value = dict(snapshot.value) if snapshot is not None and isinstance(snapshot.value, Mapping) else {}
         generation = int(value.get("代次") or 0)
         used = int(value.get("胎次") or 0)
-        can, reason = self._check(profile.gender, active, used)
+        can, reason = await self._check(user_id, profile.gender, active, used)
         return BirthView(
             companion_code=str(getattr(active, "companion_id", "") or ""),
             companion_name=str(getattr(active, "name", "") or ""),
@@ -126,9 +136,29 @@ class HunpeiFeature:
             births_limit=self._limit,
         )
 
-    def _check(self, gender: str, active: object, used: int) -> tuple[bool, str]:
+    async def _check(self, user_id: str, gender: str, active: object, used: int) -> tuple[bool, str]:
+        """规则里的六条条件，逐条落实。"""
+
         if used >= self._limit:
             return False, "本代胎数已满（%d 胎）" % self._limit
+        mate_gender = str(getattr(active, "gender", "") or "")
+        if gender and mate_gender and gender == mate_gender:
+            return False, "双方并非异性"
+        states = set(getattr(active, "states", ()) or ())
+        if states & {"伤重", "陨落", "死亡"}:
+            return False, "道侣伤重"
+        if self._medicine_code:
+            stacks = await self._asset.inventory_stacks(user_id, self._medicine_code)
+            total = sum(int(getattr(stack, "quantity", 0) or 0) for stack in stacks)
+            if total < max(1, self._medicine_cost):
+                return False, "没有生育丹"
+        # 地点是最后一道：前面都过了，再看站的地方对不对。
+        if self._location_function:
+            position = await self._weizhi.current(user_id)
+            location = getattr(position, "location", None)
+            functions = tuple(getattr(location, "available_functions", ()) or ())
+            if self._location_function not in functions:
+                return False, "须在%s" % self._location_function
         return True, ""
 
     async def birth(self, user_id: str) -> BirthResult:
@@ -172,6 +202,15 @@ class HunpeiFeature:
         value["胎次"] = state.births_this_generation + 1
         value.setdefault("代次", generation)
         value.setdefault("DNA", own_dna)
+        # 正式扣丹：与族谱写在同一次事务里，要么都成、要么都不成。
+        medicine_plan = await self._asset.plan_inventory_changes(
+            user_id,
+            (
+                InventoryAdjustment(
+                    self._medicine_code, "01", -max(1, self._medicine_cost)
+                ),
+            ),
+        )
         await self._database.commit(
             TransactionCommand(
                 user_id=user_id,
@@ -185,6 +224,7 @@ class HunpeiFeature:
                         value=value,
                         expected_version=snapshot.version if snapshot is not None else 0,
                     ),
+                    *tuple(medicine_plan.operations),
                 ),
                 payload={"新生儿": code, "DNA": child_dna, "胎次": value["胎次"]},
             )

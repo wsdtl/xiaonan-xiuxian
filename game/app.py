@@ -894,7 +894,12 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     xuemai = XuemaiFeature(data, character, database)
     xuemai.initialize()
     _bloodline_holder["xuemai"] = xuemai
-    hunpei = HunpeiFeature(data, character, companion, database, xuemai)
+    # 存档结构迁移：核心只提供注册口，迁移函数由玩法侧给（核心不 import 玩法）。
+    from game.core.database import register_migration
+    from game.features.xuemai.migrations import migrate_v1
+
+    register_migration(1, migrate_v1)
+    hunpei = HunpeiFeature(data, character, companion, database, xuemai, asset, weizhi)
     hunpei.initialize()
     renwu_peiyang = CharacterCultivationFeature(
         data,

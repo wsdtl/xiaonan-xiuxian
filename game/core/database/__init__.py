@@ -24,7 +24,7 @@ from .contracts import (
     TransactionReceipt,
 )
 from .service import DatabaseService
-from .storage import open_request_connections
+from .storage import SCHEMA_VERSION, open_request_connections, register_migration
 
 __all__ = [
     "CommittedTransaction",
@@ -35,6 +35,7 @@ __all__ = [
     "IdempotencyConflictError",
     "LocationMutation",
     "LocationRecord",
+    "SCHEMA_VERSION",
     "MutationChange",
     "NearbyLocationRecord",
     "SettlementTransactionPlan",
@@ -50,4 +51,5 @@ __all__ = [
     "TransactionCommand",
     "TransactionReceipt",
     "open_request_connections",
+    "register_migration",
 ]
