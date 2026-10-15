@@ -270,8 +270,31 @@ def main() -> int:
     for key in sorted(verdicts):
         out.write(f"{key}: {verdicts[key]}\n")
     out.write(inert_report(found))
+    #: 效果名：`.能力[].效果[]` 及其嵌套下的 `名称`，全库只许一个实体定义。
+    #: 路径判据**必须精确**——曾把战丹的 `使用效果` 误当 `效果`，改断了引用（见台账）。
+    effect_owners: dict[str, set[str]] = collections.defaultdict(set)
+
+    def scan_effect_names(node, entity_id, path=""):
+        if isinstance(node, dict):
+            if path.endswith(".效果[]") and isinstance(node.get("名称"), str) and node["名称"]:
+                effect_owners[node["名称"]].add(entity_id)
+            for key, value in node.items():
+                scan_effect_names(value, entity_id, path + "." + str(key))
+        elif isinstance(node, list):
+            for item in node:
+                scan_effect_names(item, entity_id, path + "[]")
+
+    for _source, entity_id, entry in entities():
+        scan_effect_names(entry, entity_id)
+    for name, owners in sorted(effect_owners.items()):
+        if len(owners) > 1:
+            failures.append(f"效果名「{name}」被多个实体定义：{sorted(owners)}")
+
     out.write("\n—— 卡片私有池的硬约束 ——\n")
-    out.write("计量、状态、战前状态必须逐实例唯一；判定与规则是引擎口令，不在此列。\n")
+    out.write(
+        "计量、状态、战前状态必须逐实例唯一；效果名（能力[].效果[] 下的名称）也必须全库唯一；"
+        "判定与规则是引擎口令，不在此列；天生规则[]／按钮／本命武器／地点设施是共享词汇表，不查。\n"
+    )
     if failures:
         out.write(f"不通过：{len(failures)} 项\n")
         for line in failures[:60]:
