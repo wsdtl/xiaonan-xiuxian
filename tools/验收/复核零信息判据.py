@@ -236,7 +236,7 @@ def _run_judge() -> int:
         [str(PYTHON), "-X", "utf8", JUDGE],
         cwd=str(ROOT),
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
         timeout=600,
     )
     return done.returncode

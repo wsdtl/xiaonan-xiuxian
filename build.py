@@ -199,7 +199,7 @@ def _提交() -> str:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            cwd=ROOT, capture_output=True, text=True, timeout=10, check=False,
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, check=False,
         )
         return result.stdout.strip() or "（未知）"
     except (OSError, subprocess.SubprocessError):
@@ -261,7 +261,7 @@ def 自检() -> None:
                 shutil.rmtree(目标)
         result = subprocess.run(
             [sys.executable, "-X", "utf8", "-c", 自检脚本],
-            cwd=部署, capture_output=True, text=True, timeout=300, check=False,
+            cwd=部署, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300, check=False,
         )
         tail = (result.stdout or "").strip().splitlines()[-2:]
         print("  自检输出：" + " / ".join(tail))
