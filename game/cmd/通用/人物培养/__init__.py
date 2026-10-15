@@ -101,7 +101,7 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
         "help": {
             "category": "修行",
             "summary": "消耗对应突破丹为人物突破境界",
-            "usage": ("人物突破 小还丹", "人物突破 丹药编号或名称",),
+            "usage": ("人物突破 01100005", "人物突破 丹药编号或名称",),
             "side_effect": "消耗纳戒中最低品级的一枚对应突破丹；须当前境界已满级且该境界还没突破过，突破抬高意境阶上限时会顺带发道行",
             "order": 30,
         },

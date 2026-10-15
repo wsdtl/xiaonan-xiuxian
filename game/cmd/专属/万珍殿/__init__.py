@@ -160,7 +160,7 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
             "category": "宗门",
             "summary": "由宗主或长老向本宗成员发放万珍殿成品",
             "usage": (
-                "发放万珍殿 云中鹤 小还丹", "发放万珍殿 角色名 珍物名[灵宝名]",
+                "发放万珍殿 云中鹤 01100005", "发放万珍殿 角色名 珍物名[灵宝名]",
                 "发放万珍殿 角色名或编号 珍物名[灵宝名] 数量",
             ),
             "side_effect": "扣除宗门成品，计入目标成员的个人藏库",
