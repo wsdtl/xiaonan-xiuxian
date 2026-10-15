@@ -76,7 +76,16 @@ async def show_character(user_id: str, manager: Any) -> None:
     except CharacterOverviewError:
         await manager.send(reply.overview_error())
         return
-    await manager.send(reply.overview(result, result.altitude_unit))
+    xuemai = current_game_services().features.xuemai
+    dna = await xuemai.dna(user_id)
+    await manager.send(
+        reply.overview(
+            result,
+            result.altitude_unit,
+            dna=dna,
+            bloodlines=xuemai.bloodlines(dna),
+        )
+    )
 
 
 __all__ = []

@@ -79,7 +79,10 @@ def overview_error() -> DocumentMessage:
 
 
 def overview(
-    result: CharacterOverviewResult, unit: str
+    result: CharacterOverviewResult,
+    unit: str,
+    dna: str = "",
+    bloodlines: tuple[str, ...] = (),
 ) -> DocumentMessage:
     character = result.character
     resources = dict(character.resources)
@@ -149,6 +152,11 @@ def overview(
     )
     if shield := resources.get("护盾", 0):
         builder.field("护盾", _display_number(shield))
+    # 血脉：DNA 与命中的血脉。没取到就不显示这一段（不许出现空栏目）。
+    if dna:
+        builder.section("血脉", icon="status")
+        builder.row(("DNA", dna))
+        builder.row(("血脉", "、".join(bloodlines) if bloodlines else "无"))
     # 意境：六条路各自记阶、道行共享；一条都没点过就整段不显示（不许出现空栏目）。
     if character.yijing:
         builder.section("意境", icon="status")

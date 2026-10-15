@@ -97,6 +97,8 @@ from .features.zongmen_tongxing import SectFollowFeature
 from .features.zongmen_wanzhen import WanzhenFeature
 from .features.zhuangpei import ZhuangpeiFeature
 from .features.zongmen_zhan import SectWarFeature
+from .features.xuemai import XuemaiFeature
+from .features.hunpei import HunpeiFeature
 from .startup import validate_startup_contracts
 from game.core.combat import expand_build_section
 
@@ -164,6 +166,8 @@ class FeatureServices:
     daolv_peiyang: CompanionCultivationFeature
     tanxian: ExplorationFeature
     taofa: RaidFeature
+    xuemai: XuemaiFeature
+    hunpei: HunpeiFeature
     duiwu: TeamFeature
     biguan: RetreatFeature
     caiyao: HerbGatheringFeature
@@ -394,7 +398,25 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("masters", formation_status.master_count),
         )
     )
-    combat = CombatService(data, formation)
+    # 血脉成长回调：xuemai 在同一次装配里晚于 combat 构造，所以先给一个 holder，
+    # 装配到 xuemai 之后再填进去（回调是**调用时**才取，构造顺序不影响）。
+    _bloodline_holder: dict[str, object] = {}
+
+    def _bloodline_growth(dna: str, hp_percent: object, race: str) -> dict[str, float]:
+        xuemai_service = _bloodline_holder.get("xuemai")
+        if xuemai_service is None:
+            return {}
+        return xuemai_service.combat_growth(dna, hp_percent, race)
+
+    combat = CombatService(data, formation, bloodline_growth=_bloodline_growth)
+
+    async def _bloodline_basic(user_id: str, race: str) -> dict[str, float]:
+        """角色侧：给【基础加法】（不乘倍率；乘倍率由角色的 _race_growth 负责）。"""
+        xuemai_service = _bloodline_holder.get("xuemai")
+        if xuemai_service is None:
+            return {}
+        dna = await xuemai_service.dna(user_id)
+        return xuemai_service.bloodline_growth(dna)
     combat_status = combat.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -424,6 +446,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         growth,
         forging,
         sect_library,
+        bloodline_growth=_bloodline_basic,
     )
     character_service_status = character.initialize()
     logger.opt(colors=True).success(
@@ -868,6 +891,11 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         innate_treasure,
     )
     daolv_jiejiao.initialize()
+    xuemai = XuemaiFeature(data, character, database)
+    xuemai.initialize()
+    _bloodline_holder["xuemai"] = xuemai
+    hunpei = HunpeiFeature(data, character, companion, database, xuemai)
+    hunpei.initialize()
     renwu_peiyang = CharacterCultivationFeature(
         data,
         character,
@@ -938,6 +966,8 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         renwu_peiyang=renwu_peiyang,
         daolv_peiyang=daolv_peiyang,
         tanxian=tanxian,
+        xuemai=xuemai,
+        hunpei=hunpei,
         taofa=taofa,
         duiwu=duiwu,
         biguan=biguan,
