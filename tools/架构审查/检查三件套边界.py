@@ -25,10 +25,31 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from game.core.combat.template_data import TEMPLATE_CLUSTERS  # noqa: E402
 CONTENT = ROOT / "data" / "战斗" / "内容"
 
-#: 计数类配额：用到叠层设施的功法卡占比上限（现状 97.7%，目标 ≤25%）。
+
+def collected_abilities(node: object) -> set[str]:
+    """整棵树里出现过的「能力」取值（展开后的树里直接就有，不再查模板库）。"""
+
+    found: set[str] = set()
+
+    def walk(item: object) -> None:
+        if isinstance(item, dict):
+            ability = item.get("能力")
+            if isinstance(ability, str):
+                found.add(ability)
+            for value in item.values():
+                walk(value)
+        elif isinstance(item, list):
+            for value in item:
+                walk(value)
+
+    walk(node)
+    return found
+
+#: 计数类配额：用到叠层设施的功法卡占比上限（目标 ≤25%）。
+#: 口径已变：原按「该效果引用的模板簇整体能力集」算（当时现状 97.7%），
+#: 数据展开成原子能力后改为「该效果自己树里出现的 能力」——更精确，现状 0%。
 COUNTER_QUOTA = 0.25
 #: 效果里的字符串叶子长度上限（现状最长 28，散文会远超它）。
 TEXT_LIMIT = 60
@@ -123,35 +144,6 @@ def _核对职责边界(arts, wills, breaths) -> int:
 
     #: 越界的真形态是**模板用错**，但哪几个模板算"气机的专用"必须先量出来再判，
     #: 不能凭猜（模板编号是内容地址，光看哈希认不出是谁的活）。这里先只报告交集。
-    def template_ids(node: object) -> set[str]:
-        found: set[str] = set()
-        if isinstance(node, dict):
-            if isinstance(node.get("模板"), str):
-                found.add(str(node["模板"]))
-            for value in node.values():
-                found |= template_ids(value)
-        elif isinstance(node, list):
-            for value in node:
-                found |= template_ids(value)
-        return found
-
-    art_t = [template_ids(c) for c in arts]
-    will_t = [template_ids(c) for c in wills]
-    breath_t = [template_ids(c) for c in breaths]
-    all_art = set().union(*art_t) if art_t else set()
-    all_will = set().union(*will_t) if will_t else set()
-    all_breath = set().union(*breath_t) if breath_t else set()
-    print(
-        f"       模板集合：功法 {len(all_art)} ｜ 真意 {len(all_will)} ｜ 气机 {len(all_breath)}"
-        f" ｜ 功法∩真意 {len(all_art & all_will)} ｜ 功法∩气机 {len(all_art & all_breath)}"
-    )
-    will_only = all_will - all_breath
-    breath_only = all_breath - all_will
-    print(
-        f"       真意独有 {len(will_only)} 个（其中 {len(will_only & all_art)} 个也被功法用了）"
-        f" ｜ 气机独有 {len(breath_only)} 个（其中 {len(breath_only & all_art)} 个也被功法用了）"
-    )
-
     passive_in_arts = [
         str(c.get("名称")) for c in arts if has_value(c, "能力", "被动技能")
     ]
@@ -187,12 +179,10 @@ def _核对主动形状(arts) -> int:
             if found:
                 return
             if isinstance(node, dict):
-                name = node.get("模板")
-                if isinstance(name, str):
-                    paths = (TEMPLATE_CLUSTERS.get(name) or [[], []])[1]
-                    if any(str(item).endswith("/目标/能力") or str(item).endswith("/目标/范围") for item in paths):
-                        found = True
-                        return
+                target = node.get("目标")
+                if isinstance(target, dict) and ({"能力", "范围"} & set(target)):
+                    found = True
+                    return
                 for value in node.values():
                     walk(value)
             elif isinstance(node, list):
@@ -221,10 +211,9 @@ def _核对主动形状(arts) -> int:
 
         def walk(node: object) -> None:
             if isinstance(node, dict):
-                name = node.get("模板")
-                if isinstance(name, str):
-                    for ability in (TEMPLATE_CLUSTERS.get(name) or [[]])[0]:
-                        found.add(str(ability))
+                ability = node.get("能力")
+                if isinstance(ability, str):
+                    found.add(ability)
                 for value in node.values():
                     walk(value)
             elif isinstance(node, list):
@@ -275,13 +264,16 @@ def _核对计数占比(arts) -> int:
     declare_keys = ("计量", "状态", "名称", "判定", "事实", "规则", "保存结果", "关联")
 
     def declaring(node: object) -> bool:
-        params = node.get("参数") if isinstance(node, dict) else None
-        if not isinstance(params, dict):
+        """树里有没有「声明」—— 展开后不再有参数包，直接在树里找声明键。"""
+
+        if not isinstance(node, dict):
             return False
-        return any(
+        if any(
             str(key).split("/")[-1] in declare_keys and isinstance(value, str) and value
-            for key, value in params.items()
-        )
+            for key, value in node.items()
+        ):
+            return True
+        return any(declaring(value) for value in node.values())
 
     refs = 0
     counted = 0
@@ -293,10 +285,10 @@ def _核对计数占比(arts) -> int:
             if not isinstance(effects, list):
                 continue
             for effect in effects:
-                if not isinstance(effect, dict) or not isinstance(effect.get("模板"), str):
+                if not isinstance(effect, dict):
                     continue
                 refs += 1
-                if set(TEMPLATE_CLUSTERS.get(effect["模板"], [[]])[0]) & set(counters) and not declaring(effect):
+                if collected_abilities(effect) & set(counters) and not declaring(effect):
                     counted += 1
     total = refs or 1
     counter_share = counted / total
