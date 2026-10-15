@@ -22,10 +22,9 @@
 
 * 渲染器是只读的，只输出数据里真实存在的东西。在它那儿合并等于把数据的毛病盖住，
   下一个人照抄一遍照样出（`card_text.py` 里曾经加过、已撤掉）。
-* 装载期只负责把模板引用展开成完整树。
+* 装载期只做装载（模板机制已退役，不再有展开这一步）。
 
-所以这条规则必须由**数据与模板主体**满足：`tools/库/构筑模板.py` 的收集与迁移共用
-本模块这一份实现，模板主体也要过 `fold_template_library.py` 那一遍。
+所以这条规则必须由**数据自己**满足：收集与迁移共用本模块这一份实现。
 """
 
 from __future__ import annotations
@@ -34,7 +33,6 @@ import json
 from typing import Any
 
 ABILITY = "能力"
-TEMPLATE_KEY = "模板"
 
 #: 一个时点上只可能发生一次的**加法**动作。
 INCREMENTS = ("修改构筑计量", "修改状态层数")
@@ -109,8 +107,6 @@ def fold_repeats(node: Any) -> Any:
 
 def _fold_walk(node: Any) -> Any:
     if isinstance(node, dict):
-        if TEMPLATE_KEY in node:
-            return node
         return {key: _fold_walk(value) for key, value in node.items()}
     if isinstance(node, list):
         return [_fold_walk(item) for item in _merge_same_counter(_fold_identical(node))]
