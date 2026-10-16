@@ -116,6 +116,9 @@ class HunpeiFeature:
         active = await self._companion.active(user_id)
         if active is None:
             return BirthView("", "", False, "没有同行道侣", 0, 0, self._limit)
+        # 道侣的名字与性别都在它的定义里（ActiveCompanion 只存编号与版本号）。
+        mate_code = str(getattr(active, "companion_id", "") or "")
+        mate_name = self._companion.definition(mate_code).name if mate_code else ""
         try:
             profile = await self._character.profile(user_id)
         except CharacterNotFoundError as exc:
@@ -127,8 +130,8 @@ class HunpeiFeature:
         used = int(value.get("胎次") or 0)
         can, reason = await self._check(user_id, profile.gender, active, used)
         return BirthView(
-            companion_code=str(getattr(active, "companion_id", "") or ""),
-            companion_name=str(getattr(active, "name", "") or ""),
+            companion_code=mate_code,
+            companion_name=mate_name,
             can_birth=can,
             reason=reason,
             generation=generation,
@@ -139,14 +142,21 @@ class HunpeiFeature:
     async def _check(self, user_id: str, gender: str, active: object, used: int) -> tuple[bool, str]:
         """规则里的六条条件，逐条落实。"""
 
+        # 寿元将尽：血脉失效、也不能再生养（补救的路是传位）。
+        profile = await self._character.profile(user_id)
+        if bool(getattr(profile, "lifespan_full", False)):
+            return False, "你寿元将尽，须先传位"
         if used >= self._limit:
             return False, "本代胎数已满（%d 胎）" % self._limit
-        mate_gender = str(getattr(active, "gender", "") or "")
-        if gender and mate_gender and gender == mate_gender:
-            return False, "双方并非异性"
-        states = set(getattr(active, "states", ()) or ())
-        if states & {"伤重", "陨落", "死亡"}:
-            return False, "道侣伤重"
+        # 道侣的性别要从它的定义里取：ActiveCompanion 只存道侣编号与版本号。
+        mate_id = str(getattr(active, "companion_id", "") or "")
+        if mate_id and gender:
+            mate_gender = str(self._companion.definition(mate_id).gender or "")
+            if mate_gender and gender == mate_gender:
+                return False, "双方并非异性"
+        # 道侣寿元将尽：血脉失效，也不能再生养（补救的路是夺元重置）。
+        if mate_id and await self._companion.lifespan_full(user_id, mate_id):
+            return False, "道侣寿元将尽"
         if self._medicine_code:
             stacks = await self._asset.inventory_stacks(user_id, self._medicine_code)
             total = sum(int(getattr(stack, "quantity", 0) or 0) for stack in stacks)
@@ -169,7 +179,7 @@ class HunpeiFeature:
         if not state.can_birth:
             raise BirthDeniedError(state.reason)
         own_dna = await self._xuemai.dna(user_id)
-        mother_dna = await self._companion_dna(state.companion_code)
+        mother_dna = await self.companion_dna(state.companion_code)
         sex = "女" if self._random.random() < 0.5 else "男"
         child_dna = self._xuemai.breed(own_dna, mother_dna, sex)
         generation = state.generation
@@ -240,7 +250,7 @@ class HunpeiFeature:
             medicine_name="",
         )
 
-    async def _companion_dna(self, companion_code: str) -> str:
+    async def companion_dna(self, companion_code: str) -> str:
         """道侣的 DNA：另存一份状态，首次固定。"""
 
         if not companion_code:

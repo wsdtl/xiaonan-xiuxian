@@ -102,6 +102,8 @@ class CompanionService:
         #: （`attach_races`），回填时当场校验 `道侣.json.可选种族` 里的族名都登记过。
         self._race_options: tuple[str, ...] = ()
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
+        #: 取道侣 DNA 的取法（玩法回填）：(道侣编号) -> DNA 串。没回填时进战斗不带 DNA。
+        self._dna_of: object | None = None
 
     def initialize(self) -> CompanionStatus:
         if self._initialized:
@@ -450,6 +452,23 @@ class CompanionService:
             gender=definition.gender,
             five_elements=dict(instance.five_elements),
             inherent_rules=self.inherent_rules(instance.companion_id),
+            dna=(
+                str(await self._dna_of(instance.companion_id) or "")
+                if self._dna_of is not None
+                else ""
+            ),
+            bloodline_disabled=await self.lifespan_full(user_id, instance.companion_id),
+            # 道侣也吃「等级成长 ×（觉醒倍数 + 意境百分比）」：这里给出那一份，
+            # 资质倍率照它自己的成长结算用同一份（见上方 plan_growth）。
+            # 觉醒倍数由引擎按 actor.dna 取档加上；道侣目前没有意境，所以意境那半是 0。
+            growth_base={
+                str(key): float(value)
+                for key, value in self._growth.cultivator_attribute_growth(
+                    max(0, int(instance.level) - 1),
+                    multiplier=_qualification_multiplier(instance, definition, self.rules()),
+                ).items()
+            },
+            growth_amplifier=1.0,
         )
 
     async def plan_growth(
@@ -1059,6 +1078,32 @@ class CompanionService:
             self._active_instance_operations(user_id, current, after),
         )
 
+    async def refresh_contract_time(
+        self, user_id: str, companion_id: str, occurred_at: str
+    ) -> StateMutation:
+        """把「首次邀约时间」刷成指定时刻。
+
+        夺元护契会把道侣实例重置为初境一级（新的身体），这里顺带把结契时间也刷新，
+        于是道侣年龄归零、寿元将尽随之解除——这才是护契那条补救路。
+        """
+
+        relation = await self.relation(user_id, companion_id)
+        after = CompanionRelation(
+            relation.companion_id,
+            relation.current_affection,
+            relation.gift_totals,
+            relation.first_full_at,
+            occurred_at,
+            relation.version + 1,
+        )
+        return StateMutation(
+            _user_id(user_id),
+            RELATION_STATE,
+            companion_id,
+            _relation_value(after),
+            relation.version,
+        )
+
     async def plan_severance(self, user_id: str) -> CompanionSeverancePlan:
         """归零当前同行道侣好感并解除同行，保留全部历史事实。"""
 
@@ -1565,6 +1610,11 @@ class CompanionService:
             weapon_laws,
         )
 
+    def attach_dna(self, getter: object) -> None:
+        """回填「按道侣编号取 DNA」的取法（玩法注入）；没回填时进战斗就不带 DNA。"""
+
+        self._dna_of = getter
+
     def attach_races(self, races: Mapping[str, Mapping[str, object]]) -> None:
         """回填种族登记表并**当场校验**道侣的种族池（组合根在角色核心就绪后调用）。
 
@@ -1591,6 +1641,45 @@ class CompanionService:
         if not normalized:
             raise CompanionStateError("道侣编号不能为空")
         return random.Random(f"道侣种族:{normalized}").choice(self._race_options)
+
+    async def lifespan_full(self, user_id: str, companion_id: str) -> bool:
+        """这名道侣是否寿元将尽：年龄 ≥ 境界寿元 × 种族寿元系数。
+
+        道侣没有修行日数，也不需要玩家的年龄——**年龄按结契至今的天数走**，
+        所以玩家传位换壳不影响它。没结契或没实例时算未将尽。
+        """
+
+        relation = await self.relation(user_id, companion_id)
+        if not relation.first_invited_at:
+            raise CompanionStateError("道侣关系缺「首次邀约时间」，年龄无从算起")
+        instance = await self.instance(user_id, companion_id)
+        if instance is None:
+            return False
+        race = self.race_of(companion_id)
+        entry = self._races.get(race) or {}
+        factor = float(entry.get("寿元系数") or 1.0)
+        lifespan = int(round(self._growth.realm(instance.realm_id).lifespan * factor))
+        from datetime import datetime, timezone
+
+        started = datetime.fromisoformat(relation.first_invited_at)
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        days = (datetime.now(timezone.utc) - started).total_seconds() / 86400
+        age = int(self._relation_rule_base_age() + days)
+        return age >= lifespan
+
+    def _relation_rule_base_age(self) -> int:
+        """道侣的起始年龄：与玩家同一份「创建.初始年龄」。"""
+
+        rules = self._data.dataset("角色规则")
+        person = rules.get("人物") if isinstance(rules, Mapping) else None
+        creation = person.get("创建") if isinstance(person, Mapping) else None
+        if not isinstance(creation, Mapping):
+            return 16
+        try:
+            return int(creation.get("初始年龄") or 16)
+        except (TypeError, ValueError):
+            return 16
 
     def inherent_rules(self, companion_id: str) -> tuple[Mapping[str, object], ...]:
         """这名道侣的**天生锁定技**（种族那一层，交给参战者固有规则）。"""

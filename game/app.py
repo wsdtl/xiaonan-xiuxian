@@ -402,21 +402,44 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     # 装配到 xuemai 之后再填进去（回调是**调用时**才取，构造顺序不影响）。
     _bloodline_holder: dict[str, object] = {}
 
-    def _bloodline_growth(dna: str, hp_percent: object, race: str) -> dict[str, float]:
+    def _bloodline_awaken(dna: str, hp_percent: object) -> float:
+        """战斗侧：觉醒倍数（只出倍数；血脉加法不再乘它）。"""
+
+        xuemai_service = _bloodline_holder.get("xuemai")
+        if xuemai_service is None:
+            return 1.0
+        return float(xuemai_service.awaken(hp_percent))
+
+    def _bloodline_growth(dna: str) -> dict[str, float]:
         xuemai_service = _bloodline_holder.get("xuemai")
         if xuemai_service is None:
             return {}
-        return xuemai_service.combat_growth(dna, hp_percent, race)
+        return xuemai_service.combat_growth(dna)
 
-    combat = CombatService(data, formation, bloodline_growth=_bloodline_growth)
+    combat = CombatService(
+        data, formation, bloodline_growth=_bloodline_growth, bloodline_awaken=_bloodline_awaken
+    )
 
-    async def _bloodline_basic(user_id: str, race: str) -> dict[str, float]:
-        """角色侧：给【基础加法】（不乘倍率；乘倍率由角色的 _race_growth 负责）。"""
+    async def _bloodline_basic(user_id: str) -> dict[str, float]:
+        """角色侧：给【基础加法】（不乘任何倍率）。"""
         xuemai_service = _bloodline_holder.get("xuemai")
+        character_service = _bloodline_holder.get("character")
         if xuemai_service is None:
             return {}
+        # 寿元将尽：血脉失效，加成不再生效（补救的路是传位）。
+        if character_service is not None:
+            profile = await character_service.profile(user_id)
+            if bool(getattr(profile, "lifespan_full", False)):
+                return {}
         dna = await xuemai_service.dna(user_id)
         return xuemai_service.bloodline_growth(dna)
+
+    async def _bloodline_dna(user_id: str) -> str:
+        """角色侧：给这一场战斗用的血脉 DNA（寿元将尽也带着，由失效标志决定算不算）。"""
+        xuemai_service = _bloodline_holder.get("xuemai")
+        if xuemai_service is None:
+            return ""
+        return await xuemai_service.dna(user_id)
     combat_status = combat.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -447,6 +470,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         forging,
         sect_library,
         bloodline_growth=_bloodline_basic,
+        bloodline_dna=_bloodline_dna,
     )
     character_service_status = character.initialize()
     logger.opt(colors=True).success(
@@ -460,6 +484,16 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     # 种族表归角色核心读（`角色/规则/种族/种族.json`）。道侣核心比它先构造，所以在这里回填：
     # 回填当场校验 `道侣.json.种族池`，池子里写了没登记的族名照样是启动错误。
     companion.attach_races(character.races())
+
+    async def _companion_dna_getter(companion_id: str) -> str:
+        """道侣侧：给这一场战斗用的血脉 DNA（hunpei 在同一装配里晚建，用 holder 延迟取）。"""
+
+        hunpei_service = _bloodline_holder.get("hunpei")
+        if hunpei_service is None:
+            return ""
+        return await hunpei_service.companion_dna(companion_id)
+
+    companion.attach_dna(_companion_dna_getter)
     injury = InjuryService(data, database)
     injury_status = injury.initialize()
     logger.opt(colors=True).success(
@@ -894,6 +928,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     xuemai = XuemaiFeature(data, character, database)
     xuemai.initialize()
     _bloodline_holder["xuemai"] = xuemai
+    _bloodline_holder["character"] = character
     # 存档结构迁移：核心只提供注册口，迁移函数由玩法侧给（核心不 import 玩法）。
     from game.core.database import register_migration
     from game.features.xuemai.migrations import migrate_v1
@@ -901,6 +936,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     register_migration(1, migrate_v1)
     hunpei = HunpeiFeature(data, character, companion, database, xuemai, asset, weizhi)
     hunpei.initialize()
+    _bloodline_holder["hunpei"] = hunpei
     renwu_peiyang = CharacterCultivationFeature(
         data,
         character,

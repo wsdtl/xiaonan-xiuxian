@@ -156,7 +156,9 @@ def overview(
     if dna:
         builder.section("血脉", icon="status")
         builder.row(("DNA", dna))
-        builder.row(("血脉", "、".join(bloodlines) if bloodlines else "无"))
+        if bool(getattr(unit, "lifespan_full", False)):
+            # 寿元将尽：血脉失效，加成不再生效（补救的路是传位）。
+            builder.row(("血脉", "寿元将尽·血脉失效"))
     # 意境：六条路各自记阶、道行共享；一条都没点过就整段不显示（不许出现空栏目）。
     if character.yijing:
         builder.section("意境", icon="status")

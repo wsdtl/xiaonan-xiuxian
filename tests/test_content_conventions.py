@@ -215,13 +215,12 @@ def test_companions_have_a_registered_race(services) -> None:
 
 
 def test_race_side_layers_are_readable(services) -> None:
-    """种族的另外三样也要读得出来：寿元系数、成长修正、卡池来源。"""
+    """种族的另外两样也要读得出来：寿元系数、卡池来源。
 
-    attributes = services.data.dataset("战斗定义").get("属性") or {}
+    「成长修正」已废除（委托方 2026-10-16：种族只留天生锁定技），所以不再断言两边一致。
+    """
+
     for name in services.enemy.races():
-        assert services.enemy.growth_factors(name) == services.character.race_growth_factors(name)
-        for key in services.enemy.growth_factors(name):
-            assert key in attributes, f"{name} 的成长修正用了没登记的属性：{key}"
         assert services.enemy.pool_source(name) in {"敌方修士", "灵兽"}
         assert services.character.race_lifespan_factor(name) > 0
     assert services.character.race_lifespan_factor("人族") == 1.0

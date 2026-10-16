@@ -176,27 +176,19 @@ class XuemaiFeature:
                     out[str(key)] = out.get(str(key), 0.0) + float(Decimal(str(value)) * scale)
         return out
 
-    def combat_growth(self, dna: str, hp_percent: object, race: str) -> dict[str, float]:
-        """铁律的中括号：血脉加法 x 觉醒倍数，再乘成长倍率。
+    def combat_growth(self, dna: str) -> dict[str, float]:
+        """血脉那一份：**只出基础加法**。
 
         属性 = 基础（含覆盖）
-             + （等级成长 + 血脉加法 x 觉醒倍数）x 成长倍率
-             + 意境加法 + 武器攻击
+             + 意境 + 血脉
+             + 等级成长 x (觉醒倍数 + 意境百分比)
+             + 武器攻击
 
-        这里只算括号里的血脉那一份（等级成长由成长服务出）。
-        成长倍率取种族系数（character.race_growth_factors），与等级成长共用同一份系数。
+        觉醒倍数按当前气血取档（见 `awaken`），由引擎乘在**等级成长那一份**上
+        （`core/combat/engine.py` 的 `_growth_at_action_start`）；这里不再乘任何倍率。
         """
 
-        growth = self.awakened_growth(dna, hp_percent)
-        if not growth:
-            return {}
-        factors = self._character.race_growth_factors(race) if race else {}
-        if not factors:
-            return growth
-        return {
-            str(key): float(value) * float(factors.get(str(key), 1.0))
-            for key, value in growth.items()
-        }
+        return self.bloodline_growth(dna)
 
     def awaken(self, hp_percent: object) -> object:
         """按真实气血百分比取觉醒倍率（护盾不计入）。"""

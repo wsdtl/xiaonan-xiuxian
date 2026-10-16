@@ -141,8 +141,13 @@ class CombatantSpec:
     counts_for_victory: bool = True
     #: 血脉的 DNA（12 位）：从角色存档带进战斗，供「行动开始按气血重算血脉」用。
     dna: str = ""
-    #: 种族：血脉的成长倍率按它取（见 character.race_growth_factors）。
-    race: str = ""
+
+    #: 血脉是否失效（寿元将尽）：为真则这一场不算血脉那一份。
+    bloodline_disabled: bool = False
+    #: **等级成长那一份**（属性 → 增量）：从 1 级到当前级累计的等级成长。它要被「放大成长的百分比」乘。
+    growth_base: Mapping[str, float] = field(default_factory=dict)
+    #: **放大成长的百分比之和**（觉醒倍数 + 意境百分比）。等级成长那一份乘它；1.0 表示不放大。
+    growth_amplifier: float = 1.0
 
 
     content_id: str = ""

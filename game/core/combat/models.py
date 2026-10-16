@@ -697,10 +697,15 @@ class Fighter(RuntimeExtensions):
     team_synergy: dict[str, int] = dataclass_field(default_factory=dict)
     #: 上一轮行动加进去的血脉量：重算时先减掉，避免叠加。
     bloodline_applied: dict[str, float] = dataclass_field(default_factory=dict)
+    #: 血脉是否失效（寿元将尽）：为真则这一场不加血脉那一份。
+    bloodline_disabled: bool = False
+    #: 等级成长那一份（属性 → 增量）＋放大它的百分比之和；重算时先减旧再加新。
+    growth_base: Mapping[str, float] = dataclass_field(default_factory=dict)
+    growth_amplifier: float = 1.0
+    growth_applied: dict[str, float] = dataclass_field(default_factory=dict)
     #: 血脉的 DNA（12 位）：从参战者快照带进来，供「行动开始按气血重算血脉」用。
     dna: str = ""
-    #: 种族：血脉的成长倍率按它取。
-    race: str = ""
+
     #: 按拦截点分好的规则表 + 它对应的版本号（见 `mechanics._container_rules`）。
     rules_cache: dict = dataclass_field(default_factory=dict, init=False, repr=False)
     rules_cache_version: int = dataclass_field(default=-1, init=False, repr=False)
@@ -888,8 +893,12 @@ class RuntimeCombatantSnapshot:
     counts_for_victory: bool = True
     #: 血脉的 DNA（12 位）：随快照进战斗。
     dna: str = ""
-    #: 种族：血脉的成长倍率按它取。
-    race: str = ""
+    #: 血脉是否失效（寿元将尽）。
+    bloodline_disabled: bool = False
+    #: 等级成长那一份（属性 → 增量），与放大它的百分比之和。
+    growth_base: Mapping[str, float] = dataclass_field(default_factory=dict)
+    growth_amplifier: float = 1.0
+
     tags: tuple[str, ...] = ()
     tactic: tuple[Mapping[str, Any], ...] = ()
     battle_profile: Mapping[str, Any] = dataclass_field(default_factory=dict)

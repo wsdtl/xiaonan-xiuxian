@@ -89,11 +89,13 @@ class CombatService:
         data: JsonDataService,
         formation: FormationService,
         bloodline_growth: object | None = None,
+        bloodline_awaken: object | None = None,
     ) -> None:
         self._data = data
         self._formation = formation
         #: 血脉成长回调（玩法注入），透传给引擎；None = 没接线。
         self._bloodline_growth = bloodline_growth
+        self._bloodline_awaken = bloodline_awaken
         self._engine: BattleEngine | None = None
         self._report_catalog: BattleReportCatalog | None = None
         self._build_count = 0
@@ -122,6 +124,7 @@ class CombatService:
             foundation,
             recorded_facts=report_catalog.recorded_facts,
             bloodline_growth=self._bloodline_growth,
+            bloodline_awaken=self._bloodline_awaken,
         )
         report_catalog.validate_event_kinds(tuple(self._engine.catalog.events))
         self._report_catalog = report_catalog
@@ -386,7 +389,9 @@ class CombatService:
             tactic=tuple(copy.deepcopy(value.tactic)),
             battle_profile=copy.deepcopy(dict(value.battle_profile)),
             dna=value.dna,
-            race=value.race,
+            bloodline_disabled=bool(value.bloodline_disabled),
+            growth_base=dict(value.growth_base),
+            growth_amplifier=float(value.growth_amplifier),
             five_elements=copy.deepcopy(dict(value.five_elements)),
         )
 

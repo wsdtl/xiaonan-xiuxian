@@ -107,6 +107,7 @@ class CharacterService:
         forging: ForgingService,
         sect_library: SectLibraryService | None = None,
         bloodline_growth: object | None = None,
+        bloodline_dna: object | None = None,
     ) -> None:
         self._data = data
         self._database = database
@@ -116,9 +117,12 @@ class CharacterService:
         self._growth = growth
         self._forging = forging
         self._sect_library = sect_library
-        #: 血脉基础加法回调（玩法注入，async）：(用户, 种族) -> {属性: 数值}。
-        #: 它给的是【基础加法】，乘成长倍率由下面的 _race_growth 负责，正好是铁律。
+        #: 血脉基础加法回调（玩法注入，async）：(用户) -> {属性: 数值}。
+        #: 它给的是【基础加法】，不乘任何倍率。
         self._bloodline_growth = bloodline_growth
+        #: 取血脉 DNA 的回调（玩法注入，async）：(用户) -> DNA 串。
+        #: 同理，核心不依赖玩法；没注入时进战斗就不带 DNA。
+        self._bloodline_dna = bloodline_dna
         self._initialized = False
         self._role_rule: Mapping[str, object] = {}
         self._gender_values: tuple[str, ...] = ()
@@ -331,30 +335,6 @@ class CharacterService:
         return int(base + progress)
 
 
-    def race_growth_factors(self, race: str) -> dict[str, float]:
-        """种族的**成长修正**：属性 → 倍率（没写就是空表，等于不修正）。"""
-
-        self._require_initialized()
-        name = str(race or "").strip()
-        entry = self._races.get(name)
-        if entry is None:
-            raise JsonDataError(f"未登记的种族：{name or '<空>'}")
-        raw = entry.get("成长修正") or {}
-        if not isinstance(raw, Mapping):
-            raise JsonDataError(f"{name}.成长修正必须是对象")
-        return {str(key): float(value) for key, value in raw.items()}
-
-    def _race_growth(self, race: str, growth: Mapping[str, float]) -> dict[str, float]:
-        """成长那一份按种族系数缩一遍（只乘增量，不动已有属性）。"""
-
-        factors = self.race_growth_factors(race)
-        if not factors:
-            return dict(growth)
-        return {
-            str(key): float(value) * factors.get(str(key), 1.0)
-            for key, value in growth.items()
-        }
-
     def race_pool_source(self, race: str) -> str:
         """种族的**卡池来源**：从哪一套阶梯池抽卡（默认敌方修士，可选灵兽）。"""
 
@@ -521,39 +501,45 @@ class CharacterService:
 
     def _yijing_battle(
         self, profile: CharacterProfile, attributes: dict[str, object], weapon_attack: float
-    ) -> tuple[float, tuple[CombatStatusSpec, ...]]:
+    ) -> tuple[float, tuple[CombatStatusSpec, ...], float]:
         """把人物身上的意境落进战斗快照。
 
-        **每条点过的路各落一个状态**：基础数值并进属性（开局上限与初始值只认属性，
-        状态修正改不了它们），本路增幅写进状态修正（战斗中读数生效）。
+        **每条点过的路各落一个状态**：增幅里归属为「参战者属性」的项并进属性
+        （开局上限与初始值只认属性，状态修正改不了它们），归属为「状态修正」的项写进状态修正。
         各路的动态档用**数据里各自的计量名**——战斗核心的计量键是（参战者、构筑实例、计量名），
         所以六路同时开着也各有各的档、互不串。
         """
 
         statuses: list[CombatStatusSpec] = []
+        #: 放大「等级成长那一份」的百分比之和（小数）：意境的百分比项按阶数累加。
+        amplifier = 0.0
         for yijing in profile.yijing:
             row = self._data.entity("意境", yijing.content_id)
             carrier = _mapping(row.get("载体"), "意境.载体")
-            basics = _mapping(_mapping(carrier.get("基础数值"), "意境.基础数值").get("每阶"), "意境.基础数值.每阶")
-            absolute = {str(name) for name in (_mapping(carrier.get("基础数值"), "意境.基础数值").get("绝对值") or ())}
-            for name, step in basics.items():
-                key = str(name)
-                if key in absolute:
-                    if key == "器的量":
-                        weapon_attack += float(step) * yijing.tier
-                    else:
-                        base = _number(attributes.get(key, 0), f"意境.{key}")
-                        attributes[key] = base + float(step) * yijing.tier
-                    continue
-                base = _number(attributes.get(key, 0), f"意境.{key}")
-                attributes[key] = base + base * float(step) * yijing.tier / 100.0
+            # 基础数值与增幅已合成一张表：每项自己写 口径（绝对值/百分比）与 归属（参战者属性/状态修正）。
             amp = _mapping(carrier.get("增幅"), "意境.载体.增幅")
             per_tier = _mapping(amp.get("每阶"), "意境.增幅.每阶")
             baseline = _mapping(amp.get("基准"), "意境.增幅.基准")
-            modifiers = tuple(
-                (str(name), float(baseline.get(name, 0)) + float(step) * yijing.tier)
-                for name, step in per_tier.items()
-            )
+            modifiers_list: list[tuple[str, float]] = []
+            for name, spec in per_tier.items():
+                key = str(name)
+                cell = _mapping(spec, f"意境.增幅.每阶.{key}")
+                step = float(_number(cell.get("数值"), f"意境.增幅.每阶.{key}.数值"))
+                caliber = _state_text(cell.get("口径"), f"意境.增幅.每阶.{key}.口径")
+                owner = _state_text(cell.get("归属"), f"意境.增幅.每阶.{key}.归属")
+                if owner == "状态修正":
+                    modifiers_list.append((key, float(baseline.get(key, 0)) + step * yijing.tier))
+                    continue
+                if key == "器的量":
+                    weapon_attack += step * yijing.tier
+                elif caliber == "百分比":
+                    # 这是「放大等级成长」的百分比，**不加到基础值上**（委托方 2026-10-16 最终口径：
+                    # 基础攻击太小、加百分比等于没有效果），累加成系数交给等级成长那一份去乘。
+                    amplifier += step * yijing.tier / 100.0
+                else:
+                    base = _number(attributes.get(key, 0), f"意境.{key}")
+                    attributes[key] = base + step * yijing.tier
+            modifiers = tuple(modifiers_list)
             raw_listeners = row.get("质变监听") or {}
             picked = (
                 [value for key, value in raw_listeners.items() if key.isdigit() and int(key) <= yijing.tier]
@@ -563,23 +549,45 @@ class CharacterService:
             listeners = [dict(value) for value in picked if isinstance(value, Mapping)]
             counter = _mapping(row.get("战斗档"), "意境.战斗档")
             counter_name = _state_text(counter.get("计量"), "意境.战斗档.计量")
-            if listeners:
-                # 动态档的计量由核心开：数据不知道玩家买到几阶，上限只能在这儿给。
+            # 动态档的计量由核心开：数据不知道玩家买到几阶，上限只能在这儿给。
+            # **无条件开**：涨档要靠它，跟这条路上有没有质变监听无关。
+            listeners.append(
+                {
+                    "能力": "监听事件",
+                    "事件": "行动开始",
+                    "观察角色": "行动者",
+                    "阵营关系": "自身",
+                    "效果": [
+                        {
+                            "能力": "修改构筑计量",
+                            "计量": counter_name,
+                            "方式": "增加",
+                            "数值": 0,
+                            "初始值": 0,
+                            "最低值": 0,
+                            "最高值": yijing.tier,
+                            "目标": {"能力": "选择目标", "范围": "自身"},
+                        }
+                    ],
+                    "每次行动最多触发": 1,
+                }
+            )
+            # 涨档：**事件与观察角色都写在数据里**（各路的「涨一档看什么」），核心只把上限兜住
+            # （上面那条的「最高值＝激活阶」）。数据没写涨法就不挂——那一路的动态档就一直是 0。
+            rise = counter.get("涨")
+            if isinstance(rise, Mapping):
                 listeners.append(
                     {
                         "能力": "监听事件",
-                        "事件": "行动开始",
-                        "观察角色": "行动者",
+                        "事件": _state_text(rise.get("事件"), "意境.战斗档.涨.事件"),
+                        "观察角色": _state_text(rise.get("观察"), "意境.战斗档.涨.观察"),
                         "阵营关系": "自身",
                         "效果": [
                             {
                                 "能力": "修改构筑计量",
                                 "计量": counter_name,
                                 "方式": "增加",
-                                "数值": 0,
-                                "初始值": 0,
-                                "最低值": 0,
-                                "最高值": yijing.tier,
+                                "数值": 1,
                                 "目标": {"能力": "选择目标", "范围": "自身"},
                             }
                         ],
@@ -605,7 +613,7 @@ class CharacterService:
                     source_name=yijing.name,
                 )
             )
-        return weapon_attack, tuple(statuses)
+        return weapon_attack, tuple(statuses), amplifier
 
     async def combatant(
         self, user_id: str, *, profile: CharacterProfile | None = None
@@ -623,10 +631,13 @@ class CharacterService:
             profile = await self.profile(user_id)
         attributes = dict(profile.attributes)
         resources = dict(profile.resources)
-        # 意境：基础数值要先并进属性（开局上限与初始值只认属性），增幅走状态修正。
-        weapon_attack, yijing_statuses = self._yijing_battle(
+        # 意境：归属为「参战者属性」的项要先并进属性（开局上限与初始值只认属性），其余走状态修正。
+        weapon_attack, yijing_statuses, yijing_amplifier = self._yijing_battle(
             profile, attributes, float(profile.weapon.attack)
         )
+        dna = ""
+        if self._bloodline_dna is not None:
+            dna = str(await self._bloodline_dna(profile.user_id) or "")
         build = tuple(
             CombatBuildRef(
                 section=value.category,
@@ -644,6 +655,8 @@ class CharacterService:
         return CombatantSpec(
             id=f"player:{profile.user_id}",
             name=profile.name,
+            dna=dna,
+            bloodline_disabled=bool(profile.lifespan_full),
             attributes=attributes,
             level=profile.level,
             combatant_type=profile.character_type,
@@ -659,6 +672,14 @@ class CharacterService:
             five_elements=dict(profile.five_elements),
             inherent_rules=self.inherent_rules(profile.race),
             prepared_statuses=yijing_statuses,
+            # 铁律：等级成长那一份 ×（觉醒倍数 + 意境百分比）。觉醒按战斗内气血取，由引擎加。
+            growth_base={
+                str(key): float(value)
+                for key, value in self._growth.cultivator_attribute_growth(
+                    max(0, int(profile.level) - 1)
+                ).items()
+            },
+            growth_amplifier=1.0 + yijing_amplifier,
         )
 
     async def create(self, command: CharacterCreateCommand) -> CharacterCreationResult:
@@ -755,22 +776,17 @@ class CharacterService:
             raise CharacterCultivationError(str(exc)) from exc
         character["等级"] = cultivator_advance.level_after
         character["经验"] = cultivator_advance.experience_after
-        gains = self._growth.cultivator_attribute_growth(cultivator_advance.levels_gained)
+        # 种族不再提供成长倍率（种族只留天生规则与寿元系数）：等级成长直接并入，不乘任何倍率。
+        grown = self._growth.cultivator_attribute_growth(cultivator_advance.levels_gained)
         bloodline_fn = self._bloodline_growth
         if bloodline_fn is not None:
-            # 铁律：血脉加法与等级成长【并列】，一起被下面的 _race_growth 乘。
             # 这里只并入基础加法；觉醒随战内气血，归战斗的「行动开始」。
-            bloodline = await bloodline_fn(
-                normalized_user_id, _state_text(character.get("种族"), "人物.种族")
-            )
+            bloodline = await bloodline_fn(normalized_user_id)
             if bloodline:
-                gains = _add_numbers(gains, bloodline)
+                grown = _add_numbers(grown, bloodline)
         character["属性"] = _add_numbers(
             _state_mapping(character.get("属性"), "人物.属性"),
-            self._race_growth(
-                _state_text(character.get("种族"), "人物.种族"),
-                gains,
-            ),
+            grown,
         )
         weapon["等级"] = weapon_advance.level_after
         weapon["经验"] = weapon_advance.experience_after
@@ -990,7 +1006,7 @@ class CharacterService:
         """把人物换成另一个种族（换种族丹用）。
 
         目标种族必须在登记表里，取不到就报错、不静默；已经长出来的属性**不回溯**（换种族不重算历史成长），
-        但天生规则、卡池来源、成长修正、寿元系数都是现算的派生值，改完立刻跟着换。
+        但天生规则、卡池来源、寿元系数都是现算的派生值，改完立刻跟着换。
         """
 
         user, snapshot, character = await self._medicine_state(user_id)

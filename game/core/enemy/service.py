@@ -209,18 +209,6 @@ class EnemyService:
             copy.deepcopy(dict(item)) for item in entry.get("天生规则") or ()
         )
 
-    def growth_factors(self, race: str) -> dict[str, float]:
-        """种族的**成长修正**：属性 → 倍率（没写就是空表）。"""
-
-        self._require_initialized()
-        entry = self._races.get(str(race or "").strip())
-        if entry is None:
-            return {}
-        raw = entry.get("成长修正") or {}
-        if not isinstance(raw, Mapping):
-            raise JsonDataError(f"{race}.成长修正必须是对象")
-        return {str(key): float(value) for key, value in raw.items()}
-
     def pool_source(self, race: str) -> str:
         """种族的**卡池来源**：从哪一套阶梯池抽卡（默认敌方修士，可选灵兽）。"""
 
@@ -394,14 +382,13 @@ class EnemyService:
                 ).items()
             }
         )
-        # 种族要在算成长与抽卡之前定下来：成长修正与卡池来源都挂在它身上。
+        # 种族要在算成长与抽卡之前定下来：卡池来源挂在它身上。
         # 取族用实例编号作种子，不消耗生成器随机流（见 `pick_race`）。
         race = (
             self.pick_race(str(tier.get("阶梯") or ""), instance_id)
             if role_name == "敌方修士"
             else ""
         )
-        growth_factors = self.growth_factors(race) if race else {}
         pool_source = self.pool_source(race) if race else "敌方修士"
         if role_name == "灵兽":
             per_level = _mapping(raw.get("每级成长"), f"{name}.每级成长")
@@ -412,10 +399,8 @@ class EnemyService:
         else:
             growth = dict(self._growth.cultivator_attribute_growth(max(0, level - 1)))
         for key, value in growth.items():
-            # 成长修正：只乘**成长那一份**（等级带来的增量），不动基础与属性覆盖。
-            attributes[key] = float(attributes.get(key, 0)) + float(value) * growth_factors.get(
-                key, 1.0
-            )
+            # 种族不再提供成长倍率：成长那一份直接并入，不乘任何倍率。
+            attributes[key] = float(attributes.get(key, 0)) + float(value)
         attributes["速度"] = float(attributes.get("速度", 0)) + _number(
             tier.get("每级速度"), f"{role_name}.每级速度"
         ) * max(0, level - 1)

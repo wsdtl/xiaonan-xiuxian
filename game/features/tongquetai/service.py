@@ -194,6 +194,17 @@ class TongquetaiFeature:
                     user_id, context["instance"].companion_id
                 )
                 affection_before = relation.current_affection
+                # 护契：实例已被重置为初境一级（新的身体），结契时间也刷新——
+                # 于是道侣年龄归零、寿元将尽随之解除，这才是那条补救路。
+                from datetime import datetime
+
+                operations.append(
+                    await self._companion.refresh_contract_time(
+                        user_id,
+                        context["instance"].companion_id,
+                        datetime.now().astimezone().isoformat(timespec="seconds"),
+                    )
+                )
             else:
                 severance = await self._companion.plan_severance(user_id)
                 operations.extend(severance.operations)
