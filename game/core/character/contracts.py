@@ -230,7 +230,7 @@ class CharacterRedemptionPlan:
     times_after: int
     stones_before: int
     stones_after: int
-    operation: StateMutation
+    operations: tuple[StateMutation, ...]
 
 
 @dataclass(frozen=True)

@@ -1050,13 +1050,20 @@ class CharacterService:
         if used >= times:
             raise CharacterCultivationError("这个兑换码你已经用过了")
         stones = _request_int(spirit_stones, "灵石发放")
-        before_stones = _state_nonnegative_int(character.get("灵石"), "人物.灵石")
+        before_stones = await self._asset.spirit_stone_balance(user)
         after_stones = before_stones + stones
+        stone_plan = await self._asset.plan_spirit_stone_change(user, stones)
         character["已兑换码"] = list(redeemed) + [wanted]
-        character["灵石"] = after_stones
         return CharacterRedemptionPlan(
-            wanted, used, used + 1, before_stones, after_stones,
-            StateMutation(user, "character", "main", character, snapshot.version),
+            wanted,
+            used,
+            used + 1,
+            before_stones,
+            after_stones,
+            (
+                StateMutation(user, "character", "main", character, snapshot.version),
+            )
+            + stone_plan.operations,
         )
 
     async def plan_battle_medicine(
@@ -2050,7 +2057,6 @@ class CharacterService:
             "境界": realm_id,
             "等级": _positive_int(self._role_rule.get("等级"), "人物初始等级"),
             "经验": int(self._role_rule.get("经验") or 0),
-            "灵石": int(self._role_rule.get("灵石") or 0),
             "宗门贡献": 0,
             "属性": attributes,
             "属性加成": {},

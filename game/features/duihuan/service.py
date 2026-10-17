@@ -134,7 +134,7 @@ class DuihuanFeature:
                 if adjustments
                 else None
             )
-            operations = (inventory.operations if inventory else ()) + (plan.operation,)
+            operations = (inventory.operations if inventory else ()) + plan.operations
             payload = {
                 '码': code,
                 '兑换码': code_id,
