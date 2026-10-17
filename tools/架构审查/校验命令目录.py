@@ -25,7 +25,13 @@ if str(PROJECT_ROOT) not in sys.path:
 from game.cmd.command import registered_commands  # noqa: E402
 
 # 二级命令目录 -> 必须声明的 scope。目录名与 scope 同名，集中登记便于比对。
-SCOPE_BY_TOP_DIR = {"通用": "通用", "专属": "专属", "后台": "后台"}
+SCOPE_BY_TOP_DIR = {
+    "通用": "通用",
+    "专属": "专属",
+    #: 特殊地点是「专属」的一个子类，单独目录只为看清归属。
+    "特殊地点": "专属",
+    "后台": "后台",
+}
 
 
 def audit() -> list[str]:

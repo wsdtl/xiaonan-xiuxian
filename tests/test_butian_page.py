@@ -106,7 +106,7 @@ def _发丹(services, user_id: str, medicine_id: str) -> None:
 
 def test_没公开的人读不到(services, monkeypatch) -> None:
     import importlib
-    site = importlib.import_module('game.cmd.专属.裂天原.site')
+    site = importlib.import_module('game.cmd.特殊地点.裂天原.site')
     monkeypatch.setattr(site, 'current_game_services', lambda: services)
     # 先让清单里有人：不然会走「一个人都没公开」那条早返回，测不到拒绝分支。
     _创建(services, 'b-公开', '公开修士')

@@ -331,7 +331,7 @@ def test_坐忘的成功回执能真的渲染出来(services) -> None:
     兑换码那次就是只验了返回值、从没渲染卡片，上线才炸在没登记的图标上；这里先把卡渲染一遍。
     """
 
-    from game.cmd.专属.坐忘台 import reply as 坐忘回复
+    from game.cmd.特殊地点.坐忘台 import reply as 坐忘回复
     from launch.adapter.qq_protocol.payload import payload_text
     from launch.adapter.qq_protocol.render import render_qq_message
 

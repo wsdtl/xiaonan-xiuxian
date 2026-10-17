@@ -173,12 +173,13 @@ class WorldService:
                 "地点", location_name
             ).directory_owner
             coordinate_region = self._region_at(xy)
-            if directory_region != coordinate_region:
+            #: 特殊地点（`世界/内容/特殊地点/`）没有目录区域，按坐标定区域。
+            if directory_region and directory_region != coordinate_region:
                 raise JsonDataError(
                     f"地点 {location_name} 的目录区域与坐标区域不一致："
-                    f"{directory_region or '<空>'} != {coordinate_region}"
+                    f"{directory_region} != {coordinate_region}"
                 )
-            self._location_regions[location_name] = directory_region
+            self._location_regions[location_name] = directory_region or coordinate_region
             self._locations_by_xy[xy] = (location_name, raw)
 
 

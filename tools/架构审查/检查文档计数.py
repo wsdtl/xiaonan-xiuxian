@@ -77,7 +77,10 @@ def check_readme_structure() -> list[str]:
     problems: list[str] = []
     core = len(_directories("game/core"))
     features = len(_directories("game/features"))
-    command_groups = {name: len(_directories(f"game/cmd/{name}")) for name in ("通用", "专属", "后台")}
+    command_groups = {
+        name: len(_directories(f"game/cmd/{name}"))
+        for name in ("通用", "专属", "特殊地点", "后台")
+    }
     categories = len(_directories("data"))
     rules = json.loads((ROOT / "data" / "基础" / "读取规则.json").read_text(encoding="utf-8"))
     components = len(rules["扫描目录"])
@@ -100,14 +103,25 @@ def check_readme_structure() -> list[str]:
         elif int(match.group(1)) != want:
             problems.append(f"README 写「{match.group(1)} 个{label}」，实际 {want}")
 
-    match = re.search(r"(\d+) 个二级命令组件（通用 (\d+)、专属 (\d+)、后台 (\d+)）", text)
+    match = re.search(
+        r"(\d+) 个二级命令组件（通用 (\d+)、专属 (\d+)、特殊地点 (\d+)、后台 (\d+)）",
+        text,
+    )
     if match is None:
         problems.append("README 里找不到二级命令组件的计数句")
     else:
         got = tuple(int(value) for value in match.groups())
-        want = (sum(command_groups.values()), command_groups["通用"], command_groups["专属"], command_groups["后台"])
+        want = (
+            sum(command_groups.values()),
+            command_groups["通用"],
+            command_groups["专属"],
+            command_groups["特殊地点"],
+            command_groups["后台"],
+        )
         if got != want:
-            problems.append(f"README 写「{got[0]} 个二级命令组件（通用 {got[1]}、专属 {got[2]}、后台 {got[3]}）」，实际 {want}")
+            problems.append(
+                f"README 写「{got[0]} 个二级命令组件（通用 {got[1]}、专属 {got[2]}、特殊地点 {got[3]}、后台 {got[4]}）」，实际 {want}"
+            )
     return problems
 
 
@@ -435,7 +449,10 @@ def _service_counts() -> tuple[int, int]:
 
 
 def _command_component_count() -> int:
-    return sum(len(_directories(f"game/cmd/{scope}")) for scope in ("通用", "专属", "后台"))
+    return sum(
+        len(_directories(f"game/cmd/{scope}"))
+        for scope in ("通用", "专属", "特殊地点", "后台")
+    )
 
 
 def check_architecture_doc_counts() -> list[str]:
