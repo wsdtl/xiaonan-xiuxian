@@ -328,27 +328,26 @@ class TradeService:
     def _products(self, store: _Store, category: str) -> tuple[TradeProduct, ...]:
         result: list[TradeProduct] = []
         seen: set[tuple[str, str]] = set()
-        for file_id in store.catalogs[category]:
-            for content_id in self._data.pool_members((file_id,), category):
-                raw = self._data.entity(category, content_id)
-                name = _text(raw.get("名称"), f"{category}.{content_id}.名称")
-                for grade_id in store.grade_ids:
-                    key = (content_id, grade_id)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    grade = self._asset.grade(grade_id)
-                    price = int(self._base_prices[category] * grade.price_multiplier)
-                    result.append(
-                        TradeProduct(
-                            category,
-                            content_id,
-                            name,
-                            grade.grade_id,
-                            grade.name,
-                            price,
-                        )
+        for content_id in store.catalogs[category]:
+            raw = self._data.entity(category, content_id)
+            name = _text(raw.get("名称"), f"{category}.{content_id}.名称")
+            for grade_id in store.grade_ids:
+                key = (content_id, grade_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                grade = self._asset.grade(grade_id)
+                price = int(self._base_prices[category] * grade.price_multiplier)
+                result.append(
+                    TradeProduct(
+                        category,
+                        content_id,
+                        name,
+                        grade.grade_id,
+                        grade.name,
+                        price,
                     )
+                )
         return tuple(
             sorted(result, key=lambda value: (value.content_id, value.grade_id))
         )
@@ -365,10 +364,13 @@ def _catalogs(
     result: dict[str, tuple[str, ...]] = {}
     for category in ("真意", "气机"):
         catalogs = _strings(row.get(f"{category}目录"), f"{label}.{category}目录")
-        for file_id in catalogs:
-            members = data.pool_members((file_id,), category)
-            if not members:
-                raise JsonDataError(f"{label}引用空目录：{file_id}")
+        for content_id in catalogs:
+            if not content_id.isdigit():
+                raise JsonDataError(f"{label}.{category}目录必须是编号：{content_id}")
+            try:
+                data.entity(category, content_id)
+            except JsonDataError as exc:
+                raise JsonDataError(f"{label}引用不存在的{category}：{content_id}") from exc
         result[category] = catalogs
     return result
 

@@ -988,10 +988,8 @@ class CompanionService:
             raise CompanionCultivationError("道侣归元只能选择功法、真意或气机")
         definition = self.definition(before.companion_id)
         build = self._growth.redraw_companion_category(
-            pools=definition.cultivation_pools,
             current=before.cultivation,
             category=normalized,
-            slots=self.rules().cultivation_slots,
         )
         cultivation = dict(before.cultivation)
         cultivation[normalized] = build.content_ids
@@ -1489,17 +1487,6 @@ class CompanionService:
                 for category in ("功法", "真意", "气机")
             }
         )
-        cultivation_pools = MappingProxyType(
-            {
-                category: _text(
-                    value.get(f"{category}池"), f"道侣 {companion_id}.{category}池"
-                )
-                for category in ("功法", "真意", "气机")
-            }
-        )
-        for category, pool_name in cultivation_pools.items():
-            if not self._data.pool_members((pool_name,), category):
-                raise JsonDataError(f"道侣 {companion_id} 的{category}池为空")
         weapon = _mapping(value.get("本命武器"), f"道侣 {companion_id}.本命武器")
         weapon_laws = tuple(
             _text(raw, f"道侣 {companion_id}.本命武器.器律[]")
@@ -1539,7 +1526,6 @@ class CompanionService:
                 _text(join.get("邀约话语"), "道侣.结交.邀约话语"),
                 _text(join.get("暂别话语"), "道侣.结交.暂别话语"),
             ),
-            cultivation_pools,
             fixed_build,
             MappingProxyType(
                 {

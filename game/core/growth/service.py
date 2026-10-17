@@ -14,7 +14,7 @@ from game.core.data import (
     mapping as _mapping,
     positive_int as _positive_int,
 )
-from game.core.pool import EXPAND_DEDUPLICATED, PoolRequest, PoolService
+from game.core.pool import PoolService
 
 from .contracts import (
     CultivationCategoryBuild,
@@ -197,41 +197,6 @@ class GrowthService:
             )
         return result
 
-    def random_companion_build(
-        self,
-        *,
-        pools: Mapping[str, str],
-        slots: Mapping[str, int],
-        seed: int | None = None,
-    ) -> RandomCultivationBuild:
-        self._require_initialized()
-        actual_seed = secrets.randbits(64) if seed is None else seed
-        if isinstance(actual_seed, bool) or not isinstance(actual_seed, int):
-            raise GrowthError("随机种子必须是整数")
-        source = random.Random(actual_seed)
-        for _ in range(self._attempt_limit):
-            selected: dict[str, tuple[str, ...]] = {}
-            for category in _CATEGORIES:
-                count = _positive_int(slots.get(category), f"道侣.{category}槽位")
-                pool_name = _text(pools.get(category), f"道侣.{category}池")
-                selected[category] = self._pool.draw(
-                    PoolRequest(
-                        section=category,
-                        count=count,
-                        mode=EXPAND_DEDUPLICATED,
-                        file_ids=(pool_name,),
-                        seed=source.getrandbits(64),
-                    )
-                ).entity_ids
-            if self.build_conflict(selected) is None:
-                return RandomCultivationBuild(
-                    actual_seed,
-                    selected["功法"],
-                    selected["真意"],
-                    selected["气机"],
-                )
-        raise GrowthError("道侣个人修行池无法生成无相冲构筑")
-
     def build_conflict(
         self, build: Mapping[str, Sequence[str]]
     ) -> str | None:
@@ -250,39 +215,19 @@ class GrowthService:
     def redraw_companion_category(
         self,
         *,
-        pools: Mapping[str, str],
         current: Mapping[str, Sequence[str]],
         category: str,
-        slots: Mapping[str, int],
         seed: int | None = None,
     ) -> CultivationCategoryBuild:
-        """只重抽道侣一类构筑，其他类别由调用方原样保留。"""
+        """重排道侣某一类构筑的顺序（固定构筑不再换卡）。"""
 
         self._require_initialized()
         normalized = str(category or "").strip()
         if normalized not in _CATEGORIES:
             raise GrowthError("只能重做功法、真意或气机")
-        count = _positive_int(slots.get(normalized), f"道侣.{normalized}槽位")
-        pool_name = _text(pools.get(normalized), f"道侣.{normalized}池")
-        source = random.Random(secrets.randbits(64) if seed is None else seed)
-        preserved = {
-            name: tuple(str(item) for item in current.get(name, ()))
-            for name in _CATEGORIES
-        }
-        for _ in range(self._attempt_limit):
-            chosen = self._pool.draw(
-                PoolRequest(
-                    section=normalized,
-                    count=count,
-                    mode=EXPAND_DEDUPLICATED,
-                    file_ids=(pool_name,),
-                    seed=source.getrandbits(64),
-                )
-            ).entity_ids
-            preserved[normalized] = chosen
-            if self.build_conflict(preserved) is None:
-                return CultivationCategoryBuild(normalized, chosen)
-        raise GrowthError("道侣个人修行池无法生成无相冲构筑")
+        chosen = [str(item) for item in current.get(normalized, ())]
+        random.Random(secrets.randbits(64) if seed is None else seed).shuffle(chosen)
+        return CultivationCategoryBuild(normalized, tuple(chosen))
 
     def _advance(
         self,

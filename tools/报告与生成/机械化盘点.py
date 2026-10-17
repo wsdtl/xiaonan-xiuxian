@@ -44,10 +44,10 @@ from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 DEFAULT_BASELINE = ROOT / "tools" / "基准" / "机械化基线.json"
 
 SURFACES = (
-    ("功法", "战斗/内容/功法/功法-*.json"),
-    ("真意", "战斗/内容/真意/真意-*.json"),
-    ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "物品/炼器/内容/器律-*.json"),
+    ("功法", "战斗/内容/功法/*.json"),
+    ("真意", "战斗/内容/真意/*.json"),
+    ("气机", "战斗/内容/气机/*.json"),
+    ("器律", "物品/炼器/内容/器律/*.json"),
 )
 
 #: 引擎 `_value_read` 支持的读取来源（见 `game/core/combat/mechanics.py`）。

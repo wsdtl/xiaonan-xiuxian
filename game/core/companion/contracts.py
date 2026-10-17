@@ -99,7 +99,6 @@ class CompanionDefinition:
     acceptable_item_ids: frozenset[str]
     reward: CompanionReward
     dialogue: CompanionDialogue
-    cultivation_pools: Mapping[str, str]
     fixed_build: Mapping[str, tuple[str, ...]]
     attribute_overrides: Mapping[str, int | float]
     weapon_name: str
