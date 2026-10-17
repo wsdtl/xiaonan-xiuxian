@@ -51,7 +51,7 @@ WEIGHTS: dict[str, float] = {
     "test_access_guard.py": 4.6,
     "test_lingcang_take_wiring.py": 4.3,
     "test_wuxing_visible.py": 4.2,
-    "test_build_templates.py": 4,
+
     "test_qiecuo_report_link.py": 3,
     "test_command_minimal_signatures.py": 2.9,
     "test_exploration_groups.py": 2.4,

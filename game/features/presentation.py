@@ -20,6 +20,7 @@ from collections.abc import Callable, Mapping, Sequence
 from types import MappingProxyType
 from typing import Any
 
+from game.core.asset import ItemRef, ItemRefError, format_item_ref, parse_item_ref
 from game.core.data import JsonDataError, mapping as require_mapping
 
 # 按钮 JSON 的固定字段；顺序即投影顺序。
@@ -165,9 +166,6 @@ def format_command(button: Button, variables: Mapping[str, object] | None) -> st
 
     values = {str(key): str(value) for key, value in (variables or {}).items()}
     return button["命令"].format_map(values)
-
-
-from game.core.asset import ItemRef, ItemRefError, format_item_ref, parse_item_ref
 
 
 def split_quantity(parts: Sequence[str]) -> tuple[list[str], int]:
