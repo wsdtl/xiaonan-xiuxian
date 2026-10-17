@@ -120,13 +120,6 @@ class CompanionService:
             self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         self._rules = self._load_rules()
-        definitions = self._data.dataset("角色定义")
-        self._personalities = frozenset(
-            str(item) for item in (definitions.get("性格") or {}).get("取值") or ()
-        )
-        self._positions = frozenset(
-            str(item) for item in (definitions.get("定位") or {}).get("取值") or ()
-        )
         self._coverable = frozenset(
             str(value)
             for value in (
@@ -1478,12 +1471,6 @@ class CompanionService:
             self._data.entity("丹药", reward.item_id)
         if reward.grade_id not in grade_ids:
             raise JsonDataError(f"道侣 {companion_id} 使用未知回礼品级")
-        personality = _text(value.get("性格"), f"道侣 {companion_id}.性格")
-        position = _text(value.get("定位"), f"道侣 {companion_id}.定位")
-        if personality not in self._personalities:
-            raise JsonDataError(f"道侣 {companion_id}.性格不在词表里：{personality}")
-        if position not in self._positions:
-            raise JsonDataError(f"道侣 {companion_id}.定位不在词表里：{position}")
         attributes = _mapping(value.get("属性覆盖"), "道侣.属性覆盖")
         unknown = set(attributes) - self._coverable
         if unknown:
