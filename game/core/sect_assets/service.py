@@ -872,15 +872,13 @@ class SectAssetService:
     def _spirit_stone_units(self) -> dict[str, int]:
         """品级编号 -> 黄品当量。"""
 
-        documents = self._data.dataset("灵石规则")
-        rules = _mapping(documents.get("灵石"), "灵石规则")
-        rows = rules.get("品级价值")
+        rows = self._data.dataset("基础定义").get("品级")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise SectAssetError("灵石规则.品级价值必须是数组")
+            raise SectAssetError("品级.json 必须是数组")
         units: dict[str, int] = {}
         for row in rows:
-            entry = _mapping(row, "灵石规则.品级价值")
-            units[str(entry.get("品级"))] = _positive_int(entry.get("当量"), "灵石规则.当量")
+            entry = _mapping(row, "品级")
+            units[str(entry.get("编号"))] = _positive_int(entry.get("灵石当量"), "品级.灵石当量")
         return units
 
     def _spirit_stone_total(self, entries: Mapping[str, object]) -> int:

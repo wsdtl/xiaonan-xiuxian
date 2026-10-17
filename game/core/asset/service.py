@@ -155,16 +155,14 @@ class AssetService:
     def _spirit_stone_units(self) -> dict[str, int]:
         """品级编号 -> 黄品当量。"""
 
-        documents = self._data.dataset("灵石规则")
-        rules = _mapping(documents.get("灵石"), "灵石规则")
-        rows = rules.get("品级价值")
+        rows = self._data.dataset("基础定义").get("品级")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise AssetStateError("灵石规则.品级价值必须是数组")
+            raise AssetStateError("品级.json 必须是数组")
         units: dict[str, int] = {}
         for row in rows:
-            entry = _mapping(row, "灵石规则.品级价值")
-            grade_id = _text(entry.get("品级"), "灵石规则.品级价值.品级")
-            units[grade_id] = _positive_int(entry.get("当量"), "灵石规则.品级价值.当量")
+            entry = _mapping(row, "品级")
+            grade_id = _text(entry.get("编号"), "品级.编号")
+            units[grade_id] = _positive_int(entry.get("灵石当量"), "品级.灵石当量")
         for grade_id in self._grades:
             if grade_id not in units:
                 raise AssetStateError(f"灵石规则缺少品级：{grade_id}")
