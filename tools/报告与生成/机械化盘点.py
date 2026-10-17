@@ -177,7 +177,7 @@ def gaps() -> dict[str, object]:
 
     **扫全库，不只四类构筑卡**：口径说的是「全库没人用」，只扫 `SURFACES` 会把战丹 / 伤势 /
     战场环境里已经用上的来源报成空位（`目标当前护盾` 就被这样误报过）。读取走
-    `全库扫描.全库文档()`，模板引用在那里已经展开。
+    `全库扫描.全库文档()`，读口统一（模板机制退役后直通）。
     """
     origins: collections.Counter[str] = collections.Counter()
     fields: collections.Counter[str] = collections.Counter()

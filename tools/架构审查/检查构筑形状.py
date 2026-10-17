@@ -149,9 +149,8 @@ def check_weight_uniqueness() -> list[str]:
 def check_listener_carriers() -> list[str]:
     """战丹和长期伤势也寄存监听节点，同样只允许 `监听事件`。
 
-    必须用 `_load_build_json` 展开：这两个面已经模板化，卡里直接读会拿到
-    `{"模板": …, "参数": …}` 引用（没有 `能力` 键），于是每一条都误报
-    「不是监听事件，根能力为 <空>」。
+    用 `_load_build_json` 读：它是统一读口（模板机制退役后只读不展开），这两个面的监听节点
+    直接写在实体里；换读取口会让判据与别的工具读到两种形态。
     """
 
     problems: list[str] = []

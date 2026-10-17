@@ -82,12 +82,12 @@ def 检查序列(序列: list, path: str, out: list) -> None:
                 continue
             已见[键] = 序
             continue
-        # 一字不差的重复项：`SINGLE` 类动作，或模板引用写两遍。
+        # 一字不差的重复项：`SINGLE` 类动作连写两遍就算。
         for 前 in range(序 - 1, max(-1, 序 - 4), -1):
             if 序列[前] == item:
                 能力 = item.get("能力")
-                if (isinstance(能力, str) and 能力 in SINGLE) or "模板" in item:
-                    out.append(("一字不差的重复动作", f"{path}[{序}]/{能力 or '模板'}",
+                if isinstance(能力, str) and 能力 in SINGLE:
+                    out.append(("一字不差的重复动作", f"{path}[{序}]/{能力}",
                                 item, item))
                 break
 

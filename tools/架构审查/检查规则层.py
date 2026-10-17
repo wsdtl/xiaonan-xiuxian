@@ -52,14 +52,12 @@ def _abilities() -> dict[str, dict]:
 
 
 def _cards():
-    """六面卡片 + 战场环境，逐个产出（工具侧展开模板）。"""
+    """六面卡片 + 战场环境，逐个产出（构筑正文已是完整能力树，读文件即可）。"""
 
-    import importlib
-
-    模板 = importlib.import_module("构筑模板")
+    from 构筑面 import SEGMENTS
     from 构筑模板展开 import load_build_json
 
-    for _segment, config in 模板.SEGMENTS.items():
+    for _segment, config in SEGMENTS.items():
         for path in sorted(config["目录"].glob(config["模式"])):
             for entry in load_build_json(path):
                 yield path.name, entry

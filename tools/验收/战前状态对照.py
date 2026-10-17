@@ -67,9 +67,8 @@ ATTRS = {
 def specs(core, root: pathlib.Path):
     """产出 (标签, CombatStatusSpec)；没带监听的不进战斗。
 
-    读文件必须走 `_load_build_json`：战丹与长期伤势的监听节点已经模板化，直接
-    `json.loads` 拿到的是 `{"模板": …, "参数": …}` 引用，构造 `CombatStatusSpec`
-    时会被判成「不是监听事件节点」而整条失败。
+    读文件走 `_load_build_json`（统一读口，模板机制退役后只读不展开）：战丹与长期伤势的
+    监听节点直接写在实体里；直接 `json.loads` 与它等价，但换读取口会让两条通道读到两种形态。
     """
 
     for path in sorted(root.glob("物品/炼丹/内容/丹药/战丹/*.json")):

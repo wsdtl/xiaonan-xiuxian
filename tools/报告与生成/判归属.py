@@ -117,7 +117,7 @@ def main() -> int:
     for name, pattern in SECTIONS:
         rows: list[tuple[str, str, list[str], set[str]]] = []
         for path in sorted(ROOT.glob(pattern)):
-            # 必须走展开：真意仍是模板引用形态，直接 json.loads 会把 600 张全读成「无时点」。
+            # 走统一读口（模板机制退役后只读不展开）；真意 600 张读出来就是完整树。
             for entry in load_build_json(path):
                 reasons, events = cross_reasons(entry)
                 rows.append((str(entry["编号"]), str(entry.get("名称") or ""), reasons, events))

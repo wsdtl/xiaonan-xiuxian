@@ -29,7 +29,7 @@ CONTENT = ROOT / "data" / "战斗" / "内容"
 
 
 def collected_abilities(node: object) -> set[str]:
-    """整棵树里出现过的「能力」取值（展开后的树里直接就有，不再查模板库）。"""
+    """整棵树里出现过的「能力」取值。"""
 
     found: set[str] = set()
 
@@ -48,8 +48,8 @@ def collected_abilities(node: object) -> set[str]:
     return found
 
 #: 计数类配额：用到叠层设施的功法卡占比上限（目标 ≤25%）。
-#: 口径已变：原按「该效果引用的模板簇整体能力集」算（当时现状 97.7%），
-#: 数据展开成原子能力后改为「该效果自己树里出现的 能力」——更精确，现状 0%。
+#: 口径：只数「该效果自己树里出现的 能力」。构筑模板机制退役前按模板簇整体能力集算，
+#: 那是个更粗的口径；改成本树的节点后，现状 0%。
 COUNTER_QUOTA = 0.25
 #: 效果里的字符串叶子长度上限（现状最长 28，散文会远超它）。
 TEXT_LIMIT = 60
@@ -95,20 +95,6 @@ def has_value(node: object, key: str, value: str) -> bool:
     return False
 
 
-def effect_nodes(node: object) -> list[dict]:
-    """所有「效果」条目（形如 {"模板": …, "参数": {…}}）。"""
-
-    if isinstance(node, dict):
-        found = []
-        if isinstance(node.get("模板"), str):
-            found.append(node)
-        for value in node.values():
-            found.extend(effect_nodes(value))
-        return found
-    if isinstance(node, list):
-        return [item for value in node for item in effect_nodes(value)]
-    return []
-
 
 def leaves(node: object, path: str = "") -> list[tuple[str, str]]:
     """所有字符串叶子（含路径），用来查"卡面里写句子"。"""
@@ -142,8 +128,8 @@ def _核对职责边界(arts, wills, breaths) -> int:
         "功法必须带五行根基（属性构成）", missing_element, len(arts), missing_element
     )
 
-    #: 越界的真形态是**模板用错**，但哪几个模板算"气机的专用"必须先量出来再判，
-    #: 不能凭猜（模板编号是内容地址，光看哈希认不出是谁的活）。这里先只报告交集。
+    #: 越界的真形态是**同一段机制被抄进不该有它的那一面**；哪几个能力算"气机的专用"
+    #: 必须先量出来再判，不能凭猜。这里先只报告交集。
     passive_in_arts = [
         str(c.get("名称")) for c in arts if has_value(c, "能力", "被动技能")
     ]
@@ -167,9 +153,8 @@ def _核对职责边界(arts, wills, breaths) -> int:
 def _核对主动形状(arts) -> int:
     failures = 0
     # 二、主动技能的形状：冷却 / 消耗 / 目标，缺一即不算主动技能
-    #: `目标` 不在卡里，而在**模板体**里：卡只写 {"模板": …} 与少量参数覆盖，
-    #: 真正的 `/效果/[0]/目标/能力` 由模板主体提供。所以判"有没有目标"要看
-    #: 引用模板的参数路径，而不是在卡里找 `目标` 这个键（第 38 轮踩过的坑）。
+    #: `目标` 写在效果节点里（`/效果/[0]/目标/能力`）。模板机制退役后卡里就是完整树，
+    #: 直接在效果节点里找这个键即可；「卡里没有、得看模板参数路径」那个坑也随之消失。
 
     def has_target(card: dict) -> bool:
         found = False

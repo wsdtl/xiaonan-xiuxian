@@ -42,14 +42,12 @@ for _path in (str(ROOT), str(ROOT / "tools")):
 
 
 def main() -> int:
-    import importlib
-
-    模板 = importlib.import_module("构筑模板")
+    from 构筑面 import SEGMENTS
     from 构筑模板展开 import load_build_json
 
     problems: list[str] = []
     checked = 0
-    for segment, config in 模板.SEGMENTS.items():
+    for segment, config in SEGMENTS.items():
         for path in sorted(config["目录"].glob(config["模式"])):
             for entry in load_build_json(path):
                 if not isinstance(entry, dict):

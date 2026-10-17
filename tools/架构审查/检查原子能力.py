@@ -60,9 +60,7 @@ REGISTRY = ROOT / "data" / "战斗" / "定义" / "原子能力.json"
 def _collect(root: pathlib.Path):
     """把六个面展开后遍历一遍，返回 (能力计数, 未声明键, 声明未用字段)。"""
 
-    import importlib
-
-    模板 = importlib.import_module("构筑模板")
+    from 构筑面 import SEGMENTS
     from 构筑模板展开 import load_build_json
 
     registry: dict[str, dict] = json.loads(REGISTRY.read_text(encoding="utf-8"))
@@ -92,7 +90,7 @@ def _collect(root: pathlib.Path):
                 walk(item)
 
     entities = 0
-    for _segment, config in 模板.SEGMENTS.items():
+    for _segment, config in SEGMENTS.items():
         for path in sorted(config["目录"].glob(config["模式"])):
             for entry in load_build_json(path):
                 entities += 1
