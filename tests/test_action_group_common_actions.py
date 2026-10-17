@@ -1,6 +1,6 @@
 """宗门同行「共同行动」清单的回归：规则是唯一出处，玩法自报动作要对得上。
 
-口径（负责人拍板 D2）：宗门同行能一起做什么，写成 `data/宗门/规则/宗门.json` 的
+口径（负责人拍板 D2）：宗门同行能一起做什么，写成 `data/玩法/特殊地点/宗门园区/规则/宗门.json` 的
 `同行.共同行动`（`去`、`探险`、`闭关`、`采药`、`采矿`），**并由代码真读它**——不是
 摆一条没人执行的声明。落地方式是：
 
@@ -98,7 +98,7 @@ def test_自报清单外的动作拒绝启动() -> None:
 
 def _改过的数据树(tmp_path: pathlib.Path, 清单: object) -> pathlib.Path:
     tree = pathlib.Path(shutil.copytree(DATA, tmp_path / "data", copy_function=os.link))
-    rules = tree / "宗门" / "规则" / "宗门.json"
+    rules = tree / "玩法" / "特殊地点" / "宗门园区" / "规则" / "宗门.json"
     raw = json.loads(rules.read_text(encoding="utf-8"))
     raw["同行"]["共同行动"] = 清单
     _写(rules, json.dumps(raw, ensure_ascii=False, indent=2) + "\n")
