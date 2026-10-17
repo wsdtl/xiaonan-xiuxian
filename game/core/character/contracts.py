@@ -287,7 +287,7 @@ class CharacterSpiritStonePlan:
     before: int
     after: int
     delta: int
-    operation: StateMutation
+    operations: tuple[StateMutation, ...]
 
 
 @dataclass(frozen=True)

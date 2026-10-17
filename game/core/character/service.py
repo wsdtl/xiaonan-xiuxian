@@ -395,7 +395,7 @@ class CharacterService:
             realm_name=realm_name,
             level=_state_positive_int(character.get("等级"), "人物.等级"),
             experience=_state_nonnegative_int(character.get("经验"), "人物.经验"),
-            spirit_stones=_state_nonnegative_int(character.get("灵石"), "人物.灵石"),
+            spirit_stones=await self._asset.spirit_stone_balance(normalized_user_id),
             sect_contribution=_state_nonnegative_int(
                 character.get("宗门贡献", 0), "人物.宗门贡献"
             ),
@@ -1117,11 +1117,9 @@ class CharacterService:
         health_after = bounded_number(health, attributes.get("血气上限"), "战后血气")
         spirit_after = bounded_number(spirit, attributes.get("精神上限"), "战后精神")
         stone_delta = _request_int(spirit_stones_delta, "灵石变化")
-        stones_after = (
-            _state_nonnegative_int(character.get("灵石"), "人物.灵石") + stone_delta
+        stone_plan = await self._asset.plan_spirit_stone_change(
+            normalized_user_id, stone_delta
         )
-        if stones_after < 0:
-            raise CharacterCultivationError("灵石不足")
         gained = _nonnegative_request_int(weapon_experience, "本命武器经验")
         try:
             advance = self._forging.advance_weapon(
@@ -1131,7 +1129,6 @@ class CharacterService:
             )
         except ForgingError as exc:
             raise CharacterCultivationError(str(exc)) from exc
-        character["灵石"] = stones_after
         character["资源"] = {"血气": health_after, "精神": spirit_after, "护盾": 0}
         weapon["等级"] = advance.level_after
         weapon["经验"] = advance.experience_after
@@ -1156,7 +1153,8 @@ class CharacterService:
                     weapon,
                     weapon_snapshot.version,
                 ),
-            ),
+            )
+            + stone_plan.operations,
         )
 
     async def plan_retreat_settlement(
@@ -1437,13 +1435,15 @@ class CharacterService:
         if snapshot is None:
             raise CharacterNotFoundError("尚未创建人物")
         character = dict(_state_mapping(snapshot.value, "character/main"))
-        before = _state_nonnegative_int(character.get("灵石"), "人物.灵石")
+        before = await self._asset.spirit_stone_balance(normalized_user_id)
         after = before + stone_delta
         if after < 0:
             raise CharacterCultivationError(
                 f"灵石不足：现有{before}，需要{-stone_delta}"
             )
-        character["灵石"] = after
+        stone_plan = await self._asset.plan_spirit_stone_change(
+            normalized_user_id, stone_delta
+        )
         if gained_contribution:
             character["宗门贡献"] = (
                 _state_nonnegative_int(character.get("宗门贡献", 0), "人物.宗门贡献")
@@ -1453,13 +1453,16 @@ class CharacterService:
             before,
             after,
             stone_delta,
-            StateMutation(
-                normalized_user_id,
-                "character",
-                "main",
-                character,
-                snapshot.version,
-            ),
+            (
+                StateMutation(
+                    normalized_user_id,
+                    "character",
+                    "main",
+                    character,
+                    snapshot.version,
+                ),
+            )
+            + stone_plan.operations,
         )
 
     async def plan_contribution_change(

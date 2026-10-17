@@ -147,6 +147,86 @@ class AssetService:
         self._require_initialized()
         return tuple(sorted(self._grades.values(), key=lambda value: value.order))
 
+
+    # ── 灵石 ──────────────────────────────────────────────────────────────
+    #: 纳戒里灵石的编号；品级在实例上，价值表来自「基础物品/规则/灵石.json」。
+    SPIRIT_STONE_ID = "230001"
+
+    def _spirit_stone_units(self) -> dict[str, int]:
+        """品级编号 -> 黄品当量。"""
+
+        documents = self._data.dataset("灵石规则")
+        rules = _mapping(documents.get("灵石"), "灵石规则")
+        rows = rules.get("品级价值")
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise AssetStateError("灵石规则.品级价值必须是数组")
+        units: dict[str, int] = {}
+        for row in rows:
+            entry = _mapping(row, "灵石规则.品级价值")
+            grade_id = _text(entry.get("品级"), "灵石规则.品级价值.品级")
+            units[grade_id] = _positive_int(entry.get("当量"), "灵石规则.品级价值.当量")
+        for grade_id in self._grades:
+            if grade_id not in units:
+                raise AssetStateError(f"灵石规则缺少品级：{grade_id}")
+        return units
+
+    async def spirit_stone_balance(self, user_id: str) -> int:
+        """把纳戒里的灵石按品级折成黄品当量。"""
+
+        self._require_initialized()
+        units = self._spirit_stone_units()
+        total = 0
+        for stack in await self.inventory_stacks(user_id, self.SPIRIT_STONE_ID):
+            total += stack.quantity * units[stack.grade.grade_id]
+        return total
+
+    async def plan_spirit_stone_change(
+        self, user_id: str, delta: int
+    ) -> InventoryMutationPlan:
+        """加减灵石：减先从低品扣，加先补低品；都按黄品当量拆。"""
+
+        self._require_initialized()
+        if isinstance(delta, bool) or not isinstance(delta, int):
+            raise InventoryChangeError("灵石变化必须是整数")
+        if delta == 0:
+            return InventoryMutationPlan((), ())
+        units = self._spirit_stone_units()
+        ordered = sorted(units, key=lambda grade_id: self._grades[grade_id].order)
+        held = {
+            stack.grade.grade_id: stack.quantity
+            for stack in await self.inventory_stacks(user_id, self.SPIRIT_STONE_ID)
+        }
+        adjustments: list[InventoryAdjustment] = []
+        if delta < 0:
+            need = -delta
+            for grade_id in ordered:
+                if need <= 0:
+                    break
+                unit = units[grade_id]
+                count = min(held.get(grade_id, 0), need // unit)
+                if count:
+                    adjustments.append(
+                        InventoryAdjustment(self.SPIRIT_STONE_ID, grade_id, -count)
+                    )
+                    need -= count * unit
+            if need > 0:
+                raise InventoryChangeError(f"灵石不足：还差{need}枚黄品当量")
+        else:
+            need = delta
+            for grade_id in reversed(ordered):
+                unit = units[grade_id]
+                count = need // unit
+                if count:
+                    adjustments.append(
+                        InventoryAdjustment(self.SPIRIT_STONE_ID, grade_id, count)
+                    )
+                    need -= count * unit
+            if need > 0:
+                adjustments.append(
+                    InventoryAdjustment(self.SPIRIT_STONE_ID, ordered[0], need)
+                )
+        return await self.plan_inventory_changes(user_id, tuple(adjustments))
+
     def draw_drop_grade(self, *, seed: int) -> AssetGrade:
         """按物品规则的逆权重抽取一次掉落品级。"""
 
