@@ -26,7 +26,7 @@ from collections.abc import Mapping
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATA = ROOT / 'data'
-COMPONENT = DATA / '玩法' / '兑换码'
+COMPONENT = DATA / '玩法' / '通用' / '兑换码'
 #: 纳戒（基础物品）的七个子类；物品编号的前两位必须落在其中之一。
 INVENTORY_SUBCATEGORIES = ('恢复丹', '战丹', '突破丹', '特殊丹', '灵植', '灵矿', '兽宝')
 MAX_GRANTS = 20

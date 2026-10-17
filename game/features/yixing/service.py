@@ -35,7 +35,7 @@ class YixingFeature:
         self._medicine_id = _text(rule.get("丹药"), "易形.丹药")
         self._location_function = "易形"
         self._guard_rule = _text(rule.get("状态守卫"), "易形.状态守卫")
-        copy = self._data.dataset("易形展示").get("文本")
+        copy = self._data.dataset("易形展示").get("易形")
         if not isinstance(copy, Mapping):
             raise JsonDataError("易形展示缺少文本.json")
         self._copy = copy

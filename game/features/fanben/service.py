@@ -62,7 +62,7 @@ class FanbenFeature:
         # 丹名从数据读，别在代码里硬编码——改名时这里要跟着走才对。
         self._medicine_name = str(self._data.entity("丹药", self._medicine_id).get("名称") or "换种族丹")
         self._guard_rule = _text(rule.get("状态守卫"), "返本.状态守卫")
-        copy = self._data.dataset("化形展示").get("文本")
+        copy = self._data.dataset("化形展示").get("化形")
         if not isinstance(copy, Mapping):
             raise JsonDataError("返本展示缺少文本.json")
         self._copy = copy

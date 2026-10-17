@@ -73,7 +73,7 @@ class XigenFeature:
         self._medicine_name = str(
             self._data.entity('丹药', self._medicine_id).get('名称') or '灵根重铸丹'
         )
-        copy = self._data.dataset('洗根展示').get('文本')
+        copy = self._data.dataset('洗根展示').get('洗根')
         if not isinstance(copy, Mapping):
             raise JsonDataError('洗根展示缺少文本.json')
         self._copy = copy

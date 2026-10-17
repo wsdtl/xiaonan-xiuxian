@@ -155,6 +155,9 @@ def check_category_layout() -> list[str]:
             名字 = f"{大类}/{子.name}"
             if 子.name in 四类面 or 名字 in 登记:
                 continue
+            # 允许一层分组：`玩法/通用/位置` 时 `玩法/通用` 是分组，不是组件。
+            if any(项.startswith(名字 + "/") for 项 in 登记):
+                continue
             problems.append(f"{名字}/ 既不是四类面，也不在扫描目录里")
     return problems
 

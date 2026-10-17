@@ -19,7 +19,7 @@ import secrets
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-CODES = ROOT / 'data' / '玩法' / '兑换码' / '内容' / '兑换码.json'
+CODES = ROOT / 'data' / '玩法' / '通用' / '兑换码' / '内容' / '兑换码.json'
 #: 去掉 0/O 与 1/I 的字母表：只留不易看错的字符。
 ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 CODE_LENGTH = 10

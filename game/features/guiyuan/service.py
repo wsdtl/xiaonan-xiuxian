@@ -45,7 +45,7 @@ class GuiyuanFeature:
         self._medicine_id = _text(rule.get("丹药"), "归元观.丹药")
         self._location_function = "归元"
         self._guard_rule = _text(rule.get("状态守卫"), "归元观.状态守卫")
-        copy = self._data.dataset("归元展示").get("文本")
+        copy = self._data.dataset("归元展示").get("归元")
         if not isinstance(copy, Mapping):
             raise JsonDataError("归元展示缺少文本.json")
         self._copy = copy
