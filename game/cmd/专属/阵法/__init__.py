@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from game.app import current_game_services
 from game.features.lianzhen import FormationChoiceError, FormationCraftFeatureError
+from game.features.presentation import ItemRefError, parse_item_ref
 
 from ...command import GameCommand
 from . import reply
@@ -11,7 +12,7 @@ from launch.adapter import MessageContext
 from typing import Any
 
 def _grade_prefix(feature: Any, value: str) -> str:
-    """按核心口径受理品级的三种写法，吐命令内部用的单字。
+    """按核心口径受理品级的三种写法，吐全名（黄品……）。
 
     三种写法（黄品／黄／01）的受理归阵法玩法；命令层只转交，不再自己去问资产核心。
     """
@@ -45,6 +46,23 @@ def _request(
     # 扩展位（花括号）**只用于存储**，不接受手打——挑选靠候选点选。
     parts = str(message or "").strip().split()
     feature = current_game_services().features.lianzhen
+    # 按钮发来的是**统一存储语法**（一个词，形如 05<阵法编号>{兽宝=…}）——先按它解析。
+    # 它同样能吃掉「品级编号+阵法编号」与「品级名+阵法名」这两种一个词的写法。
+    if len(parts) == 1 and parts[0]:
+        try:
+            ref = parse_item_ref(parts[0])
+        except ItemRefError:
+            ref = None
+        if ref is not None and (ref.grade or ref.item):
+            try:
+                grade = _grade_prefix(feature, ref.grade or "01")
+            except Exception:  # noqa: BLE001 - 品级不认识就回落人打语法，由它给同一句用法提示
+                grade = ""
+            if grade:
+                investments = None
+                if ref.extra:
+                    investments = {str(name): int(str(amount)) for name, amount in ref.extra}
+                return ref.item, grade, investments
     try:
         if len(parts) in {2, 5}:  # 旧：名称 品级 [三个数]
             identifier, grade_word, tail = parts[0], parts[1], parts[2:]

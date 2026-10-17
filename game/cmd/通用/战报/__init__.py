@@ -11,25 +11,6 @@ from . import reply
 from .site import router
 
 
-@GameCommand.fullmatch(
-    cmd="战报",
-    metadata={
-        "scope": "通用",
-        "guard_rule": "自主空闲或休息",
-        "help": {
-            "category": "战斗",
-            "summary": "查看我的最近未过期战报",
-            "usage": ("战报",),
-            "side_effect": "只查看，不会改变任何状态",
-            "order": 10,
-        },
-    },
-)
-async def show_my_reports(user_id: str, manager: Any) -> None:
-    feature = current_game_services().features.zhanbao
-    await manager.send(reply.view(feature, await feature.my_reports(user_id)))
-
-
 @GameCommand.command(
     cmd="战报",
     metadata={
@@ -37,10 +18,10 @@ async def show_my_reports(user_id: str, manager: Any) -> None:
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "战斗",
-            "summary": "翻页查看我的最近未过期战报",
-            "usage": ("战报 2",),
+            "summary": "查看我的最近未过期战报，可带页码翻页",
+            "usage": ("战报", "战报 2"),
             "side_effect": "只查看，不会改变任何状态",
-            "order": 11,
+            "order": 10,
         },
     },
 )
