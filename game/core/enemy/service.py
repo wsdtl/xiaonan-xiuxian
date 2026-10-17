@@ -64,6 +64,13 @@ class EnemyService:
                 for name in ("敌方修士", "灵兽")
             }
         )
+        definitions = self._data.dataset("角色定义")
+        self._personalities = frozenset(
+            str(item) for item in (definitions.get("性格") or {}).get("取值") or ()
+        )
+        self._positions = frozenset(
+            str(item) for item in (definitions.get("定位") or {}).get("取值") or ()
+        )
         self._coverable = frozenset(
             str(value)
             for value in (
@@ -454,6 +461,12 @@ class EnemyService:
         _positive_int(raw.get("权重"), f"{name}.权重")
         _range(raw.get("等级"), f"{name}.等级")
         _mapping(raw.get("属性覆盖"), f"{name}.属性覆盖")
+        personality = str(raw.get("性格") or "").strip()
+        position = str(raw.get("定位") or "").strip()
+        if personality not in self._personalities:
+            raise JsonDataError(f"{name}.性格不在词表里：{personality or '<空>'}")
+        if position not in self._positions:
+            raise JsonDataError(f"{name}.定位不在词表里：{position or '<空>'}")
         _mapping(raw.get("掉落"), f"{name}.掉落")
         _mapping(raw.get("交锋所得"), f"{name}.交锋所得")
 

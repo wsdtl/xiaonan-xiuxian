@@ -56,8 +56,13 @@ def validate_builds(
 
     if contracts is None:
         contracts = load_build_contracts(data)
+    definitions = materialize(data.dataset("战斗定义"))
     if validator is None:
-        validator = rule_validator(materialize(data.dataset("战斗定义")))
+        validator = rule_validator(definitions)
+    tendencies = tuple(
+        str(item)
+        for item in (definitions.get("倾向") or {}).get("取值") or ()
+    )
     counts: dict[str, int] = {}
     weights: dict[int, str] = {}
     for section in BUILD_SECTIONS:
@@ -73,6 +78,7 @@ def validate_builds(
                 materialize(raw),
                 validator,
                 weights,
+                tendencies,
             )
         counts[section] = len(entities)
     return counts
@@ -85,6 +91,7 @@ def _validate_build(
     value: Any,
     validator: RuleSchemaValidator,
     weights: dict[int, str],
+    tendencies: tuple[str, ...],
 ) -> None:
     path = f"{section}[{content_id}]"
     if not isinstance(value, Mapping):
@@ -106,6 +113,9 @@ def _validate_build(
     for field in ("名称", "说明"):
         if not str(value.get(field) or "").strip():
             raise BuildContractError(f"{path}.{field}不能为空")
+    label = str(value.get("倾向") or "")
+    if label not in tendencies:
+        raise BuildContractError(f"{path}.倾向不在词表里：{label or '<空>'}")
     if section == "器律":
         for field in ("器阶", "铸法"):
             if not str(value.get(field) or "").strip():
