@@ -223,8 +223,8 @@ class RuleSchemaValidator(DefinitionSchemaValidator):
     ) -> None:
         """校验一个能力节点：必须引用已声明原子能力，且字段满足其契约。
 
-        卡里可以只写「模板 + 参数」，但模板引用在**装载期**就已展开
-        （见 `service._expand_build_entities`），所以这里拿到的一定是完整的树。
+        构筑模板机制退役后，卡里写的就是完整能力树，这里拿到的一定是完整的树；
+        「能力」键缺失或未登记都当场报错，不做任何补全。
         """
 
         node = self._object(raw_node, path)

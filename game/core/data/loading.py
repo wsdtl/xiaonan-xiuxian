@@ -161,9 +161,9 @@ class GameDataLoader:
         if expand is not None:
             # 一个段落有**两份索引**：`entities`（按类别取实体）与 `records`
             # （`JsonEntity`，带来源与编号类别）。两者的 `value` 原本指向同一个对象，
-            # 所以展开必须**同时改写两份**——只改前者会让 `numbered_entities()` 这条
-            # 读取路径继续看到未展开的引用（实测：查看页把模板引用渲染成
-            # `〈未支持：〉`，而战斗语料一条都测不出来，因为战斗走的是 `entities`）。
+            # 所以改写必须**同时改写两份**——只改前者会让 `numbered_entities()` 这条
+            # 读取路径继续看到旧正文（历史上：查看页把未展开的引用渲染成 `〈未支持：〉`，
+            # 而战斗语料一条都测不出来，因为战斗走的是 `entities`）。
             for section in tuple(entities):
                 expanded = expand(section, entities[section])
                 if expanded is entities[section]:
