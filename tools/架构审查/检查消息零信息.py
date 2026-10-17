@@ -510,7 +510,7 @@ async def _造场景(services, send, user_id) -> tuple[str, list[str]]:
     """
 
     words = await _场景_切磋与深页(send, services, user_id)
-    await _场景_讨伐(send, services, user_id)
+    # 讨伐已于 2026-10-17 暂撤（只保留普通遭遇敌人），场景不再造。
     await _场景_服丹(send, services, user_id)
     await _场景_道侣(send, services, user_id)
     butian_user = await _场景_补天(services, user_id)

@@ -10,18 +10,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from game.core.combat.contracts import (
-    CombatBuildRef,
-    CombatGroupSpec,
-    CombatRequest,
-    CombatantSpec,
-)
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 ENEMY_SECTIONS = ("敌人", "讨伐首领", "讨伐辅助", "讨伐属从")
@@ -66,19 +59,6 @@ def services(tmp_path_factory):
         built.core.database.close()
 
 
-def _spec(pid: str, cards: tuple[str, ...], *, group_id: str = "") -> CombatantSpec:
-    return CombatantSpec(
-        id=pid,
-        name=pid,
-        attributes=dict(ATTRS),
-        build=tuple(
-            CombatBuildRef("功法", card, instance_id=f"{pid}:{card}", born_order=index)
-            for index, card in enumerate(cards)
-        ),
-        group_id=group_id or f"玩家编组:{pid}",
-    )
-
-
 def test_every_enemy_definition_generates(services) -> None:
     """每个敌方定义都要真的生成得出来：一处抽错池子，整条探索/讨伐都进不去。"""
 
@@ -111,73 +91,8 @@ def test_every_enemy_definition_generates(services) -> None:
         if missing:
             broken.append(f"{section} 没抽出来的定义：{'、'.join(sorted(missing)[:3])}")
     assert not broken, broken
-    # 2026-10-17 缩减：每地点每类只留一个，敌人从 160 降到 94。
-    assert len(generated) >= 90
+    # 2026-10-17 改为 5 段全局敌人池：每段 5 个，共 25 个定义。
+    assert len(generated) >= 20
 
 
-def test_every_raid_generates(services) -> None:
-    """每个讨伐定义：首领 / 辅助 / 属从三池 + 奖励池都要抽得出来。"""
-
-    ids = tuple(services.data.entities("讨伐"))
-    assert ids, "库里没有讨伐定义"
-    broken: list[str] = []
-    for raid_id in ids:
-        definition = services.raid.definition(raid_id)
-        for 人数 in (1, 15):
-            try:
-                groups = services.raid.generate(
-                    definition,
-                    ally_group_count=人数,
-                    seed=SEED,
-                    instance_prefix=f"测试:{raid_id}:{人数}",
-                )
-            except Exception as exc:  # noqa: BLE001
-                broken.append(f"{raid_id}/{人数}组: {type(exc).__name__}: {exc}")
-                continue
-            if not groups.groups or not groups.boss_group.primary_ids:
-                broken.append(f"{raid_id}/{人数}组：首领编组为空")
-    assert not broken, broken
-
-
-def _raid_request(services, 人数: int, limit: int) -> CombatRequest:
-    raid_id = sorted(services.data.entities("讨伐"))[0]
-    definition = services.raid.definition(raid_id)
-    groups = services.raid.generate(
-        definition, ally_group_count=人数, seed=SEED, instance_prefix=f"测试:{人数}"
-    )
-    allies = tuple(
-        _spec(f"L{index}", ("400541",), group_id=f"玩家编组:L{index}")
-        for index in range(1, 人数 + 1)
-    )
-    enemies = tuple(
-        member.combatant for group in groups.groups for member in group.combatants
-    )
-    return CombatRequest(
-        left_team=allies,
-        right_team=enemies,
-        seed=SEED,
-        action_limit=limit,
-        left_groups=tuple(
-            CombatGroupSpec(f"玩家编组:L{index}", (f"L{index}",), (f"L{index}",))
-            for index in range(1, 人数 + 1)
-        ),
-        right_groups=tuple(
-            CombatGroupSpec(
-                group.group_id,
-                tuple(item.combatant.id for item in group.combatants),
-                group.primary_ids,
-            )
-            for group in groups.groups
-        ),
-    )
-
-
-def test_raid_battle_runs_past_the_designed_depth(services) -> None:
-    """讨伐真打一场：不抛错，而且没撞上两条链的深度上限。"""
-
-    result = asyncio.run(services.combat.execute(_raid_request(services, 3, 60)))
-    facts = {key for event in result.events for key in event.values}
-    assert result.left_results and result.right_results
-    assert any(event.kind == "行动开始" for event in result.events)
-    assert "链深度跳过" not in facts, "事件链上限不够：有事件没往下触发"
-    assert "能力链跳过" not in facts, "能力链上限不够：有能力没执行"
+# 讨伐两个测试已于 2026-10-17 随讨伐数据暂撤（只保留普通遭遇敌人）。

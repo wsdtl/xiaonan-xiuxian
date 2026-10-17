@@ -23,7 +23,9 @@ from .contracts import (
 )
 from .journey import JourneyPlanner
 
-_LOCATION_FIELDS = frozenset({"坐标", "说明", "可用功能", "功能配置", "单次遭遇敌人倍率"})
+_LOCATION_FIELDS = frozenset(
+    {"坐标", "说明", "可用功能", "功能配置", "单次遭遇敌人倍率", "刷新区间"}
+)
 _REGION_FIELDS = frozenset({"类别", "坐标带", "说明"})
 _TERRAIN_ZONE_FIELDS = frozenset({"名称", "地形", "坐标带"})
 
@@ -295,10 +297,9 @@ class WorldService:
             if location_key and "道侣" in content_sections
             else ()
         )
-        enemy_pool = (
-            (f"{location_key}敌人",)
-            if location_key and "敌人" in content_sections
-            else ()
+        #: 敌人的来源是「这一带刷哪几段」：区间在数据里，敌人池按段全局共享。
+        enemy_pool = tuple(
+            str(value) for value in (raw.get("刷新区间") or () if location_key else ())
         )
         return LocationView(
             location_key=location_key,
@@ -878,7 +879,9 @@ def _validate_location_data(
         raise JsonDataError(
             f"地点 {location_name} 缺少专属功能配置：{'、'.join(sorted(missing_configs))}"
         )
-    declared_optional = set(raw) - {"坐标", "说明", "可用功能", "功能配置"}
+    declared_optional = set(raw) - {
+        "坐标", "说明", "可用功能", "功能配置", "刷新区间"
+    }
     undeclared_optional = declared_optional - required_fields
     if undeclared_optional:
         raise JsonDataError(
