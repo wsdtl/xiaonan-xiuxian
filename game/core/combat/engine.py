@@ -1062,6 +1062,7 @@ class BattleEngine(AbilityRuntime):
         attributes = self._normalize_attributes(attributes)
         health_max = max(1.0, attributes.get("血气上限", 1))
         spirit_max = max(0.0, attributes.get("精神上限", 0))
+        soul_max = max(0.0, attributes.get("神魂上限", 0))
         return Fighter(
             id=str(snapshot.id),
             name=str(snapshot.name or "无名参战者"),
@@ -1076,8 +1077,15 @@ class BattleEngine(AbilityRuntime):
                 0,
                 spirit_max,
             ),
+            soul=self._clamp(
+                soul_max if snapshot.soul is None else snapshot.soul,
+                0,
+                soul_max,
+            ),
             shield=self._clamp(
-                snapshot.shield, 0, max(0.0, attributes.get("护盾上限", 0))
+                snapshot.shield,
+                0,
+                max(0.0, health_max * attributes.get("护盾上限", 0) / 100.0),
             ),
             statuses=[
                 self._status_with_rules(value, f"{snapshot.name}.战前状态")
@@ -1122,6 +1130,8 @@ class BattleEngine(AbilityRuntime):
             combatant_type=fighter.combatant_type,
             health=max(0.0, round(fighter.health, 3)),
             spirit=max(0.0, round(fighter.spirit, 3)),
+            soul=max(0.0, round(fighter.soul, 3)),
+            soul_max=max(0.0, round(fighter.value("神魂上限", 0.0), 3)),
             shield=max(0.0, round(fighter.shield, 3)),
             statuses=tuple(
                 BattleEngine._status_result(status)
@@ -1206,67 +1216,34 @@ class BattleEngine(AbilityRuntime):
         return tuple(value[-1] for value in ready)
 
     def _action_efficiency(self, context: BattleContext, fighter: Fighter) -> float:
+        """行动效率 = 有效速度 ÷ 标准速度（线性，不设上限）。
+
+        速度是多少就出多少次手：速度 100 是 1 倍、300 是 3 倍。上限由属性表的
+        `速度.最高值` 兜住，公式里不再有第二个天花板。
+        """
+
+        del context
         rules = self.catalog.action_rules
         baseline = max(0.0001, float(rules.get("标准速度", 100)))
         minimum = max(0.0001, float(rules.get("最低有效速度", 25)))
-        global_limit = max(1.000001, float(rules.get("最高行动效率", 2)))
-        limit = max(
-            1.000001, float(fighter.battle_profile.get("行动效率上限", global_limit))
-        )
         effective = max(minimum, fighter.value("速度", 100))
-        efficiency = limit * effective / (effective + (limit - 1) * baseline)
-
-        response = dict(fighter.battle_profile.get("寡敌应变") or {})
-        extra_enemies = max(0, len(context.enemies_of(fighter)) - 1)
-        response_per_enemy = max(0.0, float(response.get("每名额外敌人行动效率", 0)))
-        response_limit = max(0.0, float(response.get("行动效率增量上限", 0)))
-        response_bonus = min(extra_enemies * response_per_enemy, response_limit)
-        return min(limit, efficiency + response_bonus)
+        return effective / baseline
 
     @staticmethod
     def _normalize_battle_profile(value: Mapping[str, object] | None) -> dict[str, object]:
         profile = copy.deepcopy(dict(value or {}))
-        allowed = {"行动效率上限", "寡敌应变", "同时承受控制上限", "控制持续上限"}
+        allowed = {"同时承受控制上限", "控制持续上限"}
         unknown = set(profile) - allowed
         if unknown:
             raise ValueError(
                 "战斗规格存在未知字段："
                 + "、".join(sorted(str(item) for item in unknown))
             )
-        if "行动效率上限" in profile:
-            limit = profile["行动效率上限"]
-            if (
-                isinstance(limit, bool)
-                or not isinstance(limit, (int, float))
-                or limit <= 1
-            ):
-                raise ValueError("战斗规格.行动效率上限必须是大于 1 的数字")
         for field in ("同时承受控制上限", "控制持续上限"):
             if field in profile:
                 limit = profile[field]
                 if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
                     raise ValueError(f"战斗规格.{field}必须是正整数")
-        response = profile.get("寡敌应变")
-        if response is not None:
-            if not isinstance(response, Mapping):
-                raise ValueError("战斗规格.寡敌应变必须是字典")
-            response = dict(response)
-            expected = {"每名额外敌人行动效率", "行动效率增量上限"}
-            unknown = set(response) - expected
-            if unknown:
-                raise ValueError(
-                    "战斗规格.寡敌应变存在未知字段："
-                    + "、".join(sorted(str(item) for item in unknown))
-                )
-            for field in expected:
-                number = response.get(field, 0)
-                if (
-                    isinstance(number, bool)
-                    or not isinstance(number, (int, float))
-                    or number < 0
-                ):
-                    raise ValueError(f"战斗规格.寡敌应变.{field}必须是非负数字")
-            profile["寡敌应变"] = response
         return profile
 
     def _technique_rules(self, techniques: tuple[Mapping[str, Any], ...], attributes: dict[str, float]) -> tuple[tuple[Skill, ...], tuple[Skill, ...], dict[str, dict]]:
@@ -1490,23 +1467,6 @@ class BattleEngine(AbilityRuntime):
     def _recover_at_action_start(self, context: BattleContext, actor: Fighter) -> None:
         self._bloodline_at_action_start(context, actor)
         self._growth_at_action_start(context, actor)
-        for resource, attribute in dict(
-            self.catalog.action_rules.get("行动开始恢复") or {}
-        ).items():
-            amount = actor.value(str(attribute), 0)
-            if amount > 0:
-                self._ability_recover_resource(
-                    context,
-                    actor,
-                    actor,
-                    {
-                        "目标": {"能力": "选择目标", "范围": "自身"},
-                        "资源": resource,
-                        "数值": amount,
-                        "标签": ["自然恢复"],
-                    },
-                    1,
-                )
 
     def _tick_cooldowns(self, context: BattleContext, fighter: Fighter) -> None:
         decrement = int(self.catalog.action_rules["技能冷却"]["推进"]["每次减少"])
@@ -1867,20 +1827,29 @@ class BattleEngine(AbilityRuntime):
             can_block=can_block,
             tags=tuple(tags),
         )
-        if can_lifesteal and resolution.health_damage > 0 and source.alive:
-            rate = self._percent(source, "吸血率")
-            if rate > 0:
-                self._ability_recover_resource(
-                    context,
-                    source,
-                    source,
-                    {
-                        "目标": {"能力": "选择目标", "范围": "自身"},
-                        "资源": "血气",
-                        "数值": resolution.health_damage * rate,
-                    },
-                    1,
-                )
+        if can_lifesteal and source.alive:
+            resource = resolution.request.resource
+            dealt = (
+                resolution.soul_damage
+                if resource == "神魂"
+                else resolution.health_damage
+            )
+            if dealt > 0:
+                rate = self._percent(
+                    source, "神魂吸血率" if resource == "神魂" else "吸血率"
+                ) + self._percent(source, "全能吸血率")
+                if rate > 0:
+                    self._ability_recover_resource(
+                        context,
+                        source,
+                        source,
+                        {
+                            "目标": {"能力": "选择目标", "范围": "自身"},
+                            "资源": resource,
+                            "数值": dealt * rate,
+                        },
+                        1,
+                    )
         if (
             allow_followups
             and resolution.actual_damage > 0
@@ -1909,6 +1878,7 @@ class BattleEngine(AbilityRuntime):
         label: str="伤害",
         damage_form: str="直接",
         defense_rule: str="普通",
+        resource: str="血气",
         can_miss: bool=False,
         can_critical: bool=True,
         can_block: bool=True,
@@ -1965,6 +1935,7 @@ class BattleEngine(AbilityRuntime):
                 label=label,
                 damage_form=damage_form,
                 defense_rule=effective_rule,
+                resource=resource,
                 tags=tags,
                 can_miss=can_miss,
                 can_critical=allow_critical,
@@ -2036,7 +2007,10 @@ class BattleEngine(AbilityRuntime):
                     resolution, float(fatal.facts.get("保留血气", 1))
                 )
         target.shield = resolution.shield_after
-        target.health = resolution.health_after
+        if resolution.request.resource == "神魂":
+            target.soul = resolution.soul_after
+        else:
+            target.health = resolution.health_after
         values = resolution.values()
         values["伤害名称"] = resolution.request.label
         values["实际数值"] = resolution.actual_damage
@@ -2145,6 +2119,7 @@ class BattleEngine(AbilityRuntime):
                     label="反伤",
                     damage_form="反伤",
                     defense_rule="真实",
+                    resource=resolution.request.resource,
                     can_critical=False,
                     can_block=False,
                     tags=("反伤", "派生伤害"),

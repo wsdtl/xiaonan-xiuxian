@@ -934,7 +934,13 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     from game.features.xuemai.migrations import migrate_v1
 
     register_migration(1, migrate_v1)
-    hunpei = HunpeiFeature(data, character, companion, database, xuemai, asset, weizhi)
+    from game.features.hunpei.store import BirthRequestStore
+
+    # 求子请求住非资产日志库：路径与战报、消息流水同源，过期即失效。
+    birth_requests = BirthRequestStore(runtime_log_database_path())
+    hunpei = HunpeiFeature(
+        data, character, companion, database, xuemai, asset, weizhi, birth_requests
+    )
     hunpei.initialize()
     _bloodline_holder["hunpei"] = hunpei
     renwu_peiyang = CharacterCultivationFeature(

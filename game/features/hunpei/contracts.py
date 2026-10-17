@@ -1,5 +1,4 @@
 """婚配（生育）玩法的稳定公共契约。"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -63,6 +62,38 @@ class BirthView:
     generation: int
     births_this_generation: int
     births_limit: int
+
+
+@dataclass(frozen=True)
+class BirthAsk:
+    """一次求子请求被登记后的回执。"""
+
+    request_id: str
+    target_id: str
+    target_name: str
+    expires_at: float
+
+
+@dataclass(frozen=True)
+class BirthRequestView:
+    """别人发给我的一条求子请求（展示用）。"""
+
+    request_id: str
+    asker_id: str
+    asker_name: str
+    created_at: str
+    expires_at: float
+
+
+@dataclass(frozen=True)
+class BirthRespond:
+    """我对一条求子请求的回应结果。"""
+
+    request_id: str
+    asker_id: str
+    asker_name: str
+    agreed: bool
+    result: BirthResult | None
 
 
 @dataclass(frozen=True)

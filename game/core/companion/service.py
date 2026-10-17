@@ -120,17 +120,20 @@ class CompanionService:
             self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         self._rules = self._load_rules()
+        self._coverable = frozenset(
+            str(value)
+            for value in (
+                _mapping(
+                    self._data.dataset("角色规则").get("人物"), "角色规则.人物"
+                ).get("属性覆盖白名单")
+                or ()
+            )
+        )
         self._attribute_definitions = _mapping(
             self._data.dataset("战斗定义").get("属性"), "战斗定义.属性"
         )
         self._plant_pool_meridians = self._load_plant_pool_meridians()
         self._race_options = self._load_race_options()
-        if (
-            self._rules.qualification_growth_minimum <= 0
-            or self._rules.qualification_growth_maximum
-            < self._rules.qualification_growth_minimum
-        ):
-            raise JsonDataError("道侣资质成长倍率必须为正数且最高倍率不低于最低倍率")
         if self._rules.active_limit != 1:
             raise JsonDataError("当前同行位契约要求道侣.同行上限为1")
         if self._rules.full_reward_lifetime_limit != 1:
@@ -306,8 +309,6 @@ class CompanionService:
             "属性",
             "修行槽",
             "本命武器",
-            "资质",
-            "属性倍率",
             "突破记录",
             "资源",
             "自动用药",
@@ -316,13 +317,6 @@ class CompanionService:
         }
         if set(value) != expected:
             raise CompanionStateError("道侣实例字段不完整")
-        multipliers_value = _state_mapping(value.get("属性倍率"), "道侣实例.属性倍率")
-        if set(multipliers_value) != set(definition.fluctuating_attributes):
-            raise CompanionStateError("道侣实例属性倍率与正式定义不一致")
-        multipliers = {
-            str(key): _state_positive_int(raw, f"道侣实例.属性倍率.{key}")
-            for key, raw in multipliers_value.items()
-        }
         realm_id = _state_text(value.get("境界"), "道侣实例.境界")
         self._growth.realm(realm_id)
         attributes_value = _state_mapping(value.get("属性"), "道侣实例.属性")
@@ -378,8 +372,6 @@ class CompanionService:
             weapon_level,
             _state_nonnegative_int(weapon.get("经验"), "道侣实例.本命武器.经验"),
             weapon_laws,
-            _state_positive_int(value.get("资质"), "道侣实例.资质"),
-            MappingProxyType(multipliers),
             tuple(
                 _state_mapping(raw, "道侣实例.突破记录[]")
                 for raw in _state_sequence(
@@ -445,6 +437,7 @@ class CompanionService:
             build=build,
             health=float(instance.resources["血气"]),
             spirit=float(instance.resources["精神"]),
+            soul=float(instance.resources.get("神魂", instance.attributes.get("神魂上限", 0))),
             auto_medicine=instance.automatic_medicine,
             owner_id=user_id,
             controller_id=user_id,
@@ -465,7 +458,6 @@ class CompanionService:
                 str(key): float(value)
                 for key, value in self._growth.cultivator_attribute_growth(
                     max(0, int(instance.level) - 1),
-                    multiplier=_qualification_multiplier(instance, definition, self.rules()),
                 ).items()
             },
             growth_amplifier=1.0,
@@ -496,14 +488,9 @@ class CompanionService:
             )
         except ValueError as exc:
             raise CompanionCultivationError(str(exc)) from exc
-        definition = self.definition(before.companion_id)
-        multiplier = _qualification_multiplier(before, definition, self.rules())
         attributes = _add_numbers(
             before.attributes,
-            self._growth.cultivator_attribute_growth(
-                cultivator.levels_gained,
-                multiplier=multiplier,
-            ),
+            self._growth.cultivator_attribute_growth(cultivator.levels_gained),
         )
         after = CompanionInstance(
             before.companion_id,
@@ -516,8 +503,6 @@ class CompanionService:
             weapon.level_after,
             weapon.experience_after,
             before.weapon_laws,
-            before.qualification,
-            before.attribute_multipliers,
             before.breakthrough_records,
             before.version + 1,
             before.resources,
@@ -618,8 +603,6 @@ class CompanionService:
             for record in before.breakthrough_records
         ):
             raise CompanionCultivationError("该道侣已经完成此次境界突破")
-        definition = self.definition(before.companion_id)
-        multiplier = _qualification_multiplier(before, definition, self.rules())
         advance = self._growth.advance_cultivator(
             level=before.level,
             experience=before.experience,
@@ -629,10 +612,7 @@ class CompanionService:
         attributes = _add_numbers(before.attributes, permanent)
         attributes = _add_numbers(
             attributes,
-            self._growth.cultivator_attribute_growth(
-                advance.levels_gained,
-                multiplier=multiplier,
-            ),
+            self._growth.cultivator_attribute_growth(advance.levels_gained),
         )
         records = before.breakthrough_records + (
             MappingProxyType(
@@ -654,8 +634,6 @@ class CompanionService:
             before.weapon_level,
             before.weapon_experience,
             before.weapon_laws,
-            before.qualification,
-            before.attribute_multipliers,
             records,
             before.version + 1,
             before.resources,
@@ -707,8 +685,6 @@ class CompanionService:
             before.weapon_level,
             before.weapon_experience,
             tuple(laws),
-            before.qualification,
-            before.attribute_multipliers,
             before.breakthrough_records,
             before.version + 1,
             before.resources,
@@ -906,14 +882,9 @@ class CompanionService:
             )
         except ValueError as exc:
             raise CompanionCultivationError(str(exc)) from exc
-        definition = self.definition(before.companion_id)
-        multiplier = _qualification_multiplier(before, definition, self.rules())
         attributes = _add_numbers(
             before.attributes,
-            self._growth.cultivator_attribute_growth(
-                advance.levels_gained,
-                multiplier=multiplier,
-            ),
+            self._growth.cultivator_attribute_growth(advance.levels_gained),
         )
         health_maximum = _state_number(attributes.get("血气上限"), "道侣.血气上限")
         spirit_maximum = _state_number(attributes.get("精神上限"), "道侣.精神上限")
@@ -962,11 +933,7 @@ class CompanionService:
         before = current.instance
         definition = self.definition(before.companion_id)
         initial_realm = self._growth.realm_for_level(1)
-        attributes = self._initial_attributes(
-            definition,
-            before.qualification,
-            before.attribute_multipliers,
-        )
+        attributes = self._initial_attributes(definition)
         resources = {
             resource: bounded_number(
                 before.resources.get(resource),
@@ -1322,26 +1289,12 @@ class CompanionService:
         random_source: random.Random | None,
     ) -> CompanionInstance:
         source = random_source or random.SystemRandom()
-        qualification = source.randint(*definition.qualification_range)
-        multipliers = {
-            attribute: source.randint(*definition.attribute_multiplier_range)
-            for attribute in definition.fluctuating_attributes
-        }
-        attributes = self._initial_attributes(definition, qualification, multipliers)
+        attributes = self._initial_attributes(definition)
         attributes = _add_numbers(
             attributes,
-            self._growth.cultivator_attribute_growth(
-                max(0, definition.level - 1),
-                multiplier=_qualification_multiplier_value(
-                    qualification, definition, self.rules()
-                ),
-            ),
+            self._growth.cultivator_attribute_growth(max(0, definition.level - 1)),
         )
-        build = self._growth.random_companion_build(
-            pools=definition.cultivation_pools,
-            slots=self.rules().cultivation_slots,
-            seed=source.getrandbits(64),
-        )
+        fixed = definition.fixed_build
         return CompanionInstance(
             definition.companion_id,
             definition.realm_id,
@@ -1350,17 +1303,14 @@ class CompanionService:
             MappingProxyType(attributes),
             MappingProxyType(
                 {
-                    "功法": build.techniques,
-                    "真意": build.intents,
-                    "气机": build.qi_patterns,
+                    category: tuple(str(item) for item in fixed.get(category) or ())
+                    for category in ("功法", "真意", "气机")
                 }
             ),
             definition.weapon_name,
             definition.weapon_level,
             definition.weapon_experience,
             definition.weapon_laws,
-            qualification,
-            MappingProxyType(multipliers),
             (),
             1,
             MappingProxyType(
@@ -1377,23 +1327,12 @@ class CompanionService:
     def _initial_attributes(
         self,
         definition: CompanionDefinition,
-        qualification: int,
-        multipliers: Mapping[str, int],
     ) -> dict[str, int | float]:
-        minimum, maximum = definition.qualification_range
-        if not minimum <= qualification <= maximum:
-            raise CompanionStateError("道侣资质超出正式定义范围")
-        if set(multipliers) != set(definition.fluctuating_attributes):
-            raise CompanionStateError("道侣属性倍率与正式定义不一致")
-        overrides = {
-            name: _scaled_number(raw, multipliers.get(name, 100))
-            for name, raw in definition.attribute_overrides.items()
-        }
         attributes = {
             name: _number(_mapping(raw, f"属性.{name}").get("默认值"), name)
             for name, raw in self._attribute_definitions.items()
         }
-        attributes.update(overrides)
+        attributes.update(dict(definition.attribute_overrides))
         return attributes
 
     def _load_rules(self) -> CompanionRules:
@@ -1415,10 +1354,6 @@ class CompanionService:
             raise JsonDataError("道侣拒绝赠礼倍率必须为0")
         reward = _mapping(value.get("圆满回礼"), "道侣.圆满回礼")
         slots_value = _mapping(value.get("修行槽位"), "道侣.修行槽位")
-        qualification_growth = _mapping(value.get("资质成长修正"), "道侣.资质成长修正")
-        # 资质成长按线性插值算（插值本身写在属性成长处）。算法名写在数据里，这里读死。
-        if qualification_growth.get("算法") != "线性插值":
-            raise JsonDataError("道侣资质成长修正的算法必须是「线性插值」")
         medicine_rules = _mapping(
             self._data.dataset("服丹规则").get("服丹"), "玩法/服丹/规则/服丹.json"
         )
@@ -1450,8 +1385,6 @@ class CompanionService:
                     for category in ("功法", "真意", "气机")
                 }
             ),
-            Decimal(str(qualification_growth.get("最低倍率"))),
-            Decimal(str(qualification_growth.get("最高倍率"))),
             _bool(medicine_auto.get("默认开启"), "服丹.自动用药.默认开启"),
         )
 
@@ -1540,8 +1473,22 @@ class CompanionService:
             self._data.entity("丹药", reward.item_id)
         if reward.grade_id not in grade_ids:
             raise JsonDataError(f"道侣 {companion_id} 使用未知回礼品级")
-        fluctuation = _mapping(value.get("实力波动"), "道侣.实力波动")
         attributes = _mapping(value.get("属性覆盖"), "道侣.属性覆盖")
+        unknown = set(attributes) - self._coverable
+        if unknown:
+            raise JsonDataError(
+                f"道侣 {companion_id}.属性覆盖只能覆盖成长属性："
+                + "、".join(sorted(unknown))
+            )
+        build_value = _mapping(value.get("构筑"), f"道侣 {companion_id}.构筑")
+        fixed_build = MappingProxyType(
+            {
+                category: tuple(
+                    str(item) for item in (build_value.get(category) or ())
+                )
+                for category in ("功法", "真意", "气机")
+            }
+        )
         cultivation_pools = MappingProxyType(
             {
                 category: _text(
@@ -1564,8 +1511,6 @@ class CompanionService:
         )
         for law_id in weapon_laws:
             self._data.entity("器律", law_id)
-        qualification = _integer_range(value.get("资质范围"), "道侣.资质范围")
-        multiplier_range = _integer_range(fluctuation.get("倍率"), "道侣.实力波动.倍率")
         realm_id, realm_name = matches[0]
         return CompanionDefinition(
             companion_id,
@@ -1594,10 +1539,8 @@ class CompanionService:
                 _text(join.get("邀约话语"), "道侣.结交.邀约话语"),
                 _text(join.get("暂别话语"), "道侣.结交.暂别话语"),
             ),
-            qualification,
-            _text_sequence(fluctuation.get("属性"), "道侣.实力波动.属性"),
-            multiplier_range,
             cultivation_pools,
+            fixed_build,
             MappingProxyType(
                 {
                     str(key): _number(raw, f"道侣 {companion_id}.属性覆盖.{key}")
@@ -1745,8 +1688,6 @@ def _instance_value(
             "器阶": stage_name,
             "器律": list(instance.weapon_laws),
         },
-        "资质": instance.qualification,
-        "属性倍率": dict(instance.attribute_multipliers),
         "突破记录": [dict(record) for record in instance.breakthrough_records],
         "资源": dict(instance.resources),
         "自动用药": instance.automatic_medicine,
@@ -1791,34 +1732,6 @@ def _positive_number(value: object, label: str) -> float:
 
 def _clean_number(value: float) -> int | float:
     return int(value) if value.is_integer() else round(value, 4)
-
-
-def _scaled_number(value: float, multiplier: int) -> int | float:
-    result = float(value) * multiplier / 100
-    return int(result) if result.is_integer() else round(result, 4)
-
-
-def _qualification_multiplier(
-    instance: CompanionInstance,
-    definition: CompanionDefinition,
-    rules: CompanionRules,
-) -> float:
-    return _qualification_multiplier_value(instance.qualification, definition, rules)
-
-
-def _qualification_multiplier_value(
-    qualification: int,
-    definition: CompanionDefinition,
-    rules: CompanionRules,
-) -> float:
-    minimum, maximum = definition.qualification_range
-    if minimum == maximum:
-        return 1.0
-    progress = Decimal(qualification - minimum) / Decimal(maximum - minimum)
-    result = rules.qualification_growth_minimum + progress * (
-        rules.qualification_growth_maximum - rules.qualification_growth_minimum
-    )
-    return float(result)
 
 
 def _add_numbers(
@@ -1929,17 +1842,6 @@ def _state_sequence(
 
 def _text_sequence(value: object, label: str) -> tuple[str, ...]:
     return tuple(_text(raw, f"{label}[]") for raw in _sequence(value, label))
-
-
-def _integer_range(value: object, label: str) -> tuple[int, int]:
-    values = _sequence(value, label)
-    if len(values) != 2:
-        raise JsonDataError(f"{label}必须包含下限和上限")
-    minimum = _positive_int(values[0], f"{label}.下限")
-    maximum = _positive_int(values[1], f"{label}.上限")
-    if minimum > maximum:
-        raise JsonDataError(f"{label}下限不能大于上限")
-    return minimum, maximum
 
 
 def _state_text(value: object, label: str) -> str:

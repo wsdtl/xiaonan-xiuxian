@@ -1980,6 +1980,7 @@ class AbilityRuntime(ChainRuntime):
                 label=context.current_ability or str(effect.get("名称") or "伤害"),
                 damage_form=str(effect.get("伤害形式") or "直接"),
                 defense_rule=str(effect.get("防御规则") or "普通"),
+                resource=str(effect.get("资源") or "血气"),
                 can_miss=bool(effect.get("能否闪避", False)),
                 can_critical=bool(effect.get("能否暴击", True)),
                 can_block=bool(effect.get("能否格挡", True)),
@@ -2776,6 +2777,7 @@ class AbilityRuntime(ChainRuntime):
             fighter.active = True
             fighter.health = max(1.0, fighter.health_max * float(effect.get("血气百分比", 10)) / 100.0 * multiplier)
             fighter.spirit = fighter.spirit_max * float(effect.get("精神百分比", 0)) / 100.0
+            fighter.soul = max(0.0, fighter.soul_max * float(effect.get("血气百分比", 10)) / 100.0 * multiplier)
             self._dispatch_event(context, kind="复活后", source=source, target=fighter, amount=fighter.health, values={"实际数值": fighter.health})
             changed = True
         return changed
@@ -3791,6 +3793,7 @@ class AbilityRuntime(ChainRuntime):
     _RESOURCE_FIELDS = {
         "血气": "health",
         "精神": "spirit",
+        "神魂": "soul",
         "护盾": "shield",
     }
 

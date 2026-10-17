@@ -217,7 +217,7 @@ def invitation(
     elif result.first_invitation:
         builder.line(
             M.status("邀约成功", tone="positive"), " ", text(copy, "邀约", "首次同行")
-        ).row(("资质", result.instance.qualification), ("同行", definition.name))
+        ).row(("同行", definition.name))
     else:
         builder.line(
             M.status("邀约成功", tone="positive"),

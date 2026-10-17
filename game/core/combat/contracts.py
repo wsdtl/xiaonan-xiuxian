@@ -112,6 +112,7 @@ class CombatantSpec:
     build: tuple[CombatBuildRef, ...] = ()
     health: float | None = None
     spirit: float | None = None
+    soul: float | None = None
     shield: float = 0.0
     statuses: tuple[Mapping[str, Any], ...] = ()
     prepared_statuses: tuple[CombatStatusSpec, ...] = ()
@@ -300,6 +301,7 @@ class CombatantResult:
     combatant_type: str
     health: float
     spirit: float
+    soul: float
     shield: float
     statuses: tuple[StatusResult, ...]
     cooldowns: Mapping[str, int]
@@ -314,10 +316,13 @@ class CombatantResult:
     group_role: str = "主战者"
     counts_for_victory: bool = True
     five_elements: Mapping[str, float] = field(default_factory=dict)
+    soul_max: float = 0.0
 
     @property
     def alive(self) -> bool:
-        return self.health > 0
+        if self.health <= 0:
+            return False
+        return self.soul_max <= 0 or self.soul > 0
 
 
 @dataclass(frozen=True)

@@ -17,6 +17,7 @@ class DamageRequest:
     label: str
     damage_form: str = "直接"
     defense_rule: str = "普通"
+    resource: str = "血气"
     tags: tuple[str, ...] = ()
     can_miss: bool = False
     can_critical: bool = True
@@ -59,13 +60,16 @@ class DamageResolution:
     overkill: float
     health_before: float
     health_after: float
+    soul_damage: float
+    soul_before: float
+    soul_after: float
     shield_before: float
     shield_after: float
     breakdown: DamageBreakdown
 
     @property
     def actual_damage(self) -> float:
-        return self.shield_damage + self.health_damage
+        return self.shield_damage + self.health_damage + self.soul_damage
 
     def values(self) -> dict[str, Any]:
         value = self.breakdown
@@ -93,12 +97,15 @@ class DamageResolution:
             "边界后伤害": value.limited,
             "护盾伤害": self.shield_damage,
             "血气伤害": self.health_damage,
+            "神魂伤害": self.soul_damage,
             "过量伤害": self.overkill,
             "实际伤害": self.actual_damage,
             "伤害前护盾": self.shield_before,
             "伤害后护盾": self.shield_after,
             "伤害前血气": self.health_before,
             "伤害后血气": self.health_after,
+            "伤害前神魂": self.soul_before,
+            "伤害后神魂": self.soul_after,
             "伤害形式": self.request.damage_form,
             "防御规则": self.request.defense_rule,
         }
@@ -115,6 +122,9 @@ class _LandedDamage:
     health_before: float
     health_after: float
     health_damage: float
+    soul_before: float
+    soul_after: float
+    soul_damage: float
     overkill: float
 
 
@@ -163,6 +173,9 @@ def _missed_resolution(
         0.0,
         target.health,
         target.health,
+        0.0,
+        target.soul,
+        target.soul,
         target.shield,
         target.shield,
         empty,
@@ -247,13 +260,17 @@ class DamageEngine:
             True,
             critical,
             blocked,
-            landed.health_before > 0 and landed.health_after <= 0,
+            (landed.health_before > 0 and landed.health_after <= 0)
+            or (landed.soul_before > 0 and landed.soul_after <= 0),
             landed.shield_before > 0 and landed.shield_after <= 0,
             landed.shield_damage,
             landed.health_damage,
             landed.overkill,
             landed.health_before,
             landed.health_after,
+            landed.soul_damage,
+            landed.soul_before,
+            landed.soul_after,
             landed.shield_before,
             landed.shield_after,
             breakdown,
@@ -367,10 +384,7 @@ class DamageEngine:
             rate_penetration = self._clamp(
                 self._percent(source, "比例穿透"), 0.0, 1.0
             )
-            flat_penetration = max(0.0, source.value("固定穿透", 0.0))
-            effective_defense = (
-                defense * (1.0 - rate_penetration) - flat_penetration
-            )
+            effective_defense = defense * (1.0 - rate_penetration)
             constant = max(0.0001, float(self.rules.get("防御常数", 100)))
             if effective_defense >= 0:
                 defense_multiplier = constant / (constant + effective_defense)
@@ -457,11 +471,20 @@ class DamageEngine:
         shield_before = target.shield
         shield_damage = 0.0 if request.bypass_shield else min(shield_before, limited)
         shield_after = max(0.0, shield_before - shield_damage)
-        pending_health = max(0.0, limited - shield_damage)
+        pending = max(0.0, limited - shield_damage)
         health_before = target.health
-        health_damage = min(max(0.0, health_before), pending_health)
-        health_after = max(0.0, health_before - health_damage)
-        overkill = max(0.0, pending_health - health_damage)
+        soul_before = target.soul
+        if request.resource == "神魂":
+            health_after = health_before
+            health_damage = 0.0
+            soul_damage = min(max(0.0, soul_before), pending)
+            soul_after = max(0.0, soul_before - soul_damage)
+        else:
+            health_damage = min(max(0.0, health_before), pending)
+            health_after = max(0.0, health_before - health_damage)
+            soul_after = soul_before
+            soul_damage = 0.0
+        overkill = max(0.0, pending - (health_damage + soul_damage))
         return _LandedDamage(
             limited,
             shield_before,
@@ -470,6 +493,9 @@ class DamageEngine:
             health_before,
             health_after,
             health_damage,
+            soul_before,
+            soul_after,
+            soul_damage,
             overkill,
         )
 
@@ -478,6 +504,19 @@ class DamageEngine:
         resolution: DamageResolution,
         minimum_health: float,
     ) -> DamageResolution:
+        if resolution.request.resource == "神魂":
+            floor = max(0.0, min(resolution.soul_before, float(minimum_health)))
+            pending = max(0.0, resolution.breakdown.limited - resolution.shield_damage)
+            soul_damage = min(max(0.0, resolution.soul_before - floor), pending)
+            soul_after = max(floor, resolution.soul_before - soul_damage)
+            overkill = max(0.0, pending - soul_damage)
+            return replace(
+                resolution,
+                defeated=False,
+                soul_damage=soul_damage,
+                soul_after=soul_after,
+                overkill=overkill,
+            )
         floor = max(0.0, min(resolution.health_before, float(minimum_health)))
         pending = max(0.0, resolution.breakdown.limited - resolution.shield_damage)
         health_damage = min(max(0.0, resolution.health_before - floor), pending)
@@ -505,10 +544,25 @@ class DamageEngine:
             else min(resolution.shield_before, limited)
         )
         shield_after = max(0.0, resolution.shield_before - shield_damage)
-        pending_health = max(0.0, limited - shield_damage)
-        health_damage = min(max(0.0, resolution.health_before), pending_health)
+        pending = max(0.0, limited - shield_damage)
+        if resolution.request.resource == "神魂":
+            soul_damage = min(max(0.0, resolution.soul_before), pending)
+            soul_after = max(0.0, resolution.soul_before - soul_damage)
+            overkill = max(0.0, pending - soul_damage)
+            return replace(
+                resolution,
+                defeated=resolution.soul_before > 0 and soul_after <= 0,
+                shield_broken=resolution.shield_before > 0 and shield_after <= 0,
+                shield_damage=shield_damage,
+                soul_damage=soul_damage,
+                overkill=overkill,
+                soul_after=soul_after,
+                shield_after=shield_after,
+                breakdown=replace(resolution.breakdown, limited=limited),
+            )
+        health_damage = min(max(0.0, resolution.health_before), pending)
         health_after = max(0.0, resolution.health_before - health_damage)
-        overkill = max(0.0, pending_health - health_damage)
+        overkill = max(0.0, pending - health_damage)
         return replace(
             resolution,
             defeated=resolution.health_before > 0 and health_after <= 0,

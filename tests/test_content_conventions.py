@@ -172,18 +172,6 @@ def test_every_race_rule_is_registered(services) -> None:
         组合[names] = name
 
 
-def test_every_race_is_reachable_by_generation(services) -> None:
-    """每个种族都要在敌方档次里出得来：抽不到就是躺着的死数据。"""
-
-    tiers = services.enemy.races_by_tier()
-    assert tiers, "档次→种族 是空的：生成侧抽不到任何种族"
-    seen: set[str] = set()
-    for names in tiers.values():
-        seen |= set(names)
-    missing = sorted(set(services.enemy.races()) - seen)
-    assert not missing, f"这些种族任何档次都抽不到：{missing}"
-
-
 def test_generated_enemies_carry_race_rules(services) -> None:
     """敌人真的会带上种族的天生规则（这一条从生成入口走到 `CombatantSpec`）。"""
 
@@ -215,13 +203,9 @@ def test_companions_have_a_registered_race(services) -> None:
 
 
 def test_race_side_layers_are_readable(services) -> None:
-    """种族的另外两样也要读得出来：寿元系数、卡池来源。
-
-    「成长修正」已废除（委托方 2026-10-16：种族只留天生锁定技），所以不再断言两边一致。
-    """
+    """种族只剩两样：天生规则与寿元系数（出现档次、卡池来源已于 2026-10-17 删除）。"""
 
     for name in services.enemy.races():
-        assert services.enemy.pool_source(name) in {"敌方修士", "灵兽"}
         assert services.character.race_lifespan_factor(name) > 0
     assert services.character.race_lifespan_factor("人族") == 1.0
 

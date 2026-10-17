@@ -71,12 +71,7 @@ class ZhongzuFeature:
         cards = self._load_cards()
         races = self._character.races()
         grouped: dict[str, list[RaceEntry]] = {}
-        tiers: list[str] = []
         for name, entry in races.items():
-            entry_tiers = tuple(str(tier) for tier in entry.get("出现档次") or ())
-            for tier in entry_tiers:
-                if tier not in tiers:
-                    tiers.append(tier)
             used = tuple(
                 (str(node.get("名称") or ""), str(node.get("来源") or ""))
                 for node in entry.get("天生规则") or ()
@@ -88,7 +83,7 @@ class ZhongzuFeature:
                 number=str(entry.get("编号") or ""),
                 name=name,
                 lineage=str(entry.get("族系") or ""),
-                tiers=entry_tiers,
+                tiers=(),
                 lifespan=float(str(entry.get("寿元系数") or 1.0)),
                 benefits=tuple(faces[:-1]),
                 cost=faces[-1] if faces else "",
@@ -101,7 +96,7 @@ class ZhongzuFeature:
             RaceLineage(name=lineage, races=tuple(sorted(rows, key=lambda row: row.number)))
             for lineage, rows in grouped.items()
         )
-        overview = RaceOverview(total=len(races), lineages=lineages, tiers=tuple(tiers))
+        overview = RaceOverview(total=len(races), lineages=lineages, tiers=())
         self._overview = overview
         return overview
 

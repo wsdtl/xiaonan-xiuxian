@@ -1,5 +1,4 @@
 """婚配展示的装载（复用共享骨架）。"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -11,7 +10,7 @@ from game.features.presentation import BUTTON_KEYS_WITHOUT_CONDITION, Button, pr
 from .contracts import HunpeiCopy
 
 #: 婚配展示的页面白名单。
-PAGES = frozenset({"生育", "错误", "命令"})
+PAGES = frozenset({"生育", "求子", "错误", "命令"})
 
 
 def load_hunpei_presentation(dataset: Mapping[str, object]) -> tuple[HunpeiCopy, tuple[Button, ...]]:

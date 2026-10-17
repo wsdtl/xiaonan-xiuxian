@@ -388,7 +388,10 @@ def _participant_report(
 
     health_max = max(1.0, float(participant.attributes.get("血气上限", 1.0)))
     spirit_max = max(0.0, float(participant.attributes.get("精神上限", 0.0)))
-    shield_max = max(0.0, float(participant.attributes.get("护盾上限", 0.0)))
+    shield_max = max(
+        0.0,
+        health_max * float(participant.attributes.get("护盾上限", 0.0)) / 100.0,
+    )
     resources = [
         _resource("health", participant.final_health, health_max, catalog),
     ]

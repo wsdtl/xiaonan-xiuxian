@@ -50,7 +50,6 @@ class EnemyService:
         self._genders: tuple[str, ...] = ()
         self._five_element_rules: Mapping[str, object] = {}
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
-        self._races_by_tier: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
     def initialize(self) -> EnemyStatus:
         if self._initialized:
@@ -64,6 +63,15 @@ class EnemyService:
                 name: _mapping(role_rules.get(name), f"角色规则.{name}")
                 for name in ("敌方修士", "灵兽")
             }
+        )
+        self._coverable = frozenset(
+            str(value)
+            for value in (
+                _mapping(role_rules.get("人物"), "角色规则.人物").get(
+                    "属性覆盖白名单"
+                )
+                or ()
+            )
         )
         self._attribute_definitions = MappingProxyType(
             {
@@ -91,50 +99,8 @@ class EnemyService:
             self._definitions_by_section[section] = MappingProxyType(definitions)
         self._definitions = self._definitions_by_section["敌人"]
         self._races = MappingProxyType(self._load_races())
-        by_tier: dict[str, list[str]] = {}
-        for race_name, entry in self._races.items():
-            for tier_name in entry.get("出现档次") or ():
-                by_tier.setdefault(str(tier_name), []).append(race_name)
-        self._races_by_tier = MappingProxyType(
-            {tier_name: tuple(names) for tier_name, names in by_tier.items()}
-        )
-        self._validate_race_pool_sources()
         self._initialized = True
         return self.status()
-
-    def _validate_race_pool_sources(self) -> None:
-        """种族的 `卡池来源` 必须在每一档都抽得到池子——抽不到就是启动错误，不留到打仗时。
-
-        族里写 `灵兽` 表示它从灵兽阶梯池抽卡（现成池，不新造数据）；这里按它的 `出现档次`
-        把 `{档}灵兽{功法|真意|气机}池` 逐个查一遍。
-        """
-
-        tiers = self._role_rules["敌方修士"].get("阶梯") or ()
-        for name, entry in self._races.items():
-            source = str(entry.get("卡池来源") or "敌方修士")
-            if source == "敌方修士":
-                continue
-            for tier_name in entry.get("出现档次") or ():
-                tier = next(
-                    (
-                        item
-                        for item in tiers
-                        if str(item.get("阶梯") or "") == str(tier_name)
-                    ),
-                    None,
-                )
-                if tier is None:
-                    continue  # 档名不对由判据报（规则层那一项查得更全）
-                for category in ("功法", "真意", "气机"):
-                    pool = str(tier.get(f"{category}池") or "").replace("敌方修士", source)
-                    # 池子的集合永远是**池子自己声明的**（灵兽池声明的是灵兽那一套），
-                    # 所以这里让池层按池名抽一次，抽不出来就是启动错误。
-                    try:
-                        self._pool.draw_pools((pool,), count=1, seed=1)
-                    except JsonDataError as exc:
-                        raise JsonDataError(
-                            f"种族 {name} 的卡池来源 {source} 在 {tier_name} 档抽不到：{pool}"
-                        ) from exc
 
     def _load_races(self) -> dict[str, Mapping[str, object]]:
         """种族登记表：**结构**在启动期查死。
@@ -160,10 +126,6 @@ class EnemyService:
             ):
                 node = _mapping(rule, f"{where}.天生规则[{rule_index}]")
                 _text(node.get("名称"), f"{where}.天生规则[{rule_index}].名称")
-            for tier_index, tier in enumerate(
-                _sequence(entry.get("出现档次") or (), f"{where}.出现档次")
-            ):
-                _text(tier, f"{where}.出现档次[{tier_index}]")
             result[name] = entry
         return result
 
@@ -172,26 +134,6 @@ class EnemyService:
 
         self._require_initialized()
         return self._races
-
-    def races_by_tier(self) -> Mapping[str, tuple[str, ...]]:
-        """敌方档次 → 这一档会抽到的种族（按登记表的 `出现档次` 反查）。"""
-
-        self._require_initialized()
-        return self._races_by_tier
-
-    def pick_race(self, tier: str, instance_id: str) -> str:
-        """按**实例编号**独立取一个种族。
-
-        刻意不用生成器那条随机流：种族是后加的一层，走同一条流会把敌人的等级、
-        属性、构筑、掉落全部挪位，基准会跟着乱。这里用 `实例编号 + 种族` 作种子，
-        与既有抽取互不干扰，而且同一实例永远是同一个种族。
-        """
-
-        self._require_initialized()
-        candidates = self._races_by_tier.get(_text(tier, "敌方阶梯"), ())
-        if not candidates:
-            return ""
-        return random.Random(f"{instance_id}:种族").choice(candidates)
 
     def inherent_rules(self, race: str) -> tuple[Mapping[str, object], ...]:
         """某个种族的**天生锁定技**，按「参战者固有规则」的形状交出去。
@@ -208,18 +150,6 @@ class EnemyService:
         return tuple(
             copy.deepcopy(dict(item)) for item in entry.get("天生规则") or ()
         )
-
-    def pool_source(self, race: str) -> str:
-        """种族的**卡池来源**：从哪一套阶梯池抽卡（默认敌方修士，可选灵兽）。"""
-
-        self._require_initialized()
-        entry = self._races.get(str(race or "").strip())
-        if entry is None:
-            return "敌方修士"
-        source = str(entry.get("卡池来源") or "敌方修士")
-        if source not in {"敌方修士", "灵兽"}:
-            raise JsonDataError(f"{race}.卡池来源只能是敌方修士或灵兽：{source}")
-        return source
 
     def status(self) -> EnemyStatus:
         return EnemyStatus(self._initialized, len(self._definitions))
@@ -374,22 +304,20 @@ class EnemyService:
             key: _number(value.get("默认值"), f"属性.{key}.默认值")
             for key, value in self._attribute_definitions.items()
         }
+        overrides = _mapping(raw.get("属性覆盖"), f"{name}.属性覆盖")
+        unknown = set(overrides) - self._coverable
+        if unknown:
+            raise JsonDataError(
+                f"{name}.属性覆盖只能覆盖成长属性：" + "、".join(sorted(unknown))
+            )
         attributes.update(
             {
                 str(key): _number(value, f"{name}.属性覆盖.{key}")
-                for key, value in _mapping(
-                    raw.get("属性覆盖"), f"{name}.属性覆盖"
-                ).items()
+                for key, value in overrides.items()
             }
         )
-        # 种族要在算成长与抽卡之前定下来：卡池来源挂在它身上。
-        # 取族用实例编号作种子，不消耗生成器随机流（见 `pick_race`）。
-        race = (
-            self.pick_race(str(tier.get("阶梯") or ""), instance_id)
-            if role_name == "敌方修士"
-            else ""
-        )
-        pool_source = self.pool_source(race) if race else "敌方修士"
+        # 种族由实体在设计时选定，不再从档次里随机抽。
+        race = str(raw.get("种族") or "").strip()
         if role_name == "灵兽":
             per_level = _mapping(raw.get("每级成长"), f"{name}.每级成长")
             growth = {
@@ -408,51 +336,24 @@ class EnemyService:
             tier.get("固定控制抵抗率"), f"{role_name}.固定控制抵抗率"
         )
         attributes["韧性"] = _number(tier.get("固定韧性"), f"{role_name}.固定韧性")
-        fluctuation = _mapping(raw.get("实力波动"), f"{name}.实力波动")
-        low, high = _range(fluctuation.get("倍率"), f"{name}.实力波动.倍率")
-        for attribute in _texts(fluctuation.get("属性"), f"{name}.实力波动.属性"):
-            attributes[attribute] = (
-                float(attributes[attribute]) * source.randint(low, high) / 100
-            )
         attributes = {
             key: _clamp_attribute(key, value, self._attribute_definitions)
             for key, value in attributes.items()
         }
-        pools = {
-            category: (
-                _text(tier.get(f"{category}池"), f"{role_name}.{category}池").replace(
-                    "敌方修士", pool_source
-                )
-                if pool_source != "敌方修士"
-                else _text(tier.get(f"{category}池"), f"{role_name}.{category}池")
-            )
-            for category in ("功法", "真意", "气机")
-        }
-        slots = _mapping(tier.get("修行槽位"), f"{role_name}.修行槽位")
-        build = self._growth.random_companion_build(
-            pools=pools,
-            slots={
-                category: _positive_int(
-                    slots.get(category), f"{role_name}.{category}槽"
-                )
-                for category in pools
-            },
-            seed=source.getrandbits(64),
-        )
+        fixed = _mapping(tier.get("构筑"), f"{role_name}.构筑")
         build_refs = [
             CombatBuildRef(
                 section=category,
-                content_id=content_id,
+                content_id=str(content_id),
                 instance_id=f"{instance_id}:{category}:{index}",
                 born_order=index,
-                power_multiplier=self._content_multiplier(category, content_id),
+                power_multiplier=self._content_multiplier(category, str(content_id)),
             )
-            for category, content_ids in (
-                ("功法", build.techniques),
-                ("真意", build.intents),
-                ("气机", build.qi_patterns),
+            for category in ("功法", "真意", "气机")
+            for index, content_id in enumerate(
+                _sequence(fixed.get(category) or (), f"{role_name}.构筑.{category}"),
+                start=1,
             )
-            for index, content_id in enumerate(content_ids, start=1)
         ]
         weapon_attack = 0.0
         gender = ""
@@ -501,6 +402,7 @@ class EnemyService:
             build=tuple(build_refs),
             health=float(attributes["血气上限"]),
             spirit=float(attributes["精神上限"]),
+            soul=float(attributes["神魂上限"]),
             gender=gender,
             five_elements=generate_five_elements(self._five_element_rules, source),
             inherent_rules=inherent,

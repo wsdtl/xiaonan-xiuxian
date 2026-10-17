@@ -1,10 +1,16 @@
-"""生育命令回复构造。"""
-
+"""生育与求子的回复构造。"""
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
-from game.features.hunpei import BirthResult, BirthView, HunpeiCopy
+from game.features.hunpei import (
+    BirthAsk,
+    BirthRequestView,
+    BirthRespond,
+    BirthResult,
+    BirthView,
+    HunpeiCopy,
+)
 from message import DocumentMessage, M
 
 from ...presentation import error_document
@@ -89,3 +95,57 @@ def born(copy: HunpeiCopy, result: BirthResult) -> DocumentMessage:
             text(copy, "生育", "新血脉", {"血脉": "、".join(newborn.bloodlines)})
         )
     return builder.build()
+
+
+def asked(copy: HunpeiCopy, value: BirthAsk) -> DocumentMessage:
+    """求子请求已发出。"""
+
+    return (
+        M.document()
+        .section(text(copy, "求子", "标题"), icon=copy.icons["生育"])
+        .line(
+            text(
+                copy,
+                "求子",
+                "发出",
+                {"对方": value.target_name, "编号": value.request_id},
+            )
+        )
+        .build()
+    )
+
+
+def pending(copy: HunpeiCopy, values: Sequence[BirthRequestView]) -> DocumentMessage:
+    """别人向我发的、还没回应的求子请求。"""
+
+    builder = M.document().section(text(copy, "求子", "待办标题"), icon=copy.icons["生育"])
+    if not values:
+        return builder.line(text(copy, "求子", "无待办")).build()
+    for value in values:
+        builder = builder.line(
+            text(copy, "求子", "待办", {"编号": value.request_id, "求方": value.asker_name})
+        )
+    return builder.build()
+
+
+def responded(copy: HunpeiCopy, value: BirthRespond) -> DocumentMessage:
+    """求子的回应回执：拒绝只有一句话，同意给出新生儿。"""
+
+    builder = M.document().section(text(copy, "求子", "标题"), icon=copy.icons["生育"])
+    if not value.agreed or value.result is None:
+        return builder.line(
+            text(copy, "求子", "拒绝", {"求方": value.asker_name})
+        ).build()
+    result = value.result
+    return builder.line(
+        text(
+            copy,
+            "求子",
+            "同意",
+            {
+                "求方": value.asker_name,
+                "新生儿": result.newborn.code,
+                "性别": result.newborn.sex,
+            },
+        )
+    ).build()

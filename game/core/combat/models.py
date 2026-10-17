@@ -659,6 +659,7 @@ class Fighter(RuntimeExtensions):
     attributes: dict[str, float]
     health: float
     spirit: float
+    soul: float = 0.0
     shield: float = 0.0
     statuses: list[StatusState] = dataclass_field(default_factory=list)
     skills: list[Skill] = dataclass_field(default_factory=list)
@@ -739,7 +740,10 @@ class Fighter(RuntimeExtensions):
 
     @property
     def alive(self) -> bool:
-        return self.active and self.health > 0
+        if not self.active or self.health <= 0:
+            return False
+        #: 没有神魂的单位（召唤物、构造物、战场环境）只看血气。
+        return self.value("神魂上限", 0.0) <= 0 or self.soul > 0
 
     @property
     def health_max(self) -> float:
@@ -751,7 +755,11 @@ class Fighter(RuntimeExtensions):
 
     @property
     def shield_max(self) -> float:
-        return max(0.0, self.value("护盾上限", 0.0))
+        return max(0.0, self.health_max * self.value("护盾上限", 0.0) / 100.0)
+
+    @property
+    def soul_max(self) -> float:
+        return max(0.0, self.value("神魂上限", 0.0))
 
 
 def attribute_ratio(
@@ -873,6 +881,7 @@ class RuntimeCombatantSnapshot:
     techniques: tuple[Mapping[str, Any], ...] = ()
     health: float | None = None
     spirit: float | None = None
+    soul: float | None = None
     shield: float = 0.0
     statuses: tuple[Mapping[str, Any], ...] = ()
     cooldowns: Mapping[str, int] = dataclass_field(default_factory=dict)

@@ -58,8 +58,6 @@ class CompanionRules:
     full_reward_affection: Decimal
     full_reward_lifetime_limit: int
     cultivation_slots: Mapping[str, int]
-    qualification_growth_minimum: Decimal
-    qualification_growth_maximum: Decimal
     automatic_medicine_default: bool
 
 
@@ -101,10 +99,8 @@ class CompanionDefinition:
     acceptable_item_ids: frozenset[str]
     reward: CompanionReward
     dialogue: CompanionDialogue
-    qualification_range: tuple[int, int]
-    fluctuating_attributes: tuple[str, ...]
-    attribute_multiplier_range: tuple[int, int]
     cultivation_pools: Mapping[str, str]
+    fixed_build: Mapping[str, tuple[str, ...]]
     attribute_overrides: Mapping[str, int | float]
     weapon_name: str
     weapon_level: int
@@ -153,8 +149,6 @@ class CompanionInstance:
     weapon_level: int
     weapon_experience: int
     weapon_laws: tuple[str, ...]
-    qualification: int
-    attribute_multipliers: Mapping[str, int]
     breakthrough_records: tuple[Mapping[str, object], ...]
     version: int
     resources: Mapping[str, int | float]

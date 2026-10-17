@@ -506,8 +506,6 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
     problems: list[str] = []
     组合: dict[str, str] = {}
     负面标签 = {"来源关系:己方", "来源关系:自身"}
-    档位 = _enemy_tiers()
-    档内: dict[str, list[str]] = {tier: [] for tier in 档位}
     for entry in _race_entries():
         name = str(entry.get("种族") or "").strip()
         if not name:
@@ -515,14 +513,6 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
             continue
         if not str(entry.get("族系") or "").strip():
             problems.append(f"{name} 没有写 `族系`")
-        档 = [str(item) for item in entry.get("出现档次") or ()]
-        if not 档:
-            problems.append(f"{name} 没写 `出现档次`：生成侧抽不到它，等于躺着的死数据")
-        for tier in 档:
-            if tier not in 档内:
-                problems.append(f"{name} 的 `出现档次` 不是敌方档次：{tier}")
-            else:
-                档内[tier].append(name)
         try:
             rules = parse_rule_entries(
                 entry.get("天生规则") or [],
@@ -558,11 +548,6 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
             )
         else:
             组合[签名] = name
-    for tier, names in sorted(档内.items()):
-        if len(names) < 3:
-            problems.append(f"敌方档次 {tier} 只有 {len(names)} 个种族：每档至少三个")
-        if BASE_RACE not in names:
-            problems.append(f"基准族 {BASE_RACE} 必须出现在 {tier} 档：谁都得能跟人族比")
     return problems
 
 

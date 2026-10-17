@@ -18,7 +18,7 @@ from .schema import RuleSchemaValidator
 #: 这里必须写死在代码里的是「有哪几种口径」，因为引擎按口径分派；**具体某个属性是哪一种**
 #: 是内容决定，所以写在 `属性.json` 的 `口径` 字段里。
 ATTRIBUTE_CALIBERS: Mapping[str, str] = {
-    "数值": "直接参与加减与曲线（攻击、防御、速度、各类上限、固定穿透、行动开始恢复）",
+    "数值": "直接参与加减与曲线（攻击、防御、速度、各类上限、神魂上限）",
     "加成": "相对倍率：基准 100 即不增不减，卡面写 120 就是 +20%",
     "倍率": "本身就是倍率：暴击伤害 150 = ×1.5，连击伤害 100 = ×1.0",
     "概率": "百分点概率，0 = 不发生；命中率自己那条是 100 = 必中",
@@ -453,7 +453,6 @@ def _validate_action_rules(
     expected = {
         "标准速度",
         "最低有效速度",
-        "最高行动效率",
         "技能冷却",
         "每次主行动最多追加攻击",
         "事件链深度上限",
@@ -461,7 +460,6 @@ def _validate_action_rules(
         "触发技能嵌套上限",
         "每方召唤物上限",
         "战斗构造物上限",
-        "行动开始恢复",
         "主动技能轮转",
         "被动技能结算",
     }
@@ -474,7 +472,7 @@ def _validate_action_rules(
         if missing:
             details.append("缺少字段 " + "、".join(sorted(missing)))
         raise ValueError("行动规则" + "；".join(details))
-    for name in ("标准速度", "最低有效速度", "最高行动效率"):
+    for name in ("标准速度", "最低有效速度"):
         _positive_number(value[name], f"行动规则.{name}")
     for name in (
         "每次主行动最多追加攻击",
@@ -529,12 +527,6 @@ def _validate_action_rules(
         or len(passive_fields) != 6
     ):
         raise ValueError("行动规则.被动技能结算.排序必须完整且不可重复")
-    recovery = _mapping(value["行动开始恢复"], "行动规则.行动开始恢复")
-    for resource, attribute in recovery.items():
-        if resource not in resources:
-            raise ValueError(f"行动规则.行动开始恢复引用未知资源：{resource}")
-        if attribute not in attributes:
-            raise ValueError(f"行动规则.行动开始恢复引用未知属性：{attribute}")
 
 
 def _validate_timing(value: Mapping[str, Any]) -> None:

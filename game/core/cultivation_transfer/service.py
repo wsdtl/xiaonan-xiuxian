@@ -82,8 +82,6 @@ class CultivationTransferService:
         if reset.get("资源处理") != "保留当前值并受初始属性上限约束":
             raise JsonDataError("铜雀台资源必须受重置后的初始属性上限约束")
         if tuple(reset.get("保留字段") or ()) != (
-            "资质",
-            "属性倍率",
             "功法",
             "真意",
             "气机",

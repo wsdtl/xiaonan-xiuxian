@@ -131,7 +131,6 @@ class CharacterService:
         self._medicine_default = True
         self._five_element_rules: Mapping[str, object] = {}
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
-        self._races_by_tier: Mapping[str, tuple[str, ...]] = MappingProxyType({})
         self._races_by_id: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._initial_race = ""
 
@@ -177,6 +176,10 @@ class CharacterService:
         )
         medicine_auto = _mapping(medicine_rules.get("自动用药"), "服丹.自动用药")
         self._role_rule = role_rule
+        self._coverable = frozenset(
+            str(value)
+            for value in (self._role_rule.get("属性覆盖白名单") or ())
+        )
         self._gender_values = _strings(genders)
         self._grade_values = frozenset(
             str(_mapping(raw, "品级.json").get("编号") or "").strip()
@@ -189,13 +192,6 @@ class CharacterService:
         self._races = MappingProxyType(self._load_races())
         self._races_by_id = MappingProxyType(
             {str(entry["编号"]): entry for entry in self._races.values()}
-        )
-        by_tier: dict[str, list[str]] = {}
-        for race_name, entry in self._races.items():
-            for tier_name in entry.get("出现档次") or ():
-                by_tier.setdefault(str(tier_name), []).append(race_name)
-        self._races_by_tier = MappingProxyType(
-            {tier_name: tuple(names) for tier_name, names in by_tier.items()}
         )
         self._initial_race = str(creation.get("初始种族") or "").strip()
         if self._initial_race not in self._races:
@@ -237,10 +233,6 @@ class CharacterService:
             ):
                 node = _mapping(rule, f"{where}.天生规则[{rule_index}]")
                 _text(node.get("名称"), f"{where}.天生规则[{rule_index}].名称")
-            for tier_index, tier in enumerate(
-                _sequence(entry.get("出现档次") or (), f"{where}.出现档次")
-            ):
-                _text(tier, f"{where}.出现档次[{tier_index}]")
             lifespan_factor = entry.get("寿元系数")
             if lifespan_factor is not None:
                 try:
@@ -267,12 +259,6 @@ class CharacterService:
 
         self._require_initialized()
         return self._races_by_id
-
-    def races_by_tier(self) -> Mapping[str, tuple[str, ...]]:
-        """敌方档次 → 这一档会抽到的种族（敌人核心也读这一份）。"""
-
-        self._require_initialized()
-        return self._races_by_tier
 
     def inherent_rules(self, race: str) -> tuple[Mapping[str, object], ...]:
         """某个种族的**天生锁定技**，按「参战者固有规则」的形状交出去。"""
@@ -334,16 +320,6 @@ class CharacterService:
         progress = trained if trained else days * ratio
         return int(base + progress)
 
-
-    def race_pool_source(self, race: str) -> str:
-        """种族的**卡池来源**：从哪一套阶梯池抽卡（默认敌方修士，可选灵兽）。"""
-
-        self._require_initialized()
-        name = str(race or "").strip()
-        entry = self._races.get(name)
-        if entry is None:
-            raise JsonDataError(f"未登记的种族：{name or '<空>'}")
-        return str(entry.get("卡池来源") or "敌方修士")
 
     def status(self) -> CharacterStatus:
         initial_items = _initial_items(self._role_rule) if self._initialized else ()
@@ -664,6 +640,7 @@ class CharacterService:
             build=build,
             health=float(resources.get("血气", attributes.get("血气上限", 0))),
             spirit=float(resources.get("精神", attributes.get("精神上限", 0))),
+            soul=float(resources.get("神魂", attributes.get("神魂上限", 0))),
             auto_medicine=profile.automatic_medicine,
             owner_id=profile.user_id,
             controller_id=profile.user_id,
@@ -2043,6 +2020,11 @@ class CharacterService:
         self, command: CharacterCreateCommand, realm_id: str
     ) -> dict[str, object]:
         overrides = _mapping(self._role_rule.get("属性覆盖"), "人物.json.属性覆盖")
+        unknown = set(overrides) - self._coverable
+        if unknown:
+            raise JsonDataError(
+                "人物.json.属性覆盖只能覆盖成长属性：" + "、".join(sorted(unknown))
+            )
         attributes: dict[str, object] = {
             name: _mapping(raw, f"属性.{name}").get("默认值")
             for name, raw in self._attributes.items()
@@ -2050,6 +2032,7 @@ class CharacterService:
         attributes.update(materialize(overrides))
         blood = _number(attributes.get("血气上限"), "血气上限")
         spirit = _number(attributes.get("精神上限"), "精神上限")
+        soul = _number(attributes.get("神魂上限"), "神魂上限")
         source = random.Random(f"人物五行:{command.user_id}")
         five_elements = generate_five_elements(self._five_element_rules, source)
         from datetime import datetime, timezone
@@ -2069,7 +2052,7 @@ class CharacterService:
             "属性": attributes,
             "属性加成": {},
             "五行根性": five_elements,
-            "资源": {"血气": blood, "精神": spirit, "护盾": 0},
+            "资源": {"血气": blood, "精神": spirit, "神魂": soul, "护盾": 0},
             "自动用药": self._medicine_default,
             "待战战丹": self._role_rule.get("待战战丹"),
             "突破记录": [],

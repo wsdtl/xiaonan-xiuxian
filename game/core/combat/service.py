@@ -344,6 +344,7 @@ class CombatService:
             techniques=tuple(techniques),
             health=value.health,
             spirit=value.spirit,
+            soul=value.soul,
             shield=value.shield,
             statuses=(*copy.deepcopy(value.statuses), *prepared_statuses),
             cooldowns=copy.deepcopy(dict(value.cooldowns)),
