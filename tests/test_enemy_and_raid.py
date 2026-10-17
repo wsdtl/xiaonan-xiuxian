@@ -111,7 +111,8 @@ def test_every_enemy_definition_generates(services) -> None:
         if missing:
             broken.append(f"{section} 没抽出来的定义：{'、'.join(sorted(missing)[:3])}")
     assert not broken, broken
-    assert len(generated) >= 100
+    # 2026-10-17 缩减：每地点每类只留一个，敌人从 160 降到 94。
+    assert len(generated) >= 90
 
 
 def test_every_raid_generates(services) -> None:
