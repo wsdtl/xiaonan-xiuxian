@@ -18,7 +18,6 @@ from game.core.world import LocationQuery, WorldService
 from game.features.presentation import require_mapping
 
 from .contracts import GateAction, GateCopy, GateFeatureError, GateResult
-from .presentation import actions, load_presentation
 
 
 class GateFeature:
@@ -59,7 +58,7 @@ class GateFeature:
         # 这里读它的配置，顺便把守卫也取出来（声明有人读，不是摆设）。
         gate = self._world.feature_config("宗门")
         self._enter_guard = _text(gate.get("状态守卫"), "宗门.状态守卫")
-        self._copy, self._buttons = load_presentation(self._data)
+        # 入山门/出山门命令已删，山门只做到达/离开时的自动空间切换，不再读展示。
 
     def copy(self) -> GateCopy:
         if self._copy is None:
@@ -80,6 +79,54 @@ class GateFeature:
         if current.space_type == "地表" and self._at_gate(current.xy):
             return actions(self._buttons, "宗门园区")
         return ()
+
+    async def leave_if_available(self, user_id: str, request_id: str) -> bool:
+        """离开宗门园区时自动回地表；不在洞天就静默跳过。"""
+
+        self._require_initialized()
+        member = await self._sect.membership(user_id)
+        if member is None:
+            return False
+        sect = await self._sect.sect(member.sect_id)
+        if sect is None:
+            return False
+        current = await self._location.current(user_id)
+        if current.space_type != self._space_type or current.space_id != sect.cave_id:
+            return False
+        try:
+            await self._location.change_space(
+                SpaceChangeCommand(user_id, request_id + ":出洞天", (user_id,), "地表", "")
+            )
+        except LocationConflictError:
+            return False
+        return True
+
+    async def enter_if_available(self, user_id: str, request_id: str) -> bool:
+        """到达宗门园区即进入本宗洞天：没有宗门、没有位置或状态不允许时静默跳过。"""
+
+        self._require_initialized()
+        member = await self._sect.membership(user_id)
+        if member is None:
+            return False
+        sect = await self._sect.sect(member.sect_id)
+        if sect is None:
+            return False
+        current = await self._location.current(user_id)
+        if current.space_type != "地表" or not self._at_gate(current.xy):
+            return False
+        try:
+            await self._location.change_space(
+                SpaceChangeCommand(
+                    user_id,
+                    request_id + ":入洞天",
+                    (user_id,),
+                    self._space_type,
+                    sect.cave_id,
+                )
+            )
+        except LocationConflictError:
+            return False
+        return True
 
     async def enter(self, user_id: str, request_id: str) -> GateResult:
         group = await self._resolve_group(user_id)
@@ -172,7 +219,7 @@ class GateFeature:
         return "宗门" in self._world.locate(LocationQuery(xy=xy)).available_functions
 
     def _require_initialized(self) -> None:
-        if self._copy is None:
+        if not self._space_type:
             raise RuntimeError("山门玩法尚未初始化")
 
 

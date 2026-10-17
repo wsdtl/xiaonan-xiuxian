@@ -911,7 +911,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         sect,
     )
     weizhi.initialize()
-    xinglu = TravelFeature(world, character, location, action_group, player_state)
+    xinglu = TravelFeature(world, character, location, action_group, player_state, zongmen_shanmen)
     xinglu.initialize()
     daolv_jiejiao = CompanionInteractionFeature(
         data,

@@ -101,7 +101,6 @@ DEEP = (
         "宗门园区",
         (
             "宗门 创建 判据宗",
-            "入山门",
             "藏经阁",
             "灵藏",
             "万珍殿",
@@ -123,7 +122,6 @@ DEEP = (
             "纳戒 基础物品 恢复丹",
             # 多分支选择菜单：A|B 参数 不是命令词，宽参阶段扫不到它。
             "查看|借阅功法 400001",
-            "出山门",
         ),
     ),
     ("云京城", ("炼丹 清心散", "阵法审查 530002 黄")),
@@ -307,6 +305,12 @@ async def _场景_切磋与深页(send, services, user_id) -> list[str]:
         await send(command, strict=True)
 
     for place, commands in DEEP:
+        # 宗门园区：建宗要求地表，而走进去就自动进了洞天——所以先把建宗命令在地表跑掉。
+        if place == "宗门园区":
+            for command in commands:
+                if command.startswith("宗门 创建"):
+                    _DEEP_COMMANDS.append(command)
+                    await send(command, strict=True)
         if place:
             try:
                 await services.features.xinglu.travel(
@@ -317,6 +321,8 @@ async def _场景_切磋与深页(send, services, user_id) -> list[str]:
             except Exception:  # noqa: BLE001 - 走不到就跳过这一站
                 continue
         for command in commands:
+            if place == "宗门园区" and command.startswith("宗门 创建"):
+                continue
             _DEEP_COMMANDS.append(command)
             await send(command, strict=True)
     words = sorted(

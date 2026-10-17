@@ -68,17 +68,17 @@ async def _runtime_problems() -> list[str]:
     await services.features.chuangjian_renwu.create(
         CreateCharacterRequest(user_id=user_id, request_id='网页判据', name='网判', gender='男')
     )
-    await services.features.xinglu.travel(
-        TravelRequest(user_id=user_id, request_id='网页判据-园', destination='宗门园区')
-    )
     await dispatch(user_id=user_id, raw_message='宗门 创建 网判宗', event_id='网页判据-宗')
+    await services.features.xinglu.travel(
+        TravelRequest(user_id=user_id, request_id='网页判据-入园', destination='宗门园区')
+    )
     stones = await services.core.asset.plan_inventory_changes(
         user_id, (InventoryAdjustment('100001', '01', 9000),)
     )
     await services.core.database.commit(
         TransactionCommand(user_id, '网页判据-灵石', '网页判据', tuple(stones.operations), {'物品': '100001'})
     )
-    await dispatch(user_id=user_id, raw_message='入山门', event_id='网页判据-入')
+    # 走到宗门园区就自动进了本宗洞天，不再需要「入山门」。
     reserve = await services.core.asset.plan_formation_reserve_acquisition(user_id, '530002', '01')
     await services.core.database.commit(
         TransactionCommand(user_id, '网页判据-阵藏', '网页判据', (reserve.operation,), {'阵法': '530002'})
