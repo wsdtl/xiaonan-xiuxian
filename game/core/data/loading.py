@@ -151,9 +151,9 @@ class GameDataLoader:
     def load(self, expand: "Callable[[str, Mapping[str, Any]], Any] | None" = None) -> LoadedGameData:
         """读取并建立运行期只读索引。
 
-        `expand` 是**装载期后处理钩子**：逐段落对实体索引做一次改写，发生在快照
-        冻结**之前**。构筑模板引用必须在这里展开成完整的树，否则「快照里的原始形态」
-        与「某处展开后的形态」会并存，同一个实体出现两种样子，读取方各拿一种。
+        `expand` 是**装载期后处理钩子**：逐段落改写实体索引，发生在快照冻结**之前**，
+        且必须**同时改写 entities 与 records 两份**（两条读取路径）。构筑模板机制退役后
+        组合根传进来的是直通函数；钩子为空表示不改写。
         """
 
         catalog = self.reader.load_catalog()

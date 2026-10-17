@@ -37,25 +37,14 @@ from .report import RuntimeBattleReportParticipant, build_battle_report
 
 
 def expand_build_section(section: str, values: Any) -> Any:
-    """装载期展开器：把某一段实体里的模板引用展开成独立的树。
+    """装载期后处理钩子：由 `JsonDataService.initialize(expand=...)` 在快照冻结前逐段调用。
 
-    由 `JsonDataService.initialize(expand=...)` 在**快照冻结之前**逐段调用，
-    因此快照里不会同时存在「引用」与「展开后的树」两种形态。
+    **构筑模板机制已于 2026-10-16 拆除**：数据里所有引用都展开成了原子能力节点，装载期
+    不再需要改写任何段落，所以本函数是**直通**。保留签名与段名白名单，是因为它由组合根
+    注入、是数据层与战斗层之间唯一的装载期口子；哪天真要再做装载期改写，改这里就行。
 
-    四个要点：
-
-    1. **展开结果必须是独立的树。** 同一段里重复的引用在解析后是同一个对象，原地展开
-       会污染其余引用；`templates._substitute` 靠 `_materialize` 重建整棵树来避免这一点。
-    2. **段名是实体类别，不是模板化的面名。** 现在是构筑四段（功法/真意/气机/器律）
-       加上战场环境 / 伤势 / 丹药——后三者与模板面一一对应（面名 `战丹` 对应的实体
-       类别是 `丹药`）。少一段就会出现「JSON 里是引用、快照里也是引用」，
-       读取方各拿一种形态（实测战丹 148 条监听全部报「不是监听事件节点」）。
-    3. 没有引用时不做任何拷贝，避免无谓开销。**先按原文扫一遍**：整段一条引用都没有的
-       段落直接原样返回，连 `materialize` 的整段深拷贝都不做（实测 25 个段落里有段落
-       一条引用都没有）。
-    4. **这里只做展开，不做任何修正。** 「一个时点只算一次」必须在**数据与模板主体**
-       里就成立（见 `game.core.combat.fold`），装载期不替数据兜底——解释层折叠会把
-       数据的问题藏起来，下一个人再抄一遍照样出。
+    「一个时点只算一次」仍必须由**数据自己**满足（见 `game.core.combat.fold`），
+    装载期不替数据兜底——解释层折叠会把数据的问题藏起来，下一个人再抄一遍照样出。
     """
 
     if section not in (
@@ -64,21 +53,7 @@ def expand_build_section(section: str, values: Any) -> Any:
     ):
         return values
 
-    # 构筑模板机制已退役（数据里所有引用都展开成了原子能力节点），这里不再需要展开。
-    # 保留段名白名单与函数签名，调用方与装载期契约不变。
     return values
-
-
-def _holds_template(node: Any) -> bool:
-    """这棵树里是否含模板引用。用于避免无谓的深拷贝。"""
-
-    if isinstance(node, Mapping):
-        if "模板" in node:
-            return True
-        return any(_holds_template(item) for item in node.values())
-    if isinstance(node, (list, tuple)):
-        return any(_holds_template(item) for item in node)
-    return False
 
 
 class CombatService:

@@ -372,7 +372,6 @@ class CardText:
                 return self._usage(effect)
             return ()
 
-        actives = [item for item in abilities if item.get("能力") == "主动技能"]
         if not isinstance(abilities, Sequence) or isinstance(abilities, (str, bytes)):
             return ()
         actives = [item for item in abilities if item.get("能力") == "主动技能"]

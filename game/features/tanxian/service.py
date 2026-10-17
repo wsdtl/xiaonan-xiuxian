@@ -113,9 +113,10 @@ class ExplorationFeature:
         return paged_settlement_actions(actions, self._buttons, page=page, total_pages=total_pages)
 
     def enemy_number(self, name: str) -> str:
-        """按敌人名字取它的定义编号；取不到返回空串。"""
+        """按敌人名字取它的定义编号；取不到返回空串。
 
-        """敌人是命名实体池，成员键是名字、编号在值里，所以起一次表就够。"""
+        敌人条目按编号取，名字要现从定义里的「名称」反查，所以起一次表就够。
+        """
         wanted = str(name or "").strip()
         if not wanted:
             return ""
