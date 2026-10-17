@@ -14,7 +14,7 @@ from game.app import current_game_services
 from game.features.zongmen_sheshi import SectFacilityFeatureError
 from launch.paths import static_path
 
-from ...site import PAGE_CSP, PAGE_HEADERS, failure
+from ....site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/lianzhen')
 

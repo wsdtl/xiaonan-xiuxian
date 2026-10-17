@@ -6,7 +6,7 @@ from game.app import current_game_services
 from game.features.presentation import ItemRefError, parse_item_ref
 from game.features.zongmen_lingcang import LingcangFeatureError
 
-from ...command import GameCommand
+from ....command import GameCommand
 from . import reply
 from launch.adapter import MessageContext
 from typing import Any

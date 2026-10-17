@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ....presentation import error_document
 
 from message.schema import RichText
 
@@ -12,8 +12,8 @@ from typing import Any
 from game.features.zongmen_shengchan import SectProductionAction
 from message import DocumentMessage, M
 
-from ...actions import message_actions
-from ...presentation import duration, sentence
+from ....actions import message_actions
+from ....presentation import duration, sentence
 
 #: 灵植池的命名约定；回复层只做展示，把池名还原成地形名给玩家看。
 _TERRAIN_PREFIX = "灵植-"

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ...actions import CommandAction
-from ...presentation import candidate_lines, error_document
+from ....actions import CommandAction
+from ....presentation import candidate_lines, error_document
 
 from game.features.zongmen_sheshi import FormationChoiceError
 

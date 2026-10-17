@@ -13,8 +13,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
-from ...presentation import duration
-from ...site import PAGE_CSP, PAGE_HEADERS, failure
+from ....presentation import duration
+from ....site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/lingtian')
 #: 这座设施的常用命令（与命令组认的写法一致，页面直接把它们摆出来）。

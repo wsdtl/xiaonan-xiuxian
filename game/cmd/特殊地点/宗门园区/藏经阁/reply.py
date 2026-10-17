@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ....presentation import error_document
 
 from collections.abc import Sequence, Mapping
-from ...actions import CommandAction, message_actions
+from ....actions import CommandAction, message_actions
 
 
 from game.features.zongmen_cangjing import CangjingCopy, CangjingPage
 from message import DocumentMessage, M
 
-from ...presentation import sentence
+from ....presentation import sentence
 
 
 def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandAction]) -> DocumentMessage:

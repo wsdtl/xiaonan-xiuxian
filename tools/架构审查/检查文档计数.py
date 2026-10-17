@@ -70,6 +70,21 @@ def _directories(relative: str) -> list[str]:
     )
 
 
+def _leaf_directories(relative: str) -> list[str]:
+    """叶子目录：再往下没有子目录的目录。命令组件按这个数（洞天类可再分组）。"""
+
+    folder = ROOT / relative
+    result: list[str] = []
+    for path in folder.rglob("*"):
+        if not path.is_dir() or path.name == "__pycache__":
+            continue
+        children = [sub for sub in path.iterdir() if sub.is_dir() and sub.name != "__pycache__"]
+        if children:
+            continue
+        result.append(path.name)
+    return sorted(result)
+
+
 def check_readme_structure() -> list[str]:
     """README 的结构性计数：微服务数、命令组件数、大类与组件数。"""
 
@@ -78,7 +93,7 @@ def check_readme_structure() -> list[str]:
     core = len(_directories("game/core"))
     features = len(_directories("game/features"))
     command_groups = {
-        name: len(_directories(f"game/cmd/{name}"))
+        name: len(_leaf_directories(f"game/cmd/{name}"))
         for name in ("通用", "专属", "特殊地点", "后台")
     }
     categories = len(_directories("data"))
@@ -450,7 +465,7 @@ def _service_counts() -> tuple[int, int]:
 
 def _command_component_count() -> int:
     return sum(
-        len(_directories(f"game/cmd/{scope}"))
+        len(_leaf_directories(f"game/cmd/{scope}"))
         for scope in ("通用", "专属", "特殊地点", "后台")
     )
 

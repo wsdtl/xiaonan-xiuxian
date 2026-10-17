@@ -52,7 +52,7 @@ def test_三层都没有取用方法() -> None:
 
 def test_取用没在回复层留下痕迹() -> None:
     回复 = inspect.getsource(
-        __import__("game.cmd.专属.灵藏.reply", fromlist=["reply"])
+        __import__("game.cmd.特殊地点.宗门园区.灵藏.reply", fromlist=["reply"])
     )
     assert "taken_material" not in 回复
     assert "取用灵藏" not in 回复
