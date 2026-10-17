@@ -237,7 +237,7 @@ class SectAssetService:
             user_id,
             request_id,
             "捐入灵藏灵石",
-            (personal.operation, mutation),
+            (*personal.operations, mutation),
             {"宗门编号": member.sect_id, "灵石": normalized},
         )
         return SectAssetTransfer(
@@ -404,10 +404,10 @@ class SectAssetService:
             if record is not None
             else {"名称": f"灵藏-{normalized_sect_id}", "宗门编号": normalized_sect_id, "灵石": 0, "条目": {}}
         )
-        before_stones = int(value.get("灵石") or 0)
+        entries = dict(_mapping(value.get("条目", {}), "灵藏.条目"))
+        before_stones = self._spirit_stone_total(entries)
         if before_stones < cost:
             raise SectAssetError(f"宗门灵石不足（宗门钱在灵藏里，先入山门再捐入灵藏）：现有{before_stones}，需要{cost}")
-        entries = dict(_mapping(value.get("条目", {}), "灵藏.条目"))
         totals: dict[tuple[str, str, str], int] = {}
         for material in materials:
             if material.category not in self._materials:
@@ -432,7 +432,7 @@ class SectAssetService:
                 entries[entry_key] = updated
             else:
                 entries.pop(entry_key)
-        value["灵石"] = before_stones - cost
+        self._add_spirit_stones(entries, -cost)
         value["条目"] = entries
         operations: list[SharedEntityMutation] = [
             SharedEntityMutation(
@@ -490,8 +490,8 @@ class SectAssetService:
                 "条目": {},
             }
         )
-        before_stones = int(value.get("灵石") or 0)
         entries = dict(_mapping(value.get("条目", {}), "灵藏.条目"))
+        before_stones = self._spirit_stone_total(entries)
         totals: dict[tuple[str, str, str], int] = {}
         for material in materials:
             if material.category not in self._materials:
@@ -532,7 +532,7 @@ class SectAssetService:
                     quantity,
                 )
             )
-        value["灵石"] = before_stones + spirit_stones
+        self._add_spirit_stones(entries, spirit_stones)
         value["条目"] = entries
         mutation = SharedEntityMutation(
             LINGCANG_TYPE,
@@ -561,13 +561,12 @@ class SectAssetService:
         value = (
             dict(record.value)
             if record is not None
-            else {"名称": f"灵藏-{normalized}", "宗门编号": normalized, "灵石": 0, "条目": {}}
+            else {"名称": f"灵藏-{normalized}", "宗门编号": normalized, "条目": {}}
         )
-        before = int(value.get("灵石") or 0)
-        after = before + delta
-        if after < 0:
-            raise SectAssetError(f"宗门灵石不足（宗门钱在灵藏里，先入山门再捐入灵藏）：现有{before}，需要{-delta}")
-        value["灵石"] = after
+        entries = dict(_mapping(value.get("条目", {}), "灵藏.条目"))
+        before = self._spirit_stone_total(entries)
+        self._add_spirit_stones(entries, delta)
+        value["条目"] = entries
         return SharedEntityMutation(
             LINGCANG_TYPE,
             normalized,
@@ -621,7 +620,7 @@ class SectAssetService:
             if record is None:
                 continue
             value = _mapping(record.value, entity_type)
-            if int(value.get("灵石") or 0) > 0 or bool(value.get("条目")):
+            if bool(value.get("条目")):
                 return True
         return False
 
@@ -756,7 +755,6 @@ class SectAssetService:
             else {
                 "名称": f"{name}-{sect_id}",
                 "宗门编号": sect_id,
-                "灵石": 0,
                 "条目": {},
             }
         )
@@ -828,10 +826,12 @@ class SectAssetService:
         value = (
             dict(record.value)
             if record is not None
-            else {"名称": f"灵藏-{sect_id}", "宗门编号": sect_id, "灵石": 0, "条目": {}}
+            else {"名称": f"灵藏-{sect_id}", "宗门编号": sect_id, "条目": {}}
         )
-        after = int(value.get("灵石") or 0) + delta
-        value["灵石"] = after
+        entries = dict(_mapping(value.get("条目", {}), "灵藏.条目"))
+        before = self._spirit_stone_total(entries)
+        self._add_spirit_stones(entries, delta)
+        value["条目"] = entries
         return (
             SharedEntityMutation(
                 LINGCANG_TYPE,
@@ -839,7 +839,7 @@ class SectAssetService:
                 value,
                 record.version if record is not None else 0,
             ),
-            after,
+            before + delta,
         )
 
     async def _vault(self, entity_type: str, sect_id: str, name: str) -> SectAssetVault:
@@ -851,7 +851,7 @@ class SectAssetService:
         return SectAssetVault(
             sect_id,
             name,
-            int(value.get("灵石") or 0),
+            self._spirit_stone_total(entries),
             tuple(
                 sorted(
                     (self._entry(key, raw) for key, raw in entries.items()),
@@ -864,6 +864,90 @@ class SectAssetService:
                 )
             ),
         )
+
+
+    #: 灵藏里灵石的编号；品级与价值表和人物纳戒共用同一份数据。
+    SPIRIT_STONE_ID = "230001"
+
+    def _spirit_stone_units(self) -> dict[str, int]:
+        """品级编号 -> 黄品当量。"""
+
+        documents = self._data.dataset("灵石规则")
+        rules = _mapping(documents.get("灵石"), "灵石规则")
+        rows = rules.get("品级价值")
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise SectAssetError("灵石规则.品级价值必须是数组")
+        units: dict[str, int] = {}
+        for row in rows:
+            entry = _mapping(row, "灵石规则.品级价值")
+            units[str(entry.get("品级"))] = _positive_int(entry.get("当量"), "灵石规则.当量")
+        return units
+
+    def _spirit_stone_total(self, entries: Mapping[str, object]) -> int:
+        """灵藏里的灵石折成黄品当量。"""
+
+        units = self._spirit_stone_units()
+        total = 0
+        for raw in entries.values():
+            value = _mapping(raw, "灵藏.条目")
+            if str(value.get("编号") or "") != self.SPIRIT_STONE_ID:
+                continue
+            total += int(value.get("数量") or 0) * units.get(str(value.get("品级") or ""), 0)
+        return total
+
+    def _spirit_stone_entries(self, entries: dict[str, object], values: dict[str, int]) -> None:
+        """把各品级的灵石数量写回条目；0 的品级删掉。"""
+
+        for grade_id, quantity in values.items():
+            key = format_item_ref(ItemRef(item=self.SPIRIT_STONE_ID, grade=grade_id))
+            if quantity <= 0:
+                entries.pop(key, None)
+                continue
+            entries[key] = {
+                "类别": "基础物品",
+                "编号": self.SPIRIT_STONE_ID,
+                "名称": "灵石",
+                "品级": grade_id,
+                "数量": quantity,
+                "实际投入": {},
+            }
+
+    def _add_spirit_stones(self, entries: dict[str, object], delta: int) -> None:
+        """按黄品当量加减灵石：加先补低品，减先扣低品。"""
+
+        units = self._spirit_stone_units()
+        ordered = sorted(units, key=lambda grade_id: self._asset.grade(grade_id).order)
+        held = {grade_id: 0 for grade_id in ordered}
+        for raw in entries.values():
+            value = _mapping(raw, "灵藏.条目")
+            if str(value.get("编号") or "") != self.SPIRIT_STONE_ID:
+                continue
+            grade_id = str(value.get("品级") or "")
+            if grade_id in held:
+                held[grade_id] += int(value.get("数量") or 0)
+        if delta < 0:
+            need = -delta
+            for grade_id in ordered:
+                if need <= 0:
+                    break
+                unit = units[grade_id]
+                count = min(held[grade_id], need // unit)
+                if count:
+                    held[grade_id] -= count
+                    need -= count * unit
+            if need > 0:
+                raise SectAssetError(f"宗门灵石不足：还差{need}枚黄品当量")
+        elif delta > 0:
+            need = delta
+            for grade_id in reversed(ordered):
+                unit = units[grade_id]
+                count = need // unit
+                if count:
+                    held[grade_id] += count
+                    need -= count * unit
+            if need > 0:
+                held[ordered[0]] += need
+        self._spirit_stone_entries(entries, held)
 
     def _entry(self, key: str, raw: object) -> SectAssetEntry:
         value = _mapping(raw, f"宗门资产.{key}")
