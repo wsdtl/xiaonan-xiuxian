@@ -12,8 +12,8 @@ from game.features.zongmen_tongxing import (
 )
 from message import DocumentMessage, M
 
-from ...actions import CommandAction, message_actions
-from ...presentation import error_document
+from ....actions import CommandAction, message_actions
+from ....presentation import error_document
 
 _ERROR_KEYS = {
     "not_member": "未加入宗门",

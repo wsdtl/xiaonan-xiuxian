@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ....presentation import error_document
 
 from collections.abc import Sequence, Mapping
-from ...actions import CommandAction, message_actions
+from ....actions import CommandAction, message_actions
 
 
 from game.features.zongmen_wanzhen import (
@@ -15,7 +15,7 @@ from game.features.zongmen_wanzhen import (
 )
 from message import DocumentMessage, M
 
-from ...presentation import sentence
+from ....presentation import sentence
 
 
 def _treasure_name(entry: object, names: Mapping[str, str]) -> str:

@@ -43,7 +43,7 @@ async def _runtime_problems() -> list[str]:
     from game.features.xinglu.contracts import TravelRequest
     from game.core.asset import InventoryAdjustment
     from game.core.database import StateAddress, StateMutation, TransactionCommand
-    from game.cmd.专属.万珍殿.site import _entries
+    from game.cmd.特殊地点.宗门园区.万珍殿.site import _entries
     from launch.adapter.local import dispatch
     from launch.adapter.local.handler import LocalEventHandler
 

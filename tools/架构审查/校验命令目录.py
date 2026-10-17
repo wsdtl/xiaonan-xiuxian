@@ -26,11 +26,11 @@ from game.cmd.command import registered_commands  # noqa: E402
 
 # 二级命令目录 -> 必须声明的 scope。目录名与 scope 同名，集中登记便于比对。
 SCOPE_BY_TOP_DIR = {
-    "通用": "通用",
-    "专属": "专属",
-    #: 特殊地点是「专属」的一个子类，单独目录只为看清归属。
-    "特殊地点": "专属",
-    "后台": "后台",
+    "通用": {"通用"},
+    "专属": {"专属"},
+    #: 特殊地点收拢了原本散在通用/专属下的入口，两种 scope 都允许。
+    "特殊地点": {"专属", "通用"},
+    "后台": {"后台"},
 }
 
 
@@ -46,9 +46,9 @@ def audit() -> list[str]:
         if expected is None:
             problems.append(f"{command}：命令组件不在 通用/专属/后台 之下（{module}）")
             continue
-        if scope != expected:
+        if scope not in expected:
             problems.append(
-                f"{command}：目录要求 scope={expected}，"
+                f"{command}：目录要求 scope={'/'.join(sorted(expected))}，"
                 f"实际声明 {scope or '<空>'}（{module}）"
             )
     return problems

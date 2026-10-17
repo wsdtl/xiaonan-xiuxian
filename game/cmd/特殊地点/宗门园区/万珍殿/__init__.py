@@ -11,7 +11,7 @@ from game.features.presentation import (
 )
 from game.features.zongmen_wanzhen import WanzhenFeatureError
 
-from ...command import GameCommand
+from ....command import GameCommand
 from . import reply
 from .site import router
 from launch.adapter import MessageContext

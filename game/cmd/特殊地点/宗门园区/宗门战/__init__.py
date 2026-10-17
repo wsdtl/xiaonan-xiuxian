@@ -8,7 +8,7 @@ from game.features.zongmen_zhan import SectWarView, SectWarFeature, SectWarError
 
 from game.app import current_game_services
 
-from ...command import GameCommand
+from ....command import GameCommand
 from . import reply
 from launch.adapter import MessageContext
 from typing import Any

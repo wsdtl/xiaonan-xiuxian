@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ....presentation import error_document
 
 from game.features.zongmen_shanmen import GateAction, GateCopy, GateResult
 from message import Action, DocumentMessage, M

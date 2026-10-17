@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from game.app import current_game_services
 from launch.paths import static_path
 
-from ...site import PAGE_CSP, PAGE_HEADERS, failure
+from ....site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/wanzhen')
 #: 五类成品与各自的子类（与「捐入万珍殿」命令认的写法一一对应）。
