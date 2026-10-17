@@ -33,7 +33,7 @@ os.environ["TEMP"] = os.environ["TMP"] = str(_SCRATCH)
 
 #: 必过项。每项一个名字 + 一组 argv（相对项目根）。
 REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("边界审查（27 项）", ("tools/架构审查/检查边界.py",)),
+    ("边界审查（26 项）", ("tools/架构审查/检查边界.py",)),
     ("启动契约", ("tools/架构审查/校验启动契约.py",)),
     ("命令目录", ("tools/架构审查/校验命令目录.py",)),
     ("数据驱动", ("tools/架构审查/检查数据驱动.py",)),

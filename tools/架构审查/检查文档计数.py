@@ -301,6 +301,7 @@ APP_NAMES = {
     "battle-report": "战报",
     "world-map": "全境舆图",
     "zhuangpei": "装配台",
+    "yijing": "意境",
 }
 
 
