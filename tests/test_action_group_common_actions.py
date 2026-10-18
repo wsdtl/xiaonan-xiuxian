@@ -98,7 +98,7 @@ def test_自报清单外的动作拒绝启动() -> None:
 
 def _改过的数据树(tmp_path: pathlib.Path, 清单: object) -> pathlib.Path:
     tree = pathlib.Path(shutil.copytree(DATA, tmp_path / "data", copy_function=os.link))
-    rules = tree / "玩法" / "特殊地点" / "宗门园区" / "规则" / "宗门.json"
+    rules = tree / "玩法" / "特殊地点" / "宗门园区" / "宗门" / "规则" / "宗门.json"
     raw = json.loads(rules.read_text(encoding="utf-8"))
     raw["同行"]["共同行动"] = 清单
     _写(rules, json.dumps(raw, ensure_ascii=False, indent=2) + "\n")

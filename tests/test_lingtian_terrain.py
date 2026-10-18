@@ -127,7 +127,7 @@ def test_声明了非灵植池的地形拒绝启动(tmp_path) -> None:
     """`可选地形` 声明了不是灵植池的名字，启动期直接拒绝。"""
 
     tree = Path(shutil.copytree(DATA, tmp_path / "data"))
-    rules = tree / "玩法" / "特殊地点" / "宗门园区" / "规则" / "生产.json"
+    rules = tree / "玩法" / "特殊地点" / "宗门园区" / "宗门生产" / "规则" / "生产.json"
     raw = json.loads(rules.read_text(encoding="utf-8"))
     raw["产出"]["灵田"]["可选地形"].append("灵矿-温泉谷地")
     rules.write_text(
