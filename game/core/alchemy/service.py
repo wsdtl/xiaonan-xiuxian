@@ -702,7 +702,7 @@ class AlchemyService:
         result: dict[str, AlchemyRecipe] = {}
         names: set[str] = set()
         contract = ContractSet.from_dataset(
-            self._data.dataset("炼丹字段契约"), "物品/规则/炼丹字段契约.json"
+            self._data.dataset("炼丹字段契约"), "物品/规则/丹药/炼丹字段契约.json"
         )
         for medicine_id, raw in self._data.entities("丹药").items():
             contract.validate(raw, "丹药", f"丹药 {medicine_id}")

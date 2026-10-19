@@ -421,7 +421,7 @@ class MedicineService:
         common_required = self._common_entity_fields()
         rows = self._data.dataset("基础物品分类规则").get("分类")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("物品/规则/分类.json 必须是字典列表")
+            raise JsonDataError("物品/规则/基础物品/分类.json 必须是字典列表")
         for raw_category in rows:
             entry = _mapping(raw_category, "分类[]")
             if str(entry.get("类别") or "").strip() != "丹药":

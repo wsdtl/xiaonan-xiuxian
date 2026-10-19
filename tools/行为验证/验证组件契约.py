@@ -54,7 +54,7 @@ CASES: dict[str, dict[str, str]] = {
     },
     "阵法": {
         "dataset": "阵法字段契约",
-        "contract_path": "物品/规则/阵法字段契约.json",
+        "contract_path": "物品/规则/阵法/阵法字段契约.json",
         "entity_file": "物品/内容/阵法.json",
         "remove": "阵法核心",
     },
@@ -90,7 +90,7 @@ CASES: dict[str, dict[str, str]] = {
     },
     "丹药": {
         "dataset": "炼丹字段契约",
-        "contract_path": "物品/规则/炼丹字段契约.json",
+        "contract_path": "物品/规则/丹药/炼丹字段契约.json",
         "entity_file": "物品/内容/丹药/恢复丹/恢复丹-精神.json",
         "remove": "炉法",
     },

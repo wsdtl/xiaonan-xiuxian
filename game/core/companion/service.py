@@ -1389,7 +1389,7 @@ class CompanionService:
     def _load_plant_pool_meridians(self) -> Mapping[str, str]:
         rows = _sequence(
             self._data.dataset("炼药规则").get("归脉"),
-            "物品/规则/归脉.json",
+            "物品/规则/丹药/归脉.json",
         )
         result: dict[str, str] = {}
         for raw in rows:

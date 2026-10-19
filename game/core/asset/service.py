@@ -84,7 +84,7 @@ class AssetService:
 
         paging = _mapping(
             self._data.dataset("基础物品分页规则").get("分页"),
-            "物品/规则/分页.json",
+            "物品/规则/基础物品/分页.json",
         )
         layout = _mapping(
             self._data.dataset("纳戒分类展示").get("分类"),

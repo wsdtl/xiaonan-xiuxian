@@ -27,7 +27,7 @@ import json
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-RECIPE = ROOT / "data" / "物品" / "规则" / "器则.json"
+RECIPE = ROOT / "data" / "物品" / "规则" / "炼器" / "器则.json"
 LAWS = ROOT / "data" / "物品" / "内容"
 #: 产出类原子能力：判「同模板换参」的三样之一。
 #: 真正的「消费/改动方式」只出现在这些能力上；`计算数值`/`条件执行` 的 `方式` 是算法，不算消费口径。
@@ -67,7 +67,7 @@ def _laws() -> list[tuple[str, dict, list[dict]]]:
 
 def _ladder() -> list[str]:
     data = json.loads(RECIPE.read_text(encoding="utf-8"))
-    lines = ["器阶阶梯（声明处：data/物品/规则/器则.json；强度来自解锁池，没有系数）",
+    lines = ["器阶阶梯（声明处：data/物品/规则/炼器/器则.json；强度来自解锁池，没有系数）",
              "  名称      阶序  等级范围   开放器律孔"]
     for row in data["器阶"]:
         span = row["等级范围"]

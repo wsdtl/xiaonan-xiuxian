@@ -41,7 +41,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 DATA = ROOT / "data"
-RECIPE = DATA / "物品" / "规则" / "器则.json"
+RECIPE = DATA / "物品" / "规则" / "炼器" / "器则.json"
 LAW_DIR = DATA / "物品" / "内容"
 TIERS = ("凡器", "灵器", "法器", "法宝", "后天灵宝")
 #: 读取数值 的登记来源，main 里装载（检查函数直接用）。
