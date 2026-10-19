@@ -2,9 +2,9 @@
 
 约定（既有做法，不是本轮新定）：
 
-- 绑定写在**世界数据**里：`data/世界/基础/内容/<州>/<地点>/<地点>.json` 的 `功能配置.<功能>.丹药 = <编号>`；
-- 该功能还要在 `data/世界/基础/定义/地点功能.json` 里登记（否则装载器直接拒绝启动），
-  并在 `data/世界/位置/展示/按钮/地点功能.json` 里给出玩家可见的按钮或命令；
+- 绑定写在**世界数据**里：`data/世界/内容/<州>/<地点>/<地点>.json` 的 `功能配置.<功能>.丹药 = <编号>`；
+- 该功能还要在 `data/世界/定义/地点功能.json` 里登记（否则装载器直接拒绝启动），
+  并在 `data/世界/展示/按钮/地点功能.json` 里给出玩家可见的按钮或命令；
 - 机制类型要登记在 `data/物品/定义/使用效果.json`；
 - 参数（如目标种族、性别取值）写**地点配置**里，不写丹里。
 
@@ -88,13 +88,13 @@ def _bindings() -> list[tuple[str, str, str, Mapping[str, object]]]:
 def check_bindings() -> list[str]:
     problems: list[str] = []
     pills = {code: (name, kind) for code, name, kind in _pills()}
-    funcs = {str(c.get("名称")) for c in _load(DATA / "世界" / "基础" / "定义" / "地点功能.json") if isinstance(c, Mapping)}
-    buttons = {str(c.get("功能")) for c in _load(DATA / "世界" / "位置" / "展示" / "按钮" / "地点功能.json") if isinstance(c, Mapping)}
+    funcs = {str(c.get("名称")) for c in _load(DATA / "世界" / "定义" / "地点功能.json") if isinstance(c, Mapping)}
+    buttons = {str(c.get("功能")) for c in _load(DATA / "世界" / "展示" / "按钮" / "地点功能.json") if isinstance(c, Mapping)}
     for place, fn, code, item in _bindings():
         if code not in pills:
             problems.append(f"{place}·{fn}：指名的丹药 {code} 不是一枚丹药")
         if fn not in funcs:
-            problems.append(f"{place}·{fn}：功能没有登记在 世界/基础/定义/地点功能.json")
+            problems.append(f"{place}·{fn}：功能没有登记在 世界/定义/地点功能.json")
         elif fn not in buttons:
             problems.append(f"{place}·{fn}：功能没有玩家入口（按钮表里没有）")
         for key, value in item.items():
