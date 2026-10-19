@@ -60,7 +60,7 @@ class SectLibraryService:
         if self._initialized:
             raise RuntimeError("藏经阁核心已经初始化")
         rule = _json_mapping(
-            self._data.dataset("宗门规则").get("藏经阁"), "宗门/藏经阁.json"
+            self._data.dataset("藏经阁借阅规则").get("藏经阁"), "宗门/藏经阁.json"
         )
         source = _json_mapping(rule.get("来源"), "藏经阁.来源")
         borrow = _json_mapping(rule.get("借阅"), "藏经阁.借阅")

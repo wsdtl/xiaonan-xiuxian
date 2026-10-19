@@ -41,7 +41,7 @@ class SectWarFeature:
             raise RuntimeError("宗门战玩法已经初始化")
         if not self._war.status().initialized:
             raise RuntimeError("宗门战核心必须先于玩法微服务启动")
-        raw = self._data.dataset("宗门战展示").get("文本")
+        raw = self._data.dataset("宗门战页面文案").get("文本")
         if not isinstance(raw, Mapping):
             raise JsonDataError("宗门战展示缺少文本.json")
         text = MappingProxyType(
@@ -58,7 +58,7 @@ class SectWarFeature:
         required = {"图标", "查看", "格式", "结果", "状态", "错误"}
         if set(text) != required:
             raise JsonDataError("宗门战文本必须完整包含图标、查看、格式、结果、状态、错误")
-        raw_buttons = self._data.dataset("宗门战按钮").get("按钮")
+        raw_buttons = self._data.dataset("宗门战页面按钮").get("按钮")
         if not isinstance(raw_buttons, Sequence) or isinstance(raw_buttons, (str, bytes)):
             raise JsonDataError("宗门战按钮必须是字典列表")
         buttons = tuple(

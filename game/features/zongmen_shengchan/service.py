@@ -34,11 +34,11 @@ class SectProductionFeature:
     def initialize(self) -> None:
         if self._copy is not None:
             raise RuntimeError("宗门资源生产玩法已经初始化")
-        raw = self._data.dataset("宗门生产展示").get("文本")
+        raw = self._data.dataset("宗门生产页面文案").get("文本")
         if not isinstance(raw, Mapping):
             raise JsonDataError("宗门生产展示缺少文本.json")
         self._copy = raw
-        rows = self._data.dataset("宗门生产按钮").get("按钮")
+        rows = self._data.dataset("宗门生产页面按钮").get("按钮")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
             raise JsonDataError("宗门生产按钮必须是字典列表")
         self._buttons = tuple(

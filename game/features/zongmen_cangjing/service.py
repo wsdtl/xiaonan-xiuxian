@@ -50,16 +50,16 @@ class CangjingFeature:
             raise RuntimeError("藏经阁玩法已经初始化")
         if not self._library.status().initialized:
             raise RuntimeError("藏经阁核心必须先于藏经阁玩法启动")
-        rule = require_mapping(self._data.dataset("宗门规则").get("藏经阁"), "藏经阁规则")
+        rule = require_mapping(self._data.dataset("藏经阁借阅规则").get("藏经阁"), "藏经阁规则")
         borrowing = require_mapping(rule.get("借阅"), "藏经阁.借阅")
         self._page_limit = _positive_int(rule.get("每页上限"), "藏经阁.每页上限")
         self._guard_rule = _text(borrowing.get("状态守卫"), "藏经阁.借阅.状态守卫")
-        raw_copy = require_mapping(self._data.dataset("藏经阁展示").get("文本"), "藏经阁展示")
+        raw_copy = require_mapping(self._data.dataset("藏经阁页面文案").get("文本"), "藏经阁展示")
         self._copy = CangjingCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
         self._buttons = project_dungeon_buttons(
-            self._data.dataset("藏经阁按钮").get("按钮"), "藏经阁按钮"
+            self._data.dataset("藏经阁页面按钮").get("按钮"), "藏经阁按钮"
         )
 
     def copy(self) -> CangjingCopy:

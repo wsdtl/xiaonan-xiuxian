@@ -126,7 +126,7 @@ class SectWarService:
             raise RuntimeError("异步玩法生命周期核心必须先于宗门战核心启动")
         if not self._injury.status().initialized:
             raise RuntimeError("长期伤势核心必须先于宗门战核心启动")
-        rule = _mapping(self._data.dataset("宗门规则").get("宗门战"), "宗门战.json")
+        rule = _mapping(self._data.dataset("宗门战对局规则").get("宗门战"), "宗门战.json")
         battle = _mapping(rule.get("战斗"), "宗门战.战斗")
         participants = _mapping(rule.get("参战"), "宗门战.参战")
         wager = _mapping(rule.get("押注"), "宗门战.押注")

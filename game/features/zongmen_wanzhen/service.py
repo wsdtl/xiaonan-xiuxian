@@ -73,7 +73,7 @@ class WanzhenFeature:
             raise RuntimeError("万珍殿玩法已经初始化")
         if not self._assets.status().initialized:
             raise RuntimeError("宗门公共资产核心必须先于万珍殿玩法启动")
-        rule = require_mapping(self._data.dataset("宗门规则").get("万珍殿"), "万珍殿规则")
+        rule = require_mapping(self._data.dataset("万珍殿存储规则").get("万珍殿"), "万珍殿规则")
         storing = require_mapping(rule.get("存入"), "万珍殿.存入")
         distribution = require_mapping(rule.get("发放"), "万珍殿.发放")
         store_guard = _text(storing.get("状态守卫"), "万珍殿.存入.状态守卫")
@@ -85,12 +85,12 @@ class WanzhenFeature:
             raise JsonDataError("万珍殿存入允许类别必须与成品类别一致")
         self._guard_rule = store_guard
         self._page_limit = _positive_int(rule.get("每页上限"), "万珍殿.每页上限")
-        raw_copy = require_mapping(self._data.dataset("万珍殿展示").get("文本"), "万珍殿展示")
+        raw_copy = require_mapping(self._data.dataset("万珍殿页面文案").get("文本"), "万珍殿展示")
         self._copy = WanzhenCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
         self._buttons = project_dungeon_buttons(
-            self._data.dataset("万珍殿按钮").get("按钮"), "万珍殿按钮"
+            self._data.dataset("万珍殿页面按钮").get("按钮"), "万珍殿按钮"
         )
 
     def copy(self) -> WanzhenCopy:

@@ -53,15 +53,15 @@ class LingcangFeature:
             raise RuntimeError("灵藏玩法已经初始化")
         if not self._assets.status().initialized:
             raise RuntimeError("宗门公共资产核心必须先于灵藏玩法启动")
-        rule = require_mapping(self._data.dataset("宗门规则").get("灵藏"), "灵藏规则")
+        rule = require_mapping(self._data.dataset("灵藏存取规则").get("灵藏"), "灵藏规则")
         storing = require_mapping(rule.get("存入"), "灵藏.存入")
         self._page_limit = _positive_int(rule.get("每页上限"), "灵藏.每页上限")
         self._guard_rule = _text(storing.get("状态守卫"), "灵藏.存入.状态守卫")
-        raw_copy = require_mapping(self._data.dataset("灵藏展示").get("文本"), "灵藏展示")
+        raw_copy = require_mapping(self._data.dataset("灵藏页面文案").get("文本"), "灵藏展示")
         self._copy = LingcangCopy(
             MappingProxyType({str(key): str(value) for key, value in raw_copy.items()})
         )
-        self._buttons = project_dungeon_buttons(self._data.dataset("灵藏按钮").get("按钮"), "灵藏按钮")
+        self._buttons = project_dungeon_buttons(self._data.dataset("灵藏页面按钮").get("按钮"), "灵藏按钮")
 
     def copy(self) -> LingcangCopy:
         if self._copy is None:

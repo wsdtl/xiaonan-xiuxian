@@ -21,7 +21,7 @@ _PAGES = frozenset({"未加入", "待处理邀请", "宗主", "长老", "弟子"
 def load_presentation(
     data: JsonDataService,
 ) -> tuple[SectCopy, tuple[Mapping[str, str], ...]]:
-    raw_text = data.dataset("宗门展示").get("文本")
+    raw_text = data.dataset("宗门页面文案").get("文本")
     if not isinstance(raw_text, Mapping):
         raise JsonDataError("宗门展示缺少文本.json")
     text = MappingProxyType(
@@ -38,7 +38,7 @@ def load_presentation(
     if set(text) != _TEXT_SECTIONS:
         raise JsonDataError("宗门文本必须完整包含图标、格式、查看、结果、错误")
     buttons = project_buttons(
-        data.dataset("宗门按钮").get("按钮"),
+        data.dataset("宗门页面按钮").get("按钮"),
         label="宗门按钮",
         keys=BUTTON_KEYS_WITHOUT_CONDITION,
     )

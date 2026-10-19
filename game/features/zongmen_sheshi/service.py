@@ -47,10 +47,10 @@ class SectFacilityFeature:
     def initialize(self) -> None:
         if self._copy is not None:
             raise RuntimeError("宗门设施玩法已经初始化")
-        raw = self._data.dataset("宗门设施展示").get("文本")
+        raw = self._data.dataset("宗门设施页面文案").get("文本")
         self._format_buttons = tuple(
             (str(row["页面"]), str(row["编号"]), str(row["名称"]), str(row["命令"]), str(row["行为"]), str(row["样式"]))
-            for row in (self._data.dataset("宗门设施按钮").get("按钮") or ())
+            for row in (self._data.dataset("宗门设施页面按钮").get("按钮") or ())
             if isinstance(row, Mapping)
         )
         if not isinstance(raw, Mapping):

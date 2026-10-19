@@ -94,9 +94,8 @@ class SectAssetService:
             raise RuntimeError("宗门公共资产核心已经初始化")
         if not self._innate_treasure.status().initialized:
             raise RuntimeError("先天灵宝核心必须先于宗门公共资产核心启动")
-        rules = self._data.dataset("宗门规则")
-        lingcang = _mapping(rules.get("灵藏"), "宗门/灵藏.json")
-        wanzhen = _mapping(rules.get("万珍殿"), "宗门/万珍殿.json")
+        lingcang = _mapping(self._data.dataset("灵藏存取规则").get("灵藏"), "宗门/灵藏.json")
+        wanzhen = _mapping(self._data.dataset("万珍殿存储规则").get("万珍殿"), "宗门/万珍殿.json")
         self._materials = _texts(
             _mapping(lingcang.get("基础材料"), "灵藏.基础材料").get("类别"),
             "灵藏.基础材料.类别",
@@ -106,7 +105,7 @@ class SectAssetService:
             raise JsonDataError("灵藏基础材料必须是灵植、灵矿和兽宝")
         if self._products != ("丹药", "真意", "气机", "器律", "阵法"):
             raise JsonDataError("万珍殿成品类别与正式资产分类不一致")
-        sect_rule = _mapping(rules.get("宗门"), "宗门/宗门.json")
+        sect_rule = _mapping(self._data.dataset("宗门创造规则").get("宗门"), "宗门/宗门.json")
         contribution = _mapping(sect_rule.get("贡献"), "宗门.贡献")
         sources = _mapping(contribution.get("来源"), "宗门.贡献.来源")
         stones = _mapping(sources.get("灵石"), "宗门.贡献.来源.灵石")

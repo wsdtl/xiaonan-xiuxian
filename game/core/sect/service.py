@@ -73,7 +73,7 @@ class SectService:
             raise RuntimeError("JSON 数据服务必须先于宗门核心启动")
         if not self._database.status().initialized:
             raise RuntimeError("核心数据库必须先于宗门核心启动")
-        rule = _mapping(self._data.dataset("宗门规则").get("宗门"), "宗门.json")
+        rule = _mapping(self._data.dataset("宗门创造规则").get("宗门"), "宗门.json")
         name = _mapping(rule.get("名称"), "宗门.名称")
         creation = _mapping(rule.get("创建"), "宗门.创建")
         follow = _mapping(rule.get("同行"), "宗门.同行")

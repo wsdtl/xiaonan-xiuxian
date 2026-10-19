@@ -37,7 +37,7 @@ class SectProgressService:
     def initialize(self) -> SectProgressStatus:
         if self._initialized:
             raise RuntimeError("宗门贡献等级核心已经初始化")
-        raw = _mapping(self._data.dataset("宗门规则").get("宗门"), "宗门.json")
+        raw = _mapping(self._data.dataset("宗门创造规则").get("宗门"), "宗门.json")
         level = _mapping(raw.get("等级"), "宗门.等级")
         maximum = _positive_int(level.get("最高等级"), "宗门.等级.最高等级")
         thresholds = _positive_or_zero_ints(level.get("阈值"), "宗门.等级.阈值")

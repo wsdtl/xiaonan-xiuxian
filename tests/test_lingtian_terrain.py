@@ -194,7 +194,7 @@ def test_命令层把选地形与清地形接到玩法层(services, monkeypatch)
     """玩家入口的接线：`灵田 选地形 [地形名]`、`灵田 清地形`；灵脉不给选。"""
 
     组件 = importlib.import_module("game.cmd.特殊地点.宗门园区.宗门生产")
-    假 = _假玩法(services.core.data.dataset("宗门生产展示").get("文本"))
+    假 = _假玩法(services.core.data.dataset("宗门生产页面文案").get("文本"))
     monkeypatch.setattr(
         组件,
         "current_game_services",

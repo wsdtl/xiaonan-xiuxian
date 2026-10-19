@@ -52,7 +52,7 @@ class GateFeature:
             raise RuntimeError("行动编排核心必须先于山门玩法启动")
         if not self._world.status().initialized:
             raise RuntimeError("世界核心必须先于山门玩法启动")
-        rule = require_mapping(self._data.dataset("山门规则").get("山门"), "山门.json")
+        rule = require_mapping(self._data.dataset("宗门洞天进出规则").get("山门"), "山门.json")
         self._space_type = _text(rule.get("空间类型"), "山门.空间类型")
         # 山门在哪由**数据**决定：世界核心保证「宗门」是唯一的地点专属功能，
         # 这里读它的配置，顺便把守卫也取出来（声明有人读，不是摆设）。
