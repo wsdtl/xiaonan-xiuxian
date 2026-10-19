@@ -70,9 +70,9 @@ from game.core.combat.contracts import (  # noqa: E402
 FIXED_GENERATED_AT = "2026-01-01T00:00:00+08:00"
 CARD = "400541"
 SURFACES = (
-    ("功法", "战斗/功法/内容/功法-*.json"),
-    ("真意", "战斗/真意/内容/真意-*.json"),
-    ("气机", "战斗/气机/内容/气机-*.json"),
+    ("功法", "战斗/内容/功法/功法-*.json"),
+    ("真意", "战斗/内容/真意/真意-*.json"),
+    ("气机", "战斗/内容/气机/气机-*.json"),
     ("器律", "物品/炼器/内容/器律-*.json"),
 )
 #: 与 `tools/语料对照.py` 同一套基数：这条判据比的是两条腿，不是平衡。
@@ -203,7 +203,7 @@ def 跑一遍(核心, 引擎, 请求: CombatRequest, 名单) -> tuple[list, list
     return 骨架(结果), 显示(结果, 核心), len(报), len(全份), 行数, 键
 
 
-配置 = json.loads((DATA_DIR / "战斗" / "基础" / "展示" / "战报.json").read_text(encoding="utf-8"))
+配置 = json.loads((DATA_DIR / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8"))
 声明 = 配置["标准化"]["记录事实"]
 保留 = {str(键) for 键 in 声明["保留"]}
 丢弃 = {str(键) for 键 in 声明["丢弃"]}

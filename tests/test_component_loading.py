@@ -32,14 +32,14 @@ def tree(tmp_path):
 
 @pytest.mark.parametrize("fault", ["missing", "foreign", "unknown", "identity", "unmatched"])
 def test_invalid_component_is_rejected(tree, fault):
-    manifest = tree / "战斗/基础/组件.json"
+    manifest = tree / "战斗/组件.json"
     value = json.loads(manifest.read_text(encoding="utf-8"))
     if fault == "missing":
         manifest.unlink()
     elif fault == "unknown":
         (tree / "未登记").mkdir()
     elif fault == "unmatched":
-        (tree / "战斗/基础/规则/未登记.json").write_text("{}", encoding="utf-8")
+        (tree / "战斗/规则/未登记.json").write_text("{}", encoding="utf-8")
     else:
         if fault == "identity":
             value["组件"] = "世界"

@@ -42,7 +42,7 @@ class _修士:
 
 @pytest.fixture
 def rules():
-    return json.loads((ROOT / "data" / "战斗" / "基础" / "规则" / "五行.json").read_text(encoding="utf-8"))
+    return json.loads((ROOT / "data" / "战斗" / "规则" / "五行.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def test_根性斜率按新口径走(multiply) -> None:
 
 
 def test_战报名单里有这两个键() -> None:
-    body = json.loads((ROOT / "data" / "战斗" / "基础" / "展示" / "战报.json").read_text(encoding="utf-8"))
+    body = json.loads((ROOT / "data" / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8"))
     assert "五行关系" in body["展示"]["伤害事实"]
     assert "五行倍率" in body["展示"]["伤害事实"]
     assert "五行倍率" in body["标准化"]["倍率明细"]

@@ -117,7 +117,7 @@ def _failures(services, cases: list[tuple[str, dict]], limit: int = 8) -> list[s
 def test_every_environment_fights(services) -> None:
     """55 个战场环境 × 地表/秘境两种来源。"""
 
-    environments = _load("战斗/战场环境/内容/*.json")
+    environments = _load("战斗/内容/战场环境/*.json")
     assert len(environments) >= 50
 
     cases: list[tuple[str, dict]] = []
@@ -263,7 +263,7 @@ def test_every_recovery_pill_can_be_used(services) -> None:
 def test_entry_surfaces_reach_their_deep_paths(services) -> None:
     """批量扫描只保证不崩；这里确认环境阶段、阵法轮转和用丹真的被走到。"""
 
-    environment = _load("战斗/战场环境/内容/*.json")[0]
+    environment = _load("战斗/内容/战场环境/*.json")[0]
     result = _fight(
         services,
         limit=200,

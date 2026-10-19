@@ -65,7 +65,7 @@ STACK_CEILING = 1000
 def _read_sources() -> frozenset:
     """读取数值 允许的来源。未登记的名字会被引擎静默取 0，所以必须逐个核对。"""
 
-    data = json.loads((DATA / "战斗" / "基础" / "定义" / "原子能力.json").read_text(encoding="utf-8"))
+    data = json.loads((DATA / "战斗" / "定义" / "原子能力.json").read_text(encoding="utf-8"))
     field = (data.get("读取数值") or {}).get("字段") or {}
     options = (field.get("来源") or {}).get("选项") or []
     return frozenset(str(item) for item in options)
@@ -127,7 +127,7 @@ def check_law(laws: dict) -> tuple[list[str], list[str], list[str]]:
     problems: list[str] = []
     warnings: list[str] = []
     names: list[str] = []
-    limits = {str(row.get("名称")): row.get("层数上限") for row in json.loads((DATA / "战斗" / "基础" / "定义" / "状态.json").read_text(encoding="utf-8"))} if (DATA / "战斗" / "基础" / "定义" / "状态.json").is_file() else {}
+    limits = {str(row.get("名称")): row.get("层数上限") for row in json.loads((DATA / "战斗" / "定义" / "状态.json").read_text(encoding="utf-8"))} if (DATA / "战斗" / "定义" / "状态.json").is_file() else {}
     for num, row in sorted(laws.items()):
         label = str(row["原始"].get("名称"))
         nodes = _nodes(row["展开"])

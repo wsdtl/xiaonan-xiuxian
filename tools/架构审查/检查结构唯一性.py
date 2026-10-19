@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CONTENT_ROOT = ROOT / "data/战斗"
+CONTENT_ROOT = ROOT / "data" / "战斗" / "内容"
 BASELINE = ROOT / "tools/基准/结构唯一性基线.json"
 SECTIONS = ("功法", "真意", "气机")
 
@@ -23,7 +23,7 @@ SECTIONS = ("功法", "真意", "气机")
 def measure_section(section: str) -> dict:
     strict: collections.Counter = collections.Counter()
     whole_card: collections.Counter = collections.Counter()
-    for p in sorted((CONTENT_ROOT / section / "内容").rglob("*.json")):
+    for p in sorted((CONTENT_ROOT / section).rglob("*.json")):
         doc = json.loads(p.read_text(encoding="utf-8"))
         for c in (doc if isinstance(doc, list) else [doc]):
             if not isinstance(c, dict):

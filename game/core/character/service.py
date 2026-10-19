@@ -170,7 +170,7 @@ class CharacterService:
         _mapping(creation.get("初始本命武器"), "人物.json.创建.初始本命武器")
         attributes = self._data.dataset("战斗字段定义").get("属性")
         self._five_element_rules = _mapping(
-            self._data.dataset("战斗规则").get("五行"), "战斗/基础/规则/五行.json"
+            self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         medicine_rules = _mapping(
             self._data.dataset("服丹规则").get("服丹"), "玩法/服丹/规则/服丹.json"
@@ -337,7 +337,7 @@ class CharacterService:
         """每个属性的基准值：属性定义里的 默认值，也就是「不增不减」的那个数。
 
         展示层靠它判断「这条属性有没有信息」——等于基准的属性不值得占玩家的屏幕
-        （见 data/战斗/基础/定义/说明.md：默认值也是这个属性的基准值）。
+        （见 data/战斗/定义/说明.md：默认值也是这个属性的基准值）。
         """
 
         self._require_initialized()

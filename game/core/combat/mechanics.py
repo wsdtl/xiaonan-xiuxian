@@ -1293,7 +1293,7 @@ class AbilityRuntime(ChainRuntime):
     def _dispatch_event_body(self, context: BattleContext, *, kind: str, source: Fighter, target: Fighter, amount: float=0.0, values: Mapping[str, Any] | None=None, tags: Iterable[str]=(), record: bool=True, capture: bool=True, chain_entry: tuple | None=None) -> EventFrame:
         depth_limit = self._event_depth_limit
         # 到顶之后**这次事件照旧发生、照旧进战报，只是不再往下触发监听**——见
-        # `data/战斗/基础/规则/说明.md` 的「两条链的上限」。留痕：事实里记 `链深度跳过`。
+        # `data/战斗/规则/说明.md` 的「两条链的上限」。留痕：事实里记 `链深度跳过`。
         over_depth = context.event_depth >= depth_limit
         if str(kind) not in self._event_names:
             raise ValueError(f"战斗核心未登记事件：{kind}")

@@ -45,7 +45,7 @@ def audit(root: Path) -> list[str]:
     errors: list[str] = []
     global_names: dict[str, str] = {}
     for category in CONTENT:
-        base = root / "data" / "战斗" / "功法" / "内容" / category
+        base = root / "data" / "战斗" / "内容" / "功法" / category
         for path, values in _iter_json(base):
             for entity in values:
                 if not isinstance(entity, dict):

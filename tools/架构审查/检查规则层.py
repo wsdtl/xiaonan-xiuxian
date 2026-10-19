@@ -1,6 +1,6 @@
 """规则层审查：效果之外的规则必须「登记得下、条件站得住、渲染得出来、内容只用登记过的」。
 
-规则层是 `data/战斗/基础/定义/规则层.json`，代码侧是 `game/core/combat/rules.py` 的
+规则层是 `data/战斗/定义/规则层.json`，代码侧是 `game/core/combat/rules.py` 的
 **拦截点表** `INTERCEPTION_POINTS`。这一层的设计目标是**加一条规则和加一张功法一样简单**：
 一条规则 = 一个拦截点 + 一组条件 + 一个处置，条件用已登记的条件原子写，参数用 `$字段`
 占位。于是判据也必须是通用的——**不为任何具体规则写一条判据**，只核七件事：
@@ -41,8 +41,8 @@ for _path in (str(ROOT), str(ROOT / "tools")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-REGISTRY = ROOT / "data" / "战斗" / "基础" / "定义" / "规则层.json"
-ABILITIES = ROOT / "data" / "战斗" / "基础" / "定义" / "原子能力.json"
+REGISTRY = ROOT / "data" / "战斗" / "定义" / "规则层.json"
+ABILITIES = ROOT / "data" / "战斗" / "定义" / "原子能力.json"
 #: 基准族：它的天生规则必须是空的（所有种族的强弱都以它为参照）。
 BASE_RACE = "人族"
 
@@ -61,7 +61,7 @@ def _cards():
         for path in sorted(config["目录"].glob(config["模式"])):
             for entry in load_build_json(path):
                 yield path.name, entry
-    for path in sorted((ROOT / "data" / "战斗" / "功法" / "内容" / "战场环境").rglob("*.json")):
+    for path in sorted((ROOT / "data" / "战斗" / "内容" / "功法" / "战场环境").rglob("*.json")):
         for entry in load_build_json(path):
             yield path.name, entry
 
@@ -75,9 +75,9 @@ def check_registry(layer: dict[str, dict]) -> list[str]:
     validator = rule_validator(
         {
             "原子能力": _abilities(),
-            "属性": json.loads((ROOT / "data" / "战斗" / "基础" / "定义" / "属性.json").read_text(encoding="utf-8")),
-            "资源": json.loads((ROOT / "data" / "战斗" / "基础" / "定义" / "资源.json").read_text(encoding="utf-8")),
-            "事件": json.loads((ROOT / "data" / "战斗" / "基础" / "定义" / "事件.json").read_text(encoding="utf-8")),
+            "属性": json.loads((ROOT / "data" / "战斗" / "定义" / "属性.json").read_text(encoding="utf-8")),
+            "资源": json.loads((ROOT / "data" / "战斗" / "定义" / "资源.json").read_text(encoding="utf-8")),
+            "事件": json.loads((ROOT / "data" / "战斗" / "定义" / "事件.json").read_text(encoding="utf-8")),
         }
     )
     try:
@@ -307,7 +307,7 @@ def check_content_uses(layer: dict[str, dict]) -> list[str]:
 def _status_reactions() -> list[dict]:
     """`规则/状态反应.json`：状态反应的 `生成状态` 也可能带规则。"""
 
-    path = ROOT / "data" / "战斗" / "基础" / "规则" / "状态反应.json"
+    path = ROOT / "data" / "战斗" / "规则" / "状态反应.json"
     if not path.exists():
         return []
     value = json.loads(path.read_text(encoding="utf-8"))
@@ -420,7 +420,7 @@ def _enemy_tiers() -> tuple[str, ...]:
 def _attributes() -> set[str]:
     """登记过的战斗属性名（种族 `成长修正` 只能写这些键）。"""
 
-    path = ROOT / "data" / "战斗" / "基础" / "定义" / "属性.json"
+    path = ROOT / "data" / "战斗" / "定义" / "属性.json"
     if not path.exists():
         return set()
     return {str(key) for key in json.loads(path.read_text(encoding="utf-8"))}

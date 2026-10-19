@@ -56,7 +56,7 @@ class EnemyService:
             raise RuntimeError("敌人核心已经初始化")
         role_rules = self._data.dataset("角色规则")
         self._five_element_rules = _mapping(
-            self._data.dataset("战斗规则").get("五行"), "战斗/基础/规则/五行.json"
+            self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
         self._role_rules = MappingProxyType(
             {

@@ -49,9 +49,9 @@ from game.core.combat.contracts import (  # noqa: E402
 
 #: 一场足够复杂的战斗：左二右三，各自带功法 / 真意 / 气机 / 器律，能出召唤物与控制状态。
 SURFACES = (
-    ("功法", 4, "战斗/功法/内容/*.json"),
-    ("真意", 3, "战斗/真意/内容/*.json"),
-    ("气机", 3, "战斗/气机/内容/*.json"),
+    ("功法", 4, "战斗/内容/功法/*.json"),
+    ("真意", 3, "战斗/内容/真意/*.json"),
+    ("气机", 3, "战斗/内容/气机/*.json"),
     ("器律", 2, "物品/炼器/内容/器律/*.json"),
 )
 ATTRIBUTES = {
@@ -239,12 +239,12 @@ def check_compact_lines(report: dict, presentation: dict) -> list[str]:
 def check_internal_details(report: dict, presentation: dict) -> list[str]:
     """明细里不许出现引擎的内部记账标签与内部编号。
 
-    名单取自 `data/战斗/基础/展示/战报.json`（`标准化.内部明细`），判据不另抄一份：
+    名单取自 `data/战斗/展示/战报.json`（`标准化.内部明细`），判据不另抄一份：
     抄一份就会出现「数据里加了、判据没加」的缝。
     """
 
     declared = json.loads(
-        (ROOT / "data" / "战斗" / "基础" / "展示" / "战报.json").read_text(encoding="utf-8")
+        (ROOT / "data" / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8")
     )
     kinds = {str(value) for value in declared["标准化"]["内部明细"]}
     problems: list[str] = []
@@ -284,7 +284,7 @@ def check_event_fields(report: dict, presentation: dict) -> list[str]:
     """
 
     declared = json.loads(
-        (ROOT / "data" / "战斗" / "基础" / "展示" / "战报.json").read_text(encoding="utf-8")
+        (ROOT / "data" / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8")
     )
     event_fields = {str(value) for value in declared["协议"]["事件字段"]}
     fact_fields = {str(value) for value in declared["协议"]["事实字段"]}
@@ -371,7 +371,7 @@ def check_participant_records(report: dict, presentation: dict) -> list[str]:
     """快照记录只带会变的那一半，花名册覆盖率与内容要跟战报一致（第 117 轮的分工）。"""
 
     declared = json.loads(
-        (ROOT / "data" / "战斗" / "基础" / "展示" / "战报.json").read_text(encoding="utf-8")
+        (ROOT / "data" / "战斗" / "展示" / "战报.json").read_text(encoding="utf-8")
     )
     record_fields = {str(value) for value in declared["协议"]["参战者字段"]}
     profile_fields = {str(value) for value in declared["协议"]["花名册字段"]}

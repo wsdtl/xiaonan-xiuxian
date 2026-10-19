@@ -198,7 +198,7 @@ def _数据词表() -> set[str]:
 
 
 def _是数据路径(名字: str) -> bool:
-    """`规则/切磋.json`、`data/战斗/基础/规则/五行.json`、`战斗/基础/定义/属性.json` 都算数据路径。
+    """`规则/切磋.json`、`data/战斗/规则/五行.json`、`战斗/定义/属性.json` 都算数据路径。
 
     判据是「它真的指向一个数据文件」，而不是看它长什么样——这样组件内相对路径与跨组件的
     `data/…` 前缀两种写法都放行，只要文件真在。
@@ -256,7 +256,7 @@ def check_component_function_docs() -> list[str]:
                 continue
             if 名字.startswith(("http", "data/")) or 名字 in {"组件.json"}:
                 continue
-            # 数据文件路径留在说明里是好事（`规则/切磋.json`、`data/战斗/基础/规则/五行.json`）：
+            # 数据文件路径留在说明里是好事（`规则/切磋.json`、`data/战斗/规则/五行.json`）：
             # 改数据的人要照着找。只有指向代码的才算夹带。
             if _是数据路径(名字):
                 continue
@@ -806,7 +806,7 @@ def check_terrain_pace() -> list[str]:
 
     import json as _json
 
-    地形路径 = DATA / "战斗" / "基础" / "规则" / "地形.json"
+    地形路径 = DATA / "战斗" / "规则" / "地形.json"
     分区路径 = DATA / "世界" / "内容" / "地形分区.json"
     if not 地形路径.exists() or not 分区路径.exists():
         return []
@@ -815,21 +815,21 @@ def check_terrain_pace() -> list[str]:
     problems: list[str] = []
     if "无相地势" in 文档:
         problems.append(
-            "战斗/基础/规则/地形.json 不得再声明 `无相地势`：地形不再调节输出倍率"
+            "战斗/规则/地形.json 不得再声明 `无相地势`：地形不再调节输出倍率"
             "（输出倍率只有 `伤害.json.输出倍率` 一个出处）"
         )
     需要 = {str(条.get("地形") or "") for 条 in 分区 if isinstance(条, dict)}
     行 = 文档.get("地形")
     if not isinstance(行, list) or not 行:
-        return ["战斗/基础/规则/地形.json 的 `地形` 必须是非空数组"]
+        return ["战斗/规则/地形.json 的 `地形` 必须是非空数组"]
     登记: set[str] = set()
     for 条 in 行:
         if not isinstance(条, dict):
-            problems.append("战斗/基础/规则/地形.json 的 `地形` 里混了非对象")
+            problems.append("战斗/规则/地形.json 的 `地形` 里混了非对象")
             continue
         名 = str(条.get("地形") or "").strip()
         if not 名:
-            problems.append("战斗/基础/规则/地形.json 有一行没写 `地形`")
+            problems.append("战斗/规则/地形.json 有一行没写 `地形`")
             continue
         if 名 in 登记:
             problems.append(f"地形重复登记：{名}")

@@ -119,7 +119,7 @@ class CombatService:
         )
 
     def rule_layer(self) -> Mapping[str, Mapping[str, object]]:
-        """锁定技登记表（`战斗/基础/定义/规则层.json`）的**公共读口**。
+        """锁定技登记表（`战斗/定义/规则层.json`）的**公共读口**。
 
         渲染一张卡的正文要用它——规则段的文字由登记表成句，缺了就只会印「缺少登记表」。
         查看页、渲染工具、判据都从这里取，免得各自去掏引擎的内部字段。
@@ -128,7 +128,7 @@ class CombatService:
         return self._require_engine().catalog.rule_layer
 
     def report_catalog(self) -> BattleReportCatalog:
-        """战报展示目录（`战斗/基础/展示/战报.json` 的**公共读口**）。
+        """战报展示目录（`战斗/展示/战报.json` 的**公共读口**）。
 
         战报页面按编号取到存档战报之后，要用它把展示包现算出来（第 118 轮起宗门战只存
         战报、不存展示包）。查看页、渲染工具、判据也走这里，免得各自去掏内部字段。

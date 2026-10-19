@@ -25,7 +25,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-CONTENT = ROOT / "data" / "战斗" / "功法" / "内容"
+CONTENT = ROOT / "data" / "战斗" / "内容" / "功法"
 
 
 def collected_abilities(node: object) -> set[str]:

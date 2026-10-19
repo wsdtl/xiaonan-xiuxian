@@ -28,7 +28,7 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
 RACE_FILE = DATA / "角色" / "规则" / "种族" / "种族.json"
-LAYER_FILE = DATA / "战斗" / "基础" / "定义" / "规则层.json"
+LAYER_FILE = DATA / "战斗" / "定义" / "规则层.json"
 COPY_FILE = DATA / "角色" / "展示" / "文本.json"
 FLAVOR_SECTION = "风味"
 

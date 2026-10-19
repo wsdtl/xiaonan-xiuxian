@@ -296,7 +296,7 @@ class CardText:
 
     def __init__(self, entity: Mapping[str, object], rule_layer: Mapping[str, object] | None = None) -> None:
         self.entity = entity
-        #: 规则层登记表（`data/战斗/基础/定义/规则层.json`）。规则段必须由它渲染，
+        #: 规则层登记表（`data/战斗/定义/规则层.json`）。规则段必须由它渲染，
         #: 拿不到就报「缺少登记表」，不悄悄少印一段。
         self.rule_layer: dict[str, Mapping] = dict(rule_layer or {})
         self.unknown: list[str] = []
