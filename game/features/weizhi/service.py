@@ -23,6 +23,7 @@ from game.core.world import LocationQuery, LocationView, WorldService
 from game.features.presentation import require_mapping
 
 from .contracts import (
+    StatusView,
     CurrentPositionView,
     NearbyCultivatorPage,
     NearbyCultivatorView,
@@ -222,6 +223,30 @@ class PositionFeature:
         result = list(self._location_entry_actions(locations))
         result.extend(self._actions_for("地点"))
         return tuple(result)
+
+    def status_copy(self) -> dict:
+        """快捷状态页的文案（读「快捷页面文案」数据集）。"""
+
+        return dict(self._data.dataset("快捷页面文案").get("状态") or {})
+
+    async def status_summary(self, user_id: str) -> StatusView:
+        """只看现在在干什么：位置、空间、状态标签与可用守卫。"""
+
+        if not self._initialized:
+            raise RuntimeError("位置查看玩法微服务尚未初始化")
+        position = await self.current(user_id)
+        snapshot = await self._player_state.current(user_id)
+        names = tuple(
+            slot.name for slot in (snapshot.states.values() if snapshot else ())
+        )
+        return StatusView(
+            place_name=position.location.location_name,
+            xy=position.location.xy,
+            space_type=position.space_type,
+            space_name=position.space_name,
+            states=names,
+            guards=(),
+        )
 
     async def current(self, user_id: str) -> CurrentPositionView:
         self._require_initialized()

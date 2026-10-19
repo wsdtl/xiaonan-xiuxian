@@ -100,6 +100,16 @@ class CurrentPositionView:
 
 
 @dataclass(frozen=True)
+class StatusView:
+    place_name: str
+    xy: tuple[int, int]
+    space_type: str
+    space_name: str
+    states: tuple[str, ...]
+    guards: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CompanionView:
     """道侣实例的公开视图：只看状态，不带突破记录与备药（局内状态归战斗）。"""
 
@@ -162,6 +172,7 @@ class NearbyOverview:
 
 __all__ = [
     "CurrentPositionView",
+    "StatusView",
     "NearbyCultivatorPage",
     "NearbyCultivatorView",
     "NearbyOverview",

@@ -1,6 +1,8 @@
 """纳戒玩法微服务。"""
 
 from .contracts import (
+    SpiritStoneGrade,
+    SpiritStoneView,
     NajieCategorySummary,
     NajieCategoryView,
     NajieEntry,
@@ -19,6 +21,8 @@ __all__ = [
     "NajieFeature",
     "NajieHome",
     "NajiePage",
+    "SpiritStoneGrade",
+    "SpiritStoneView",
     "NajieQueryError",
     "NajieStateError",
     "NajieSubcategorySummary",

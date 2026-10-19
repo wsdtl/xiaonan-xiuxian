@@ -42,6 +42,20 @@ class NajieCategorySummary:
 
 
 @dataclass(frozen=True)
+class SpiritStoneGrade:
+    grade_id: str
+    grade_name: str
+    quantity: int
+    units: int
+
+
+@dataclass(frozen=True)
+class SpiritStoneView:
+    total_units: int
+    grades: tuple[SpiritStoneGrade, ...]
+
+
+@dataclass(frozen=True)
 class NajieHome:
     categories: tuple[NajieCategorySummary, ...]
 
@@ -69,6 +83,8 @@ __all__ = [
     "NajieCategorySummary",
     "NajieCategoryView",
     "NajieEntry",
+    "SpiritStoneGrade",
+    "SpiritStoneView",
     "NajieHome",
     "NajiePage",
     "NajieQueryError",

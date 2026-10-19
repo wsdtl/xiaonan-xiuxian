@@ -168,6 +168,11 @@ class AssetService:
                 raise AssetStateError(f"灵石规则缺少品级：{grade_id}")
         return units
 
+    def spirit_stone_units(self) -> dict[str, int]:
+        """品级编号 -> 黄品当量（公开给玩法层复用）。"""
+
+        return self._spirit_stone_units()
+
     async def spirit_stone_balance(self, user_id: str) -> int:
         """把纳戒里的灵石按品级折成黄品当量。"""
 

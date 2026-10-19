@@ -14,6 +14,8 @@ from game.core.asset import (
 )
 
 from .contracts import (
+    SpiritStoneGrade,
+    SpiritStoneView,
     NajieCategorySummary,
     NajieCategoryView,
     NajieEntry,
@@ -28,7 +30,8 @@ from .contracts import (
 class NajieFeature:
     """只组合资产视图，不拥有任何资产写权限。"""
 
-    def __init__(self, assets: AssetService) -> None:
+    def __init__(self, data, assets: AssetService) -> None:
+        self._data = data
         self._assets = assets
         self._initialized = False
 
@@ -47,6 +50,33 @@ class NajieFeature:
                 for category in snapshot.categories
             )
         )
+
+    def copy_spirit_stone(self) -> dict:
+        """快捷灵石页的文案（读「快捷页面文案」数据集）。"""
+
+        return dict(self._data.dataset("快捷页面文案").get("灵石") or {})
+
+    async def spirit_stone(self, user_id: str) -> SpiritStoneView:
+        """只看灵石：总当量与各品级数量，不拉纳戒全表。"""
+
+        if not self._initialized:
+            raise RuntimeError("纳戒玩法微服务尚未初始化")
+        total = await self._assets.spirit_stone_balance(user_id)
+        stacks = await self._assets.inventory_stacks(
+            user_id, self._assets.SPIRIT_STONE_ID
+        )
+        units = self._assets.spirit_stone_units()
+        grades = tuple(
+            SpiritStoneGrade(
+                grade_id=stack.grade.grade_id,
+                grade_name=stack.grade.name,
+                quantity=stack.quantity,
+                units=stack.quantity * units[stack.grade.grade_id],
+            )
+            for stack in stacks
+            if stack.quantity > 0
+        )
+        return SpiritStoneView(total_units=total, grades=grades)
 
     async def category(self, user_id: str, category_name: str) -> NajieCategoryView:
         snapshot = await self._snapshot(user_id)

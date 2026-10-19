@@ -796,7 +796,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     )
     zhongzu = ZhongzuFeature(data, character, combat)
     zhongzu.initialize()
-    najie = NajieFeature(asset)
+    najie = NajieFeature(data, asset)
     najie.initialize()
     jiaoyi = TradeFeature(data, trade)
     jiaoyi.initialize()

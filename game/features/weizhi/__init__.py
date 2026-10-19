@@ -1,6 +1,7 @@
 """位置查看玩法微服务。"""
 
 from .contracts import (
+    StatusView,
     CompanionView,
     CurrentPositionView,
     NearbyCultivatorPage,
@@ -20,6 +21,7 @@ __all__ = [
     "CharacterPublicProfile",
     "CompanionView",
     "CurrentPositionView",
+    "StatusView",
     "NearbyCultivatorPage",
     "NearbyCultivatorView",
     "NearbyOverview",
