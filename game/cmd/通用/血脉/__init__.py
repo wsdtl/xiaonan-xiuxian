@@ -16,7 +16,7 @@ _SUBCOMMANDS = ("族谱",)
 @GameCommand.command(
     cmd=("血脉", "血脉族谱"),
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "角色",
@@ -44,7 +44,7 @@ async def xuemai(user_id: str, message: str, manager: Any) -> None:
 @GameCommand.command(
     cmd=("传位",),
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "角色",

@@ -19,7 +19,7 @@ from typing import Any
 @GameCommand.command(
     cmd=("交谈", "道侣交谈"),
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "道侣",
@@ -49,7 +49,7 @@ async def converse_companion(user_id: str, message: str, manager: Any) -> None:
 @GameCommand.command(
     cmd="赠予",
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "道侣",
@@ -87,7 +87,7 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
 @GameCommand.command(
     cmd=("邀约", "邀约道侣"),
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "道侣",
@@ -119,7 +119,7 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
 @GameCommand.command(
     cmd=("暂别", "暂别道侣"),
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "道侣",

@@ -14,7 +14,7 @@ from typing import Any
 @GameCommand.fullmatch(
     cmd=("开始讨伐", "讨伐"),
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲且可行动",
         "help": {
             "category": "行动",
@@ -37,7 +37,7 @@ async def start_raid(user_id: str, message_context: MessageContext, manager: Any
 @GameCommand.fullmatch(
     cmd=("讨伐战况", "查看讨伐战况", "讨况"),
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "已创建",
         "help": {
             "category": "行动",
@@ -61,7 +61,7 @@ async def raid_progress(user_id: str, manager: Any) -> None:
     cmd=("讨伐结束", "结算讨伐", "讨伐结算", "结束讨伐", "讨结"),
     metadata={
         "hosting": {"activity": "讨伐", "phase": "end"},
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "已创建",
         "help": {
             "category": "行动",

@@ -13,7 +13,7 @@ from . import input as command_input, reply
 @GameCommand.command(
     cmd="生育",
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "道侣",
@@ -43,7 +43,7 @@ async def birth(user_id: str, message: str, manager: Any) -> None:
 @GameCommand.command(
     cmd="求子",
     metadata={
-        "scope": "专属",
+        "scope": "通用",
         "guard_rule": "已创建",
         "help": {
             "category": "道侣",
