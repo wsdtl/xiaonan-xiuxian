@@ -421,7 +421,7 @@ class MedicineService:
         common_required = self._common_entity_fields()
         rows = self._data.dataset("基础物品分类规则").get("分类")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("物品/基础物品/规则/分类.json 必须是字典列表")
+            raise JsonDataError("物品/规则/分类.json 必须是字典列表")
         for raw_category in rows:
             entry = _mapping(raw_category, "分类[]")
             if str(entry.get("类别") or "").strip() != "丹药":
@@ -440,7 +440,7 @@ class MedicineService:
 
         rows = self._data.dataset("基础物品字段定义").get("公共字段")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("物品/基础物品/定义/公共字段.json 必须是字典列表")
+            raise JsonDataError("物品/定义/公共字段.json 必须是字典列表")
         for raw in rows:
             entry = _mapping(raw, "公共字段[]")
             if str(entry.get("类别") or "").strip() != "编号实体":
@@ -453,7 +453,7 @@ class MedicineService:
 
         rows = self._data.dataset("基础物品字段定义").get("使用效果")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("物品/基础物品/定义/使用效果.json 必须是字典列表")
+            raise JsonDataError("物品/定义/使用效果.json 必须是字典列表")
         contract: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
         for raw in rows:
             entry = _mapping(raw, "使用效果[]")

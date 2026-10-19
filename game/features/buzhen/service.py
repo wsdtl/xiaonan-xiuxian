@@ -28,7 +28,7 @@ class FormationArmFeature:
     def initialize(self) -> None:
         if self._copy is not None:
             raise RuntimeError("布阵玩法已经初始化")
-        raw = self._data.dataset("阵法展示").get("文本")
+        raw = self._data.dataset("阵法展示").get("阵法-文本")
         if not isinstance(raw, Mapping):
             raise JsonDataError("阵法展示缺少文本.json")
         text = MappingProxyType(

@@ -136,7 +136,7 @@ class FormationService:
         )
         contract = ContractSet.load(
             self._data.dataset("阵法字段契约").get("阵法字段契约"),
-            "物品/阵法/规则/阵法字段契约.json",
+            "物品/规则/阵法字段契约.json",
         )
         raw_formations = {}
         for formation_id, raw in self._data.entities("阵法").items():
@@ -161,7 +161,7 @@ class FormationService:
             raise JsonDataError("阵法名称不能重复")
         self._masters = MappingProxyType(self._load_masters())
         paging = _mapping(
-            self._data.dataset("阵法展示").get("分页"), "阵法展示.分页"
+            self._data.dataset("阵法展示").get("阵法-分页"), "阵法展示.阵法-分页"
         )
         self._page_limit = _positive_int(
             _mapping(

@@ -154,7 +154,7 @@ class ForgingService:
             self._load_beast_materials(rules.get("归引"))
         )
         self._mineral_materials = MappingProxyType(
-            self._load_mineral_materials(rules.get("归脉"))
+            self._load_mineral_materials(rules.get("炼器-归脉"))
         )
         self._laws = MappingProxyType(self._load_laws())
         self._law_by_name = MappingProxyType(
@@ -686,7 +686,7 @@ class ForgingService:
 
     def _load_mineral_materials(self, value: object) -> dict[str, _MaterialIdentity]:
         result: dict[str, _MaterialIdentity] = {}
-        for raw in _sequence(value, "炼器规则.归脉"):
+        for raw in _sequence(value, "炼器规则.炼器-归脉"):
             row = _mapping(raw, "归脉[]")
             pool = _text(row.get("灵矿池"), "归脉.灵矿池")
             primary = _text(row.get("本脉"), "归脉.本脉")

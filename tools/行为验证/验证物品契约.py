@@ -32,7 +32,7 @@ from game.core.data import JsonDataService  # noqa: E402
 from game.core.database import DatabaseService  # noqa: E402
 from game.core.medicine import MedicineService  # noqa: E402
 
-TARGET = "物品/炼丹/内容/丹药/恢复丹/恢复丹-精神.json"
+TARGET = "物品/内容/丹药/恢复丹/恢复丹-精神.json"
 
 
 def _initialize_medicine(root: pathlib.Path, database_path: pathlib.Path) -> str:

@@ -875,7 +875,6 @@ def test_炼阵圣品两条候选能点着挑(services) -> None:
             pathlib.Path(__file__).resolve().parents[1]
             / 'data'
             / '物品'
-            / '阵法'
             / '内容'
             / '阵法.json'
         ).read_text(encoding='utf-8')

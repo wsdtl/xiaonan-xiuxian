@@ -49,7 +49,7 @@ KNOWN_LOOPING: set[str] = set()
 
 def _battle_pills() -> list[dict]:
     entries: list[dict] = []
-    for path in sorted((DATA / "物品/炼丹/内容/丹药/战丹").glob("*.json")):
+    for path in sorted((DATA / "物品/内容/丹药/战丹").glob("*.json")):
         # 监听节点已经模板化；不展开拿到的是引用，会被判成「不是监听事件节点」。
         entries.extend(expand_build_document(json.loads(path.read_text(encoding="utf-8"))))
     return entries

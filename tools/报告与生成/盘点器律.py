@@ -1,7 +1,7 @@
 """器律盘点：把这次重做的现状一条命令重算出来——阶梯、覆盖、每条签名与强度画像。
 
 为什么不落一份静态基线文件：器律 64 条已经全部**内联**（不再引用构筑模板），
-现状完全由 `data/物品/炼器/内容/器律-*.json` 决定；任何一份抄下来的表格都会在某次改动后烂掉。
+现状完全由 `data/物品/内容/器律-*.json` 决定；任何一份抄下来的表格都会在某次改动后烂掉。
 所以这里的做法是**可重算**：读数一律现算，要看就重跑，不存在过期问题。
 
 盘四样：
@@ -27,8 +27,8 @@ import json
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-RECIPE = ROOT / "data" / "物品" / "炼器" / "规则" / "器则.json"
-LAWS = ROOT / "data" / "物品" / "炼器" / "内容"
+RECIPE = ROOT / "data" / "物品" / "规则" / "器则.json"
+LAWS = ROOT / "data" / "物品" / "内容"
 #: 产出类原子能力：判「同模板换参」的三样之一。
 #: 真正的「消费/改动方式」只出现在这些能力上；`计算数值`/`条件执行` 的 `方式` 是算法，不算消费口径。
 MUTATORS = ("修改状态层数", "修改构筑计量", "修改行动条", "修改技能冷却", "修改事件标签")
@@ -67,7 +67,7 @@ def _laws() -> list[tuple[str, dict, list[dict]]]:
 
 def _ladder() -> list[str]:
     data = json.loads(RECIPE.read_text(encoding="utf-8"))
-    lines = ["器阶阶梯（声明处：data/物品/炼器/规则/器则.json；强度来自解锁池，没有系数）",
+    lines = ["器阶阶梯（声明处：data/物品/规则/器则.json；强度来自解锁池，没有系数）",
              "  名称      阶序  等级范围   开放器律孔"]
     for row in data["器阶"]:
         span = row["等级范围"]

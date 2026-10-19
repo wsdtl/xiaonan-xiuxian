@@ -33,7 +33,7 @@ _REQUIRED = {
 
 
 def load_presentation(data: JsonDataService) -> tuple[FormationCopy, tuple[Mapping[str, str], ...]]:
-    raw_text = data.dataset("阵法展示").get("文本")
+    raw_text = data.dataset("阵法展示").get("阵法-文本")
     if not isinstance(raw_text, Mapping):
         raise JsonDataError("阵法展示缺少文本.json")
     text = MappingProxyType(
@@ -53,7 +53,7 @@ def load_presentation(data: JsonDataService) -> tuple[FormationCopy, tuple[Mappi
         if set(text[section]) != set(fields):
             raise JsonDataError(f"阵法文本字段不完整：{section}")
     buttons = project_buttons(
-        data.dataset("阵法按钮").get("按钮"),
+        data.dataset("阵法按钮").get("阵法-按钮"),
         label="阵法按钮",
     )
     _validate_buttons(buttons)

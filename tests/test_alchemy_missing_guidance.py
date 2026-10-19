@@ -23,16 +23,16 @@ def _炉法药脉(丹编号: str, services) -> list[str]:
     )
     炉法 = {
         x["名称"]: x["辅材"]
-        for x in json.loads((DATA / "物品" / "炼丹" / "规则" / "炉法.json").read_text(encoding="utf-8"))
+        for x in json.loads((DATA / "物品" / "规则" / "炉法.json").read_text(encoding="utf-8"))
     }
     return [x["药脉"] for x in 炉法[recipe.method]]
 
 
 def _本脉灵植(脉: str) -> str:
-    归脉 = json.loads((DATA / "物品" / "炼丹" / "规则" / "归脉.json").read_text(encoding="utf-8"))
+    归脉 = json.loads((DATA / "物品" / "规则" / "归脉.json").read_text(encoding="utf-8"))
     池 = next(x["灵植池"] for x in 归脉 if x["本脉"] == 脉)
     条目 = json.loads(
-        (DATA / "物品" / "基础物品" / "灵植" / "内容" / f"{池}.json").read_text(encoding="utf-8")
+        (DATA / "物品" / "内容" / "灵植" / f"{池}.json").read_text(encoding="utf-8")
     )
     return str((条目 if isinstance(条目, list) else [条目])[0]["编号"])
 

@@ -71,7 +71,7 @@ def specs(core, root: pathlib.Path):
     监听节点直接写在实体里；直接 `json.loads` 与它等价，但换读取口会让两条通道读到两种形态。
     """
 
-    for path in sorted(root.glob("物品/炼丹/内容/丹药/战丹/*.json")):
+    for path in sorted(root.glob("物品/内容/丹药/战丹/*.json")):
         for entry in _load_build_json(path):
             if not (entry.get("使用效果") or {}).get("监听"):
                 continue

@@ -51,7 +51,7 @@ SOURCES = (
     ("功法", "战斗/内容/功法/功法-*.json"),
     ("真意", "战斗/内容/真意/真意-*.json"),
     ("气机", "战斗/内容/气机/气机-*.json"),
-    ("器律", "物品/炼器/内容/器律-*.json"),
+    ("器律", "物品/内容/器律-*.json"),
 )
 FORBIDDEN = {
     "气机": ("监听事件",),
@@ -154,7 +154,7 @@ def check_listener_carriers() -> list[str]:
     """
 
     problems: list[str] = []
-    pills = DATA / "物品/炼丹/内容/丹药/战丹"
+    pills = DATA / "物品/内容/丹药/战丹"
     for path in sorted(pills.glob("*.json")):
         for entry in _load_build_json(path):
             effect = entry.get("使用效果") or {}

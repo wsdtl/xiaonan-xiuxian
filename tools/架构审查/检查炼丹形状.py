@@ -10,9 +10,9 @@
 * 又分出一份「丹方」数据集、目录或编号段（11/13/15/17）；
 * 丹药漏了处方那一半（`炼制难度` / `炉法`），退回「只有成品、没法炼」；
 * 丹药又写回 `成丹` 那一格——并了之后它就是它自己，写回去就是两份实体的残影；
-* `物品/炼丹/组件.json` 的实体类别 / 编号类别 / 路径与 `基础/定义/编号.json` 的前缀段对不上；
+* `物品/组件.json` 的实体类别 / 编号类别 / 路径与 `基础/定义/编号.json` 的前缀段对不上；
 * 字段契约的必填 / 可选与实体实际写的字段脱钩（契约变成装饰）；
-* 物品层（`物品/基础物品/规则/分类.json`）那一份丹药条目与炼丹侧各写一套、互相漂移。
+* 物品层（`物品/规则/分类.json`）那一份丹药条目与炼丹侧各写一套、互相漂移。
 """
 
 from __future__ import annotations
@@ -52,24 +52,24 @@ def main() -> int:
     问题: list[str] = []
 
     # 一、目录与数据集形状
-    if (ROOT / "data/物品/炼丹/内容/丹方").exists():
-        问题.append("data/物品/炼丹/内容/丹方 又出现了（丹方已并进丹药）")
-    if not (ROOT / "data/物品/炼丹/内容/丹药").is_dir():
-        问题.append("data/物品/炼丹/内容/丹药 不见了")
+    if (ROOT / "data/物品/内容/丹方").exists():
+        问题.append("data/物品/内容/丹方 又出现了（丹方已并进丹药）")
+    if not (ROOT / "data/物品/内容/丹药").is_dir():
+        问题.append("data/物品/内容/丹药 不见了")
 
-    组件 = _读json("物品/炼丹/组件.json")
+    组件 = _读json("物品/组件.json")
     数据集 = collections.Counter(
         str(规则.get("数据集")) for 规则 in 组件["读取规则"]
     )
     for 名 in 数据集:
         if 名 == "丹方":
-            问题.append("物品/炼丹/组件.json 又登记了「丹方」数据集")
+            问题.append("物品/组件.json 又登记了「丹方」数据集")
     if 数据集.get("丹药") != 1:
-        问题.append(f"物品/炼丹/组件.json 的「丹药」数据集应为 1 条，实为 {数据集.get('丹药', 0)}")
+        问题.append(f"物品/组件.json 的「丹药」数据集应为 1 条，实为 {数据集.get('丹药', 0)}")
     for 规则 in 组件["读取规则"]:
         if 规则.get("数据集") != "丹药":
             continue
-        if 规则.get("路径") != "物品/炼丹/内容/丹药/*/*.json":
+        if 规则.get("路径") != "物品/内容/丹药/*/*.json":
             问题.append(f"丹药数据集路径变了：{规则.get('路径')}")
         if 规则.get("实体类别") != "丹药" or 规则.get("编号类别") != "丹药":
             问题.append(
@@ -93,7 +93,7 @@ def main() -> int:
     段计数: collections.Counter = collections.Counter()
     字段集合: set[frozenset[str]] = set()
     for 相对, 文档 in 全库文档():
-        if not 相对.startswith("data/物品/炼丹/内容/丹药/"):
+        if not 相对.startswith("data/物品/内容/丹药/"):
             continue
         for 实体 in 文档 if isinstance(文档, list) else [文档]:
             if not (isinstance(实体, dict) and 实体.get("编号")):
@@ -124,7 +124,7 @@ def main() -> int:
                 问题.append(f"{标签}：字段顺序不是 { '/'.join(字段序) }，实为 {'/'.join(实体)}")
 
     # 四、字段契约与实体实际字段对齐
-    契约 = _读json("物品/炼丹/规则/炼丹字段契约.json")
+    契约 = _读json("物品/规则/炼丹字段契约.json")
     类别 = {str(项.get("类别")) for 项 in 契约}
     if 类别 != {"丹药"}:
         问题.append(f"炼丹字段契约的类别应为 {{'丹药'}}，实为 {类别}")
@@ -137,10 +137,10 @@ def main() -> int:
             问题.append(f"契约可选字段与实体不符：{sorted(声明的可选)}")
 
     # 五、物品层那一份丹药条目：与炼丹侧同源，只能更窄，不能各写一套
-    分类 = _读json("物品/基础物品/规则/分类.json")
+    分类 = _读json("物品/规则/分类.json")
     物品条目 = [项 for 项 in 分类 if 项.get("类别") == "丹药"]
     if len(物品条目) != 1:
-        问题.append(f"物品/基础物品/规则/分类.json 的丹药条目应有 1 条，实为 {len(物品条目)}")
+        问题.append(f"物品/规则/分类.json 的丹药条目应有 1 条，实为 {len(物品条目)}")
     else:
         条目 = 物品条目[0]
         物品必填 = {str(x) for x in 条目.get("必填字段") or ()}

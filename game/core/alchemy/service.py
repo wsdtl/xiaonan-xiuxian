@@ -159,7 +159,7 @@ class AlchemyService:
         )
         self._alchemists = MappingProxyType(self._load_alchemists())
         paging = _mapping(
-            self._data.dataset("炼丹展示").get("分页"), "炼丹展示.分页"
+            self._data.dataset("炼丹展示").get("炼丹-分页"), "炼丹展示.炼丹-分页"
         )
         self._page_limit = _positive_int(
             _mapping(
@@ -702,7 +702,7 @@ class AlchemyService:
         result: dict[str, AlchemyRecipe] = {}
         names: set[str] = set()
         contract = ContractSet.from_dataset(
-            self._data.dataset("炼丹字段契约"), "物品/炼丹/规则/炼丹字段契约.json"
+            self._data.dataset("炼丹字段契约"), "物品/规则/炼丹字段契约.json"
         )
         for medicine_id, raw in self._data.entities("丹药").items():
             contract.validate(raw, "丹药", f"丹药 {medicine_id}")

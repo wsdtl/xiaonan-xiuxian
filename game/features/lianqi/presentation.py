@@ -25,7 +25,7 @@ _REQUIRED_TEXT = {
 def load_presentation(
     data: JsonDataService,
 ) -> tuple[ForgingCopy, tuple[Mapping[str, str], ...]]:
-    raw_text = data.dataset("炼器展示").get("文本")
+    raw_text = data.dataset("炼器展示").get("炼器-文本")
     if not isinstance(raw_text, Mapping):
         raise JsonDataError("炼器展示缺少文本.json")
     text = MappingProxyType(
@@ -45,7 +45,7 @@ def load_presentation(
         if set(text[section]) != set(fields):
             raise JsonDataError(f"炼器文本字段不完整：{section}")
     buttons = project_buttons(
-        data.dataset("炼器按钮").get("按钮"),
+        data.dataset("炼器按钮").get("炼器-按钮"),
         label="炼器按钮",
     )
     _validate_buttons(buttons)

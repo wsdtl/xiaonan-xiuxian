@@ -5,7 +5,7 @@
 - 绑定写在**世界数据**里：`data/世界/基础/内容/<州>/<地点>/<地点>.json` 的 `功能配置.<功能>.丹药 = <编号>`；
 - 该功能还要在 `data/世界/基础/定义/地点功能.json` 里登记（否则装载器直接拒绝启动），
   并在 `data/世界/位置/展示/按钮/地点功能.json` 里给出玩家可见的按钮或命令；
-- 机制类型要登记在 `data/物品/基础物品/定义/使用效果.json`；
+- 机制类型要登记在 `data/物品/定义/使用效果.json`；
 - 参数（如目标种族、性别取值）写**地点配置**里，不写丹里。
 
 本判据验三件事：
@@ -36,7 +36,7 @@ def _load(path: pathlib.Path):
 
 def _pills() -> list[tuple[str, str, str]]:
     out: list[tuple[str, str, str]] = []
-    for path in sorted((DATA / "物品" / "炼丹" / "内容" / "丹药" / "特殊丹").glob("*.json")):
+    for path in sorted((DATA / "物品" / "内容" / "丹药" / "特殊丹").glob("*.json")):
         for row in _load(path):
             if isinstance(row, Mapping):
                 effect = row.get("使用效果")
@@ -108,7 +108,7 @@ def check_bindings() -> list[str]:
 
 
 def check_pill_types() -> list[str]:
-    declared = {str(c.get("类型")) for c in _load(DATA / "物品" / "基础物品" / "定义" / "使用效果.json") if isinstance(c, Mapping)}
+    declared = {str(c.get("类型")) for c in _load(DATA / "物品" / "定义" / "使用效果.json") if isinstance(c, Mapping)}
     problems: list[str] = []
     for code, name, kind in _pills():
         if kind and kind not in declared:
