@@ -512,7 +512,7 @@ def check_location_count() -> list[str]:
     真出过事：地点从 81 加到 82 之后，五份文档（含 `核心设定.md`）留在 81。
     """
 
-    world = ROOT / "data" / "世界" / "内容"
+    world = ROOT / "data" / "世界"
     actual = 0
     for path in world.rglob("*.json"):
         if path.name == "组件.json":
