@@ -25,9 +25,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 CORE = ROOT / "game" / "core"
 
 #: 允许被多个核心共写的状态类型 -> 各写哪一半。
-SHARED = {
-    "cultivation": "character 写功法/真意/气机的装配与修为；sect_library 只写借阅产生的藏书持有，不碰装配",
-}
+SHARED: dict[str, str] = {}
 
 
 def _writers() -> dict[str, set[str]]:

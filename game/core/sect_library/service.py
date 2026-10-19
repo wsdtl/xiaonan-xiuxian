@@ -54,7 +54,13 @@ class SectLibraryService:
         self._sect = sect
         self._asset = asset
         self._growth = growth
+        self._character: CharacterService | None = None
         self._initialized = False
+
+    def attach_character(self, character: CharacterService) -> None:
+        """角色核心晚于本服务装配，借阅槽位的写入由它负责。"""
+
+        self._character = character
 
     def initialize(self) -> SectLibraryStatus:
         if self._initialized:
@@ -93,57 +99,21 @@ class SectLibraryService:
         if isinstance(slot, bool) or not isinstance(slot, int) or slot < 1:
             raise SectLibraryError("功法槽位必须是正整数")
         technique = self._resolve(await self._techniques(member.sect_id), identifier)
-        snapshot = await self._database.get(
-            StateAddress(user_id, "cultivation", "main")
-        )
-        if snapshot is None:
-            raise SectLibraryError("人物缺少修行构筑")
-        cultivation = dict(_mapping(snapshot.value, "cultivation/main"))
-        techniques = list(_slots(cultivation.get("功法"), "功法"))
-        if slot > len(techniques):
-            raise SectLibraryError(f"人物只有{len(techniques)}个功法槽")
-        current = techniques[slot - 1]
-        original = current
-        if isinstance(current, Mapping):
-            borrowed = current.get("藏经阁借阅")
-            if isinstance(borrowed, Mapping):
-                original = borrowed.get("原功法")
-        techniques[slot - 1] = {
-            "编号": technique.content_id,
-            "品级": technique.grade_id,
-            "藏经阁借阅": {
-                "宗门编号": member.sect_id,
-                "原功法": original,
-            },
-        }
-        cultivation["功法"] = techniques
-        build = {
-            category: tuple(
-                str(value["编号"])
-                for raw in _slots(cultivation.get(category), category)
-                if raw is not None
-                for value in (_mapping(raw, f"{category}槽"),)
+        try:
+            if self._character is None:
+                raise SectLibraryError("角色核心尚未接入")
+            plan = await self._character.plan_borrow_slot(
+                user_id, slot, technique.content_id, technique.grade_id, member.sect_id
             )
-            for category in ("功法", "真意", "气机")
-        }
-        conflict = self._growth.build_conflict(build)
-        if conflict is not None:
-            raise SectLibraryError(f"该借阅构筑触发相冲：{conflict}")
+        except CharacterStateError as exc:
+            raise SectLibraryError(str(exc)) from exc
         try:
             receipt = await self._database.commit(
                 TransactionCommand(
                     user_id,
                     request_id,
                     "藏经阁借阅",
-                    (
-                        StateMutation(
-                            user_id,
-                            "cultivation",
-                            "main",
-                            cultivation,
-                            snapshot.version,
-                        ),
-                    ),
+                    plan.operations,
                     {
                         "宗门编号": member.sect_id,
                         "功法编号": technique.content_id,
@@ -169,44 +139,21 @@ class SectLibraryService:
 
         self._require_initialized()
         user = _rule_text(user_id, "user_id")
-        snapshot = await self._database.get(
-            StateAddress(user, "cultivation", "main")
-        )
-        if snapshot is None:
-            return 0
-        cultivation = dict(_mapping(snapshot.value, "cultivation/main"))
-        techniques = list(_slots(cultivation.get("功法"), "功法"))
         member = await self._sect.membership(user)
-        cleared = 0
-        for index, raw in enumerate(techniques):
-            if not isinstance(raw, Mapping):
-                continue
-            borrowed = raw.get("藏经阁借阅")
-            if not isinstance(borrowed, Mapping):
-                continue
-            sect_id = str(borrowed.get("宗门编号") or "")
-            if member is not None and member.sect_id == sect_id:
-                continue
-            techniques[index] = borrowed.get("原功法")
-            cleared += 1
-        if not cleared:
+        keep = member.sect_id if member is not None else ""
+        if self._character is None:
+            raise SectLibraryError("角色核心尚未接入")
+        plan = await self._character.plan_restore_borrowed(user, keep)
+        if not plan.operations:
             return 0
-        cultivation["功法"] = techniques
+        cleared = plan.cleared
         try:
             await self._database.commit(
                 TransactionCommand(
                     user,
                     _rule_text(request_id, "request_id"),
                     "清除宗门借阅",
-                    (
-                        StateMutation(
-                            user,
-                            "cultivation",
-                            "main",
-                            cultivation,
-                            snapshot.version,
-                        ),
-                    ),
+                    plan.operations,
                     {"宗门编号": "", "清除槽位数": cleared},
                 )
             )

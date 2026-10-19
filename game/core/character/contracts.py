@@ -283,6 +283,13 @@ class CharacterEquipPlan:
 
 
 @dataclass(frozen=True)
+class CharacterSlotPlan:
+    version: int
+    operations: tuple[StateMutation, ...]
+    cleared: int = 0
+
+
+@dataclass(frozen=True)
 class CharacterSpiritStonePlan:
     before: int
     after: int
@@ -414,6 +421,7 @@ __all__ = [
     "CharacterRecoveryPlan",
     "CharacterRedemptionPlan",
     "CharacterRetreatPlan",
+    "CharacterSlotPlan",
     "CharacterSpiritStonePlan",
     "CharacterStateError",
     "CharacterStatus",

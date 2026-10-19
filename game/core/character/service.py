@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from game.core.sect_library import SectLibraryService
 
 from .contracts import (
+    CharacterSlotPlan,
     CharacterAssemblyPlan,
     CharacterAbsorptionPlan,
     CharacterAlreadyExistsError,
@@ -1234,6 +1235,84 @@ class CharacterService:
                 snapshot.version,
             ),
         )
+
+    async def plan_borrow_slot(
+        self,
+        user_id: str,
+        slot: int,
+        content_id: str,
+        grade_id: str,
+        sect_id: str,
+    ) -> "CharacterSlotPlan":
+        """藏经阁借阅：把某一格功法换成借来的那本，并记住原本的功法。"""
+
+        snapshot = await self._database.get(StateAddress(user_id, "cultivation", "main"))
+        if snapshot is None:
+            raise CharacterStateError("人物缺少修行构筑")
+        cultivation = dict(_mapping(snapshot.value, "cultivation/main"))
+        slots = list(_state_slots(cultivation.get("功法"), "功法"))
+        if slot < 1 or slot > len(slots):
+            raise CharacterStateError(f"人物只有{len(slots)}个功法槽")
+        current = slots[slot - 1]
+        original = current
+        if isinstance(current, Mapping):
+            borrowed = current.get("藏经阁借阅")
+            if isinstance(borrowed, Mapping):
+                original = borrowed.get("原功法")
+        slots[slot - 1] = {
+            "编号": content_id,
+            "品级": grade_id,
+            "藏经阁借阅": {"宗门编号": sect_id, "原功法": original},
+        }
+        cultivation["功法"] = slots
+        self._assert_no_conflict(cultivation)
+        return CharacterSlotPlan(
+            snapshot.version,
+            (StateMutation(user_id, "cultivation", "main", cultivation, snapshot.version),),
+        )
+
+    async def plan_restore_borrowed(self, user_id: str, keep_sect_id: str) -> "CharacterSlotPlan":
+        """离开宗门：把借自其他宗门的槽还原成原本的功法；没有可清的就返回空计划。"""
+
+        snapshot = await self._database.get(StateAddress(user_id, "cultivation", "main"))
+        if snapshot is None:
+            return CharacterSlotPlan(0, ())
+        cultivation = dict(_mapping(snapshot.value, "cultivation/main"))
+        slots = list(_state_slots(cultivation.get("功法"), "功法"))
+        cleared = 0
+        for index, raw in enumerate(slots):
+            if not isinstance(raw, Mapping):
+                continue
+            borrowed = raw.get("藏经阁借阅")
+            if not isinstance(borrowed, Mapping):
+                continue
+            sect_id = str(borrowed.get("宗门编号") or "")
+            if keep_sect_id and sect_id == keep_sect_id:
+                continue
+            slots[index] = borrowed.get("原功法")
+            cleared += 1
+        if not cleared:
+            return CharacterSlotPlan(0, ())
+        cultivation["功法"] = slots
+        return CharacterSlotPlan(
+            snapshot.version,
+            (StateMutation(user_id, "cultivation", "main", cultivation, snapshot.version),),
+            cleared,
+        )
+
+    def _assert_no_conflict(self, cultivation: Mapping[str, object]) -> None:
+        build = {
+            category: tuple(
+                str(value["编号"])
+                for raw in _state_slots(cultivation.get(category), category)
+                if raw is not None
+                for value in (_mapping(raw, f"{category}槽"),)
+            )
+            for category in ("功法", "真意", "气机")
+        }
+        conflict = self._growth.build_conflict(build)
+        if conflict is not None:
+            raise CharacterStateError(f"该借阅构筑触发相冲：{conflict}")
 
     async def plan_equip(
         self,
