@@ -65,7 +65,7 @@ class GrowthService:
                 str(value.get("下一境界") or "").strip(),
                 _positive_int(value.get("寿元"), f"境界 {realm_id}.寿元"),
             )
-        build_rules = self._data.dataset("构筑规则")
+        build_rules = self._data.dataset("构筑生成规则")
         generation = _mapping(build_rules.get("生成"), "构筑/生成.json")
         self._attempt_limit = _positive_int(generation.get("尝试上限"), "构筑.尝试上限")
         self._conflicts = tuple(

@@ -89,7 +89,7 @@ class CombatService:
             self._data, load_build_contracts(self._data)
         )
         self._build_count = sum(build_counts.values())
-        report_dataset = materialize(self._data.dataset("战斗展示"))
+        report_dataset = materialize(self._data.dataset("战斗页面文案"))
         report_catalog = BattleReportCatalog.from_mapping(
             report_dataset["战报"], foundation["属性"]
         )

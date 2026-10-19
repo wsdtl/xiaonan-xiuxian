@@ -234,7 +234,7 @@ BUILD_MUTATIONS: dict[str, tuple[str, Callable[[dict], None], str]] = {
 def check_build_contracts(data: JsonDataService, failures: list[str]) -> None:
     """四类构筑各自的形状必须被严格执行，不能互相借用。"""
 
-    definition = dict(_plain(data.dataset("战斗定义")))  # type: ignore[arg-type]
+    definition = dict(_plain(data.dataset("战斗字段定义")))  # type: ignore[arg-type]
     validator = rule_validator(definition)
     contracts = load_build_contracts(data)
     base: dict[str, dict[str, dict]] = {}
@@ -279,7 +279,7 @@ def check_build_contracts(data: JsonDataService, failures: list[str]) -> None:
 def main() -> int:
     data = JsonDataService("data")
     data.initialize(expand=expand_build_section)
-    definition = dict(_plain(data.dataset("战斗定义")))  # type: ignore[arg-type]
+    definition = dict(_plain(data.dataset("战斗字段定义")))  # type: ignore[arg-type]
 
     failures: list[str] = []
 

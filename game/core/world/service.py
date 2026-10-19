@@ -108,7 +108,7 @@ class WorldService:
             raise JsonDataError(
                 "地形缺少同名战场环境：" + "、".join(sorted(missing_environments))
             )
-        definitions = self._data.dataset("世界定义").get("地点功能")
+        definitions = self._data.dataset("世界字段定义").get("地点功能")
         (
             self._feature_contents,
             self._feature_requirements,

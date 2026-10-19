@@ -23,7 +23,7 @@ from game.core.duel import DuelService
 from game.core.sect_war import SectWarService
 
 #: 本玩法命令文案所在的数据集（登记在 data/战斗/组件.json）。
-COPY_DATASET = "我的战报展示"
+COPY_DATASET = "我的战报页面文案"
 
 #: 一次调用要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应（核心定的名单）。
 VIEWS = VIEW_PARTS

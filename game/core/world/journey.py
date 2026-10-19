@@ -76,7 +76,7 @@ class JourneyPlanner:
         self._road_edges = _road_edges(roads)
 
         rules = _mapping(_single(data, "行路规则", "行程"), "行路规则.行程")
-        display = _mapping(_single(data, "行路展示", "行程"), "行路展示.行程")
+        display = _mapping(_single(data, "行路页面文案", "行程"), "行路页面文案.行程")
         self._moves, self._diagonal_multiplier = _coordinate_rules(rules)
         self._allow_off_road, self._road_overrides_terrain = _network_rules(rules)
         self._horizontal_weight, self._ascent_weight, self._descent_weight = (
@@ -93,19 +93,19 @@ class JourneyPlanner:
 
         self._direction_words = _direction_words(display, self._moves)
         self._road_words = _road_words(display, self._road_multipliers)
-        self._terrain_words = _mapping(display.get("地形措辞"), "行路展示.地形措辞")
-        _required_texts(self._terrain_words, "行路展示.地形措辞", ("起行", "转入"))
+        self._terrain_words = _mapping(display.get("地形措辞"), "行路页面文案.地形措辞")
+        _required_texts(self._terrain_words, "行路页面文案.地形措辞", ("起行", "转入"))
         self._ascent_words = _threshold_words(
-            display.get("爬升措辞"), "累计爬升上限", "行路展示.爬升措辞"
+            display.get("爬升措辞"), "累计爬升上限", "行路页面文案.爬升措辞"
         )
         self._altitude_words = _threshold_words(
-            display.get("海拔措辞"), "最高海拔上限", "行路展示.海拔措辞"
+            display.get("海拔措辞"), "最高海拔上限", "行路页面文案.海拔措辞"
         )
         self._realms, self._realm_names = _realm_narratives(data, display)
-        self._narrative = _mapping(display.get("叙事"), "行路展示.叙事")
+        self._narrative = _mapping(display.get("叙事"), "行路页面文案.叙事")
         self._narrative_order = tuple(
             str(value or "").strip()
-            for value in _sequence(self._narrative.get("顺序"), "行路展示.叙事.顺序")
+            for value in _sequence(self._narrative.get("顺序"), "行路页面文案.叙事.顺序")
         )
         expected_narrative_order = {
             "起程",
@@ -120,17 +120,17 @@ class JourneyPlanner:
             len(self._narrative_order) != len(expected_narrative_order)
             or set(self._narrative_order) != expected_narrative_order
         ):
-            raise JsonDataError("行路展示.叙事.顺序必须完整且唯一地定义七段叙事")
-        limits = _mapping(display.get("展示限制"), "行路展示.展示限制")
+            raise JsonDataError("行路页面文案.叙事.顺序必须完整且唯一地定义七段叙事")
+        limits = _mapping(display.get("展示限制"), "行路页面文案.展示限制")
         self._passage_limit = _positive_int(limits.get("最多通行段"), "最多通行段")
         self._via_limit = _positive_int(limits.get("最多经由地点"), "最多经由地点")
-        distance = _mapping(display.get("距离"), "行路展示.距离")
+        distance = _mapping(display.get("距离"), "行路页面文案.距离")
         self._meters_per_li = _positive_int(distance.get("每里米数"), "每里米数")
         self._li_rounding = _positive_int(distance.get("约数步长"), "约数步长")
         _validate_metric_definitions(data)
         _required_texts(
             self._narrative,
-            "行路展示.叙事",
+            "行路页面文案.叙事",
             (
                 "通行分隔",
                 "通行省略",
@@ -513,7 +513,7 @@ def _direction_words(
     display: Mapping[str, object], moves: tuple[XY, ...]
 ) -> dict[XY, str]:
     result: dict[XY, str] = {}
-    for raw in _sequence(display.get("方向措辞"), "行路展示.方向措辞"):
+    for raw in _sequence(display.get("方向措辞"), "行路页面文案.方向措辞"):
         row = _mapping(raw, "方向措辞")
         direction = row.get("方向")
         if (
@@ -540,7 +540,7 @@ def _road_words(
     display: Mapping[str, object], multipliers: Mapping[str, float]
 ) -> dict[str, Mapping[str, object]]:
     result: dict[str, Mapping[str, object]] = {}
-    for raw in _sequence(display.get("道路措辞"), "行路展示.道路措辞"):
+    for raw in _sequence(display.get("道路措辞"), "行路页面文案.道路措辞"):
         row = _mapping(raw, "道路措辞")
         road = str(row.get("道路") or "").strip()
         _required_texts(row, f"道路措辞.{road}", ("起行", "转入"))
@@ -581,7 +581,7 @@ def _realm_narratives(
     realms = data.entities("境界")
     result: dict[str, _RealmNarrative] = {}
     names: dict[str, str] = {}
-    for raw in _sequence(display.get("境界行路"), "行路展示.境界行路"):
+    for raw in _sequence(display.get("境界行路"), "行路页面文案.境界行路"):
         row = _mapping(raw, "境界行路")
         realm_id = str(row.get("境界") or "").strip()
         _required_texts(row, f"境界行路.{realm_id}", ("方式", "起程", "途中", "抵达"))

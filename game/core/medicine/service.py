@@ -419,7 +419,7 @@ class MedicineService:
         """
 
         common_required = self._common_entity_fields()
-        rows = self._data.dataset("物品规则").get("分类")
+        rows = self._data.dataset("基础物品分类规则").get("分类")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
             raise JsonDataError("物品/基础物品/规则/分类.json 必须是字典列表")
         for raw_category in rows:
@@ -438,7 +438,7 @@ class MedicineService:
     def _common_entity_fields(self) -> tuple[str, ...]:
         """从 `物品定义/公共字段.json` 取得编号实体的公共字段。"""
 
-        rows = self._data.dataset("物品定义").get("公共字段")
+        rows = self._data.dataset("基础物品字段定义").get("公共字段")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
             raise JsonDataError("物品/基础物品/定义/公共字段.json 必须是字典列表")
         for raw in rows:
@@ -451,7 +451,7 @@ class MedicineService:
     def _effect_contract(self) -> dict[str, tuple[tuple[str, ...], tuple[str, ...]]]:
         """从 `物品定义/使用效果.json` 取得每种效果类型的字段契约。"""
 
-        rows = self._data.dataset("物品定义").get("使用效果")
+        rows = self._data.dataset("基础物品字段定义").get("使用效果")
         if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
             raise JsonDataError("物品/基础物品/定义/使用效果.json 必须是字典列表")
         contract: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}

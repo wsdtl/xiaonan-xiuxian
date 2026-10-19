@@ -167,7 +167,7 @@ class CharacterService:
             raise JsonDataError("基础定义缺少品级.json")
         creation = _mapping(role_rule.get("创建"), "人物.json.创建")
         _mapping(creation.get("初始本命武器"), "人物.json.创建.初始本命武器")
-        attributes = self._data.dataset("战斗定义").get("属性")
+        attributes = self._data.dataset("战斗字段定义").get("属性")
         self._five_element_rules = _mapping(
             self._data.dataset("战斗规则").get("五行"), "战斗/基础/规则/五行.json"
         )

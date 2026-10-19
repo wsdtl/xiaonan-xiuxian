@@ -82,7 +82,7 @@ class PositionFeature:
         ):
             if not initialized:
                 raise RuntimeError(f"{label}必须先于位置查看玩法启动")
-        nearby = self._data.dataset("位置规则").get("附近")
+        nearby = self._data.dataset("位置页面规则").get("附近")
         nearby_rule = require_mapping(nearby, "附近.json")
         location_rule = require_mapping(nearby_rule.get("地点"), "附近.地点")
         self._location_radius_meters = _positive_int(
@@ -91,7 +91,7 @@ class PositionFeature:
         self._location_limit = _positive_int(
             location_rule.get("最多数量"), "附近.地点.最多数量"
         )
-        presentation = load_position_presentation(self._data.dataset("位置展示"))
+        presentation = load_position_presentation(self._data.dataset("位置页面文案"))
         self._meters_per_li = presentation.meters_per_li
         self._rounding_step = presentation.rounding_step
         self._same_place = presentation.same_place

@@ -57,7 +57,7 @@ def load_battle_foundation(
 ) -> dict[str, Any]:
     if not data.status().loaded:
         raise RuntimeError("JSON 数据微服务必须先于战斗微服务启动")
-    result = materialize(data.dataset("战斗定义"))
+    result = materialize(data.dataset("战斗字段定义"))
     rules = materialize(data.dataset("战斗规则"))
     result.update(
         {

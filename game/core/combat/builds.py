@@ -57,7 +57,7 @@ def validate_builds(
     if contracts is None:
         contracts = load_build_contracts(data)
     if validator is None:
-        validator = rule_validator(materialize(data.dataset("战斗定义")))
+        validator = rule_validator(materialize(data.dataset("战斗字段定义")))
     counts: dict[str, int] = {}
     weights: dict[int, str] = {}
     for section in BUILD_SECTIONS:

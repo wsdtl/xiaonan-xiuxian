@@ -63,7 +63,7 @@ class LocationService:
             raise RuntimeError("核心数据库必须先于玩家位置服务启动")
         if not self._world.status().initialized:
             raise RuntimeError("世界核心必须先于玩家位置服务启动")
-        rules = self._data.dataset("位置规则")
+        rules = self._data.dataset("位置页面规则")
         nearby = rules.get("附近")
         if not isinstance(nearby, Mapping):
             raise JsonDataError("位置规则缺少附近.json")

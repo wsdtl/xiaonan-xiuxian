@@ -77,7 +77,7 @@ class EnemyService:
             {
                 str(name): _mapping(raw, f"属性.{name}")
                 for name, raw in _mapping(
-                    self._data.dataset("战斗定义").get("属性"), "战斗定义.属性"
+                    self._data.dataset("战斗字段定义").get("属性"), "战斗定义.属性"
                 ).items()
             }
         )
