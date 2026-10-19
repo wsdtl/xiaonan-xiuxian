@@ -28,7 +28,7 @@ from game.cmd.command import registered_commands  # noqa: E402
 SCOPE_BY_TOP_DIR = {
     "通用": {"通用"},
     "专属": {"专属"},
-    #: 特殊地点收拢了原本散在通用/专属下的入口，两种 scope 都允许。
+    #: 特殊地点只放该地点独有的功能；原本散在通用/专属下的入口收拢后，两种 scope 都允许。
     "特殊地点": {"专属", "通用"},
     "后台": {"后台"},
 }
