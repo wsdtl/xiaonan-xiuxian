@@ -3,7 +3,7 @@
 ## 检查什么
 
 1. **数据侧只用登记能力**：六个面展开后的每个 `能力` 取值都必须在
-   `data/战斗/定义/原子能力.json` 里。
+   `data/战斗/基础/定义/原子能力.json` 里。
 2. **节点字段不越界**：每个能力节点的键都必须在该能力的 `字段` 声明里
    （`能力` 自身与 `$参数` 占位符除外）。
 3. **登记侧不缺实现**：每个登记能力的 `执行器` 都必须在
@@ -54,7 +54,7 @@ for _path in (str(ROOT), str(ROOT / "tools")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-REGISTRY = ROOT / "data" / "战斗" / "定义" / "原子能力.json"
+REGISTRY = ROOT / "data" / "战斗" / "基础" / "定义" / "原子能力.json"
 
 
 def _collect(root: pathlib.Path):

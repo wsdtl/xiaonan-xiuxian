@@ -17,7 +17,7 @@ from game.core.combat.models import Fighter, attribute_ratio
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 DEFINITIONS = json.loads(
-    (DATA / "战斗" / "定义" / "属性.json").read_text(encoding="utf-8")
+    (DATA / "战斗" / "基础" / "定义" / "属性.json").read_text(encoding="utf-8")
 )
 
 

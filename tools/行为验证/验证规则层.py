@@ -36,7 +36,7 @@ from game.app import build_game_services  # noqa: E402
 from game.core.combat.models import RuntimeCombatantSnapshot  # noqa: E402
 from game.core.combat.rules import expand_rule, probe_tags  # noqa: E402
 
-REGISTRY = ROOT / "data" / "战斗" / "定义" / "规则层.json"
+REGISTRY = ROOT / "data" / "战斗" / "基础" / "定义" / "规则层.json"
 
 ATTRIBUTES = {
     #: 按**设计口径**标定的夹具血量：一击 ≈ 攻击 100 × 输出倍率 1020/100 × 防御系数 1.0 = 1,020，
@@ -749,7 +749,7 @@ def _scene_counter(engine, entry: dict, rule: dict) -> tuple[str, float, float, 
     )
     plain, guarded = _pair_runs(engine, direction, modifier, entry)
     # ⚠️ **这条期望对"资源保护型"规则是错的，别照抄**（第 20~27 轮查证）：
-    #   `计量不可被改`（`data/战斗/定义/规则层.json`）的语义是
+    #   `计量不可被改`（`data/战斗/基础/定义/规则层.json`）的语义是
     #   `拦截点=计量被修改 / 处置=拒绝 / 条件=标签条件(来源关系:$来源) / 字段 来源∈{敌方,己方,自身}`
     #   —— 它**按来源**拒绝，不是无差别拦截。但这条探针数的是"计量加满才落的那一刀"的**笔数**，
     #   而那条规则在**拒绝时会顺手加计量**（模板族里见过 `取消事件 + 修改构筑计量 增加`），

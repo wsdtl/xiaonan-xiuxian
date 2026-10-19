@@ -1,6 +1,6 @@
 '''属性构成审查：`属性构成` 是效果侧的五行，谁配带、键合不合法、权重合不合一，都在这儿守。
 
-为什么需要它：五行契约（`data/战斗/规则/五行.json`）与装载期校验（`game/core/combat/foundation.py`）
+为什么需要它：五行契约（`data/战斗/基础/规则/五行.json`）与装载期校验（`game/core/combat/foundation.py`）
 只管**契约本身**的形状——字段名、属性集合、相生相克各五条、倍率键齐不齐；
 而**实体身上的** `属性构成` 只在构筑装配时校验过键名（`game/core/combat/builds.py`），
 「权重合计一百」这条谁也没查。它本来是手工核出来的（全库 600 门功法实测 0 例外），
@@ -32,7 +32,7 @@ SKIP_PARTS = {'__pycache__'}
 
 
 def _five_elements() -> Mapping[str, object]:
-    path = DATA / '战斗' / '规则' / '五行.json'
+    path = DATA / '战斗' / '基础' / '规则' / '五行.json'
     return json.loads(path.read_text(encoding='utf-8'))
 
 

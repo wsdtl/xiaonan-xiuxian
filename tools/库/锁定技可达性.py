@@ -23,11 +23,11 @@ from 构筑模板展开 import load_build_json
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
 SECTIONS = (
-    ("功法", DATA / "战斗" / "内容" / "功法"),
-    ("真意", DATA / "战斗" / "内容" / "真意"),
-    ("气机", DATA / "战斗" / "内容" / "气机"),
+    ("功法", DATA / "战斗" / "功法" / "内容"),
+    ("真意", DATA / "战斗" / "真意" / "内容"),
+    ("气机", DATA / "战斗" / "气机" / "内容"),
     ("器律", DATA / "物品" / "炼器" / "内容" / "器律"),
-    ("战场环境", DATA / "战斗" / "内容" / "战场环境"),
+    ("战场环境", DATA / "战斗" / "战场环境" / "内容"),
 )
 #: 拦截点 -> 内容侧发出这类请求的原子能力。
 EMITTERS = {
@@ -135,7 +135,7 @@ def rule_direction(rule: dict, used: object = None) -> str:
 
 
 def rules() -> dict:
-    return json.loads((DATA / "战斗" / "定义" / "规则层.json").read_text(encoding="utf-8"))
+    return json.loads((DATA / "战斗" / "基础" / "定义" / "规则层.json").read_text(encoding="utf-8"))
 
 
 def races() -> list:

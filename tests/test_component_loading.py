@@ -32,14 +32,14 @@ def tree(tmp_path):
 
 @pytest.mark.parametrize("fault", ["missing", "foreign", "unknown", "identity", "unmatched"])
 def test_invalid_component_is_rejected(tree, fault):
-    manifest = tree / "战斗/组件.json"
+    manifest = tree / "战斗/基础/组件.json"
     value = json.loads(manifest.read_text(encoding="utf-8"))
     if fault == "missing":
         manifest.unlink()
     elif fault == "unknown":
         (tree / "未登记").mkdir()
     elif fault == "unmatched":
-        (tree / "战斗/规则/未登记.json").write_text("{}", encoding="utf-8")
+        (tree / "战斗/基础/规则/未登记.json").write_text("{}", encoding="utf-8")
     else:
         if fault == "identity":
             value["组件"] = "世界"
@@ -51,8 +51,27 @@ def test_invalid_component_is_rejected(tree, fault):
 
 
 def _搬到第二层(tree, 大类: str, 组件: str) -> None:
-    """把顶层组件搬进一个大类目录，并同步它的清单路径与读取入口。"""
+    """造一个最小组件，再把它搬进大类目录，并同步清单路径与读取入口。"""
 
+    (tree / 组件).mkdir(exist_ok=True)
+    (tree / 组件 / "规则").mkdir(exist_ok=True)
+    (tree / 组件 / "规则" / "样例.json").write_text("{}", encoding="utf-8")
+    _写(
+        tree / 组件 / "组件.json",
+        json.dumps(
+            {
+                "组件": 组件,
+                "读取规则": [
+                    {"数据集": "样例规则", "路径": f"{组件}/规则/样例.json", "结构": "对象"}
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    )
+    entry = tree / "基础/读取规则.json"
+    routing = json.loads(entry.read_text(encoding="utf-8"))
+    routing["扫描目录"].append(组件)
+    _写(entry, json.dumps(routing, ensure_ascii=False))
     (tree / 大类).mkdir(exist_ok=True)
     shutil.move(str(tree / 组件), str(tree / 大类 / 组件))
     manifest = tree / 大类 / 组件 / "组件.json"
@@ -71,17 +90,17 @@ def _搬到第二层(tree, 大类: str, 组件: str) -> None:
 def test_component_may_sit_in_a_category_directory(tree):
     """大类下放组件：扫描目录写组件相对路径，清单与注册路径都带上大类。"""
 
-    _搬到第二层(tree, "武备", "战斗")
+    _搬到第二层(tree, "武备", "样例")
     assert JsonDataService(tree).initialize(expand=expand_build_section).loaded
 
 
 def test_category_directory_without_entry_is_rejected(tree):
     """顶层出现大类，就必须在扫描目录里登记它的子组件。"""
 
-    _搬到第二层(tree, "武备", "战斗")
+    _搬到第二层(tree, "武备", "样例")
     entry = tree / "基础/读取规则.json"
     routing = json.loads(entry.read_text(encoding="utf-8"))
-    routing["扫描目录"] = [x for x in routing["扫描目录"] if x != "武备/战斗"]
+    routing["扫描目录"] = [x for x in routing["扫描目录"] if x != "武备/样例"]
     _写(entry, json.dumps(routing, ensure_ascii=False))
     with pytest.raises(JsonDataError):
         JsonDataService(tree).initialize(expand=expand_build_section)
@@ -90,8 +109,8 @@ def test_category_directory_without_entry_is_rejected(tree):
 def test_nested_component_must_register_under_its_own_prefix(tree):
     """第二层组件的注册路径必须带自己的前缀，不能只写组件名。"""
 
-    _搬到第二层(tree, "武备", "战斗")
-    manifest = tree / "武备/战斗/组件.json"
+    _搬到第二层(tree, "武备", "样例")
+    manifest = tree / "武备/样例/组件.json"
     value = json.loads(manifest.read_text(encoding="utf-8"))
     value["读取规则"][0]["路径"] = value["读取规则"][0]["路径"].removeprefix("武备/")
     _写(manifest, json.dumps(value, ensure_ascii=False))

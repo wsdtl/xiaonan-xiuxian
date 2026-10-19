@@ -11,7 +11,7 @@ import json
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-RULE_LAYER_PATH = ROOT / "data" / "战斗" / "定义" / "规则层.json"
+RULE_LAYER_PATH = ROOT / "data" / "战斗" / "基础" / "定义" / "规则层.json"
 
 
 def load_rule_layer() -> dict[str, dict]:

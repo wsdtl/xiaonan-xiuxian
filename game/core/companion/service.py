@@ -117,7 +117,7 @@ class CompanionService:
         if not self._forging.status().initialized:
             raise RuntimeError("炼器核心必须先于道侣核心启动")
         self._five_element_rules = _mapping(
-            self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
+            self._data.dataset("战斗规则").get("五行"), "战斗/基础/规则/五行.json"
         )
         self._rules = self._load_rules()
         self._coverable = frozenset(

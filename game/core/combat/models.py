@@ -167,9 +167,9 @@ class CombatCatalog:
     environment_rules: Mapping[str, Any]
     five_elements: Mapping[str, Any]
     formation_rules: FormationNodeRules
-    #: 地形战斗节奏（`data/战斗/规则/地形.json`）：地形 → 输出倍率百分比；无名之地按进度加。
+    #: 地形战斗节奏（`data/战斗/基础/规则/地形.json`）：地形 → 输出倍率百分比；无名之地按进度加。
     terrain_pace: Mapping[str, Any] = dataclass_field(default_factory=dict)
-    #: 规则层登记表（`data/战斗/定义/规则层.json`）：单位级规则在装配期按它解析。
+    #: 规则层登记表（`data/战斗/基础/定义/规则层.json`）：单位级规则在装配期按它解析。
     rule_layer: Mapping[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
     #: 节点解析缓存：`id(节点) -> RuleNode`（见 `parse_node`）。装配期节点不换，按身份缓存安全。
     _node_cache: dict[int, RuleNode] = dataclass_field(
@@ -602,7 +602,7 @@ class Skill(SnapshotState):
     tags: tuple[str, ...] = ()
     costs: tuple[Mapping[str, Any], ...] = ()
     disabled: bool = False
-    #: 这一行自己的规则（行级）：`规则名 -> 展开后的规则`，见 `data/战斗/定义/规则层.json`。
+    #: 这一行自己的规则（行级）：`规则名 -> 展开后的规则`，见 `data/战斗/基础/定义/规则层.json`。
     rules: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     uses: int = 0
     use_limit: int = 0
@@ -664,7 +664,7 @@ class Fighter(RuntimeExtensions):
     statuses: list[StatusState] = dataclass_field(default_factory=list)
     skills: list[Skill] = dataclass_field(default_factory=list)
     passives: list[dict[str, Any]] = dataclass_field(default_factory=list)
-    #: 规则层的单位级规则：`规则名 -> 参数`（见 `data/战斗/定义/规则层.json`）。
+    #: 规则层的单位级规则：`规则名 -> 参数`（见 `data/战斗/基础/定义/规则层.json`）。
     rules: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     cooldowns: dict[str, int] = dataclass_field(default_factory=dict)
     inventory: dict[str, int] = dataclass_field(default_factory=dict)
