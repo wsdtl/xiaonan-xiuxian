@@ -19,7 +19,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-ARTS = ROOT / "data" / "战斗" / "内容" / "功法"
+ARTS = ROOT / "data" / "战斗" / "功法" / "内容" / "功法"
 
 ACTIVE_LIMIT = 3
 COOLDOWN_SHARE_LIMIT = 0.30

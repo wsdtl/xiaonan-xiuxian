@@ -61,7 +61,7 @@ def _cards():
         for path in sorted(config["目录"].glob(config["模式"])):
             for entry in load_build_json(path):
                 yield path.name, entry
-    for path in sorted((ROOT / "data" / "战斗" / "内容" / "战场环境").rglob("*.json")):
+    for path in sorted((ROOT / "data" / "战斗" / "功法" / "内容" / "战场环境").rglob("*.json")):
         for entry in load_build_json(path):
             yield path.name, entry
 

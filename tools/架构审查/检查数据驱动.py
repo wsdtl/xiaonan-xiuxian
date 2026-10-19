@@ -800,7 +800,7 @@ def check_terrain_pace() -> list[str]:
     `输出倍率 = 伤害.json.输出倍率 × 地形百分比 / 100` 那层耦合。新契约恰好相反：
     **输出倍率只有 `伤害.json.输出倍率` 一个出处**，地形只描述战场形态。所以现在查：
     ① 任何一条地形都不许再出现 `输出倍率`；② 整个文档不许再有 `无相地势`；
-    ③ 地形清单仍要与 `世界/内容/地形分区.json` 对得上（少列 / 多列都报）。
+    ③ 地形清单仍要与 `世界/基础/内容/地形分区.json` 对得上（少列 / 多列都报）。
     ① ② 是把那个开关**堵在门外**：谁把它加回来，`tools/全量核对.py` 当场报错。
     """
 
@@ -860,9 +860,9 @@ def check_guard_rules_have_consumers() -> list[str]:
     所以本判据**不按「名字在数据里出现过」判**（队伍状态里也有一个叫它的状态，那样会误判）。
     """
 
-    guard_file = PROJECT_ROOT / "data" / "角色" / "规则" / "状态" / "状态守卫.json"
+    guard_file = PROJECT_ROOT / "data" / "角色" / "内容" / "状态" / "状态守卫.json"
     if not guard_file.exists():
-        return ["找不到 data/角色/规则/状态/状态守卫.json"]
+        return ["找不到 data/角色/内容/状态/状态守卫.json"]
     rows = json.loads(guard_file.read_text(encoding="utf-8"))
     names = [str(row.get("名称") or "") for row in rows if isinstance(row, dict)]
     names = [name for name in names if name]
