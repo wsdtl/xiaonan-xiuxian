@@ -860,9 +860,9 @@ def check_guard_rules_have_consumers() -> list[str]:
     所以本判据**不按「名字在数据里出现过」判**（队伍状态里也有一个叫它的状态，那样会误判）。
     """
 
-    guard_file = PROJECT_ROOT / "data" / "角色" / "内容" / "状态" / "状态守卫.json"
+    guard_file = PROJECT_ROOT / "data" / "角色" / "规则" / "状态" / "状态守卫.json"
     if not guard_file.exists():
-        return ["找不到 data/角色/内容/状态/状态守卫.json"]
+        return ["找不到 data/角色/规则/状态/状态守卫.json"]
     rows = json.loads(guard_file.read_text(encoding="utf-8"))
     names = [str(row.get("名称") or "") for row in rows if isinstance(row, dict)]
     names = [name for name in names if name]
