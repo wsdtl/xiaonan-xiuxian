@@ -7,7 +7,7 @@
 用法：
 
 ```powershell
-.venv/Scripts/python.exe -X utf8 tools/架构审查/校验命令目录.py
+.venv/Scripts/python.exe -X utf8 tools/架构审查/检查命令目录.py
 ```
 
 退出码 0 表示全部一致，1 表示存在越界。

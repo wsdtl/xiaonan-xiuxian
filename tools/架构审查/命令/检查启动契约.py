@@ -14,7 +14,7 @@
 用法：
 
 ```powershell
-.venv/Scripts/python.exe -X utf8 tools/架构审查/校验启动契约.py
+.venv/Scripts/python.exe -X utf8 tools/架构审查/检查启动契约.py
 ```
 
 退出码 0 表示全部通过；1 表示存在违反项。
