@@ -1426,6 +1426,14 @@ class CardText:
             base = f"{owner}已损失的精神"
         elif source == "目标已损失护盾":
             base = f"{owner}已损失的护盾"
+        elif source == "自身当前神魂":
+            base = "自身当前神魂"
+        elif source == "目标当前神魂":
+            base = f"{owner}当前神魂"
+        elif source == "自身已损失神魂":
+            base = "自身已损失的神魂"
+        elif source == "目标已损失神魂":
+            base = f"{owner}已损失的神魂"
         elif source == "行动条":
             # 引擎读的是 `行动进度 × 100`，所以正文也按百分数写。
             base = "自身行动条"
