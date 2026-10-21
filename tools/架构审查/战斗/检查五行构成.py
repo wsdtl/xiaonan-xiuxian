@@ -93,7 +93,7 @@ def check_carriers() -> list[str]:
     if not allowed:
         return ['五行契约里没有 实体属性.来源类别']
     problems: list[str] = []
-    for path in sorted((DATA / '战斗' / '内容' / '功法').iterdir()):
+    for path in sorted((DATA / '战斗' / '内容').iterdir()):
         if not path.is_dir():
             continue
         if path.name in allowed:
