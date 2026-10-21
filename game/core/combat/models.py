@@ -809,6 +809,9 @@ def attribute_ratio(
     if shape == "概率":
         # 概率没有负数：减到 0 以下一律当 0。
         return max(0.0, value / 100.0)
+    if shape == "倍率":
+        # 倍率没有下限以外的限制：不设上限，最低 ×1（不减反伤）。
+        return max(1.0, value / 100.0)
     return value / 100.0
 
 
