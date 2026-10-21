@@ -87,10 +87,16 @@ def test_unset_bonus_attribute_reads_as_one() -> None:
 
 
 def test_bonus_is_relative_to_the_declared_base() -> None:
-    """数据写的都是「加在基准上的差值」：120 是 +20%，20 是 −80%。"""
+    """数据写的都是「加在基准上的差值」：120 是 +20%。
+
+    负数不是「减多少就减多少」：加成口径走分母衰减，20 是 −80%，
+    实际倍率是 1/(1+0.8)，永远减不完、也不会压成负数。
+    """
 
     assert attribute_ratio(_fighter({"伤害加成": 120}), "伤害加成", DEFINITIONS) == 1.2
-    assert attribute_ratio(_fighter({"伤害加成": 20}), "伤害加成", DEFINITIONS) == 0.2
+    assert attribute_ratio(
+        _fighter({"伤害加成": 20}), "伤害加成", DEFINITIONS
+    ) == pytest.approx(1 / 1.8)
 
 
 def test_call_site_default_still_wins_when_given() -> None:
