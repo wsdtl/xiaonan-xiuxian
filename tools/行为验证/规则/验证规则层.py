@@ -1,0 +1,1035 @@
+"""规则层的行为验证：**每条登记的规则都要真的有作用**，且只在声明它的载体上起作用。
+
+`检查规则层.py` 只核「登记与实现不脱钩」，它跑不动战斗。规则层是行为，所以另有一条
+行为判据，而且它**随登记表自动生长**：每条规则按自己的 `拦截点` 落进对应的标准探针场景，
+跑「声明 / 不声明」两场真战斗，两场的唯一差别就是这条规则。
+
+探针用合成卡片驱动战斗核心（不走 `data/` 里的内容，所以语料不受影响），
+**正反两个方向都要成立**：只看「声明后有变化」会漏掉「什么都没做也通过」的假规则，
+只看正方向还会漏掉「把这一处请求全拦掉」的过宽规则——后者由一条通用的反方向探针收掉
+（把请求标签换掉一项，条件不成立时 `拒绝` 必须变成不拒绝）；条件里没有标签字面量、
+这条探针做不了的规则，工具会**照实说出来**，不静默放过。
+
+**标准探针场景覆盖到了哪些请求标签，`rules.INTERCEPTION_POINTS` 里逐个声明**；
+登记一条落在覆盖范围外的规则，`检查规则层.py` 会要求先扩探针场景（那是代码）。
+
+最后还有一条**载体等价**检查：同一条规则写在三种已有载体上（根能力 `规则文本`、被动技能行、
+状态定义），行为必须一样；状态带的那一份还必须**跟状态一起失效**——写在哪只影响跟谁生灭。
+
+    .venv/Scripts/python.exe -X utf8 tools/验证规则层.py
+
+**退出码：0 = 全部成立，1 = 有规则名不副实。**
+"""
+
+from __future__ import annotations
+
+import json
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[3]
+for _path in (str(ROOT), str(ROOT / "tools")):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+from game.app import build_game_services  # noqa: E402
+from game.core.combat.models import RuntimeCombatantSnapshot  # noqa: E402
+from game.core.combat.rules import expand_rule, probe_tags  # noqa: E402
+
+REGISTRY = ROOT / "data" / "战斗" / "定义" / "规则层.json"
+
+ATTRIBUTES = {
+    #: 按**设计口径**标定的夹具血量：一击 ≈ 攻击 100 × 输出倍率 1020/100 × 防御系数 1.0 = 1,020，
+    #: 探针斩 120 × 10.2 = 1,224；所以 `血气上限 = 5,000` ⇒ 击杀约 4~5 次有效出手，
+    #: 与"同成长下 ~4 次出手分胜负"的 PVP 设计一致。**这是夹具跟着设计走，不是开关**：
+    #: 探针要验的是「规则随状态失效 / 事件被改写多少」这类**机制**，它需要在若干行动之后才看得见；
+    #: 血量太薄（旧值 1,000）时一击就结束、观测窗口根本不存在（第 54 轮的"没有区分度"就是这个）。
+    "血气上限": 5000.0,
+    "精神上限": 400.0,
+    "攻击": 100.0,
+    "防御": 0.0,
+    "速度": 100.0,
+    "命中率": 100.0,
+    "闪避率": 0.0,
+    "暴击率": 0.0,
+    "抗暴率": 0.0,
+    "暴击伤害": 150.0,
+    "格挡率": 0.0,
+    "破格率": 0.0,
+    "格挡减伤": 0.0,
+    "伤害加成": 100.0,
+    "伤害减免": 0.0,
+}
+#: 事件改写的探针要看得见「少了多少」：血量够厚才不会把差值顶到上限。
+TANK_ATTRIBUTES = {**ATTRIBUTES, "血气上限": 6000.0, "攻击": 10.0, "防御": 200.0}
+SEED = 20260912
+ACTION_LIMIT = 20
+
+
+def _card(*abilities: dict) -> dict:
+    return {"功法": "探针卡", "编号": "900001", "能力": list(abilities)}
+
+
+def _rules(*entries: dict) -> dict:
+    return {"能力": "规则文本", "规则": list(entries)}
+
+
+def _fighter(
+    pid: str,
+    card: dict | None,
+    *,
+    health: float | None = None,
+    tank: bool = False,
+    inherent_rules: tuple = (),
+) -> RuntimeCombatantSnapshot:
+    return RuntimeCombatantSnapshot(
+        id=pid,
+        name=pid,
+        attributes=dict(TANK_ATTRIBUTES if tank else ATTRIBUTES),
+        level=5,
+        health=health,
+        techniques=(card,) if card else (),
+        inherent_rules=tuple(inherent_rules),
+    )
+
+
+def _strike_skill(name: str = "探针斩", rules: list | None = None) -> dict:
+    """一发必定命中、必定不暴击、必定不被格挡的直伤。"""
+
+    node = {
+        "能力": "主动技能",
+        "名称": name,
+        "释放顺序": 1,
+        "精神消耗": 0,
+        "冷却行动": 0,
+        "效果": [
+            {
+                "能力": "造成伤害",
+                "目标": {"能力": "选择目标", "范围": "当前目标"},
+                "数值": 120,
+                "能否闪避": False,
+                "能否暴击": False,
+                "能否格挡": False,
+            }
+        ],
+    }
+    if rules:
+        node["规则"] = rules
+    return node
+
+
+def _listener_passive(event: str, effects: list[dict], name: str = "探针被动") -> dict:
+    return {
+        "能力": "被动技能",
+        "名称": name,
+        "结算顺序": 1,
+        "效果": [
+            {
+                "能力": "监听事件",
+                "事件": event,
+                "阵营关系": "任意",
+                "效果": effects,
+            }
+        ],
+    }
+
+
+def _ban_passive(skill_name: str, field: str = "禁用", value: object = True, mode: str = "设置") -> dict:
+    return {
+        "能力": "被动技能",
+        "名称": "探针封",
+        "结算顺序": 1,
+        "效果": [
+            {
+                "能力": "监听事件",
+                "事件": "战斗开始",
+                "阵营关系": "任意敌方",
+                "效果": [
+                    {
+                        "能力": "修改技能",
+                        "目标": {"能力": "选择目标", "范围": "敌方"},
+                        "技能": {"能力": "选择技能", "范围": "指定技能", "名称": skill_name},
+                        "字段": field,
+                        "方式": mode,
+                        "值": value,
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _heal_passive(amount: float = 500) -> dict:
+    """目标自己每次行动开始时恢复血气——每次都会派发「恢复前」。
+
+    恢复量要比「行动开始恢复」的自然回血大得多，否则观测里分不出探针那一份。
+    """
+
+    return {
+        "能力": "被动技能",
+        "名称": "探针养",
+        "结算顺序": 1,
+        "效果": [
+            {
+                "能力": "监听事件",
+                "事件": "行动开始",
+                "阵营关系": "自身",
+                "效果": [
+                    {
+                        "能力": "恢复资源",
+                        "目标": {"能力": "选择目标", "范围": "自身"},
+                        "资源": "血气",
+                        "数值": amount,
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _run(engine, left, right):
+    """跑一场：`left` / `right` 可以是单个参战者，也可以是一队（己方方向的探针要同侧）。
+
+    **节奏钉死在基准**（`pace_percent=100`）：地形节奏是给正式对局调快慢的，判据要看的是
+    「这条规则拦不拦得住」，不是「地形凶不凶」——不钉住的话，调一次地势就得重校一遍探针。
+    """
+
+    lefts = left if isinstance(left, tuple) else (left,)
+    rights = right if isinstance(right, tuple) else (right,)
+    return engine.simulate_teams(
+        left=lefts,
+        right=rights,
+        medicine_definitions={},
+        medicine_selection_strategy="",
+        seed=SEED,
+        action_limit=ACTION_LIMIT,
+        pace_percent=100,
+    )
+
+
+def _health(result, pid: str) -> float:
+    for value in (*result.left_results, *result.right_results):
+        if value.id == pid:
+            return float(value.health)
+    return -1.0
+
+
+def _spirit(result, pid: str) -> float:
+    for value in (*result.left_results, *result.right_results):
+        if value.id == pid:
+            return float(value.spirit)
+    return -1.0
+
+
+def _count(result, *, kind: str, actor: str = "", target: str = "", skill: str = "") -> int:
+    total = 0
+    for event in result.events:
+        if event.kind != kind:
+            continue
+        if actor and (event.source_id != actor and str(event.values.get("行动者") or "") != actor):
+            continue
+        if target and event.target_id != target:
+            continue
+        if skill and str(event.values.get("技能") or "") != skill:
+            continue
+        total += 1
+    return total
+
+
+def _consumed(result, pid: str) -> float:
+    """落在目标身上的资源被扣掉的总量（`资源消耗后` 的 `实际数值` 之和）。"""
+
+    return sum(
+        float(event.values.get("实际数值") or 0)
+        for event in result.events
+        if event.kind == "资源消耗后" and event.target_id == pid
+    )
+
+
+def _big_hits(result, pid: str, threshold: float = 500) -> int:
+    """落在目标身上的大额伤害笔数（合成探针用它当「计量加满才落的一刀」）。"""
+
+    return sum(
+        1
+        for event in result.events
+        if event.kind == "造成伤害后"
+        and event.target_id == pid
+        and float(event.values.get("实际数值") or 0) >= threshold
+    )
+
+
+def _healed(result, pid: str) -> float:
+    """目标身上真正结算成功的恢复量（恢复后 的实际数值）。"""
+
+    return sum(
+        float(event.values.get("实际数值") or 0)
+        for event in result.events
+        if event.kind == "恢复后" and event.target_id == pid
+    )
+
+
+def _damage_taken(result, pid: str) -> float:
+    return sum(
+        float(event.values.get("实际数值") or 0)
+        for event in result.events
+        if event.kind == "造成伤害后" and event.target_id == pid
+    )
+
+
+def _direction(rule: dict) -> str:
+    """这条规则的请求是**谁动谁**：敌方（敌人对你）／己方（同伴对你）／自身（你对自己）。
+
+    方向取自规则自己的条件（2026-10 重构后方向不再走参数）——**方向决定探针怎么摆**：敌人要站在对面，
+    同伴要站在同一侧，自己就是承受者本人。
+    """
+
+    tags = probe_tags(rule)
+    if "来源关系:自身" in tags:
+        return "自身"
+    if "来源关系:己方" in tags:
+        return "己方"
+    return "敌方"
+
+
+def _scope(direction: str) -> dict:
+    """按方向给探针选目标。
+
+    己方那一路用「血气比例从低到高」把目标钉在**被护着的那一位**上：探针施法者做成血厚的，
+    目标先掉半管血，于是同侧里被选中的一定是目标（`排出自身` 那一栏在运行期不一定被尊重）。
+    """
+
+    if direction == "自身":
+        return {"能力": "选择目标", "范围": "自身"}
+    if direction == "己方":
+        return {"能力": "选择目标", "范围": "己方", "排序": "血气比例从低到高"}
+    return {"能力": "选择目标", "范围": "敌方"}
+
+
+#: 己方／自身方向的探针里，被护着的那一位先掉半管血（选目标与治疗观测量都要它）。
+GUARDED_HEALTH = 500.0
+
+
+def _sides(direction: str, probe: dict, guarded: dict | None, guarded_extra: list | None = None):
+    """按方向摆两边，返回 `(left, right)`（一边可以是多人）。
+
+    - 敌方：探针在左（L1），目标在右（R1）带规则；
+    - 己方：探针与目标**同侧**（R2 探针 + R1 带规则），对面拿一发直伤让仗打起来；
+    - 自身：目标自己当探针（能力与规则同一张脸），对面同前。
+
+    `guarded_extra` 是给被护着那一位额外塞的能力（例如「限制:技能」的探针要它真的会放技能）。
+    """
+
+    extra = list(guarded_extra or ())
+    rules_nodes = list((guarded or {}).get("能力") or [])
+    if direction == "敌方":
+        card = _card(*extra, *rules_nodes) if (extra or rules_nodes) else None
+        return _fighter("L1", probe), _fighter("R1", card)
+    # 对面要有事做：不然只有探针一方行动，观测量会被行动上限压平（推条、加速都看不出差别）。
+    opponent = _fighter("L1", _card(_strike_skill()))
+    if direction == "己方":
+        card = _card(*extra, *rules_nodes) if (extra or rules_nodes) else None
+        return opponent, (
+            _fighter("R2", probe, tank=True),
+            _fighter("R1", card, health=GUARDED_HEALTH),
+        )
+    return opponent, _fighter(
+        "R1",
+        _card(*extra, *(probe.get("能力") or []), *rules_nodes),
+        health=GUARDED_HEALTH,
+    )
+
+
+def _pair_runs(engine, direction: str, probe: dict, entry: dict, guarded_extra: list | None = None):
+    """同一套摆法跑两场，**只有「规则那一处」不同**：一场带规则、一场不带。
+
+    两场必须同侧同样的人（同伴方向的探针要有同伴在场），否则观测量的差别会来自布阵而不是规则。
+    """
+
+    plain_left, plain_right = _sides(direction, probe, None, guarded_extra)
+    guarded_left, guarded_right = _sides(
+        direction, probe, _card(_rules(entry)), guarded_extra
+    )
+    return _run(engine, plain_left, plain_right), _run(
+        engine, guarded_left, guarded_right
+    )
+
+
+def _scene_targeted(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """被选为目标：**对方**打过来看挨了多少伤害；**同伴/自己**动手看落了没有。
+
+    同伴给自己加的量（治疗）就是观测量：挡同伴指定的规则一旦生效，这一份就落不下来。
+    """
+
+    direction = _direction(rule)
+    if direction == "敌方":
+        attacker = _fighter("L1", _card(_strike_skill()))
+        plain = _run(engine, attacker, _fighter("R1", None))
+        guarded = _run(engine, attacker, _fighter("R1", _card(_rules(entry))))
+        return (
+            "目标受到的伤害",
+            _damage_taken(plain, "R1"),
+            _damage_taken(guarded, "R1"),
+            _damage_taken(guarded, "R1") < _damage_taken(plain, "R1"),
+        )
+    healer = _card(
+        {
+            "能力": "主动技能",
+            "名称": "探针援",
+            "释放顺序": 1,
+            "精神消耗": 0,
+            "冷却行动": 0,
+            "效果": [
+                {
+                    "能力": "恢复资源",
+                    "目标": _scope(direction),
+                    "资源": "血气",
+                    "数值": 300,
+                }
+            ],
+        }
+    )
+    plain, guarded = _pair_runs(engine, direction, healer, entry)
+    return (
+        "目标收到的治疗量",
+        _healed(plain, "R1"),
+        _healed(guarded, "R1"),
+        _healed(guarded, "R1") < _healed(plain, "R1"),
+    )
+
+
+def _scene_action_bar(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """行动条被改写：检查实际推条量，避免最终行动次数相同掩盖规则效果。"""
+
+    direction = _direction(rule)
+    pusher = _card(
+        {
+            "能力": "主动技能",
+            "名称": "探针推",
+            "释放顺序": 1,
+            "精神消耗": 0,
+            "冷却行动": 0,
+            "效果": [
+                {
+                    "能力": "修改行动条",
+                    "目标": _scope(direction),
+                    "方式": "增加",
+                    "数值": 60,
+                }
+            ],
+        }
+    )
+    plain, guarded = _pair_runs(engine, direction, pusher, entry)
+    def pushed(result):
+        return sum(max(0, event.amount) for event in result.events
+                   if event.kind == "行动条变化后" and event.target_id == "R1")
+    plain_amount, guarded_amount = pushed(plain), pushed(guarded)
+    return ("目标实际获得的行动条", plain_amount, guarded_amount, guarded_amount < plain_amount)
+
+
+def _scene_event_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """事件被改写：按这条规则挡的是哪种改写，挑对应的探针组合。
+
+    - `改写:取消`：对手在「造成伤害前」取消事件 → 看目标实际挨到多少伤害；
+    - `改写:数值`：对手把这次伤害减去 90 → 同上；
+    - `改写:转化`：目标自己回血，对手把「恢复前」转成「获得护盾前」→ 看目标回了多少血。
+    """
+
+    tags = probe_tags(rule)
+    if "改写:转化" in tags:
+        # 目标必须先掉血：满血时回复会溢出，观测不到「回没回成」。
+        healer = _fighter("R1", _card(_heal_passive()), tank=True, health=3000.0)
+        converter = _listener_passive(
+            "恢复前",
+            [{"能力": "转化事件", "事件": "获得护盾前"}],
+            name="探针转",
+        )
+        plain = _run(engine, _fighter("L1", _card(converter), tank=True), healer)
+        guarded = _run(
+            engine,
+            _fighter("L1", _card(converter), tank=True),
+            _fighter("R1", _card(_heal_passive(), _rules(entry)), tank=True, health=3000.0),
+        )
+        # 转化事件是**换事件**：原事件不再记录，改派发新事件（见 mechanics._dispatch_event），
+        # 所以「回血变护盾」在资源上未必立刻看得出差别。观测量直接取这件事本身：
+        # 关于目标的事件被转化了几次——这正是 不可转化 要挡的东西。
+        converted_plain = _count(plain, kind="事件转化后")
+        converted_guarded = _count(guarded, kind="事件转化后")
+        return ("事件被转化的次数", converted_plain, converted_guarded, converted_guarded < converted_plain)
+    if "改写:数值" in tags:
+        saboteur = _listener_passive(
+            "造成伤害前",
+            [{"能力": "修改事件数值", "方式": "减少", "数值": 90}],
+            name="探针削",
+        )
+    else:
+        saboteur = _listener_passive(
+            "造成伤害前",
+            [{"能力": "取消事件"}],
+            name="探针销",
+        )
+    plain = _run(
+        engine,
+        _fighter("L1", _card(_strike_skill()), tank=True),
+        _fighter("R1", _card(saboteur), tank=True),
+    )
+    guarded = _run(
+        engine,
+        _fighter("L1", _card(_strike_skill()), tank=True),
+        _fighter("R1", _card(saboteur, _rules(entry)), tank=True),
+    )
+    return (
+        "目标受到的伤害",
+        _damage_taken(plain, "R1"),
+        _damage_taken(guarded, "R1"),
+        _damage_taken(guarded, "R1") > _damage_taken(plain, "R1"),
+    )
+
+
+def _scene_resource_consume(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """资源被消耗：按方向抽/花目标的精神，问**被扣的那个单位**。"""
+
+    direction = _direction(rule)
+    资源 = "血气" if "资源:血气" in probe_tags(rule) else "精神"
+    drainer = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "消耗资源",
+                    "目标": _scope(direction),
+                    "资源": 资源,
+                    "数值": 300,
+                    "不足时是否失败": False,
+                }
+            ],
+            name="探针抽取",
+        )
+    )
+    left, right = _sides(direction, drainer, _card(_rules(entry)))
+    plain, guarded = _pair_runs(engine, direction, drainer, entry)
+    return (
+        f"目标被扣掉的{资源}",
+        _consumed(plain, "R1"),
+        _consumed(guarded, "R1"),
+        _consumed(guarded, "R1") < _consumed(plain, "R1"),
+    )
+
+
+def _scene_action_limit(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """行动被限制：按方向给目标挂一条「不许行动」的状态，问被限制的那个单位。"""
+
+    direction = _direction(rule)
+    限制 = "技能" if "限制:技能" in probe_tags(rule) else "行动"
+    limiter = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "添加状态",
+                    "目标": _scope(direction),
+                    "状态": {
+                        "名称": "探针锁步",
+                        "类别": "负面",
+                        "剩余行动": 20,
+                        "持续单位": "状态承受者行动",
+                        "行动限制": [限制],
+                    },
+                }
+            ],
+            name="探针锁步",
+        )
+    )
+    plain, guarded = _pair_runs(
+        engine, direction, limiter, entry, [_strike_skill()] if 限制 == "技能" else None
+    )
+
+    def 受限次数(result) -> int:
+        # 限制「行动」是跳过整次行动（`行动跳过后`）；限制「技能」是这一门技能施放失败
+        # （`技能施放失败后`，探针技能精神消耗为 0，所以失败只可能来自限制）。
+        return _count(result, kind="行动跳过后", target="R1") + _count(
+            result, kind="技能施放失败后", actor="R1"
+        )
+
+    return (
+        f"目标被限制{限制}的次数",
+        受限次数(plain),
+        受限次数(guarded),
+        受限次数(guarded) < 受限次数(plain),
+    )
+
+
+def _scene_ownership(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """归属被修改：按方向改目标的阵营，看这场仗还打不打得起来。
+
+    敌方：对手把目标拉走 → 我方没敌人了，伤害事件归零；
+    己方：同伴把目标推到对面 → 目标掉头打它原来的同伴（伤害落在 R2 身上）；
+    自身：目标自己投敌 → 同上，整场仗的伤害事件归零。
+    """
+
+    direction = _direction(rule)
+    阵营 = "己方" if direction == "敌方" else "敌方"
+    changer = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "修改归属",
+                    "目标": _scope(direction),
+                    "字段": "阵营",
+                    "阵营": 阵营,
+                }
+            ],
+            name="探针夺舍",
+        )
+    )
+    plain, guarded = _pair_runs(engine, direction, changer, entry)
+    if direction == "己方":
+        return (
+            "目标掉头打同伴的次数",
+            _count(plain, kind="造成伤害后", actor="R1", target="R2"),
+            _count(guarded, kind="造成伤害后", actor="R1", target="R2"),
+            _count(guarded, kind="造成伤害后", actor="R1", target="R2")
+            < _count(plain, kind="造成伤害后", actor="R1", target="R2"),
+        )
+    return (
+        "这场仗的伤害事件数",
+        _count(plain, kind="造成伤害后"),
+        _count(guarded, kind="造成伤害后"),
+        _count(guarded, kind="造成伤害后") > _count(plain, kind="造成伤害后"),
+    )
+
+
+def _scene_form(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """形态被切换：按方向强切目标的形态，问要被切的那个单位。"""
+
+    direction = _direction(rule)
+    switcher = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "切换形态",
+                    "目标": _scope(direction),
+                    "形态": "探针形态",
+                    "定义": {"属性变化": {"攻击": 5}},
+                }
+            ],
+            name="探针变形",
+        )
+    )
+    plain, guarded = _pair_runs(engine, direction, switcher, entry)
+    return (
+        "目标被切形态的次数",
+        _count(plain, kind="形态切换后", target="R1"),
+        _count(guarded, kind="形态切换后", target="R1"),
+        _count(guarded, kind="形态切换后", target="R1") < _count(plain, kind="形态切换后", target="R1"),
+    )
+
+
+def _scene_status_removed(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """状态被移除：按 `原因` 挑探针，看状态到底走没走。
+
+    - `原因:清除`：先给目标挂一条状态，再让对手（或同伴／自己）清掉它 → 数「移除状态后」；
+    - `原因:消耗`：把状态层数扣到 0（状态反应吃掉的也是这一条路）→ 同样数「移除状态后」；
+    - `原因:到期`：挂一条「只活 1 次行动」的状态，让它自然走完 → 同样数「移除状态后」。
+    """
+
+    from game.core.combat.rules import probe_tags
+
+    tags = probe_tags(rule)
+    direction = _direction(rule)
+    范围 = _scope(direction)
+    到期 = "原因:到期" in tags
+    消耗 = "原因:消耗" in tags
+    探针状态 = {
+        "名称": "探针封",
+        "类别": "负面",
+        "持续单位": "状态承受者行动" if 到期 or 消耗 else "整场战斗",
+        # 非到期探针不应把稍后的自然到期算成清除或消耗成功。
+        "剩余行动": 1 if 到期 else ACTION_LIMIT + 1,
+        "层数": 5 if 消耗 else 1,
+        "层数上限": 5 if 消耗 else 1,
+    }
+    效果 = [{"能力": "添加状态", "目标": 范围, "状态": dict(探针状态)}]
+    if 消耗:
+        效果.append(
+            {
+                "能力": "修改状态层数",
+                "方式": "减少",
+                "状态": {"能力": "选择状态", "目标": 范围, "名称": "探针封"},
+                "层数": 5,
+                "不足时是否失败": False,
+            }
+        )
+    elif not 到期:
+        效果.append(
+            {
+                "能力": "移除状态",
+                "目标": 范围,
+                "状态": {"能力": "选择状态", "目标": 范围, "名称": "探针封"},
+            }
+        )
+    eraser = _card(_listener_passive("战斗开始", 效果, name="探针洗"))
+    plain, guarded = _pair_runs(engine, direction, eraser, entry)
+    原因 = "到期" if 到期 else ("消耗" if 消耗 else "清除")
+    if 消耗:
+        # 「消耗」这条路（层数扣到 0）**不发 `移除状态后`**，所以观测量改看终局：
+        # 状态还在身上就是没被吃掉。没规则时它被吃掉 → 身上没有；有规则 → 还在。
+        return (
+            "终局时目标身上还剩几条状态",
+            float(_status_count(plain, "R1")),
+            float(_status_count(guarded, "R1")),
+            _status_count(guarded, "R1") > _status_count(plain, "R1"),
+        )
+    return (
+        f"目标身上状态被移除的次数（{原因}）",
+        float(_count(plain, kind="移除状态后", target="R1")),
+        float(_count(guarded, kind="移除状态后", target="R1")),
+        _count(guarded, kind="移除状态后", target="R1")
+        < _count(plain, kind="移除状态后", target="R1"),
+    )
+
+
+def _对象数(result) -> int:
+    """终局里除双方参战者之外多出来的战斗对象数。"""
+
+    return len(result.left_results) + len(result.right_results) - 2
+
+
+def _scene_counter(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """计量被修改：按方向给目标的计量加数，**加满就触发一刀**，问计量记在谁身上。
+
+    计量本身不进事件流（没有「计量变化后」这种事件），所以观测量取它的后果：
+    加满了才落下来的那一刀有没有落下来。
+    """
+
+    direction = _direction(rule)
+    范围 = _scope(direction)
+    modifier = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "修改构筑计量",
+                    "目标": 范围,
+                    "计量": "探针计量",
+                    "方式": "增加",
+                    "数值": 5,
+                    "最高值": 100,
+                },
+                {
+                    "能力": "条件执行",
+                    "条件": [
+                        {
+                            "能力": "数值条件",
+                            "左值": {
+                                "能力": "读取数值",
+                                "来源": "构筑计量",
+                                "目标": 范围,
+                                "计量": "探针计量",
+                            },
+                            "比较": "大于等于",
+                            "右值": 5,
+                        }
+                    ],
+                    "成立效果": [
+                        {
+                            "能力": "造成伤害",
+                            "目标": 范围,
+                            "数值": 999,
+                            "能否闪避": False,
+                            "能否暴击": False,
+                            "能否格挡": False,
+                        }
+                    ],
+                },
+            ],
+            name="探针记账",
+        )
+    )
+    plain, guarded = _pair_runs(engine, direction, modifier, entry)
+    # ⚠️ **这条期望对"资源保护型"规则是错的，别照抄**（第 20~27 轮查证）：
+    #   `计量不可被改`（`data/战斗/定义/规则层.json`）的语义是
+    #   `拦截点=计量被修改 / 处置=拒绝 / 条件=标签条件(来源关系:$来源) / 字段 来源∈{敌方,己方,自身}`
+    #   —— 它**按来源**拒绝，不是无差别拦截。但这条探针数的是"计量加满才落的那一刀"的**笔数**，
+    #   而那条规则在**拒绝时会顺手加计量**（模板族里见过 `取消事件 + 修改构筑计量 增加`），
+    #   于是守卫态的后果**反而更多**：实测无规则 1 笔 → 声明后 **5 笔**（旧夹具只够 1 个行动，
+    #   两边都是 1，所以第 18 轮它表现为"没有区分度"）。
+    #   ⇒ 正确的期望不是"笔数变少"，而是**来源判别**：敌方的计量修改被拒、自己的照旧生效。
+    #   那需要换一个**不被规则副作用污染**的观测量（例如"一次修改尝试之后，计量有没有变"，
+    #   而不是"落了几刀"），并同时把"该拦的拦 / 该放的放"两侧都验到——改的时候两条一起写。
+    #
+    #   **改在哪一层（本轮查清的卡点）**：**不要在 `_scene_counter` 里改**。它只拿到
+    #   **已经展开好的 `rule`**（`:1120` 的 `expand_rule(name, params, layer)` 在**主循环**里做），
+    #   拿不到 `params`，所以"把同一条规则换个 `来源` 再跑一遍"这件事**只能在主循环里做**
+    #   （`:1114-1130` 那一段：`rule = expand_rule(...)` → `scene(...)` → `ok` 判红）。
+    #   正确形状：在主循环里对"带来源字段的规则"跑**两次**——`来源=敌方`（该拦）与 `来源=自身`
+    #   （该放），比较两次观测量；而不是在 scene 内部造第二条世界线。
+    return (
+        "计量加满才落的那一刀",
+        _big_hits(plain, "R1"),
+        _big_hits(guarded, "R1"),
+        _big_hits(guarded, "R1") < _big_hits(plain, "R1"),
+    )
+
+
+def _landed_statuses(result, pid: str) -> int:
+    """落到目标身上的状态数（`添加状态后` 的事件数就是它）。"""
+
+    return sum(1 for event in result.events if event.kind == "添加状态后" and event.target_id == pid)
+
+
+def _status_count(result, pid: str) -> int:
+    """终局时这个参战者身上还剩几条状态。"""
+
+    for value in (*result.left_results, *result.right_results):
+        if value.id == pid:
+            return len(value.statuses)
+    return -1
+
+
+def _scene_status_added(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
+    """状态被添加：对手给别人挂状态时，问**被打上的那个单位**。
+
+    按这条规则拦的是哪种状态挑探针：条件里有 `控制:真` 就用控制型状态，有 `类别:负面`
+    就用负面状态（这是标准探针覆盖表里声明过的那两类）。
+    """
+
+    tags = probe_tags(rule)
+    direction = _direction(rule)
+    范围 = _scope(direction)
+    status: dict = {"名称": "探针封", "类别": "中性", "持续单位": "整场战斗"}
+    if "控制:真" in tags:
+        status = {
+            "名称": "探针封",
+            "类别": "负面",
+            "是否控制": True,
+            "持续单位": "状态承受者行动",
+            "剩余行动": 2,
+            "标签": ["控制"],
+        }
+    elif "类别:负面" in tags:
+        status = {"名称": "探针封", "类别": "负面", "持续单位": "整场战斗"}
+    elif "类别:正面" in tags:
+        status = {"名称": "探针封", "类别": "正面", "持续单位": "整场战斗"}
+    applier = _card(
+        _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "添加状态",
+                    "目标": 范围,
+                    "状态": status,
+                }
+            ],
+            name="探针下咒",
+        )
+    )
+    plain, guarded = _pair_runs(engine, direction, applier, entry)
+    return (
+        "目标身上落到的状态数",
+        _landed_statuses(plain, "R1"),
+        _landed_statuses(guarded, "R1"),
+        _landed_statuses(guarded, "R1") < _landed_statuses(plain, "R1"),
+    )
+
+
+SCENES = {
+    "被选为目标": _scene_targeted,
+    "行动条被改写": _scene_action_bar,
+    "事件被改写": _scene_event_rewrite,
+    "状态被添加": _scene_status_added,
+    "资源被消耗": _scene_resource_consume,
+    "行动被限制": _scene_action_limit,
+    "归属被修改": _scene_ownership,
+    "形态被切换": _scene_form,
+    "计量被修改": _scene_counter,
+    "状态被移除": _scene_status_removed,
+}
+
+
+
+class _载体:
+    """只为 `_rules_deny` 造一个「身上带着规则」的东西（真身是参战者或技能行）。"""
+
+    def __init__(self, rules: dict) -> None:
+        self.rules = rules
+
+
+def _overreach(engine, name: str, rule: dict) -> str | None:
+    """条件不该匹配的请求必须放过去。
+
+    返回值：`""` = 放过（合格）· 一句话 = 误拦（不合格）· `None` = 这条规则的条件里
+    没有标签字面量，**反方向探针做不了**（工具会照实说出来，不再静默跳过）。
+
+    把这条规则的请求标签换掉一项，造一个「条件必然不成立」的请求：`拒绝` 必须变成
+    「不拒绝」。**没有这条反方向探针，一条把这一处全部请求都拦掉的规则，与一条名实
+    相符的规则在正方向探针里长得一模一样。**
+    """
+
+    tags = sorted(probe_tags(rule))
+    if not tags:
+        return None
+    mutated = ["不匹配:探针", *tags[1:]]
+    carrier = _载体({name: rule})
+    if not engine._rules_deny(None, carrier, str(rule.get("拦截点") or ""), owner=None, tags=tuple(mutated)):
+        return ""
+    return f"{name}：条件不匹配的请求也被拦（{'、'.join(mutated)}）"
+
+
+def _carrier_cards(entry: dict) -> dict[str, dict]:
+    """同一份规则引用的三种**卡面**写法（都是已有机制，没有新机制）。
+
+    第四种「参战者固有规则」不走卡面，由 `_carrier_check` 直接挂在快照上。
+    """
+
+    def 挂规则的被动() -> dict:
+        node = _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "记录战斗事实",
+                    "归属": {"能力": "选择目标", "范围": "自身"},
+                    "名称": "探针",
+                    "值": 1,
+                    "方式": "追加",
+                    "保留数量": 1,
+                }
+            ],
+            name="探针载规则",
+        )
+        node["规则"] = [entry]
+        return node
+
+    def 带规则的状态(持续单位: str, 剩余行动: int) -> dict:
+        return _listener_passive(
+            "战斗开始",
+            [
+                {
+                    "能力": "添加状态",
+                    "目标": {"能力": "选择目标", "范围": "自身"},
+                    "状态": {
+                        "名称": "探针锁势",
+                        "类别": "正面",
+                        "持续单位": 持续单位,
+                        "剩余行动": 剩余行动,
+                        "规则": [entry],
+                    },
+                }
+            ],
+            name="探针挂势",
+        )
+
+    return {
+        "规则文本": _card(_rules(entry)),
+        "被动技能": _card(挂规则的被动()),
+        "状态·整场战斗": _card(带规则的状态("整场战斗", 1)),
+        "状态·1 行动": _card(带规则的状态("状态承受者行动", 1)),
+    }
+
+
+def _carrier_check(engine, layer: dict[str, dict]) -> list[str]:
+    """**写在哪不影响语义**：同一份规则挂在四种载体上，行为必须一样。
+
+    单位级规则有四种写法——卡面根能力 `规则文本`、被动技能行、状态定义、**参战者固有规则**
+    （种族一类「天生如此」的东西走这一条）。判据要成立三件事：四处写法挡住的东西一样；
+    状态带的那份**状态一走就失效**；固有规则与卡面**同一条写两遍当场报错**（不挑一张悄悄用）。
+    """
+
+    entry = {"名称": "不可被指定"}
+    if "不可被指定" not in layer:
+        return []
+    problems: list[str] = []
+    打手 = _fighter("L1", _card(_strike_skill()))
+    基准 = _damage_taken(_run(engine, 打手, _fighter("R1", None)), "R1")
+    if 基准 <= 0:
+        return ["载体探针没有区分度：没有规则时目标也没挨打"]
+    结果: dict[str, float] = {}
+    for 名, 卡 in _carrier_cards(entry).items():
+        try:
+            结果[名] = _damage_taken(
+                _run(engine, _fighter("L1", _card(_strike_skill())), _fighter("R1", 卡)),
+                "R1",
+            )
+        except Exception as exc:  # noqa: BLE001
+            problems.append(f"{名} 写法跑不起来（{type(exc).__name__}: {exc}）")
+    # 第四种写法：**参战者固有规则**（不走卡面，直接从快照进来）。
+    try:
+        固有 = _fighter("R1", None, inherent_rules=(entry,))
+        结果["固有规则"] = _damage_taken(
+            _run(engine, _fighter("L1", _card(_strike_skill())), 固有),
+            "R1",
+        )
+    except Exception as exc:  # noqa: BLE001
+        problems.append(f"固有规则 写法跑不起来（{type(exc).__name__}: {exc}）")
+    # 同一条规则写两遍（卡面 + 固有）必须当场报错，不许挑一张用。
+    try:
+        _run(
+            engine,
+            _fighter("L1", _card(_strike_skill())),
+            _fighter("R1", _card(_rules(entry)), inherent_rules=(entry,)),
+        )
+        problems.append("卡面与固有规则写了同一条锁定技，却没报错")
+    except ValueError:
+        pass
+    for 名 in ("规则文本", "被动技能", "状态·整场战斗", "固有规则"):
+        if 名 in 结果 and 结果[名] != 0:
+            problems.append(f"{名} 写法没挡住：目标受到伤害 {结果[名]:.0f}")
+    if "状态·1 行动" in 结果 and 结果["状态·1 行动"] <= 0:
+        problems.append("状态带的那份规则没有跟状态一起失效")
+    print(
+        "  四种写法（没有规则时受伤害 "
+        f"{基准:.0f}）："
+        + " · ".join(f"{名} {值:.0f}" for 名, 值 in 结果.items())
+    )
+    return problems
+
+
+def main() -> int:
+    layer = json.loads(REGISTRY.read_text(encoding="utf-8"))
+    services = build_game_services()
+    problems: list[str] = []
+    try:
+        engine = services.core.combat._require_engine()
+        print(f"规则层行为验证：{len(layer)} 条规则")
+        for name, definition in sorted(layer.items()):
+            point = str(definition.get("拦截点") or "")
+            scene = SCENES.get(point)
+            if scene is None:
+                problems.append(f"{name} 的拦截点没有标准探针场景：{point}")
+                continue
+            entry = {"名称": name}
+            # 参数替换仍在引擎里（规则定义声明 `字段` 时生效），当前没有规则声明它。
+            rule = expand_rule(name, {}, layer)
+            try:
+                label, plain, guarded, ok = scene(engine, entry, rule)
+            except Exception as exc:  # noqa: BLE001
+                problems.append(f"{name}：探针跑不起来（{type(exc).__name__}: {exc}）")
+                continue
+            print(f"  {name:<16} {label}：没有规则 {plain:.0f} → 声明后 {guarded:.0f}")
+            if plain == guarded:
+                problems.append(f"{name}：声明前后完全一样，探针没有区分度")
+            elif not ok:
+                problems.append(f"{name} 名不副实：{label} {plain:.0f} → {guarded:.0f}")
+            overreach = _overreach(engine, name, rule)
+            if overreach is None:
+                print(f"  {'':<16} 条件里没有标签字面量：反方向探针跳过")
+            else:
+                print(f"  {'':<16} 条件不匹配的请求：{'误拦' if overreach else '放过'}")
+                if overreach:
+                    problems.append(overreach)
+        print("规则层载体验证：写在哪不影响语义")
+        problems.extend(_carrier_check(engine, layer))
+    finally:
+        services.core.database.close()
+    if problems:
+        print(f"规则名不副实 {len(problems)} 处")
+        for problem in problems:
+            print(f"  {problem}")
+        return 1
+    print("规则层行为验证通过：每条规则都有作用，且只在声明它的载体上起作用")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
