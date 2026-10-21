@@ -800,11 +800,15 @@ def attribute_ratio(
         value = fighter.value(attribute, baseline)
     # 「加成」口径：正数线性（+200% 是 ×3），负数走分母衰减（-200% 是 ×1/3），
     # 永远减不完。其余口径（倍率、概率、减免、比率）保持线性不变。
-    if str(definition.get("口径") or "") == "加成" and baseline == 100.0:
+    shape = str(definition.get("口径") or "")
+    if shape == "加成" and baseline == 100.0:
         delta = (value - baseline) / baseline
         if delta >= 0.0:
             return 1.0 + delta
         return 1.0 / (1.0 - delta)
+    if shape == "概率":
+        # 概率没有负数：减到 0 以下一律当 0。
+        return max(0.0, value / 100.0)
     return value / 100.0
 
 
