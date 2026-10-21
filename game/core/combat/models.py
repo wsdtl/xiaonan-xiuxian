@@ -740,10 +740,11 @@ class Fighter(RuntimeExtensions):
 
     @property
     def alive(self) -> bool:
+        #: 所有单位都有血气与神魂两条命线，任一条归零即死。
+        #: 流派可以只强化其中一条，但没人能忽略另一条。
         if not self.active or self.health <= 0:
             return False
-        #: 没有神魂的单位（召唤物、构造物、战场环境）只看血气。
-        return self.value("神魂上限", 0.0) <= 0 or self.soul > 0
+        return self.soul > 0
 
     @property
     def health_max(self) -> float:

@@ -162,7 +162,10 @@ def main() -> int:
     # 两阶段跑：单元测试自己会开分片，和别的项抢核只会互相拖（实测它内部墙钟从 23 秒
     # 涨到 46 秒），所以先让它独占跑完，其余项再并发。并发上限按核数取一半——全开满
     # 会超订，实测墙钟反而更慢。
-    workers = max(1, (os.cpu_count() or 4) * 5 // 8)
+    # 留一个核给用户：并发不超过「核数 − 1」，且封顶 4 —— 判据是子进程，
+    # 开满会把机器卡死（委托方 2026-10-22 口径：跑全量不能占满 CPU）。
+    cores = os.cpu_count() or 4
+    workers = max(1, min(cores - 1, 4))
     heavies = tuple(item for item in chosen if "单元测试" in item[0])
     others = tuple(item for item in chosen if item not in heavies)
     measured = {item[0]: run_one(item) for item in heavies}

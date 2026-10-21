@@ -22,7 +22,8 @@ import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
-GROUPS = max(1, min(8, os.cpu_count() or 4))
+# 留一个核给用户：分片数不超过「核数 − 1」，且封顶 4。
+GROUPS = max(1, min(4, (os.cpu_count() or 4) - 1))
 
 #: 实测的每文件耗时（秒，含 pytest 启动），用来做 LPT 平衡分组——按文件大小分会严重失衡。
     #: 刷新方式：对每个 `tests/test_*.py` 单独计时（2026-10 实测：28 个文件合计 235.2 秒，12 核理想墙钟约 19.6 秒）。
