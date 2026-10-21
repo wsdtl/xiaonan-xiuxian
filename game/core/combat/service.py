@@ -336,7 +336,7 @@ class CombatService:
             content_id=value.content_id,
             id=value.id,
             name=value.name,
-            attributes=copy.deepcopy(dict(value.attributes)),
+            attributes=_merge_race_bonus(value.attributes, value.race_bonus),
             level=value.level,
             combatant_type=value.combatant_type,
             gender=value.gender,
@@ -551,3 +551,15 @@ class CombatService:
 
 
 __all__ = ["CombatService"]
+
+
+def _merge_race_bonus(attributes, bonus):
+    """种族天生属性叠加到属性表上；数值口径直接相加。"""
+    merged = copy.deepcopy(dict(attributes))
+    for key, value in dict(bonus or {}).items():
+        try:
+            delta = float(value)
+        except (TypeError, ValueError):
+            continue
+        merged[str(key)] = float(merged.get(str(key), 0.0)) + delta
+    return merged

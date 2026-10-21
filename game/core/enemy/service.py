@@ -406,6 +406,7 @@ class EnemyService:
             gender=gender,
             five_elements=generate_five_elements(self._five_element_rules, source),
             inherent_rules=inherent,
+            race_bonus=dict(self._races.get(race, {}).get("天生属性") or {}) if race else {},
         )
         return EnemyInstance(
             name, combatant, self._reward(name, raw, role_name, source)
