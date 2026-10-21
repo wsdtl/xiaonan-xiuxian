@@ -19,7 +19,7 @@
 判定方式同 `语料对照.py`：**纯改名、纯结构等价应当是 100% 一致**。某一条变成
 `None` 说明它在改后数据里已经不存在了（例如整条监听被摘空），要单独看。
 
-基准是 `tools/基准/战前状态摘要.json`（入库跟踪），只在**零抛错**时才会写。
+基准是 `tools/基准/缓存/战前状态摘要.json`（入库跟踪），只在**零抛错**时才会写。
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ from game.core.combat.contracts import (  # noqa: E402
     CombatStatusSpec,
 )
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "战前状态摘要.json"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "战前状态摘要.json"
 
 #: 陪练卡：任选一张自带主动与被动的功法，两侧都装，好让战前状态的监听有机会触发。
 CARD = "400541"
@@ -162,7 +162,7 @@ def main() -> int:
     parser.add_argument("改动前", nargs="?", default="",
                         help="改动前的 data 目录（旧用法；与 --基准 二选一）")
     parser.add_argument("--基准", dest="基准", default=str(DEFAULT_BASELINE),
-                        help="入库基准摘要；默认 tools/基准/战前状态摘要.json")
+                        help="入库基准摘要；默认 tools/基准/缓存/战前状态摘要.json")
     parser.add_argument("--写基准", dest="写基准", action="store_true",
                         help="把当前数据目录的摘要写进 --基准")
     parser.add_argument("--数据", dest="数据", default="",

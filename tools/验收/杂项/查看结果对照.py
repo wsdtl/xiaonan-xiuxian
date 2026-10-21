@@ -36,7 +36,7 @@ if str(ROOT) not in sys.path:
 from game.app import build_game_services  # noqa: E402
 from game.cmd.通用.查看.reply import inspection  # noqa: E402
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "查看结果摘要.json"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "查看结果摘要.json"
 
 
 def _canonical(value: object) -> object:

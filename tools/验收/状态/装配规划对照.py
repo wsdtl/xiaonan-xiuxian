@@ -43,7 +43,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "装配规划摘要.json"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "装配规划摘要.json"
 
 #: 道藏的三个体裁；`器律` 走的是器律储备，不在本判据里。
 CATEGORIES = (

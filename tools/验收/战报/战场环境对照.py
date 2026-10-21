@@ -57,7 +57,7 @@ from game.core.combat.contracts import (  # noqa: E402
     CombatRequest,
 )
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "战场环境摘要.json"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "战场环境摘要.json"
 
 #: 陪练卡：自带主动与被动的功法，两侧都装，好让环境阶段有伤害推进。
 CARD = "400541"

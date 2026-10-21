@@ -40,7 +40,7 @@ from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 from 规则层 import load_rule_layer  # noqa: E402
 
 DATA = ROOT / "data"
-BASELINE = ROOT / "tools/基准/渲染正文摘要.json"
+BASELINE = ROOT / "tools/基准/缓存/渲染正文摘要.json"
 
 #: 有正文的体裁与它们的文件位置。加一栏就要同时改 `渲染战斗文本.py` 的 SURFACES。
 SURFACES = (

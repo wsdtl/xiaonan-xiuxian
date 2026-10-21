@@ -28,7 +28,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "协议适配摘要.json"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "协议适配摘要.json"
 
 #: 固定的签名密钥、时间戳与「现在」，让签名类样本可复现。
 SECRET = "判据用密钥-not-a-real-secret"

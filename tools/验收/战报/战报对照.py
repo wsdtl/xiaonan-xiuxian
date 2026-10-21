@@ -47,7 +47,7 @@ from game.core.combat.contracts import (  # noqa: E402
     CombatantSpec,
 )
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "战报摘要.sem"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "战报摘要.sem"
 
 #: 战报里的时间戳，固定住才谈得上「对照」。
 FIXED_GENERATED_AT = "2026-01-01T00:00:00+08:00"

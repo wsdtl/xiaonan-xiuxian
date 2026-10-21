@@ -34,7 +34,7 @@ from game.core.combat.contracts import (  # noqa: E402
     CombatantSpec,
 )
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "交叉对局摘要.sem"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "交叉对局摘要.sem"
 DATA = ROOT / "data"
 ATTRS = {
     "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,

@@ -55,7 +55,7 @@ from game.core.combat.contracts import (  # noqa: E402
     CombatRequest,
 )
 
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "阵法摘要.json"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "阵法摘要.json"
 
 #: 陪练卡：自带主动与被动的功法，两侧都装，好让阵法的冲击与轮转有机会发生。
 CARD = "400541"

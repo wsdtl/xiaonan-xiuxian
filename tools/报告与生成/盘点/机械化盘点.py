@@ -41,7 +41,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from 全库扫描 import 全库文档  # noqa: E402
 from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
-DEFAULT_BASELINE = ROOT / "tools" / "基准" / "机械化基线.json"
+DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "机械化基线.json"
 
 SURFACES = (
     ("功法", "战斗/内容/功法/*.json"),
