@@ -12,6 +12,9 @@ from game.core.data import JsonDataError, JsonDataService
 from .contracts import RaceEntry, RaceLineage, RaceOverview, ZhongzuCopy
 
 #: 展示数据集三节的键，缺一个或多一个都拒绝启动（与其它展示数据集同一套做法）。
+#: 图鉴每页显示多少个种族。
+PAGE_SIZE = 20
+
 COPY_SECTIONS: tuple[tuple[str, set[str]], ...] = (
     ("总览", {"标题", "引言", "页码", "提示"}),
     ("详情", {"标题", "基础", "编号", "档次", "寿元", "天生规则", "本相代价", "规则分隔"}),
@@ -92,9 +95,16 @@ class ZhongzuFeature:
             grouped.setdefault(race.lineage, []).append(race)
             self._by_number[race.number] = race
             self._by_name[race.name] = race
+        # 一族系一页的时代过去了：现在按**固定条数**切页，页名就是该页的编号区间。
+        all_entries = tuple(row for rows in grouped.values() for row in rows)
+        ordered = tuple(sorted(all_entries, key=lambda row: row.number))
+        pages = [ordered[i : i + PAGE_SIZE] for i in range(0, len(ordered), PAGE_SIZE)]
         lineages = tuple(
-            RaceLineage(name=lineage, races=tuple(sorted(rows, key=lambda row: row.number)))
-            for lineage, rows in grouped.items()
+            RaceLineage(
+                name=(rows[0].number + "–" + rows[-1].number) if len(rows) > 1 else rows[0].number,
+                races=rows,
+            )
+            for rows in pages
         )
         overview = RaceOverview(total=len(races), lineages=lineages, tiers=())
         self._overview = overview
