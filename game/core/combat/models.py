@@ -683,6 +683,8 @@ class Fighter(RuntimeExtensions):
     group_role: str = "主战者"
     #: 破架势后的硬直剩余次数：>0 时这次行动直接作废。
     poise_stun: int = 0
+    #: 形态剩余行动：>0 时到点自动回「本相」，0 表示不自动回。
+    form_remaining: int = 0
     form: str = "本相"
     forms: dict[str, Mapping[str, Any]] = dataclass_field(default_factory=dict)
     form_modifiers: dict[str, float] = dataclass_field(default_factory=dict)

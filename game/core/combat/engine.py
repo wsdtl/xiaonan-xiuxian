@@ -15,6 +15,7 @@ from .models import (
     RuntimeCombatField,
     RuntimeFormation,
     Skill,
+    copy_skills,
 )
 
 
@@ -601,12 +602,41 @@ class BattleEngine(AbilityRuntime):
             health_basis=round(field.health_basis, 3),
         )
 
+    def _expire_form(self, context: BattleContext, actor: Fighter) -> None:
+        """形态到期：回到「本相」，把临时属性变化撤掉。
+
+        `切换形态` 的 `属性变化` 是**战场内的临时加成**，不是角色成长；给了
+        `持续行动` 的形态到点自动回，`0` 表示不自动回（老数据行为不变）。
+        """
+
+        if int(getattr(actor, "form_remaining", 0)) <= 0:
+            return
+        actor.form_remaining = int(actor.form_remaining) - 1
+        if actor.form_remaining > 0:
+            return
+        for key, value in actor.form_modifiers.items():
+            actor.attributes[key] = actor.attributes.get(key, 0.0) - value
+        actor.form_modifiers = {}
+        before = actor.form
+        actor.form = "本相"
+        if actor.base_form_skills is not None:
+            actor.skills = copy_skills(actor.base_form_skills)
+            actor.base_form_skills = None
+        context.event(
+            "行动开始",
+            actor,
+            actor,
+            f"{actor.name}的[{before}]到点散去",
+            values={"行动": context.action_number, "行动者": actor.id, "形态": actor.form},
+        )
+
     def _take_action(self, context: BattleContext, actor: Fighter) -> None:
         # 仅持有者自己的主行动刷新其预算；其他人的行动、追加攻击不刷新。
         context.support_window = {
             key: value for key, value in context.support_window.items()
             if key[0] != actor.id
         }
+        self._expire_form(context, actor)
         if int(actor.poise_stun) > 0:
             # 破架势的硬直：这次行动直接作废，行动条照常走。
             actor.poise_stun = int(actor.poise_stun) - 1

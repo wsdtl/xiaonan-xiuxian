@@ -3150,6 +3150,15 @@ class AbilityRuntime(ChainRuntime):
             }
             for key, value in fighter.form_modifiers.items():
                 fighter.attributes[key] = fighter.attributes.get(key, 0.0) + value
+            # 形态的**时限**：能力上写了 `持续行动` 就用它，否则看定义里的同名键；
+            # 0 表示不自动回（老数据行为不变）。
+            limit = effect.get("持续行动")
+            if limit is None:
+                limit = definition.get("持续行动")
+            try:
+                fighter.form_remaining = max(0, int(limit or 0))
+            except (TypeError, ValueError):
+                fighter.form_remaining = 0
             if fighter.base_form_skills is None:
                 fighter.base_form_skills = copy_skills(fighter.skills)
             if definition.get("替换技能"):
