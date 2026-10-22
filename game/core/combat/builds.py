@@ -88,6 +88,25 @@ def _validate_build(
     path = f"{section}[{content_id}]"
     if not isinstance(value, Mapping):
         raise BuildContractError(f"{path}必须是对象")
+    # 字段契约：这一类的字段必须**正好**是契约声明的那些（多一个少一个都拒）。
+    # 判定依据在数据里，代码只执行。
+    prefix = str(contract.get("编号前缀") or "")
+    if prefix and not content_id.startswith(prefix):
+        raise BuildContractError(f"{path}编号必须以{prefix}开头")
+    expected = tuple(str(field) for field in contract.get("字段") or ())
+    if expected:
+        actual = set(str(key) for key in value)
+        if actual != set(expected):
+            missing = sorted(set(expected) - actual)
+            unknown = sorted(actual - set(expected))
+            details = []
+            if missing:
+                details.append("缺少 " + "、".join(missing))
+            if unknown:
+                details.append("多出 " + "、".join(unknown))
+            raise BuildContractError(
+                f"{path}字段不符合{section}契约：{'；'.join(details)}"
+            )
     # 只查「能不能显示」：名字和说明为空，这张卡在界面上就是一块空白。
     for field in ("名称", "说明"):
         if not str(value.get(field) or "").strip():

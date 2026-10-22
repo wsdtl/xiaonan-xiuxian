@@ -199,6 +199,7 @@ class BattleEngine(AbilityRuntime):
         self._skill_selector_handlers = {"选择技能": self._skills_select}
         self._assembly_handlers = {
             "装配属性": self._assemble_attributes,
+            "属性溢出转化": self._assemble_overflow,
             "装配规则": self._assemble_rules,
             "装配主动技能": self._assemble_active_skill,
             "装配被动技能": self._assemble_passive_skill,
@@ -1288,6 +1289,32 @@ class BattleEngine(AbilityRuntime):
                 attributes.get(str(key), 0) + float(value) * multiplier
             )
 
+    def _assemble_overflow(self, instance: Mapping[str, Any], index: int, node: Mapping[str, Any], attributes: dict[str, float], skills: list[Skill], passives: list[dict[str, Any]], rules: dict) -> None:
+        """把某项属性**超出最高有效值**的那一截，按比例折成另一项属性。
+
+        `最高值` 是有效上限不是硬上限（见 `_normalize_attributes`）：暴击率堆到 150，
+        100 仍然算暴击，多出来的 50 由这条能力换成别的属性——这就是器律的「换一种兑现方式」。
+        """
+
+        del index, skills, passives, rules
+        source_key = str(node.get("来源属性") or "")
+        target_key = str(node.get("目标属性") or "")
+        if not source_key or not target_key:
+            return
+        definition = self.catalog.attributes.get(source_key) or {}
+        ceiling = float(definition.get("最高值", math.inf))
+        if math.isinf(ceiling):
+            return
+        overflow = float(attributes.get(source_key, 0)) - ceiling
+        if overflow <= 0:
+            return
+        ratio = float(node.get("转化比例", 1.0))
+        step = float(node.get("取整到", 0.1)) or 0.0
+        gained = overflow * ratio
+        if step:
+            gained = round(gained / step) * step
+        attributes[target_key] = attributes.get(target_key, 0) + gained
+
     def _assemble_rules(self, instance: Mapping[str, Any], index: int, node: Mapping[str, Any], attributes: dict[str, float], skills: list[Skill], passives: list[dict[str, Any]], rules: dict) -> None:
         """装配卡面的规则文本：`规则[]` 里的每条都要是登记过的单位级规则。
 
@@ -1406,9 +1433,11 @@ class BattleEngine(AbilityRuntime):
         for key, definition in self.catalog.attributes.items():
             value = float(values.get(key, definition.get("默认值", 0)))
             minimum = float(definition.get("最低值", -math.inf))
-            maximum = float(definition.get("最高值", math.inf))
+            # `最高值` 是**最高有效值**，不是硬上限：属性允许超出去，超出的那一截
+            # 由 `属性溢出转化` 折成别的属性；判定侧各自按有效值截断（暴击率按
+            # `min(概率, 1)` 算），所以这里只钳下限。
             unit = max(0.0, float(definition.get("最小单位", 0)))
-            value = self._clamp(value, minimum, maximum)
+            value = max(minimum, value)
             if unit:
                 value = round(value / unit) * unit
             result[str(key)] = value
