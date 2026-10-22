@@ -104,6 +104,7 @@ INTERCEPTION_POINTS = MappingProxyType(
                 "来源关系:己方",
                 "来源关系:自身",
                 "方式:增加",
+                "方式:减少",
             ),
         ),
         "事件被改写": InterceptionPoint(
@@ -135,6 +136,7 @@ INTERCEPTION_POINTS = MappingProxyType(
                 "方式:消耗",
                 "资源:精神",
                 "资源:血气",
+                "资源:神魂",
                 "来源关系:敌方",
                 "来源关系:己方",
                 "来源关系:自身",
@@ -188,6 +190,7 @@ INTERCEPTION_POINTS = MappingProxyType(
             probe_tags=(
                 "状态:探针封",
                 "类别:负面",
+                "类别:正面",
                 "原因:清除",
                 "原因:消耗",
                 "原因:到期",

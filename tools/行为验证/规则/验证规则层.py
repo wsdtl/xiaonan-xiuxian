@@ -400,7 +400,10 @@ def _scene_targeted(engine, entry: dict, rule: dict) -> tuple[str, float, float,
 def _scene_action_bar(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
     """行动条被改写：检查实际推条量，避免最终行动次数相同掩盖规则效果。"""
 
+    from game.core.combat.rules import probe_tags as _pt
+
     direction = _direction(rule)
+    _方式 = "减少" if "方式:减少" in _pt(rule) else "增加"
     pusher = _card(
         {
             "能力": "主动技能",
@@ -412,7 +415,7 @@ def _scene_action_bar(engine, entry: dict, rule: dict) -> tuple[str, float, floa
                 {
                     "能力": "修改行动条",
                     "目标": _scope(direction),
-                    "方式": "增加",
+                    "方式": _方式,
                     "数值": 60,
                 }
             ],
@@ -420,10 +423,11 @@ def _scene_action_bar(engine, entry: dict, rule: dict) -> tuple[str, float, floa
     )
     plain, guarded = _pair_runs(engine, direction, pusher, entry)
     def pushed(result):
-        return sum(max(0, event.amount) for event in result.events
+        # 增加与减少都取绝对值：减少时 amount 是负数，取正才数得到。
+        return sum(abs(event.amount) for event in result.events
                    if event.kind == "行动条变化后" and event.target_id == "R1")
     plain_amount, guarded_amount = pushed(plain), pushed(guarded)
-    return ("目标实际获得的行动条", plain_amount, guarded_amount, guarded_amount < plain_amount)
+    return ("目标实际被改写的行动条", plain_amount, guarded_amount, guarded_amount < plain_amount)
 
 
 def _scene_event_rewrite(engine, entry: dict, rule: dict) -> tuple[str, float, float, bool]:
@@ -489,7 +493,7 @@ def _scene_resource_consume(engine, entry: dict, rule: dict) -> tuple[str, float
     """资源被消耗：按方向抽/花目标的精神，问**被扣的那个单位**。"""
 
     direction = _direction(rule)
-    资源 = "血气" if "资源:血气" in probe_tags(rule) else "精神"
+    资源 = ("血气" if "资源:血气" in probe_tags(rule) else "神魂" if "资源:神魂" in probe_tags(rule) else "精神")
     drainer = _card(
         _listener_passive(
             "战斗开始",
@@ -643,7 +647,7 @@ def _scene_status_removed(engine, entry: dict, rule: dict) -> tuple[str, float, 
     消耗 = "原因:消耗" in tags
     探针状态 = {
         "名称": "探针封",
-        "类别": "负面",
+        "类别": "正面" if "类别:正面" in tags else "负面",
         "持续单位": "状态承受者行动" if 到期 or 消耗 else "整场战斗",
         # 非到期探针不应把稍后的自然到期算成清除或消耗成功。
         "剩余行动": 1 if 到期 else ACTION_LIMIT + 1,
