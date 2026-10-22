@@ -21,7 +21,7 @@ from game.features.fanben import FanbenError
 太素坊 = "太素坊"
 万化易形丹 = "160005"
 人族 = "人族"
-狼妖 = "狼妖"
+狼妖 = "夺运氏"
 
 
 def _创建(services, user_id: str, name: str, race: str = "") -> None:
