@@ -83,7 +83,8 @@ def nodes() -> dict[str, list[dict]]:
     for _, folder in SECTIONS:
         if not folder.exists():
             continue
-        for path in sorted(folder.glob("*.json")):
+        # 卡是按流派分子目录存的（`<段>/<流派>/<编号>.json`），平铺 glob 一张都读不到。
+        for path in sorted(folder.rglob("*.json")):
             try:
                 rows = load_build_json(path)
             except Exception:
