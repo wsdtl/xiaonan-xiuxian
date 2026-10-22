@@ -1249,6 +1249,11 @@ class BattleEngine(AbilityRuntime):
                 efficiency -= spent
                 if efficiency <= 0:
                     continue
+            elif delay < 0:
+                # 负延后 = 拉条攒下的「提前量」：这一轮多推进这么多，抵完为止。
+                bonus = min(-delay, 1.0)
+                context.action_delay[fighter.id] = delay + bonus
+                efficiency += bonus
             before = context.action_progress.get(fighter.id, 0)
             total = before + efficiency
             count = math.floor(total + 1e-9)
