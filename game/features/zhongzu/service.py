@@ -12,9 +12,6 @@ from game.core.data import JsonDataError, JsonDataService
 from .contracts import RaceEntry, RaceLineage, RaceOverview, ZhongzuCopy
 
 #: 展示数据集三节的键，缺一个或多一个都拒绝启动（与其它展示数据集同一套做法）。
-#: 图鉴每页显示多少个种族。
-PAGE_SIZE = 20
-
 COPY_SECTIONS: tuple[tuple[str, set[str]], ...] = (
     ("总览", {"标题", "引言", "页码", "提示"}),
     ("详情", {"标题", "基础", "编号", "档次", "寿元", "天生规则", "本相代价", "规则分隔"}),
@@ -55,6 +52,7 @@ class ZhongzuFeature:
         self._copy: ZhongzuCopy | None = None
         self._by_number: dict[str, RaceEntry] = {}
         self._by_name: dict[str, RaceEntry] = {}
+        self._page_limit: int = 0
 
     def _load_cards(self) -> Mapping[str, str]:
         """规则层登记表的 `卡面`：本相/代价的文案只有这一处出处。"""
@@ -71,6 +69,13 @@ class ZhongzuFeature:
         if not self._character.status().initialized:
             raise RuntimeError("角色核心微服务必须先于种族图鉴玩法启动")
         self._copy = self._load_copy()
+        paging = (self._data.dataset("种族分页") or {}).get("分页") or {}
+        try:
+            self._page_limit = int(paging.get("每页上限"))
+        except (TypeError, ValueError) as exc:
+            raise JsonDataError("种族.分页.每页上限必须是正整数") from exc
+        if self._page_limit <= 0:
+            raise JsonDataError("种族.分页.每页上限必须是正整数")
         cards = self._load_cards()
         races = self._character.races()
         grouped: dict[str, list[RaceEntry]] = {}
@@ -98,7 +103,8 @@ class ZhongzuFeature:
         # 一族系一页的时代过去了：现在按**固定条数**切页，页名就是该页的编号区间。
         all_entries = tuple(row for rows in grouped.values() for row in rows)
         ordered = tuple(sorted(all_entries, key=lambda row: row.number))
-        pages = [ordered[i : i + PAGE_SIZE] for i in range(0, len(ordered), PAGE_SIZE)]
+        size = self._page_limit
+        pages = [ordered[i : i + size] for i in range(0, len(ordered), size)]
         lineages = tuple(
             RaceLineage(
                 name=(rows[0].number + "–" + rows[-1].number) if len(rows) > 1 else rows[0].number,
