@@ -2679,25 +2679,6 @@ class AbilityRuntime(ChainRuntime):
         amount = self._resolve_value(context, effect.get("数值", 0), source, target, kwargs.get("event_amount", 0), kwargs.get("event_values") or {}) * multiplier
         changed = False
         for fighter in self._select_targets(context, source, target, effect.get("目标")):
-            # 锁定技：`计量被修改` 拦截点——问**计量记在谁身上**。
-            version = int(getattr(context, "status_rules_version", 0))
-            rules = (
-                fighter.rules_cache.get("计量被修改")
-                if fighter.rules_cache_version == version
-                else self._container_rules(fighter, context).get("计量被修改")
-            )
-            if rules and self._rules_deny(
-                context,
-                fighter,
-                "计量被修改",
-                owner=source,
-                tags=(
-                    f"计量:{name}",
-                    f"方式:{mode}",
-                    f"来源关系:{self._source_relation(context, source, fighter)}",
-                ),
-            ):
-                continue
             key = (fighter.id, instance, name)
             before = context.ability_counters.get(key, initial)
             if mode == "减少" and before < amount and insufficient_fails:

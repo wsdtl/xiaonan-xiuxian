@@ -173,17 +173,6 @@ INTERCEPTION_POINTS = MappingProxyType(
                 "来源关系:自身",
             ),
         ),
-        "计量被修改": InterceptionPoint(
-            note="动某个单位的构筑计量之前问那个单位",
-            carriers=("单位",),
-            probe_tags=(
-                "计量:探针计量",
-                "方式:增加",
-                "来源关系:敌方",
-                "来源关系:己方",
-                "来源关系:自身",
-            ),
-        ),
         "状态被移除": InterceptionPoint(
             note="清掉 / 吃掉 / 到期收走某个状态之前问挂着它的那个单位",
             carriers=("单位",),

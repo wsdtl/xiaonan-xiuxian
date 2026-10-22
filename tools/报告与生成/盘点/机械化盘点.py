@@ -47,7 +47,6 @@ SURFACES = (
     ("功法", "战斗/内容/功法/*.json"),
     ("真意", "战斗/内容/真意/*.json"),
     ("气机", "战斗/内容/气机/*.json"),
-    ("器律", "物品/内容/器律/*.json"),
 )
 
 #: 引擎 `_value_read` 支持的读取来源（见 `game/core/combat/mechanics.py`）。
