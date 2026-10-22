@@ -21,7 +21,7 @@ from game.features.fanben import FanbenError
 太素坊 = "太素坊"
 万化易形丹 = "160005"
 人族 = "人族"
-秤灵 = "秤灵"
+狼妖 = "狼妖"
 
 
 def _创建(services, user_id: str, name: str, race: str = "") -> None:
@@ -75,7 +75,7 @@ def _种族(services, user_id: str) -> str:
 
 def test_在太素坊换种族成功且上限与年龄自洽(services) -> None:
     # 新人物默认就是人族，而返本还元丹通向人族——所以要造一个**非人族**才走得通这条路径。
-    _创建(services, "u-返本", "换族修士", race=秤灵)
+    _创建(services, "u-返本", "换族修士", race=狼妖)
     _发丹(services, "u-返本", 万化易形丹)
     _挪到(services, "u-返本", 太素坊)
     前 = asyncio.run(services.core.character.profile("u-返本"))
@@ -95,7 +95,7 @@ def test_不在太素坊被拒(services) -> None:
 
 
 def test_没有丹被拒(services) -> None:
-    _创建(services, "u-无丹", "无丹修士", race=秤灵)
+    _创建(services, "u-无丹", "无丹修士", race=狼妖)
     _挪到(services, "u-无丹", 太素坊)
     with pytest.raises(FanbenError) as error:
         asyncio.run(services.features.fanben.change("u-无丹", "返本:3", 人族))

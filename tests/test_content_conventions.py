@@ -154,7 +154,7 @@ def test_every_race_rule_is_registered(services) -> None:
 
     layer = services.combat.rule_layer()
     races = services.enemy.races()
-    assert len(races) == 180, f"种族数不对：{len(races)}"
+    assert len(races) == 69, f"种族数不对：{len(races)}"
     assert BASE_RACE in races, "基准族人族必须在表里"
     组合: dict[tuple[str, ...], str] = {}
     for name, entry in races.items():
