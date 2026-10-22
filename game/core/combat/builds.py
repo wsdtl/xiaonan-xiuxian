@@ -18,7 +18,6 @@ from .schema import RuleSchemaValidator
 BUILD_CONTRACT_DATASET = "战斗规则"
 BUILD_CONTRACT_NAME = "构筑契约"
 BUILD_SECTIONS = ("功法", "真意", "气机", "器律")
-_ELEMENT_KEYS = frozenset({"木", "火", "土", "金", "水", "无相"})
 
 
 class BuildContractError(ValueError):
@@ -89,70 +88,27 @@ def _validate_build(
     path = f"{section}[{content_id}]"
     if not isinstance(value, Mapping):
         raise BuildContractError(f"{path}必须是对象")
-    prefix = str(contract.get("编号前缀") or "")
-    if not content_id.startswith(prefix):
-        raise BuildContractError(f"{path}编号必须以{prefix}开头")
-    expected = tuple(str(field) for field in contract.get("字段") or ())
-    actual = set(str(key) for key in value)
-    if actual != set(expected):
-        missing = sorted(set(expected) - actual)
-        unknown = sorted(actual - set(expected))
-        details = []
-        if missing:
-            details.append("缺少 " + "、".join(missing))
-        if unknown:
-            details.append("多出 " + "、".join(unknown))
-        raise BuildContractError(f"{path}字段不符合{section}契约：{'；'.join(details)}")
+    # 只查「能不能显示」：名字和说明为空，这张卡在界面上就是一块空白。
     for field in ("名称", "说明"):
         if not str(value.get(field) or "").strip():
             raise BuildContractError(f"{path}.{field}不能为空")
-    if section == "器律":
-        for field in ("器阶", "铸法"):
-            if not str(value.get(field) or "").strip():
-                raise BuildContractError(f"{path}.{field}不能为空")
-        beast = value.get("兽引")
-        if not isinstance(beast, list) or not beast or any(
-            not isinstance(item, str) or not item.strip() for item in beast
-        ):
-            raise BuildContractError(f"{path}.兽引必须是非空字符串数组")
-    else:
+    if section != "器律":
         _validate_weight(section, contract, path, value, weights)
+    else:
+        beast = value.get("兽引")
+        if beast is not None and not isinstance(beast, list):
+            raise BuildContractError(f"{path}.兽引必须是数组")
 
-    composition = value.get("属性构成")
-    if not isinstance(composition, Mapping) or not composition:
-        raise BuildContractError(f"{path}.属性构成必须是非空对象")
-    if not set(str(key) for key in composition) <= _ELEMENT_KEYS:
-        raise BuildContractError(f"{path}.属性构成包含未登记五行")
-    total = sum(float(amount) for amount in composition.values())
-    if abs(total - 100.0) > 1e-6:
-        raise BuildContractError(f"{path}.属性构成必须合计 100，当前 {total:g}")
-
+    # 能力树：只查「能不能解析、事件挂得上」，不查设计模板。
     abilities = value.get("能力")
     if not isinstance(abilities, list) or not abilities:
         raise BuildContractError(f"{path}.能力必须是非空数组")
-    allowed_roots = tuple(str(item) for item in contract.get("根能力") or ())
-    fixed = contract.get("能力数量")
-    if fixed is not None and len(abilities) != int(fixed):
-        raise BuildContractError(f"{path}的{section}必须正好有{int(fixed)}项根能力")
-    minimum = int(contract.get("最少能力") or 1)
-    if len(abilities) < minimum:
-        raise BuildContractError(f"{path}.能力不得少于{minimum}项")
-    roots: list[str] = []
     for index, node in enumerate(abilities):
         node_path = f"{path}.能力[{index}]"
         if not isinstance(node, Mapping):
             raise BuildContractError(f"{node_path}必须是对象")
-        root = str(node.get("能力") or "")
-        roots.append(root)
-        if root not in allowed_roots:
-            raise BuildContractError(
-                f"{node_path}的根能力是{root or '<空>'}，"
-                f"{section}只允许 {'、'.join(allowed_roots)}"
-            )
         validator.validate_node(node, node_path)
         _validate_event_binding(node, node_path)
-    if bool(contract.get("要求主动技能")) and "主动技能" not in roots:
-        raise BuildContractError(f"{path}必须至少有一项主动技能")
 
 
 def _validate_weight(
