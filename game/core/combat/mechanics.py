@@ -2712,6 +2712,78 @@ class AbilityRuntime(ChainRuntime):
         self._dispatch_event(context, kind="追加攻击后", source=source, target=destination, amount=applied, values={"实际数值": applied, "行动类型": "追加攻击"}, tags=("追加攻击",))
         return True
 
+    def _ability_break_poise(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
+        """破架势：把目标的架势层数一次打空，并让他硬直若干次行动。
+
+        架势是「蓄力—兑现」那条线：站着不动攒层，层数换来强力一击；
+        破架势就是**把这个囤积一次抹掉**，还顺手让他停手。
+        """
+
+        del multiplier
+        poise = str(effect.get("架势状态") or "")
+        if not poise:
+            return False
+        changed = False
+        for victim in self._select_targets(context, source, target, effect.get("目标")):
+            stacks = 0
+            for state in list(victim.statuses):
+                if state.definition.get("名称") != poise:
+                    continue
+                stacks += int(state.stacks)
+                victim.statuses.remove(state)
+            if stacks:
+                changed = True
+            stun = max(0, int(effect.get("硬直行动", 1)))
+            if stun:
+                victim.poise_stun = max(int(getattr(victim, "poise_stun", 0)), stun)
+                changed = True
+        return changed
+
+    def _ability_assist_strike(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
+        """连携：叫己方另外几个人一起打同一个目标。
+
+        合击者各出一份**自己的**攻击力乘 `威力倍率`，不占他们的行动——
+        这是「多人合击」这种战斗形式，不是给他们多一次出手。
+        """
+
+        destinations = self._select_targets(context, source, target, effect.get("目标"))
+        if not destinations:
+            return False
+        victim = destinations[0]
+        allies = [
+            value
+            for value in context.allies_of(source, alive=None)
+            if value.id != source.id and value.active
+        ]
+        if isinstance(effect.get("合击者"), Mapping):
+            picked = {value.id for value in self._select_targets(context, source, target, effect.get("合击者"))}
+            allies = [value for value in allies if value.id in picked]
+        limit = max(0, int(effect.get("人数上限", 2)))
+        allies = allies[:limit]
+        if not allies:
+            return False
+        ratio = float(effect.get("威力倍率", 0.5)) * float(multiplier or 1.0)
+        form = str(effect.get("伤害形式") or "连携")
+        struck = False
+        for mate in allies:
+            power = float(mate.attributes.get("攻击", 0)) * ratio
+            if power <= 0:
+                continue
+            self._apply_damage(
+                context,
+                mate,
+                victim,
+                power,
+                label=str(effect.get("名称") or "连携"),
+                damage_form=form,
+                defense_rule="普通",
+                can_critical=True,
+                can_block=True,
+                tags=("连携",),
+            )
+            struck = True
+        return struck
+
     def _ability_share_damage(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         frame = self._current_event(context, "造成伤害前")
         destinations = self._select_targets(context, source, target, effect.get("目标"))

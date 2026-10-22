@@ -200,6 +200,8 @@ class BattleEngine(AbilityRuntime):
         self._assembly_handlers = {
             "装配属性": self._assemble_attributes,
             "属性溢出转化": self._assemble_overflow,
+            "连携攻击": self._ability_assist_strike,
+            "破架势": self._ability_break_poise,
             "装配规则": self._assemble_rules,
             "装配主动技能": self._assemble_active_skill,
             "装配被动技能": self._assemble_passive_skill,
@@ -605,6 +607,17 @@ class BattleEngine(AbilityRuntime):
             key: value for key, value in context.support_window.items()
             if key[0] != actor.id
         }
+        if int(actor.poise_stun) > 0:
+            # 破架势的硬直：这次行动直接作废，行动条照常走。
+            actor.poise_stun = int(actor.poise_stun) - 1
+            context.event(
+                "行动结束",
+                actor,
+                actor,
+                f"{actor.name}架势被破，硬直",
+                values={"行动": context.action_number, "行动者": actor.id, "硬直": actor.poise_stun},
+            )
+            return
         target = context.opponent_of(actor)
         context.event(
             "行动开始",

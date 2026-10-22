@@ -8,6 +8,8 @@ EXECUTOR_CATEGORIES = MappingProxyType(
     {
         "装配属性": frozenset({"装配"}),
     "属性溢出转化": frozenset({"装配"}),
+    "连携攻击": frozenset({"效果"}),
+    "破架势": frozenset({"效果"}),
         "装配规则": frozenset({"装配"}),
         "装配主动技能": frozenset({"装配"}),
         "装配被动技能": frozenset({"装配"}),

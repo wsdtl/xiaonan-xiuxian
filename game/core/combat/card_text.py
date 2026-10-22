@@ -246,6 +246,8 @@ ABILITY_RENDERERS: dict[str, str] = {
     "追加攻击": "_ability_extra_attack",
     "分摊伤害": "_ability_share_damage",
     "转移伤害": "_ability_transfer_damage",
+    "连携攻击": "_ability_assist_strike",
+    "破架势": "_ability_break_poise",
     "抵挡致命伤害": "_ability_resist_lethal_damage",
     "复活": "_ability_revive",
     "修改事件数值": "_ability_modify_event_value",
@@ -1670,6 +1672,20 @@ class CardText:
     def _ability_share_damage(self, node: Mapping) -> str:
         return f"将{self._target(node.get('目标'))}受到的{_percent(node.get('比例'))}伤害分摊给其他己方"
 
+    def _ability_assist_strike(self, node: Mapping) -> str:
+        limit = int(node.get("人数上限", 2))
+        return (
+            f"{self._target(node.get(chr(0x76ee)+chr(0x6807)))}出手时，"
+            f"另有至多{limit}人合击，各出{_percent(node.get(chr(0x5a01)+chr(0x529b)+chr(0x500d)+chr(0x7387)))}攻击力"
+        )
+
+    def _ability_break_poise(self, node: Mapping) -> str:
+        stun = int(node.get("硬直行动", 1))
+        return (
+            f"打空{self._target(node.get(chr(0x76ee)+chr(0x6807)))}的"
+            f"「{node.get(chr(0x67b6)+chr(0x52bf)+chr(0x72b6)+chr(0x6001))}」层数，"
+            f"并使其硬直{stun}次行动"
+        )
     def _ability_transfer_damage(self, node: Mapping) -> str:
         return f"将{self._target(node.get('目标'))}受到的{self._value(node.get('数值'))}点伤害转移出去"
 
