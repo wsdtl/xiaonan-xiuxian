@@ -14,7 +14,7 @@ from .contracts import RaceEntry, RaceLineage, RaceOverview, ZhongzuCopy
 #: 展示数据集三节的键，缺一个或多一个都拒绝启动（与其它展示数据集同一套做法）。
 COPY_SECTIONS: tuple[tuple[str, set[str]], ...] = (
     ("总览", {"标题", "引言", "页码", "提示"}),
-    ("详情", {"标题", "基础", "编号", "族系", "档次", "寿元", "天生规则", "本相代价", "规则分隔"}),
+    ("详情", {"标题", "基础", "编号", "档次", "寿元", "天生规则", "本相代价", "规则分隔"}),
     ("错误", {"未找到", "页码有误"}),
 )
 
@@ -82,12 +82,12 @@ class ZhongzuFeature:
             race = RaceEntry(
                 number=str(entry.get("编号") or ""),
                 name=name,
-                lineage=str(entry.get("族系") or ""),
+                lineage="",
                 tiers=(),
                 lifespan=float(str(entry.get("寿元系数") or 1.0)),
                 benefits=tuple(faces[:-1]),
                 cost=faces[-1] if faces else "",
-                flavor=_flavor(self._copy, name, str(entry.get("族系") or "")),
+                flavor=_flavor(self._copy, name, ""),
             )
             grouped.setdefault(race.lineage, []).append(race)
             self._by_number[race.number] = race

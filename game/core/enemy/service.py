@@ -120,7 +120,6 @@ class EnemyService:
             name = _text(entry.get("种族"), f"{where}.种族")
             if name in result:
                 raise JsonDataError(f"{where}.种族重名：{name}")
-            _text(entry.get("族系"), f"{where}.族系")
             for rule_index, rule in enumerate(
                 _sequence(entry.get("天生规则") or (), f"{where}.天生规则")
             ):

@@ -511,8 +511,6 @@ def check_race_registry(layer: dict[str, dict]) -> list[str]:
         if not name:
             problems.append("种族登记表有一条没写 `种族`")
             continue
-        if not str(entry.get("族系") or "").strip():
-            problems.append(f"{name} 没有写 `族系`")
         try:
             rules = parse_rule_entries(
                 entry.get("天生规则") or [],

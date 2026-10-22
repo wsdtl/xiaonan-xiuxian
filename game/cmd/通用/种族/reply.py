@@ -15,14 +15,13 @@ def page(copy: ZhongzuCopy, overview: RaceOverview, index: int) -> DocumentMessa
 
     lineage = overview.lineages[index - 1]
     builder = M.document()
-    builder.section(
-        lineage.name
-        + " · "
-        + _text(copy, "总览", "页码").format_map(
-            {"当前页": index, "总页数": len(overview.lineages)}
-        ),
-        icon="character",
-    )
+    total_pages = len(overview.lineages)
+    title = lineage.name
+    if total_pages > 1:
+        title += " · " + _text(copy, "总览", "页码").format_map(
+            {"当前页": index, "总页数": total_pages}
+        )
+    builder.section(title, icon="character")
     if index == 1:
         builder.line(_text(copy, "总览", "引言").format_map(
             {"总数": overview.total, "族系数": len(overview.lineages)}
