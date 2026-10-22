@@ -1926,7 +1926,7 @@ class BattleEngine(AbilityRuntime):
             allow_followups
             and resolution.actual_damage > 0
             and target.alive
-            and self._judgement(context, "连击", self._percent(source, "连击率"))
+            and self._judgement(context, "连击", self._percent(source, "连击率"), who=source)
         ):
             self._deal_attack(
                 context,
@@ -2017,7 +2017,7 @@ class BattleEngine(AbilityRuntime):
             target=target,
             rng=context.rng,
             judge=lambda kind, chance, roll: self._judgement(
-                context, kind, chance, roll
+                context, kind, chance, roll, who=source
             ),
         )
         if not resolution.hit:
@@ -2200,7 +2200,7 @@ class BattleEngine(AbilityRuntime):
             if (
                 source.alive
                 and target.alive
-                and self._judgement(context, "反击", self._percent(target, "反击率"))
+                and self._judgement(context, "反击", self._percent(target, "反击率"), who=target)
             ):
                 self._deal_attack(
                     context,

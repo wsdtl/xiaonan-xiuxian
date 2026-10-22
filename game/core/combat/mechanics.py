@@ -3072,9 +3072,10 @@ class AbilityRuntime(ChainRuntime):
         return frozenset({"恢复前", "获得护盾前", "资源恢复前"})
 
     def _ability_modify_judgement(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
-        del source, target, multiplier
+        del target, multiplier
         kind = str(effect.get("判定") or "任意")
-        context.judgement_overrides.setdefault(kind, []).append({"方式": str(effect.get("方式") or "必定成功"), "次数": max(1, int(effect.get("次数", 1)))})
+        # 记下**这条覆盖是谁下的**：判定主链要拿它比对，否则会替对手也生效（实测敌方暴击被抬 3 次）。
+        context.judgement_overrides.setdefault(kind, []).append({"方式": str(effect.get("方式") or "必定成功"), "次数": max(1, int(effect.get("次数", 1))), "来源": source.id})
         return True
 
     def _ability_modify_battle_rule(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
@@ -3915,8 +3916,11 @@ class AbilityRuntime(ChainRuntime):
 
         frame.facts["改写非法"] = reason
 
-    def _judgement(self, context: BattleContext, kind: str, chance: float, roll: float | None=None) -> bool:
+    def _judgement(self, context: BattleContext, kind: str, chance: float, roll: float | None=None, who: Fighter | None=None) -> bool:
         overrides = context.judgement_overrides.get(kind) or context.judgement_overrides.get("任意") or []
+        if who is not None:
+            # 只吃「下给 who 的」那条；别人的覆盖不顶用（不然器律会替敌人改判定）。
+            overrides = [item for item in overrides if item.get("来源") in (None, who.id)]
         if overrides:
             value = overrides[0]
             mode = value["方式"]
