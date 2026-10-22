@@ -42,7 +42,7 @@ if str(ROOT) not in sys.path:
 
 DATA = ROOT / "data"
 RECIPE = DATA / "物品" / "规则" / "炼器" / "器则.json"
-LAW_DIR = DATA / "物品" / "内容"
+LAW_DIR = DATA / "物品" / "内容" / "器律"
 TIERS = ("凡器", "灵器", "法器", "法宝", "后天灵宝")
 #: 读取数值 的登记来源，main 里装载（检查函数直接用）。
 READ_SOURCES = frozenset()
@@ -260,10 +260,10 @@ def load_laws() -> dict:
 
     raw = {}
     use_of: dict[str, str] = {}
-    for file in sorted(LAW_DIR.glob("器律-*.json")):
+    for file in sorted(LAW_DIR.glob("*.json")):
         for entry in json.loads(file.read_text(encoding="utf-8")):
             raw[str(entry["编号"])] = entry
-            use_of[str(entry["编号"])] = file.stem[3:]
+            use_of[str(entry["编号"])] = file.stem
     services = app.build_game_services()
     try:
         data = services.core.data
@@ -283,6 +283,53 @@ def _plain(node):
         return [_plain(v) for v in node]
     return node
 
+
+
+
+#: 器律**只许用改规则的手段**：它改变的是「战斗怎么进行」，不是「加多少数值」。
+#: 加状态、回血、直接造成伤害这些是功法/真意的活，混进器律就变成「武器什么都能干」。
+RULE_ABILITIES = frozenset({
+    "修改事件目标", "修改事件标签", "修改事件数值", "取消事件", "转化事件", "修改判定",
+    "修改行动条", "修改技能冷却", "修改构筑计量", "分摊伤害", "转移伤害", "修改归属",
+    "修改状态层数", "修改状态持续", "修改战场规则", "切换形态", "属性溢出转化",
+    "连携攻击", "破架势",
+})
+
+
+def check_rule_only(laws: Sequence[dict]) -> list[str]:
+    """每条器律用到的能力必须全在 `RULE_ABILITIES` 里。"""
+
+    problems: list[str] = []
+    for number, item in laws.items():
+        used: set[str] = set()
+
+        def walk(node: object) -> None:
+            if isinstance(node, Mapping):
+                raw = node.get("能力")
+                if isinstance(raw, str) and raw:
+                    used.add(raw)
+                for value in node.values():
+                    walk(value)
+            elif isinstance(node, Sequence) and not isinstance(node, (str, bytes)):
+                for value in node:
+                    walk(value)
+
+        walk(item.get("展开"))
+        walk(item.get("原始"))
+        # 只判「效果类」：组合/条件/数值这些是骨架，不算手段。
+        skeleton = {"被动技能", "主动技能", "规则文本", "固定属性加成", "监听事件",
+                    "顺序执行", "条件执行", "随机执行", "遍历目标", "重复执行", "尝试执行",
+                    "事务执行", "选择目标", "选择技能", "选择状态", "读取数值", "计算数值",
+                    "随机数值", "聚合数值", "概率条件", "数值条件", "状态条件", "类型条件",
+                    "组合条件", "标签条件", "记录战斗事实", "保存结果", "回放效果",
+                    "修改战斗关联", "修改技能", "复制技能", "修改行动意图", "修改战术",
+                    "创建战斗对象", "移除战斗对象", "复活", "抵挡致命伤害", "触发技能",
+                    "复制状态", "转移状态", "添加状态", "移除状态", "恢复资源", "消耗资源",
+                    "支付代价", "设置资源", "转移资源", "造成伤害", "追加攻击"}
+        extra = sorted(used - RULE_ABILITIES - skeleton)
+        if extra:
+            problems.append(f"器律[{number}] 用了非改规则手段：" + "、".join(extra))
+    return problems
 
 def main() -> int:
     global READ_SOURCES
@@ -309,7 +356,11 @@ def main() -> int:
         for item in similar[:6]:
             print("     " + item)
     # 64 条逐条设计已全部完成，同模板换参数不再是「先报不判」——它就是不合格。
-    problems += scope + law_problems + distinct + similar
+    rule_only = check_rule_only(laws)
+    print("  [" + ("干净" if not rule_only else str(len(rule_only)) + " 处") + "] 只用改规则手段")
+    for item in rule_only[:6]:
+        print("     " + item)
+    problems += scope + law_problems + distinct + similar + rule_only
     if problems:
         print(f"器律形状 {len(problems)} 处")
         return 1
