@@ -158,6 +158,8 @@ class BattleEngine(AbilityRuntime):
             "追加攻击": self._ability_additional_attack,
             "分摊伤害": self._ability_share_damage,
             "转移伤害": self._ability_transfer_damage,
+            "连携攻击": self._ability_assist_strike,
+            "破架势": self._ability_break_poise,
             "抵挡致命伤害": self._ability_fatal_guard,
             "复活": self._ability_revive,
             "修改事件数值": self._ability_modify_event_value,
@@ -200,8 +202,6 @@ class BattleEngine(AbilityRuntime):
         self._assembly_handlers = {
             "装配属性": self._assemble_attributes,
             "属性溢出转化": self._assemble_overflow,
-            "连携攻击": self._ability_assist_strike,
-            "破架势": self._ability_break_poise,
             "装配规则": self._assemble_rules,
             "装配主动技能": self._assemble_active_skill,
             "装配被动技能": self._assemble_passive_skill,

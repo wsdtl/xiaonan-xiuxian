@@ -2727,16 +2727,17 @@ class AbilityRuntime(ChainRuntime):
         for victim in self._select_targets(context, source, target, effect.get("目标")):
             stacks = 0
             for state in list(victim.statuses):
-                if state.definition.get("名称") != poise:
+                if str(getattr(state, "name", "")) != poise:
                     continue
                 stacks += int(state.stacks)
                 victim.statuses.remove(state)
-            if stacks:
-                changed = True
+            # 架势层数为 0 就不再吃硬直：否则每打一下都刷新硬直，等于永晕。
+            if not stacks:
+                continue
+            changed = True
             stun = max(0, int(effect.get("硬直行动", 1)))
             if stun:
                 victim.poise_stun = max(int(getattr(victim, "poise_stun", 0)), stun)
-                changed = True
         return changed
 
     def _ability_assist_strike(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
