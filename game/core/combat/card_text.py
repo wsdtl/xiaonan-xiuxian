@@ -246,6 +246,7 @@ ABILITY_RENDERERS: dict[str, str] = {
     "追加攻击": "_ability_extra_attack",
     "分摊伤害": "_ability_share_damage",
     "转移伤害": "_ability_transfer_damage",
+    "属性溢出转化": "_ability_overflow_convert",
     "连携攻击": "_ability_assist_strike",
     "破架势": "_ability_break_poise",
     "抵挡致命伤害": "_ability_resist_lethal_damage",
@@ -379,12 +380,14 @@ class CardText:
         actives = [item for item in abilities if item.get("能力") == "主动技能"]
         passives = [item for item in abilities if item.get("能力") == "被动技能"]
         statics = [item for item in abilities if item.get("能力") == "固定属性加成"]
+        # 「属性溢出转化」是**装配期**的根能力（不是效果、不进监听），单独成一行。
+        converts = [item for item in abilities if item.get("能力") == "属性溢出转化"]
         rulings_nodes = [item for item in abilities if item.get("能力") == RULE_TEXT_ABILITY]
         others = [
             item
             for item in abilities
             if item.get("能力")
-            not in ("主动技能", "被动技能", "固定属性加成", RULE_TEXT_ABILITY)
+            not in ("主动技能", "被动技能", "固定属性加成", "属性溢出转化", RULE_TEXT_ABILITY)
         ]
         for item in others:
             self._flag("构筑根能力", str(item.get("能力")))
@@ -411,6 +414,8 @@ class CardText:
                 for index, (skill, body) in enumerate(visible, 1):
                     lines.append(f"{_ordinal(index)}[{self._short_name(skill.get('名称'))}]")
                     lines.extend(body)
+        for item in converts:
+            lines.append(self._ability_overflow_convert(item))
         if statics and not actives and not passives:
             # 气机整张卡只有固定属性加成，没有主动/被动可分，所以不另起小节标题——
             # 「契合」这个词直接当句子主语用，四类方向各叫各的。
@@ -1672,6 +1677,14 @@ class CardText:
     def _ability_share_damage(self, node: Mapping) -> str:
         return f"将{self._target(node.get('目标'))}受到的{_percent(node.get('比例'))}伤害分摊给其他己方"
 
+    def _ability_overflow_convert(self, node: Mapping) -> str:
+        source = str(node.get("来源属性") or "")
+        target = str(node.get("目标属性") or "")
+        ratio = node.get("转化比例")
+        percent = _percent(ratio) if ratio is not None else "100%"
+        return (
+            f"{source}超出最高有效值的部分，按{percent}折成{target}"
+        )
     def _ability_assist_strike(self, node: Mapping) -> str:
         limit = int(node.get("人数上限", 2))
         return (
