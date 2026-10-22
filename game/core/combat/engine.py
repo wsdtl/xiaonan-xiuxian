@@ -1241,6 +1241,14 @@ class BattleEngine(AbilityRuntime):
             if not fighter.alive or not fighter.can_act:
                 continue
             efficiency = self._action_efficiency(context, fighter)
+            # 延后：先吃掉积累的 `action_delay`，吃满之前这个人的行动条不推进。
+            delay = context.action_delay.get(fighter.id, 0.0)
+            if delay > 0:
+                spent = min(delay, efficiency)
+                context.action_delay[fighter.id] = delay - spent
+                efficiency -= spent
+                if efficiency <= 0:
+                    continue
             before = context.action_progress.get(fighter.id, 0)
             total = before + efficiency
             count = math.floor(total + 1e-9)

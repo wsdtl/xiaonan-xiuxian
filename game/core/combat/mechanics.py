@@ -2635,14 +2635,48 @@ class AbilityRuntime(ChainRuntime):
                 amount=amount * 100,
             ):
                 continue
+            # 星铁式语义：`减少` 是**拉条**（提前，行动条往前推）；`增加` 是**推条**
+            # （延后，累积器模型里没有「负数」，所以记到 `action_delay` 上）。
+            if mode == "增加":
+                context.action_delay[destination.id] = context.action_delay.get(destination.id, 0.0) + amount
+                changed = True
+                self._dispatch_event(
+                    context,
+                    kind="行动条变化后",
+                    source=source,
+                    target=destination,
+                    amount=amount * 100,
+                    values={"方式": mode, "数值": amount * 100, "延后": context.action_delay[destination.id] * 100},
+                )
+                continue
             before = context.action_progress.get(destination.id, 0.0)
             if cost and before < amount:
                 return False
-            after = amount if mode == "设置" else before + amount if mode == "增加" else before - amount
-            after = self._clamp(after, 0.0, 0.999999)
-            context.action_progress[destination.id] = after
-            self._dispatch_event(context, kind="行动条变化后", source=source, target=destination, amount=(after - before) * 100, values={"变化前数值": before * 100, "变化后数值": after * 100})
-            changed = changed or before != after
+            if mode == "设置":
+                after = self._clamp(amount, 0.0, 0.999999)
+                delta = after - before
+                context.action_progress[destination.id] = after
+            else:
+                # 拉条：先抵掉这个人身上还欠的延后量，抵不动的部分才记成「提前量」（负数延后）。
+                owed = context.action_delay.get(destination.id, 0.0)
+                take = min(owed, amount)
+                if take > 0:
+                    context.action_delay[destination.id] = owed - take
+                remain = amount - take
+                if remain > 0:
+                    after = self._clamp(before - remain, 0.0, 0.999999)
+                    delta = after - before
+                    context.action_progress[destination.id] = after
+                    shortfall = remain - (before - after)
+                    if shortfall > 0:
+                        context.action_delay[destination.id] = context.action_delay.get(destination.id, 0.0) - shortfall
+                else:
+                    delta = -take
+            # 上报的改写量：`delta` 是行动条本身的位移，`shortfall` 那截转成了「提前量」，
+            # 两者都算这次改写实际发生的量——只报 delta 会在余数为 0 时永远报 0。
+            reported = abs(delta) + locals().get("shortfall", 0.0) + locals().get("take", 0.0)
+            self._dispatch_event(context, kind="行动条变化后", source=source, target=destination, amount=reported * 100, values={"变化前数值": before * 100, "变化后数值": context.action_progress.get(destination.id, 0.0) * 100})
+            changed = changed or reported > 0
         return changed
 
     def _ability_modify_cooldown(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:

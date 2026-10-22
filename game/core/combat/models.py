@@ -1057,6 +1057,8 @@ class BattleContext(RuntimeExtensions):
     ability_depth: int = 0
     triggered_skill_depth: int = 0
     action_progress: dict[str, float] = dataclass_field(default_factory=dict)
+    #: 行动延后量（累积器模型里「推条」没有对应状态，用它记「还要等几轮才继续推进」）。
+    action_delay: dict[str, float] = dataclass_field(default_factory=dict)
     ability_counters: dict[tuple[str, str, str], float] = dataclass_field(default_factory=dict)
     current_ability: str = ""
     current_build_instance: str = ""
