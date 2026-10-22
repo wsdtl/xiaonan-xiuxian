@@ -48,7 +48,7 @@ ATTRS = {
     "伤害减免": 0,
 }
 GRADES = ("黄品", "玄品", "地品", "天品")
-CARD = "400541"
+CARD = "400041"
 
 
 def _load(pattern: str) -> list[dict]:

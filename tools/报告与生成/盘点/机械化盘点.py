@@ -44,9 +44,9 @@ from 构筑模板展开 import load_build_json as _load_build_json  # noqa: E402
 DEFAULT_BASELINE = ROOT / "tools" / "基准" / "缓存" / "机械化基线.json"
 
 SURFACES = (
-    ("功法", "战斗/内容/功法/*.json"),
-    ("真意", "战斗/内容/真意/*.json"),
-    ("气机", "战斗/内容/气机/*.json"),
+    ("功法", "战斗/内容/功法/**/*.json"),
+    ("真意", "战斗/内容/真意/**/*.json"),
+    ("气机", "战斗/内容/气机/**/*.json"),
 )
 
 #: 引擎 `_value_read` 支持的读取来源（见 `game/core/combat/mechanics.py`）。
@@ -121,7 +121,9 @@ def scan() -> dict[str, object]:
                 walk(value, card_id)
 
     for section, pattern in SURFACES:
-        for path in sorted(ROOT.glob(f"data/{pattern}")):
+        # 结构是 data/<段>/<流派>/<编号>.json，所以既要扫平铺的，也要扫一层子目录。
+        paths = list(ROOT.glob(f"data/{pattern}")) + list(ROOT.glob(f"data/{pattern.replace('.json', '/*/*.json')}"))
+        for path in sorted(set(paths)):
             for entry in _load_build_json(path):
                 total_cards += 1
                 walk(entry, str(entry["编号"]))

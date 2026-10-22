@@ -88,7 +88,7 @@ def _spec(pid: str, statuses: tuple[CombatStatusSpec, ...] = ()) -> CombatantSpe
         name=pid,
         attributes=dict(ATTRS),
         build=(
-            CombatBuildRef("功法", "400541", instance_id=f"{pid}:400541", born_order=0),
+            CombatBuildRef("功法", "400041", instance_id=f"{pid}:400541", born_order=0),
         ),
         prepared_statuses=statuses,
     )

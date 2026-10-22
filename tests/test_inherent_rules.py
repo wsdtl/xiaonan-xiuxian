@@ -18,7 +18,7 @@ from game.core.combat.contracts import CombatBuildRef, CombatRequest, CombatantS
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 SEED = 20260912
-PROBE_CARD = "400541"
+PROBE_CARD = "400041"
 ATTRS = {
     "血气上限": 1000,
     "精神上限": 400,

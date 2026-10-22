@@ -363,7 +363,13 @@ def _catalogs(
     row = _mapping(value, label)
     result: dict[str, tuple[str, ...]] = {}
     for category in ("真意", "气机"):
-        catalogs = _strings(row.get(f"{category}目录"), f"{label}.{category}目录")
+        # 目录可以整段缺席：某类卡片被整体撤掉时，商店就不卖这一类。
+        raw = row.get(f"{category}目录")
+        if raw is None:
+            # 不写目录 = 这一类**全能买**（委托方口径：商店不再逐条列举卖什么）。
+            result[category] = tuple(sorted(str(item) for item in data.all_members(category)))
+            continue
+        catalogs = _strings(raw, f"{label}.{category}目录")
         for content_id in catalogs:
             if not content_id.isdigit():
                 raise JsonDataError(f"{label}.{category}目录必须是编号：{content_id}")

@@ -86,6 +86,10 @@ def check_dangling_script_refs() -> list[str]:
             for full, base in SCRIPT_REF.findall(line):
                 if any(ch in full for ch in "<>*"):
                     continue
+                # `_输出/` 是一次性脚本目录，委托方要求每轮任务后清空，
+                # 所以台账点它下面的脚本不算「悬空」——那些文件本来就该没了。
+                if "_输出" in full or "_output" in full or "_输出" in line or "_output" in line:
+                    continue
                 if f"{base}.py" not in names:
                     problems.append(
                         f"{path.relative_to(ROOT).as_posix()}:{line_no} 点了不存在的脚本 {full}"
