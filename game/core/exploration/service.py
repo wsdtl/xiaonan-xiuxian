@@ -412,29 +412,30 @@ class ExplorationService:
             living = [value for value in current.values() if (value.health or 0) > 0]
             if not living:
                 break
-            cultivator = bool(location.cultivator_pool)
-            beast = bool(location.beast_pool)
+            cultivator = bool(location.cultivator_tiers)
+            beast = bool(location.beast_tiers)
             if not cultivator and not beast:
-                raise ExplorationStateError("地点没有修士池或灵兽池")
+                raise ExplorationStateError("地点没有修士或灵兽阶级区间")
             if cultivator and beast:
                 use_cultivator = source.random() < 0.5
             else:
                 use_cultivator = cultivator
             if use_cultivator:
-                pool_names = location.cultivator_pool
-                count_range = location.cultivator_count
                 tiers = location.cultivator_tiers
+                count_range = location.cultivator_count
+                kind = "修士"
             else:
-                pool_names = location.beast_pool
-                count_range = location.beast_count
                 tiers = location.beast_tiers
+                count_range = location.beast_count
+                kind = "灵兽"
+            tier = source.choice(tiers)
             enemy_groups = self._enemy.generate_groups(
-                pool_names=pool_names,
+                pool_names=(f"{tier}{kind}",),
                 group_count=1,
                 unit_count_range=count_range,
                 seed=source.getrandbits(64),
                 instance_prefix=f"{session_id}:{battle_index}",
-                required_tier=tiers[0] if len(tiers) == 1 else None,
+                required_tier=tier,
             )
             enemies = tuple(item for group in enemy_groups for item in group.combatants)
             enemy_group_specs = tuple(
