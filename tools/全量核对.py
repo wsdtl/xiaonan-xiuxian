@@ -122,9 +122,40 @@ def run_one(item: tuple[str, tuple[str, ...]]) -> tuple[str, bool, str, float]:
     return name, done.returncode == 0, tail[:320], time.perf_counter() - started
 
 
+def _changed_files() -> list[str]:
+    """当前工作区改了什么（相对上一次提交）。
+
+    委托方口径（2026-10-23）：跑闸门之前先把「改了什么」摆出来，再按改动挑对应项；
+    不许不问改了什么就一把梭跑全量。这里只读 git，不写盘。
+    """
+    try:
+        done = subprocess.run(
+            ["git", "-c", "core.quotepath=false", "status", "--short"],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
+    except OSError:
+        return []
+    return [line.rstrip() for line in (done.stdout or "").splitlines() if line.strip()]
+
+
+def _print_changes() -> None:
+    """把改动摆在前头；没有改动也要说一句，免得误以为跑的是新代码。"""
+
+    changed = _changed_files()
+    print("== 本次改动 ==")
+    if not changed:
+        print("  工作区干净（与上一条提交一致）")
+        return
+    for line in changed[:40]:
+        print("  " + line)
+    if len(changed) > 40:
+        print(f"  …… 其余 {len(changed) - 40} 个文件")
+
+
 def main() -> int:
     started = time.perf_counter()
     failures: list[str] = []
+    _print_changes()
     # 先把上一次留下的临时件清掉：测试会往 _SCRATCH 写几万个小文件，
     # 攒着不清会把之后每一次临时文件操作都拖慢（实测墙钟 130 秒涨到 280 秒）。
     shutil.rmtree(_SCRATCH, ignore_errors=True)
