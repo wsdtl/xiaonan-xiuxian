@@ -127,7 +127,7 @@ class ForgingService:
                 raise RuntimeError(f"{label}必须先于炼器核心启动")
         rules = self._data.dataset("炼器规则")
         self._weapon_rule = MappingProxyType(
-            dict(_mapping(rules.get("本命武器"), "炼器规则.本命武器"))
+            dict(_mapping(self._data.dataset("装备规则").get("本命武器"), "装备规则.本命武器"))
         )
         law_rule = _mapping(rules.get("器则"), "炼器规则.器则")
         rows = tuple(
