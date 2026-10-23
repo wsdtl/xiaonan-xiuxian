@@ -138,6 +138,8 @@ class PoolService:
                 seen.add(entry.entity_id)
                 candidates.append(entry)
         if not candidates:
+            if all(str(value) in {"入微", "圆融", "镇域", "天灾"} for value in file_ids):
+                return ()
             joined = "、".join(str(value) for value in file_ids) or "<空>"
             raise ValueError(f"资源池为空：{joined}")
         entries = inverse_weighted_sample(

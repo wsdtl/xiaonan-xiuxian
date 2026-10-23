@@ -75,6 +75,11 @@ class LoadedGameData:
         for file_id in file_ids:
             result.extend(self._resolve_pool_file(str(file_id), section_name, ()))
         if not result:
+            if section_name == "敌人" and all(
+                str(value) in {"入微", "圆融", "镇域", "天灾"}
+                for value in file_ids
+            ):
+                return ()
             joined = "、".join(str(value) for value in file_ids) or "<空>"
             raise JsonDataError(f"资源池为空：{joined} -> {section_name}")
         result.sort(key=lambda entry: entry[0])
@@ -335,6 +340,14 @@ def _numbered_entries(
         seen.add(entity_id)
         result.append((entity_id, raw))
     if not result:
+        # 敌人等高阶段先留空文件，等 boss 设计时再填内容；空段不产生实体。
+        if document.relative_path in {
+            "世界/内容/敌人/入微.json",
+            "世界/内容/敌人/圆融.json",
+            "世界/内容/敌人/镇域.json",
+            "世界/内容/敌人/天灾.json",
+        }:
+            return ()
         raise JsonDataError(f"编号内容文件不能为空：{document.relative_path}")
     return tuple(result)
 
