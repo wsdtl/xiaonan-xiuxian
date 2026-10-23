@@ -1263,6 +1263,8 @@ class BattleEngine(AbilityRuntime):
                     (
                         (ordinal + 1 - before) / efficiency,
                         -fighter.value("速度", 100),
+                        # 同速同到达时用战斗种子随机决定先后，避免镜像战固定左方先手。
+                        context.rng.random(),
                         fighter.side,
                         ordinal,
                         context.fighter_order.get(fighter.id, 0),
