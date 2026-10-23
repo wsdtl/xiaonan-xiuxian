@@ -86,7 +86,6 @@ class CompanionDefinition:
     gender: str
     title: str
     stance: str
-    personality: str
     description: str
     location_name: str
     realm_id: str

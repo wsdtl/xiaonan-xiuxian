@@ -1505,7 +1505,6 @@ class CompanionService:
             _text(value.get("性别"), f"道侣 {companion_id}.性别"),
             _text(identity.get("称号"), f"道侣 {companion_id}.身份.称号"),
             _text(identity.get("立场"), f"道侣 {companion_id}.身份.立场"),
-            _text(value.get("标签"), f"道侣 {companion_id}.标签"),
             _text(value.get("说明"), f"道侣 {companion_id}.说明"),
             location_name,
             realm_id,
