@@ -37,6 +37,12 @@ class LocationView:
     enemy_pool: tuple[str, ...]
     enemy_multiplier: tuple[int, ...]
     enemy_level_range: tuple[int, int] = (1, 60)
+    cultivator_pool: tuple[str, ...] = ()
+    beast_pool: tuple[str, ...] = ()
+    cultivator_tiers: tuple[str, ...] = ()
+    beast_tiers: tuple[str, ...] = ()
+    cultivator_count: tuple[int, ...] = ()
+    beast_count: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -172,6 +172,7 @@ class EnemyService:
         seed: int,
         instance_prefix: str,
         level_range: tuple[int, int] | None = None,
+        required_tier: str | None = None,
     ) -> tuple[EnemyInstance, ...]:
         return self.generate_category(
             section="敌人",
@@ -180,6 +181,7 @@ class EnemyService:
             seed=seed,
             instance_prefix=instance_prefix,
             level_range=level_range,
+            required_tier=required_tier,
         )
 
     def generate_category(
@@ -259,6 +261,7 @@ class EnemyService:
         seed: int,
         instance_prefix: str,
         level_range: tuple[int, int] | None = None,
+        required_tier: str | None = None,
     ) -> tuple[EnemyGroup, ...]:
         """按组独立抽取；每组独立决定数量、成员、等级和奖励。"""
 
@@ -277,6 +280,7 @@ class EnemyService:
                 seed=source.getrandbits(64),
                 instance_prefix=group_id,
                 level_range=level_range,
+                required_tier=required_tier,
             )
             grouped = tuple(
                 EnemyInstance(

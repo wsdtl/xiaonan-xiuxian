@@ -24,7 +24,8 @@ from .contracts import (
 from .journey import JourneyPlanner
 
 _LOCATION_FIELDS = frozenset(
-    {"坐标", "说明", "可用功能", "功能配置", "单次遭遇敌人倍率", "刷新区间", "敌人等级区间"}
+    {"坐标", "说明", "可用功能", "功能配置", "单次遭遇敌人倍率", "刷新区间", "敌人等级区间",
+     "修士池", "灵兽池", "修士阶级区间", "灵兽阶级区间", "修士数量区间", "灵兽数量区间"}
 )
 _REGION_FIELDS = frozenset({"类别", "坐标带", "说明"})
 _TERRAIN_ZONE_FIELDS = frozenset({"名称", "地形", "坐标带"})
@@ -316,6 +317,12 @@ class WorldService:
             enemy_pool=enemy_pool,
             enemy_multiplier=_numbers(raw.get("单次遭遇敌人倍率")),
             enemy_level_range=_level_range(raw.get("敌人等级区间")),
+            cultivator_pool=_texts_from(raw.get("修士池")),
+            beast_pool=_texts_from(raw.get("灵兽池")),
+            cultivator_tiers=_texts_from(raw.get("修士阶级区间")),
+            beast_tiers=_texts_from(raw.get("灵兽阶级区间")),
+            cultivator_count=_numbers(raw.get("修士数量区间")),
+            beast_count=_numbers(raw.get("灵兽数量区间")),
         )
 
     def plan_journey(self, query: JourneyQuery) -> JourneyPlan:
@@ -881,7 +888,8 @@ def _validate_location_data(
             f"地点 {location_name} 缺少专属功能配置：{'、'.join(sorted(missing_configs))}"
         )
     declared_optional = set(raw) - {
-        "坐标", "说明", "可用功能", "功能配置", "刷新区间", "敌人等级区间"
+        "坐标", "说明", "可用功能", "功能配置", "刷新区间", "敌人等级区间",
+        "修士池", "灵兽池", "修士阶级区间", "灵兽阶级区间", "修士数量区间", "灵兽数量区间",
     }
     undeclared_optional = declared_optional - required_fields
     if undeclared_optional:
@@ -895,6 +903,12 @@ def _validate_location_data(
             _positive_range(value, f"地点 {location_name}.{field}")
         elif not _nonempty(value):
             raise JsonDataError(f"地点 {location_name}.{field} 必须非空")
+
+
+def _texts_from(value: object) -> tuple[str, ...]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return ()
+    return tuple(str(item) for item in value)
 
 
 def _numbers(value: object) -> tuple[int, ...]:
