@@ -86,8 +86,10 @@ class InnateTreasureService:
         for treasure_id, raw in self._data.entities("先天灵宝").items():
             contract.validate(raw, "先天灵宝", f"先天灵宝 {treasure_id}")
             treasures[treasure_id] = _treasure(treasure_id, raw)
-        if len(treasures) != 21:
-            raise JsonDataError("首批先天灵宝必须完整定义21件")
+        # 件数由 data 决定，代码只要求「非空」——原先写死 21 是代码越界，
+        # 委托方口径：data 驱动，data 有几件就解析几件。
+        if not treasures:
+            raise JsonDataError("先天灵宝至少要有一件")
         names = {value.name: value.treasure_id for value in treasures.values()}
         if len(names) != len(treasures):
             raise JsonDataError("先天灵宝名称不能重复")
