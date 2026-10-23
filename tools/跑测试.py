@@ -1,168 +1,29 @@
-"""跑单元测试：把 tests/ 拆成耗时相近的若干片并发跑，缩短墙钟。
-
-两份浪费要收掉：① 各文件都要单独装一遍数据快照，串行跑是纯浪费；② 单文件也能
-很贵（`test_component_loading.py` 一个文件就 20 秒），独占一片会把墙钟锁死在它身上。
-所以超过阈值的文件**按用例再拆**，分组用实测耗时做 LPT。
+"""跑 `tests/`：单进程 pytest，临时目录由全量核对统一指向 `_输出/临时`。
 
     .venv/Scripts/python.exe -X utf8 tools/跑测试.py
-
-某一组失败时会连 pytest 的 FAILED 行与 stderr 末行一起打出来——只留最后一行
-（1 failed, 73 passed）看不出是哪个用例，偶发失败就无从查起。
 
 **退出码：0 = 全部通过，1 = 有失败。**
 """
 from __future__ import annotations
 
-import concurrent.futures
 import os
 import pathlib
 import subprocess
 import sys
-import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-TESTS = ROOT / "tests"
-# 留一个核给用户：分片数不超过「核数 − 1」，且封顶 4。
-GROUPS = max(1, min(4, (os.cpu_count() or 4) - 1))
-
-#: 实测的每文件耗时（秒，含 pytest 启动），用来做 LPT 平衡分组——按文件大小分会严重失衡。
-    #: 刷新方式：对每个 `tests/test_*.py` 单独计时（2026-10 实测：28 个文件合计 235.2 秒，12 核理想墙钟约 19.6 秒）。
-WEIGHTS: dict[str, float] = {
-    "test_duihuan.py": 24,
-    "test_action_group_common_actions.py": 17.4,
-    "test_yijing.py": 15.8,
-    "test_component_loading.py": 15.7,
-    "test_breakthrough_medicine_source.py": 15,
-    "test_wangye.py": 12.4,
-    "test_xigen.py": 12.1,
-    "test_zhuangpei.py": 11.1,
-    "test_fanben.py": 9.9,
-    "test_lingtian_terrain.py": 8.9,
-    "test_prepared_status.py": 8.1,
-    "test_alchemy_missing_guidance.py": 8,
-    "test_combat_entry_surfaces.py": 6.9,
-    "test_butian_page.py": 6.8,
-    "test_content_conventions.py": 5.9,
-    "test_zongmen_gate.py": 5.9,
-    "test_battle_report.py": 5.5,
-    "test_enemy_and_raid.py": 5.3,
-    "test_cangjing_borrow_invalidation.py": 5.2,
-    "test_data_contract.py": 5.2,
-    "test_inherent_rules.py": 4.9,
-    "test_access_guard.py": 4.6,
-    "test_lingcang_take_wiring.py": 4.3,
-    "test_wuxing_visible.py": 4.2,
-
-    "test_qiecuo_report_link.py": 3,
-    "test_command_minimal_signatures.py": 2.9,
-    "test_exploration_groups.py": 2.4,
-}
-#: 权重表里没有的新文件按这个估——宁可略高，别让它把一片拖长。
-DEFAULT_WEIGHT = 3.0
-#: 耗时超过这个值的文件按用例拆开，不让一个文件独占一片。
-SPLIT_THRESHOLD = 10.0
-#: 拆成几份。
-SPLIT_PARTS = 3
-
-
-def _collect(path: pathlib.Path) -> list[str]:
-    """取一个测试文件的用例 node id，用来把它拆开跑。"""
-
-    done = subprocess.run(
-        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--collect-only", str(path)],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    return [line.strip() for line in (done.stdout or "").splitlines() if "::" in line]
-
-
-def _units() -> list[tuple[float, list[str]]]:
-    """把测试拆成「权重 + 一组 pytest 参数」的工作单元。"""
-
-    units: list[tuple[float, list[str]]] = []
-    for path in sorted(TESTS.glob("test_*.py")):
-        weight = WEIGHTS.get(path.name, DEFAULT_WEIGHT)
-        relative = f"tests/{path.name}"
-        if weight <= SPLIT_THRESHOLD:
-            units.append((weight, [relative]))
-            continue
-        node_ids = _collect(path)
-        if len(node_ids) < SPLIT_PARTS:
-            units.append((weight, [relative]))
-            continue
-        for part in (node_ids[index::SPLIT_PARTS] for index in range(SPLIT_PARTS)):
-            units.append((weight / SPLIT_PARTS, part))
-    return units
-
-
-def _shards() -> list[list[str]]:
-    """按权重做 LPT 平衡分组，让墙钟逼近最大单片。"""
-
-    groups: list[list[str]] = [[] for _ in range(GROUPS)]
-    load = [0.0] * GROUPS
-    for weight, args in sorted(_units(), key=lambda unit: -unit[0]):
-        slot = load.index(min(load))
-        groups[slot].extend(args)
-        load[slot] += weight
-    return [group for group in groups if group]
-
-
-def _run(job: tuple[int, list[str]]) -> tuple[bool, str, float]:
-    index, args = job
-    started = time.perf_counter()
-    # 本环境的 TEMP/TMP 没设，pytest 与 tempfile 会回落到当前工作目录，把
-    # pytest-of-* 与临时库落在仓库根。显式指到 _输出/ 下（已被 .gitignore 忽略）。
-    basetemp = ROOT / "_输出" / "测试临时" / f"片{index}"
-    basetemp.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "TEMP": str(basetemp), "TMP": str(basetemp)}
-    done = subprocess.run(
-        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "--basetemp", str(basetemp), *args],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    tail = ""
-    for line in reversed((done.stdout or "").splitlines()):
-        if line.strip():
-            tail = line.strip()
-            break
-    if done.returncode != 0:
-        # 失败时只留最后一行看不出是哪个用例——把 FAILED 行与 stderr 末行一起带上，
-        # 免得下一次偶发失败又只剩一句「1 failed, 73 passed」。
-        failed = [
-            line.strip()
-            for line in (done.stdout or "").splitlines()
-            if line.strip().startswith(("FAILED", "ERROR"))
-        ]
-        if failed:
-            tail = (tail + " ｜ " + "；".join(failed[:3]))
-        errors = [line.strip() for line in (done.stderr or "").splitlines() if line.strip()]
-        if errors:
-            tail = tail + " ｜ stderr: " + errors[-1]
-    return done.returncode == 0, tail[:300], time.perf_counter() - started
 
 
 def main() -> int:
-    groups = _shards()
-    started = time.perf_counter()
-    failures: list[str] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(groups)) as pool:
-        for index, (ok, tail, seconds) in enumerate(pool.map(_run, enumerate(groups, start=1)), start=1):
-            print(f"  [{'通过' if ok else '失败'}] 第 {index} 组（{len(groups[index - 1])} 个单元） {seconds:>6.1f}s  {tail}")
-            if not ok:
-                failures.append(str(index))
-    wall = time.perf_counter() - started
-    if failures:
-        print(f"单元测试：{len(groups)} 组，失败 {len(failures)} 组 —— 第 {'、'.join(failures)} 组（墙钟 {wall:.1f}s）")
-        return 1
-    print(f"单元测试：{len(groups)} 组全部通过（墙钟 {wall:.1f}s）")
-    return 0
+    scratch = ROOT / "_输出" / "临时"
+    scratch.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ, "TEMP": str(scratch), "TMP": str(scratch)}
+    done = subprocess.run(
+        [sys.executable, "-X", "utf8", "-m", "pytest", "-q", "tests"],
+        cwd=ROOT,
+        env=env,
+    )
+    return done.returncode
 
 
 if __name__ == "__main__":

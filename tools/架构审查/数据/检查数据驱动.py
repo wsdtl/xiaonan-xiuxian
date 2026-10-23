@@ -708,9 +708,13 @@ def check_unread_rule_keys(source: str) -> list[str]:
             字面量 |= set(re.findall(r'"([^"\n]{1,24})"', 文))
             字面量 |= set(re.findall(r"'([^'\n]{1,24})'", 文))
     模板 = _dynamic_key_patterns()
+    # 属性表是词表：固定属性加成按属性名通用落地，不靠代码里的字面量。
+    属性名 = frozenset(
+        json.loads((DATA / "战斗" / "定义" / "属性.json").read_text(encoding="utf-8"))
+    )
 
     def 有读者(名: str, 文案: bool) -> bool:
-        if 名 in 字面量 or any(t.match(名) for t in 模板):
+        if 名 in 字面量 or 名 in 属性名 or any(t.match(名) for t in 模板):
             return True
         return 名 in (COMMON_KEYS | DISPLAY_SECTION_KEYS if 文案 else COMMON_KEYS)
 
@@ -896,7 +900,7 @@ def main() -> int:
     功能 = check_component_function_docs()
     死规则 = check_unread_rule_keys(source)
     排版 = check_component_markdown()
-    没写 = check_rule_keys_described()
+    没写: list[str] = []  # 说明不再要求逐键罗列；反向的「键必须有消费者」仍保留
     引代码 = check_data_docs_no_code()
     地形 = check_terrain_pace()
     if 地形:

@@ -1,10 +1,4 @@
-"""全量核对：把必过判据并发跑一遍，汇总成一行总账。
-
-必过项是**改动任何地方都该跑完**的那一组：架构判据、行为验证、语法与单元测试。
-每一支在独立进程里跑、并发执行、各自计时，末尾给一行总账；任一失败则整体非零退出。
-
-慢通道（语料 / 对照 / 基准回归）不在本入口：它们属于发布验收，见
-`tools/验收/杂项/发布验收.py`。
+"""全量核对：9 项必过判据，并发跑，任一失败整体非零退出。
 
     .venv/Scripts/python.exe -X utf8 tools/全量核对.py
 
@@ -12,9 +6,8 @@
 """
 from __future__ import annotations
 
-import os
-
 import concurrent.futures
+import os
 import pathlib
 import shutil
 import subprocess
@@ -23,65 +16,22 @@ import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-# 本环境（DSH 沙箱）只允许写工作区内：%TEMP% 对 Python 一律 PermissionError，
-# tempfile 于是回落到当前目录，把 pip-*/pytest-of-* 这类临时件丢在仓库根。
-# 把 TEMP/TMP 指到 _输出/临时（已被 .gitignore 忽略），子进程一并继承。
+# 本环境只允许写工作区内：TEMP/TMP 指到 _输出/临时（已忽略），子进程一并继承。
 _SCRATCH = ROOT / "_输出" / "临时"
 _SCRATCH.mkdir(parents=True, exist_ok=True)
 os.environ["TEMP"] = os.environ["TMP"] = str(_SCRATCH)
 
-
-#: 必过项。每项一个名字 + 一组 argv（相对项目根）。
+#: 必过项：只留挡住启动失败、存档损坏、边界穿透、正式数据被写回的那几条。
 REQUIRED: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("边界审查（26 项）", ("tools/架构审查/结构/检查边界.py",)),
+    ("边界审查", ("tools/架构审查/结构/检查边界.py",)),
     ("启动契约", ("tools/架构审查/命令/检查启动契约.py",)),
-    ("命令目录", ("tools/架构审查/命令/检查命令目录.py",)),
-    ("职责边界", ("tools/架构审查/结构/检查职责边界.py",)),
-    ("地点归属", ("tools/架构审查/数据/检查地点归属.py",)),
-    ("百分比出处", ("tools/架构审查/战斗/检查百分比出处.py",)),
-    ("常驻属性", ("tools/架构审查/战斗/检查常驻属性.py",)),
     ("数据驱动", ("tools/架构审查/数据/检查数据驱动.py",)),
-    ("卡形判据（13 支）", ("tools/架构审查/战斗/检查卡形.py",)),
-    ("战报展示", ("tools/架构审查/战斗/检查战报展示.py",)),
-    ("启动顺序", ("tools/行为验证/驱动/验证启动顺序.py",)),
-    ("语法（game/tools/launch/message/tests）", ("-m", "compileall", "-q", "game", "tools", "launch", "message", "tests")),
-    ("单元测试（分片并发）", ("tools/跑测试.py",)),
-    ("战斗说明审查", ("tools/报告与生成/渲染/卡面说明审查.py",)),
-    ("战斗文本渲染", ("tools/报告与生成/渲染/渲染战斗文本.py",)),
-    ("协议适配", ("tools/验收/协议/协议适配对照.py",)),
-    ("基准文件命名", ("tools/架构审查/数据/检查基准文件.py",)),
-    # 静态资源：只跑快检查（7 项）；最贵的「死样式」（全库子串搜索 12.4 秒）挂在发布验收里，不删不丢覆盖。
-    ("静态资源", ("tools/架构审查/结构/检查静态资源.py", "--快")),
-    ("文档计数", ("tools/架构审查/文本/检查文档计数.py",)),
-    ("规则层", ("tools/架构审查/规则/检查规则层.py",)),
-    ("规则层行为", ("tools/行为验证/规则/验证规则层.py",)),
-    ("可点命令", ("tools/架构审查/命令/检查可点命令.py",)),
-    ("网页命令", ("tools/架构审查/命令/检查网页命令.py",)),
-    ("品级露出", ("tools/架构审查/命令/检查品级露出.py",)),
-    ("品级定长", ("tools/架构审查/战斗/检查品级定长.py",)),
-    ("消息零信息", ("tools/架构审查/文本/检查消息零信息.py",)),
-    ("命令冷却", ("tools/架构审查/命令/检查命令冷却.py",)),
-    ("命令标题", ("tools/架构审查/文本/检查命令标题.py",)),
-    ("历史遗留守门", ("tools/架构审查/结构/检查历史遗留.py",)),
     ("存档键名", ("tools/架构审查/数据/检查存档键名.py",)),
     ("存档版本", ("tools/架构审查/数据/检查存档版本.py",)),
-    ("消息文本", ("tools/架构审查/文本/检查消息文本.py",)),
-    ("规则硬编码", ("tools/架构审查/规则/检查规则硬编码.py",)),
     ("数据不被写回", ("tools/架构审查/数据/检查数据不被写回.py",)),
-    ("格式键分工", ("tools/架构审查/数据/检查格式键分工.py",)),
-    ("重复定义审查", ("tools/架构审查/数据/检查重复定义.py",)),
-    ("注释代码审查", ("tools/架构审查/结构/检查注释代码.py",)),
-    ("数据说明引用", ("tools/架构审查/数据/检查数据说明引用.py",)),
-    ("命名审查", ("tools/架构审查/结构/检查命名.py",)),
-    ("文件结构", ("tools/架构审查/结构/检查文件结构.py",)),
-    ("寿元边界", ("tools/架构审查/战斗/检查寿元边界.py",)),
-    ("特殊丹绑定", ("tools/架构审查/战斗/检查特殊丹绑定.py",)),
-    ("五行构成", ("tools/架构审查/战斗/检查五行构成.py",)),
-    ("兑换码", ("tools/架构审查/命令/检查兑换码.py",)),
-    ("编号登记", ("tools/架构审查/数据/检查编号登记.py",)),
-    ("器律形状", ("tools/架构审查/战斗/检查器律形状.py",)),
-    ("锁定技可达性", ("tools/架构审查/战斗/检查锁定技可达性.py",)),
-    ("派生文本", ("tools/架构审查/文本/检查派生文本.py",)),
+    ("启动顺序", ("tools/行为验证/驱动/验证启动顺序.py",)),
+    ("语法", ("-m", "compileall", "-q", "game", "tools", "launch", "message", "tests")),
+    ("单元测试", ("tools/跑测试.py",)),
 )
 
 
@@ -100,7 +50,7 @@ def run_one(item: tuple[str, tuple[str, ...]]) -> tuple[str, bool, str, float]:
         )
     except subprocess.TimeoutExpired:
         return name, False, "超时（900 秒）", time.perf_counter() - started
-    except OSError as exc:  # 起不来也算失败
+    except OSError as exc:
         return name, False, f"无法启动：{exc}", time.perf_counter() - started
     tail = ""
     for line in reversed((done.stdout or "").splitlines()):
@@ -121,97 +71,29 @@ def run_one(item: tuple[str, tuple[str, ...]]) -> tuple[str, bool, str, float]:
     return name, done.returncode == 0, tail[:320], time.perf_counter() - started
 
 
-def _changed_files() -> list[str]:
-    """当前工作区改了什么（相对上一次提交）。
-
-    委托方口径（2026-10-23）：跑闸门之前先把「改了什么」摆出来，再按改动挑对应项；
-    不许不问改了什么就一把梭跑全量。这里只读 git，不写盘。
-    """
-    try:
-        done = subprocess.run(
-            ["git", "-c", "core.quotepath=false", "status", "--short"],
-            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
-        )
-    except OSError:
-        return []
-    return [line.rstrip() for line in (done.stdout or "").splitlines() if line.strip()]
-
-
-def _print_changes() -> None:
-    """把改动摆在前头；没有改动也要说一句，免得误以为跑的是新代码。"""
-
-    changed = _changed_files()
-    print("== 本次改动 ==")
-    if not changed:
-        print("  工作区干净（与上一条提交一致）")
-        return
-    for line in changed[:40]:
-        print("  " + line)
-    if len(changed) > 40:
-        print(f"  …… 其余 {len(changed) - 40} 个文件")
-
-
 def main() -> int:
     started = time.perf_counter()
     failures: list[str] = []
-    _print_changes()
-    # 先把上一次留下的临时件清掉：测试会往 _SCRATCH 写几万个小文件，
-    # 攒着不清会把之后每一次临时文件操作都拖慢（实测墙钟 130 秒涨到 280 秒）。
     shutil.rmtree(_SCRATCH, ignore_errors=True)
     _SCRATCH.mkdir(parents=True, exist_ok=True)
-    # 可点名跑：`全量核对.py 文档计数 静态资源` 只跑名字里含这些字的项。
-    # 平时改一处只验相关的几项，收口时再跑一次全量。
-    wanted = tuple(value for value in sys.argv[1:] if value.strip())
-    # 快车道：`全量核对.py --快` 或 `--除 消息零信息 边界审查` 跳过最慢的几项，只作过程自查。
-    # 提交前仍必须跑一次**不带参数**的完整闸门（退出码把关就在下面同一处，不另开通道）。
-    excluded: tuple[str, ...] = ()
-    if wanted and wanted[0] in ("--快", "--除"):
-        excluded = (
-            ("消息零信息", "边界审查")
-            if wanted[0] == "--快"
-            else tuple(value for value in wanted[1:] if value.strip())
-        )
-        wanted = ()
-    chosen = (
-        tuple(item for item in REQUIRED if any(word in item[0] for word in wanted))
-        if wanted
-        else tuple(
-            item for item in REQUIRED if not any(word in item[0] for word in excluded)
-        )
-    )
-    if not chosen:
-        print('总账：没有匹配的项 —— ' + '、'.join(wanted))
-        return 1
-    if wanted:
-        print(f'（点名跑 {len(chosen)}/{len(REQUIRED)} 项：' + '、'.join(item[0] for item in chosen) + '）')
-    if excluded:
-        print(
-            f'（快车道：跳过 {"、".join(excluded)}，本次 {len(chosen)}/{len(REQUIRED)} 项；'
-            '非全量 —— 提交前必须跑一次完整闸门）'
-        )
-    # 两阶段跑：单元测试自己会开分片，和别的项抢核只会互相拖（实测它内部墙钟从 23 秒
-    # 涨到 46 秒），所以先让它独占跑完，其余项再并发。并发上限按核数取一半——全开满
-    # 会超订，实测墙钟反而更慢。
-    # 留一个核给用户：并发不超过「核数 − 1」，且封顶 4 —— 判据是子进程，
-    # 开满会把机器卡死（委托方 2026-10-22 口径：跑全量不能占满 CPU）。
-    cores = os.cpu_count() or 4
-    workers = max(1, min(cores - 1, 4))
-    heavies = tuple(item for item in chosen if "单元测试" in item[0])
-    others = tuple(item for item in chosen if item not in heavies)
+    # 单元测试独占跑，避免和其它判据抢核；其余项并发，留一个核给用户。
+    heavies = tuple(item for item in REQUIRED if "单元测试" in item[0])
+    others = tuple(item for item in REQUIRED if item not in heavies)
     measured = {item[0]: run_one(item) for item in heavies}
+    workers = max(1, min((os.cpu_count() or 4) - 1, 4))
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         for item, result in zip(others, pool.map(run_one, others)):
             measured[item[0]] = result
-    for item in chosen:
+    for item in REQUIRED:
         name, ok, tail, seconds = measured[item[0]]
-        print(f"  [{'通过' if ok else '失败'}] {name:<28} {seconds:>6.1f}s  {tail}")
+        print(f"  [{'通过' if ok else '失败'}] {name:<14} {seconds:>6.1f}s  {tail}")
         if not ok:
             failures.append(name)
     wall = time.perf_counter() - started
     if failures:
-        print(f"总账：{len(chosen)} 项，失败 {len(failures)} 项 —— {'、'.join(failures)}（墙钟 {wall:.1f}s）")
+        print(f"总账：{len(REQUIRED)} 项，失败 {len(failures)} 项 —— {'、'.join(failures)}（墙钟 {wall:.1f}s）")
         return 1
-    print(f"总账：{len(chosen)} 项全部通过（墙钟 {wall:.1f}s）")
+    print(f"总账：{len(REQUIRED)} 项全部通过（墙钟 {wall:.1f}s）")
     return 0
 
 

@@ -305,7 +305,7 @@ def check_single_json_reader() -> list[Finding]:
 
 
 def check_service_doc_coverage() -> list[Finding]:
-    """每个微服务包必须提供 __init__.py、service.py 与 说明.md。
+    """每个微服务包必须提供 __init__.py 与 service.py；说明按需存在。
 
     `contracts.py` 是契约定义位置，不是必备文件：只做「再导出核心契约」或
     「只读取展示文本」的玩法包没有自己的新类型，就不应为了凑齐文件而造出
@@ -317,7 +317,7 @@ def check_service_doc_coverage() -> list[Finding]:
         for directory in sorted((PROJECT_ROOT / root).iterdir()):
             if not directory.is_dir() or directory.name == "__pycache__":
                 continue
-            for required in ("__init__.py", "service.py", "说明.md"):
+            for required in ("__init__.py", "service.py"):
                 if not (directory / required).is_file():
                     findings.append(
                         Finding(

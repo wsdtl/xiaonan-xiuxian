@@ -7,7 +7,6 @@
 
 import asyncio
 import json
-import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -21,10 +20,6 @@ from game.core.combat.contracts import (
 )
 
 DATA = Path(__file__).resolve().parents[1] / "data"
-if str(DATA.parent / "tools" / "库") not in sys.path:
-    sys.path.insert(0, str(DATA.parent / "tools" / "库"))
-
-from 构筑模板展开 import expand_build_document  # noqa: E402
 ATTRS = {
     "血气上限": 1200,
     "精神上限": 400,
@@ -50,15 +45,12 @@ KNOWN_LOOPING: set[str] = set()
 def _battle_pills() -> list[dict]:
     entries: list[dict] = []
     for path in sorted((DATA / "物品/内容/丹药/战丹").glob("*.json")):
-        # 监听节点已经模板化；不展开拿到的是引用，会被判成「不是监听事件节点」。
-        entries.extend(expand_build_document(json.loads(path.read_text(encoding="utf-8"))))
+        entries.extend(json.loads(path.read_text(encoding="utf-8")))
     return entries
 
 
 def _injuries() -> list[dict]:
-    return expand_build_document(
-        json.loads((DATA / "角色" / "内容" / "伤势.json").read_text(encoding="utf-8"))
-    )
+    return json.loads((DATA / "角色" / "内容" / "伤势.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")

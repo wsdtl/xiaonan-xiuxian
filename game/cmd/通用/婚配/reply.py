@@ -38,7 +38,7 @@ def birth(copy: HunpeiCopy, value: BirthView) -> DocumentMessage:
 
     if not value.companion_code:
         # 没有同行道侣：标题仍走生育页，正文用「无道侣」那一行——
-        # 空栏目会被「消息零信息」判据点名。
+        # 空栏目会渲染成空引用。
         return (
             M.document()
             .section(
