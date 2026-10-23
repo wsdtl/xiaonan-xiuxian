@@ -99,8 +99,7 @@ class CompanionService:
         self._plant_pool_meridians: Mapping[str, str] = {}
         self._five_element_rules: Mapping[str, object] = {}
         #: 种族：道侣核心构造在角色核心之前，所以种族表由组合根在角色核心就绪后回填
-        #: （`attach_races`），回填时当场校验 `道侣.json.可选种族` 里的族名都登记过。
-        self._race_options: tuple[str, ...] = ()
+        #: （`attach_races`），回填时当场校验每名道侣的固定种族都登记过。
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         #: 取道侣 DNA 的取法（玩法回填）：(道侣编号) -> DNA 串。没回填时进战斗不带 DNA。
         self._dna_of: object | None = None
@@ -133,7 +132,6 @@ class CompanionService:
             self._data.dataset("战斗字段定义").get("属性"), "战斗定义.属性"
         )
         self._plant_pool_meridians = self._load_plant_pool_meridians()
-        self._race_options = self._load_race_options()
         if self._rules.active_limit != 1:
             raise JsonDataError("当前同行位契约要求道侣.同行上限为1")
         if self._rules.full_reward_lifetime_limit != 1:
@@ -1503,6 +1501,7 @@ class CompanionService:
             companion_id,
             _text(value.get("名称"), f"道侣 {companion_id}.名称"),
             _text(value.get("性别"), f"道侣 {companion_id}.性别"),
+            _text(value.get("种族"), f"道侣 {companion_id}.种族"),
             _text(identity.get("称号"), f"道侣 {companion_id}.身份.称号"),
             _text(identity.get("立场"), f"道侣 {companion_id}.身份.立场"),
             _text(value.get("说明"), f"道侣 {companion_id}.说明"),
@@ -1552,15 +1551,19 @@ class CompanionService:
 
         if self._races:
             raise RuntimeError("道侣核心的种族表已经回填过")
-        unknown = [name for name in self._race_options if name not in races]
+        unknown = [
+            f"{definition.companion_id}:{definition.race}"
+            for definition in self._definitions.values()
+            if definition.race not in races
+        ]
         if unknown:
             raise JsonDataError(
-                f"道侣.json.可选种族里有未登记的种族：{'、'.join(unknown)}"
+                f"道侣固定种族里有未登记的种族：{'、'.join(unknown)}"
             )
         self._races = MappingProxyType({str(k): v for k, v in races.items()})
 
     def race_of(self, companion_id: str) -> str:
-        """这名道侣是哪一族：按编号独立取，同一名道侣永远是同一族。"""
+        """这名道侣固定是哪一族。"""
 
         self._require_initialized()
         if not self._races:
@@ -1568,7 +1571,7 @@ class CompanionService:
         normalized = str(companion_id or "").strip()
         if not normalized:
             raise CompanionStateError("道侣编号不能为空")
-        return random.Random(f"道侣种族:{normalized}").choice(self._race_options)
+        return self.definition(normalized).race
 
     async def lifespan_full(self, user_id: str, companion_id: str) -> bool:
         """这名道侣是否寿元将尽：年龄 ≥ 境界寿元 × 种族寿元系数。
@@ -1619,20 +1622,6 @@ class CompanionService:
         return tuple(
             copy.deepcopy(dict(item)) for item in entry.get("天生规则") or ()
         )
-
-    def _load_race_options(self) -> tuple[str, ...]:
-        value = _mapping(
-            self._data.dataset("角色规则").get("道侣"), "角色/规则/主体/道侣.json"
-        )
-        pool = tuple(
-            _text(item, "道侣.可选种族")
-            for item in _sequence(value.get("可选种族"), "道侣.可选种族")
-        )
-        if not pool:
-            raise JsonDataError("道侣.json.可选种族不能为空")
-        if len(set(pool)) != len(pool):
-            raise JsonDataError("道侣.json.可选种族里有重复的种族")
-        return pool
 
     def _require_initialized(self) -> None:
         if not self._initialized:

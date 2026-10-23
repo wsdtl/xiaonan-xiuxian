@@ -36,6 +36,7 @@ class LocationView:
     companion_pool: tuple[str, ...]
     enemy_pool: tuple[str, ...]
     enemy_multiplier: tuple[int, ...]
+    enemy_level_range: tuple[int, int] = (1, 60)
 
 
 @dataclass(frozen=True)

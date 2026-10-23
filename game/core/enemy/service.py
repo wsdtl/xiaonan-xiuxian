@@ -171,6 +171,7 @@ class EnemyService:
         count: int,
         seed: int,
         instance_prefix: str,
+        level_range: tuple[int, int] | None = None,
     ) -> tuple[EnemyInstance, ...]:
         return self.generate_category(
             section="敌人",
@@ -178,6 +179,7 @@ class EnemyService:
             count=count,
             seed=seed,
             instance_prefix=instance_prefix,
+            level_range=level_range,
         )
 
     def generate_category(
@@ -189,6 +191,7 @@ class EnemyService:
         seed: int,
         instance_prefix: str,
         required_tier: str | None = None,
+        level_range: tuple[int, int] | None = None,
     ) -> tuple[EnemyInstance, ...]:
         self._require_initialized()
         definitions = self._definitions_by_section.get(str(section))
@@ -242,6 +245,7 @@ class EnemyService:
                 instance_id=f"{instance_prefix}:{index}",
                 definitions=definitions,
                 required_tier=required_tier,
+                level_range=level_range,
             )
             for index, name in enumerate(selected, start=1)
         )
@@ -254,6 +258,7 @@ class EnemyService:
         unit_count_range: tuple[int, int],
         seed: int,
         instance_prefix: str,
+        level_range: tuple[int, int] | None = None,
     ) -> tuple[EnemyGroup, ...]:
         """按组独立抽取；每组独立决定数量、成员、等级和奖励。"""
 
@@ -271,6 +276,7 @@ class EnemyService:
                 count=source.randint(low, high),
                 seed=source.getrandbits(64),
                 instance_prefix=group_id,
+                level_range=level_range,
             )
             grouped = tuple(
                 EnemyInstance(
@@ -297,13 +303,20 @@ class EnemyService:
         instance_id: str,
         definitions: Mapping[str, Mapping[str, object]] | None = None,
         required_tier: str | None = None,
+        level_range: tuple[int, int] | None = None,
     ) -> EnemyInstance:
         raw = (definitions or self._definitions)[name]
         # 池成员现在是编号（编号实体池）：显示名与兽宝池名一律取定义里的「名称」。
         display_name = str(raw.get("名称") or name)
         role_name = _text(raw.get("角色规则"), f"{name}.角色规则")
         role = self._role_rules[role_name]
-        level = source.randint(*_range(raw.get("等级"), f"{name}.等级"))
+        low, high = _range(raw.get("等级"), f"{name}.等级")
+        if level_range is not None:
+            low = max(low, int(level_range[0]))
+            high = min(high, int(level_range[1]))
+            if low > high:
+                raise JsonDataError(f"敌人 {name} 的等级区间与地点区间无交集")
+        level = source.randint(low, high)
         tier = _tier(role, level, role_name)
         declared_tier = str(raw.get("阶梯") or "").strip()
         if declared_tier and declared_tier != str(tier.get("阶梯") or "").strip():

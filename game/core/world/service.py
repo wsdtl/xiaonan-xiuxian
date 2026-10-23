@@ -24,7 +24,7 @@ from .contracts import (
 from .journey import JourneyPlanner
 
 _LOCATION_FIELDS = frozenset(
-    {"坐标", "说明", "可用功能", "功能配置", "单次遭遇敌人倍率", "刷新区间"}
+    {"坐标", "说明", "可用功能", "功能配置", "单次遭遇敌人倍率", "刷新区间", "敌人等级区间"}
 )
 _REGION_FIELDS = frozenset({"类别", "坐标带", "说明"})
 _TERRAIN_ZONE_FIELDS = frozenset({"名称", "地形", "坐标带"})
@@ -316,6 +316,7 @@ class WorldService:
             companion_pool=companion_pool,
             enemy_pool=enemy_pool,
             enemy_multiplier=_numbers(raw.get("单次遭遇敌人倍率")),
+            enemy_level_range=_level_range(raw.get("敌人等级区间")),
         )
 
     def plan_journey(self, query: JourneyQuery) -> JourneyPlan:
@@ -881,7 +882,7 @@ def _validate_location_data(
             f"地点 {location_name} 缺少专属功能配置：{'、'.join(sorted(missing_configs))}"
         )
     declared_optional = set(raw) - {
-        "坐标", "说明", "可用功能", "功能配置", "刷新区间"
+        "坐标", "说明", "可用功能", "功能配置", "刷新区间", "敌人等级区间"
     }
     undeclared_optional = declared_optional - required_fields
     if undeclared_optional:
@@ -901,6 +902,13 @@ def _numbers(value: object) -> tuple[int, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         return ()
     return tuple(int(item) for item in value)
+
+
+def _level_range(value: object) -> tuple[int, int]:
+    values = _numbers(value)
+    if len(values) == 2 and values[0] <= values[1]:
+        return (values[0], values[1])
+    return (1, 60)
 
 
 def _environment_ids(data: JsonDataService) -> dict[str, str]:

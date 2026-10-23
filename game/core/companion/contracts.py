@@ -84,6 +84,7 @@ class CompanionDefinition:
     companion_id: str
     name: str
     gender: str
+    race: str
     title: str
     stance: str
     description: str

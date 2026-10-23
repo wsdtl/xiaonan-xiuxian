@@ -414,10 +414,11 @@ class ExplorationService:
                 break
             enemy_groups = self._enemy.generate_groups(
                 pool_names=location.enemy_pool,
-                group_count=len(ally_groups),
+                group_count=1,
                 unit_count_range=location.enemy_multiplier,
                 seed=source.getrandbits(64),
                 instance_prefix=f"{session_id}:{battle_index}",
+                level_range=location.enemy_level_range,
             )
             enemies = tuple(item for group in enemy_groups for item in group.combatants)
             enemy_group_specs = tuple(
