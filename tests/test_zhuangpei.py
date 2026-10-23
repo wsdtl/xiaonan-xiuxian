@@ -865,7 +865,7 @@ def test_炼阵圣品两条候选能点着挑(services) -> None:
             )
         )
     )
-    # 圣品门槛按每门阵法各自定（530007 的兽宝门槛是 3888，不是周天星斗大阵的 1944），
+    # 圣品门槛按每门阵法各自定（530008 的兽宝门槛是 4374，不是周天星斗大阵的 1944），
     # 所以从数据里读，不写死数字。
     import json
     import pathlib
@@ -895,7 +895,7 @@ def test_炼阵圣品两条候选能点着挑(services) -> None:
                     return 命中
         return None
 
-    定义 = 找定义(阵法数据, '530007')
+    定义 = 找定义(阵法数据, '530008')
     assert 定义 is not None
     门槛 = next(x for x in 定义['品级'] if x['品级'] == '圣品')['最低消耗']
     assert set(门槛) == {'兽宝', '灵矿', '灵植'}
@@ -905,11 +905,11 @@ def test_炼阵圣品两条候选能点着挑(services) -> None:
     for 序号, 投入 in (('入库1', dict(门槛)), ('入库2', {k: v + 500 for k, v in 门槛.items()})):
         计划 = asyncio.run(
             services.core.asset.plan_formation_reserve_acquisition(
-                uid, '530007', '05', materials={k: str(v) for k, v in 投入.items()}
+                uid, '530008', '05', materials={k: str(v) for k, v in 投入.items()}
             )
         )
         提交(序号, (计划.operation,))
-    # 云水观虽有炼阵功能，却没有阵师文件；归元观的玄玑子开放 530007 等阵法。
+    # 布阵只认阵藏实例，不需要阵师在场；这里走一次真实位置变更，顺带覆盖位置表。
     xy = services.core.world.locate(LocationQuery(location_name='归元观')).xy
     位置 = asyncio.run(services.core.location.current(uid))
     提交('挪:归元观', (LocationMutation(uid, xy, 位置.version),))
@@ -917,7 +917,7 @@ def test_炼阵圣品两条候选能点着挑(services) -> None:
 
 
     阵藏 = asyncio.run(services.core.asset.formation_entries(uid))
-    同名 = [e for e in 阵藏 if e.instance_key.startswith('05530007')]
+    同名 = [e for e in 阵藏 if e.instance_key.startswith('05530008')]
     assert len(同名) == 2, [e.instance_key for e in 同名]
     assert 同名[0].instance_key != 同名[1].instance_key
 

@@ -79,7 +79,7 @@ def check_dangling_script_refs() -> list[str]:
     problems: list[str] = []
     names = {p.name for p in ROOT.rglob("*.py")}
     for path in sorted(ROOT.rglob("*.md")):
-        if {".venv", ".git", "_输出", "BUILD"} & set(path.parts):
+        if _WALK_SKIP & set(path.parts):
             continue
         text = path.read_text(encoding="utf-8")
         for line_no, line in enumerate(text.splitlines(), start=1):
