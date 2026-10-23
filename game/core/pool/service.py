@@ -138,7 +138,10 @@ class PoolService:
                 seen.add(entry.entity_id)
                 candidates.append(entry)
         if not candidates:
-            if all(str(value) in {"入微", "圆融", "镇域", "天灾"} for value in file_ids):
+            if all(str(value) in {
+                "入微修士", "入微灵兽", "圆融修士", "圆融灵兽",
+                "镇域修士", "镇域灵兽", "天灾修士", "天灾灵兽",
+            } for value in file_ids):
                 return ()
             joined = "、".join(str(value) for value in file_ids) or "<空>"
             raise ValueError(f"资源池为空：{joined}")

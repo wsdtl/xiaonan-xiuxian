@@ -76,7 +76,10 @@ class LoadedGameData:
             result.extend(self._resolve_pool_file(str(file_id), section_name, ()))
         if not result:
             if section_name == "敌人" and all(
-                str(value) in {"入微", "圆融", "镇域", "天灾"}
+                str(value) in {
+                    "入微修士", "入微灵兽", "圆融修士", "圆融灵兽",
+                    "镇域修士", "镇域灵兽", "天灾修士", "天灾灵兽",
+                }
                 for value in file_ids
             ):
                 return ()
@@ -342,10 +345,14 @@ def _numbered_entries(
     if not result:
         # 敌人等高阶段先留空文件，等 boss 设计时再填内容；空段不产生实体。
         if document.relative_path in {
-            "世界/内容/敌人/入微.json",
-            "世界/内容/敌人/圆融.json",
-            "世界/内容/敌人/镇域.json",
-            "世界/内容/敌人/天灾.json",
+            "世界/内容/敌人/入微/入微修士.json",
+            "世界/内容/敌人/入微/入微灵兽.json",
+            "世界/内容/敌人/圆融/圆融修士.json",
+            "世界/内容/敌人/圆融/圆融灵兽.json",
+            "世界/内容/敌人/镇域/镇域修士.json",
+            "世界/内容/敌人/镇域/镇域灵兽.json",
+            "世界/内容/敌人/天灾/天灾修士.json",
+            "世界/内容/敌人/天灾/天灾灵兽.json",
         }:
             return ()
         raise JsonDataError(f"编号内容文件不能为空：{document.relative_path}")
