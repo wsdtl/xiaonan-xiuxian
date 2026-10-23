@@ -41,7 +41,6 @@ REQUIRED_BEFORE = {
     "sect_production": "sect_assets",
     "sect_war": "sect",
     "exploration": "enemy",
-    "raid": "enemy",
 }
 # 需要输出启动结果的玩法微服务；其余玩法不逐条播报。
 LOGGING_FEATURES = {"create_character", "ditu"}

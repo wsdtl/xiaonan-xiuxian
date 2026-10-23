@@ -86,7 +86,7 @@ class EnemyService:
             raise RuntimeError("炼器核心必须先于敌人核心启动")
         gender = _mapping(self._data.dataset("角色定义").get("性别"), "性别")
         self._genders = _texts(gender.get("取值"), "性别.取值")
-        for section in ("敌人", "讨伐首领", "讨伐辅助", "讨伐属从"):
+        for section in ("敌人",):
             try:
                 entities = self._data.entities(section)
             except JsonDataError:

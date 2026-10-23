@@ -38,7 +38,6 @@ from .core.location import LocationService
 from .core.medicine import MedicineService
 from .core.player_state import PlayerStateService
 from .core.pool import PoolService
-from .core.raid import RaidService
 from .core.retreat import RetreatService
 from .core.sect import SectService
 from .core.sect_assets import SectAssetService
@@ -72,7 +71,6 @@ from .features.najie import NajieFeature
 from .features.qiecuo import DuelFeature
 from .features.renwu_peiyang import CharacterCultivationFeature
 from .features.tanxian import ExplorationFeature
-from .features.taofa import RaidFeature
 from .features.tongquetai import TongquetaiFeature
 from .features.tuoguan import HostingFeature
 from .features.weizhi import PositionFeature
@@ -137,7 +135,6 @@ class CoreServices:
     asset: AssetService
     medicine: MedicineService
     enemy: EnemyService
-    raid: RaidService
     exploration: ExplorationService
     sect_war: SectWarService
     retreat: RetreatService
@@ -165,7 +162,6 @@ class FeatureServices:
     renwu_peiyang: CharacterCultivationFeature
     daolv_peiyang: CompanionCultivationFeature
     tanxian: ExplorationFeature
-    taofa: RaidFeature
     xuemai: XuemaiFeature
     hunpei: HunpeiFeature
     duiwu: TeamFeature
@@ -613,22 +609,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     gift = GiftService(data, database, location, character, asset, item_catalog)
     gift.initialize()
     logger.opt(colors=True).success(C.ok("赠送核心微服务已启动"))
-    raid = RaidService(
-        data,
-        enemy,
-        database,
-        world,
-        location,
-        character,
-        companion,
-        player_state,
-        combat,
-        activity,
-        asset,
-        pool,
-    )
-    raid.initialize()
-    logger.opt(colors=True).success(C.ok("讨伐编组核心微服务已启动"))
     exploration = ExplorationService(
         data,
         database,
@@ -756,7 +736,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         asset=asset,
         medicine=medicine,
         enemy=enemy,
-        raid=raid,
         exploration=exploration,
         sect_war=sect_war,
         retreat=retreat,
@@ -984,8 +963,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         data, exploration, item_catalog, asset, action_group, medicine
     )
     tanxian.initialize()
-    taofa = RaidFeature(data, raid, action_group)
-    taofa.initialize()
     biguan = RetreatFeature(data, retreat, asset, action_group)
     biguan.initialize()
     caiyao = HerbGatheringFeature(data, gathering, asset, action_group)
@@ -1016,7 +993,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         tanxian=tanxian,
         xuemai=xuemai,
         hunpei=hunpei,
-        taofa=taofa,
         duiwu=duiwu,
         biguan=biguan,
         caiyao=caiyao,

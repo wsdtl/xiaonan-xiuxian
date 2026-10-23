@@ -200,8 +200,7 @@ class WorldService:
                     if section == "商店":
                         self._require_location_shop(location_name)
                     elif section in {
-                        "炼器工匠", "炼丹师", "阵师", "讨伐", "讨伐首领",
-                        "讨伐辅助", "讨伐属从",
+                        "炼器工匠", "炼丹师", "阵师",
                     }:
                         self._require_location_entity(location_name, section)
                     else:
@@ -958,7 +957,6 @@ def _feature_definitions(
         if any(
             section not in {
                 "道侣", "敌人", "商店", "炼器工匠", "炼丹师", "阵师",
-                "讨伐", "讨伐首领", "讨伐辅助", "讨伐属从",
             }
             for section in sections
         ):
