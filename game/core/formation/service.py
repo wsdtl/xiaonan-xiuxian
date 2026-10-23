@@ -880,8 +880,9 @@ class FormationService:
         return result
 
     def _validate_static_rules(self) -> None:
-        if len(self._formations) != 46:
-            raise JsonDataError("当前阵法必须完整定义46座")
+        # 阵数不再写死 46：它等于「有炼阵功能的地点」数，两者必须相等。
+        # 原先硬编码 46 会让「删掉一个炼阵地点」连带要求删阵法，而阵法又被
+        # 各阵师的 `开放阵法` 引用，改一处要连改三处。改成由数据决定。
         locations = {
             item.name
             for item in self._world.map_view().locations
@@ -894,7 +895,7 @@ class FormationService:
             )
         opened = [item for master in self._masters.values() for item in master.formation_ids]
         if len(opened) != len(set(opened)) or set(opened) != set(self._formations):
-            raise JsonDataError("46座阵法必须各由一个地点独占开放")
+            raise JsonDataError("阵法必须各由一个地点独占开放")
         for formation_id, raw in self._raw_formations.items():
             grades = tuple(
                 _text(_mapping(item, "阵法.品级[]").get("品级"), "阵法.品级")
