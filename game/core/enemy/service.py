@@ -49,6 +49,7 @@ class EnemyService:
         )
         self._genders: tuple[str, ...] = ()
         self._five_element_rules: Mapping[str, object] = {}
+        self._school_builds: dict[str, dict[str, tuple[str, ...]]] = {}
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
 
     def initialize(self) -> EnemyStatus:
@@ -98,6 +99,16 @@ class EnemyService:
                 self._validate_definition(name, raw)
             self._definitions_by_section[section] = MappingProxyType(definitions)
         self._definitions = self._definitions_by_section["敌人"]
+        for category in ("功法", "真意", "气机"):
+            for content_id, card in self._data.entities(category).items():
+                school = str(card.get("标签") or "").strip()
+                if not school:
+                    continue
+                self._school_builds.setdefault(school, {}).setdefault(category, []).append(str(content_id))
+        self._school_builds = {
+            school: {category: tuple(sorted(ids)) for category, ids in groups.items()}
+            for school, groups in self._school_builds.items()
+        }
         self._races = MappingProxyType(self._load_races())
         self._initialized = True
         return self.status()
@@ -340,6 +351,18 @@ class EnemyService:
             for key, value in attributes.items()
         }
         fixed = _mapping(tier.get("构筑"), f"{role_name}.构筑")
+        school = str(raw.get("流派") or "").strip()
+        if school:
+            school_build = self._school_builds.get(school)
+            if school_build is None:
+                raise JsonDataError(f"敌人 {name} 使用未知流派：{school}")
+            fixed = {
+                category: tuple(
+                    school_build[category][index % len(school_build[category])]
+                    for index in range(len(_sequence(fixed.get(category) or (), f"{role_name}.构筑.{category}")))
+                )
+                for category in ("功法", "真意", "气机")
+            }
         build_refs = [
             CombatBuildRef(
                 section=category,
