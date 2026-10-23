@@ -1264,7 +1264,6 @@ class CharacterService:
             "藏经阁借阅": {"宗门编号": sect_id, "原功法": original},
         }
         cultivation["功法"] = slots
-        self._assert_no_conflict(cultivation)
         return CharacterSlotPlan(
             snapshot.version,
             (StateMutation(user_id, "cultivation", "main", cultivation, snapshot.version),),
@@ -1299,20 +1298,6 @@ class CharacterService:
             cleared,
         )
 
-    def _assert_no_conflict(self, cultivation: Mapping[str, object]) -> None:
-        build = {
-            category: tuple(
-                str(value["编号"])
-                for raw in _state_slots(cultivation.get(category), category)
-                if raw is not None
-                for value in (_mapping(raw, f"{category}槽"),)
-            )
-            for category in ("功法", "真意", "气机")
-        }
-        conflict = self._growth.build_conflict(build)
-        if conflict is not None:
-            raise CharacterStateError(f"该借阅构筑触发相冲：{conflict}")
-
     async def plan_equip(
         self,
         user_id: str,
@@ -1325,10 +1310,8 @@ class CharacterService:
         """验证道藏所有权，并生成一个人物修行槽替换。
 
         五个阶段各自成函数：校验入参（`_equip_target`）、读修行快照
-        （`_equip_slots`，顺带做槽位范围与重复装配检查）、写槽并查构筑相冲
-        （`_equip_conflict`）、取内容来源（`_equip_source`，功法查道藏所有权、
-        真意与气机扣一份储备）、组装计划。装回去的槽位与相冲判定都在这里，
-        顺序不要调换——相冲是拿**装好之后**的构筑算的。
+        （`_equip_slots`，顺带做槽位范围与重复装配检查）、写槽、取内容来源
+        （`_equip_source`，功法查道藏所有权、真意与气机扣一份储备）、组装计划。
         """
 
         normalized_user_id, normalized_category, normalized_content_id, grade = (
@@ -1345,7 +1328,6 @@ class CharacterService:
             "品级": grade.grade_id,
         }
         cultivation[normalized_category] = slots
-        self._equip_conflict(cultivation)
         content_name, reserve_operation = await self._equip_source(
             normalized_user_id, normalized_category, normalized_content_id, grade.grade_id
         )
@@ -1451,22 +1433,6 @@ class CharacterService:
             ):
                 raise CharacterCultivationError("该槽位已经装配相同内容")
         return replaced
-
-    def _equip_conflict(self, cultivation: dict) -> None:
-        """按装好之后的构筑查相冲。"""
-
-        build = {
-            name: tuple(
-                str(entry["编号"])
-                for raw in _state_slots(cultivation.get(name), name)
-                if raw is not None
-                for entry in (_state_mapping(raw, f"{name}槽"),)
-            )
-            for name in ("功法", "真意", "气机")
-        }
-        conflict = self._growth.build_conflict(build)
-        if conflict is not None:
-            raise CharacterCultivationError(f"该构筑触发相冲：{conflict}")
 
     async def _equip_source(
         self, user_id: str, category: str, content_id: str, grade_id: str

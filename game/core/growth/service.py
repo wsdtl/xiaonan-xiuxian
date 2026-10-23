@@ -24,7 +24,7 @@ from .contracts import (
     RandomCultivationBuild,
     RealmDefinition,
 )
-from game.core.data import number as _number, sequence as _sequence, strict_text as _text
+from game.core.data import number as _number, strict_text as _text
 
 _CATEGORIES = ("功法", "真意", "气机")
 
@@ -38,7 +38,6 @@ class GrowthService:
         self._initialized = False
         self._cultivator_rule: Mapping[str, object] = {}
         self._realms: dict[str, RealmDefinition] = {}
-        self._conflicts: tuple[tuple[str, tuple[frozenset[str], ...]], ...] = ()
 
     def initialize(self) -> GrowthStatus:
         if self._initialized:
@@ -64,19 +63,6 @@ class GrowthService:
                 str(value.get("下一境界") or "").strip(),
                 _positive_int(value.get("寿元"), f"境界 {realm_id}.寿元"),
             )
-        build_rules = self._data.dataset("构筑生成规则")
-        self._conflicts = tuple(
-            (
-                _text(_mapping(row, "构筑/相冲.json[]").get("名称"), "相冲.名称"),
-                tuple(
-                    frozenset(_strings(side, "相冲.相冲[]"))
-                    for side in _sequence(
-                        _mapping(row, "构筑/相冲.json[]").get("相冲"), "相冲.相冲"
-                    )
-                ),
-            )
-            for row in _sequence(build_rules.get("相冲"), "构筑/相冲.json")
-        )
         self._validate_static_rules()
         self._initialized = True
         return self.status()
@@ -194,21 +180,6 @@ class GrowthService:
             )
         return result
 
-    def build_conflict(
-        self, build: Mapping[str, Sequence[str]]
-    ) -> str | None:
-        """返回构筑触发的相冲规则名；没有相冲时返回 None。"""
-
-        self._require_initialized()
-        selected: set[str] = set()
-        for category in _CATEGORIES:
-            for content_id in build.get(category, ()):
-                selected.add(str(content_id))
-        for name, sides in self._conflicts:
-            if all(selected & side for side in sides):
-                return name
-        return None
-
     def redraw_companion_category(
         self,
         *,
@@ -285,44 +256,9 @@ class GrowthService:
             )
             if len(matches) != 1:
                 raise JsonDataError(f"等级{level}必须唯一归属一个境界")
-        self._validate_conflicts()
-
-    def _validate_conflicts(self) -> None:
-        """相冲规则必须成对、互不重叠，并且只引用构筑类别的真实卡片。"""
-
-        known = {
-            category: set(self._data.entities(category))
-            for category in _CATEGORIES
-        }
-        names: set[str] = set()
-        for name, sides in self._conflicts:
-            if name in names:
-                raise JsonDataError(f"相冲规则名重复：{name}")
-            names.add(name)
-            if len(sides) != 2:
-                raise JsonDataError(f"相冲规则{name}必须声明两组卡片")
-            for side in sides:
-                if not side:
-                    raise JsonDataError(f"相冲规则{name}存在空分组")
-                for content_id in side:
-                    if not any(content_id in known[category] for category in _CATEGORIES):
-                        raise JsonDataError(
-                            f"相冲规则{name}引用未知卡片：{content_id}"
-                        )
-            if sides[0] & sides[1]:
-                overlap = "、".join(sorted(sides[0] & sides[1]))
-                raise JsonDataError(f"相冲规则{name}两组卡片重叠：{overlap}")
-
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("成长核心微服务尚未初始化")
-
-
-def _strings(value: object, label: str) -> tuple[str, ...]:
-    result = tuple(_text(raw, label) for raw in _sequence(value, label))
-    if not result:
-        raise JsonDataError(f"{label}不能为空")
-    return result
 
 
 __all__ = ["GrowthService"]

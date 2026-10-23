@@ -1,4 +1,4 @@
-"""整套人物装配的内部计划器；复用角色原有实体、品级、相冲与器阶规则。"""
+"""整套人物装配的内部计划器；复用角色原有实体、品级与器阶规则。"""
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
@@ -72,7 +72,6 @@ async def plan_assembly(
                     if old is not None and retain_replaced:
                         returns[(category, old["编号"], old["品级"])] += 1
         cultivation[category] = chosen
-    service._equip_conflict(cultivation)
     # 先检查所需库存，再结算灵宝返还；不得用本次返还的内容垫付本次消耗。
     for key in sorted(costs.keys() | returns.keys()):
         category, content_id, grade_id = key
