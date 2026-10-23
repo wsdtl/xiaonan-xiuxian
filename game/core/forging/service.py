@@ -745,7 +745,6 @@ class ForgingService:
                 location,
                 _text(raw.get("称号"), f"炼器工匠 {artisan_id}.称号"),
                 _text(raw.get("炉名"), f"炼器工匠 {artisan_id}.炉名"),
-                _text(raw.get("工艺流派"), f"炼器工匠 {artisan_id}.工艺流派"),
                 _text(raw.get("话语风格"), f"炼器工匠 {artisan_id}.话语风格"),
                 speech(raw.get("话语"), f"炼器工匠 {artisan_id}.话语"),
             )

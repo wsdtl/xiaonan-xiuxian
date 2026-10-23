@@ -40,7 +40,6 @@ def overview(
 
         .section(alchemist.title, icon="item")
         .field(text(copy, "总览", "丹师"), alchemist.name)
-        .field(text(copy, "总览", "丹门"), alchemist.heritage)
         .line(text(copy, "总览", "引言", {"丹师": alchemist.name}))
         .small(alchemist.speech["总览"].format_map({"主持": alchemist.name}))
         .section(text(copy, "总览", "分类"), icon="inventory")

@@ -860,7 +860,12 @@ class FormationService:
                 raise JsonDataError(f"阵师 {master_id} 缺少地点目录归属")
             if location in result:
                 raise JsonDataError(f"同一地点不能有多名主持阵师：{location}")
-            formation_ids = _texts(raw.get("开放阵法"), f"阵师 {master_id}.开放阵法")
+            declared = tuple(raw.get("开放阵法") or ())
+            formation_ids = (
+                _texts(declared, f"阵师 {master_id}.开放阵法")
+                if declared
+                else tuple(sorted(self._formations))
+            )
             if len(formation_ids) != len(set(formation_ids)):
                 raise JsonDataError(f"阵师开放阵法重复：{master_id}")
             unknown = set(formation_ids) - set(self._formations)
@@ -872,7 +877,6 @@ class FormationService:
                 location,
                 _text(raw.get("称号"), f"阵师 {master_id}.称号"),
                 _text(raw.get("阵台"), f"阵师 {master_id}.阵台"),
-                _text(raw.get("阵道传承"), f"阵师 {master_id}.阵道传承"),
                 _text(raw.get("话语风格"), f"阵师 {master_id}.话语风格"),
                 speech(raw.get("话语"), f"阵师 {master_id}.话语"),
                 formation_ids,
@@ -893,9 +897,9 @@ class FormationService:
                 f"炼阵地点与阵师不一一对应：缺少{sorted(locations - set(self._masters))}，"
                 f"多余{sorted(set(self._masters) - locations)}"
             )
-        opened = [item for master in self._masters.values() for item in master.formation_ids]
-        if len(opened) != len(set(opened)) or set(opened) != set(self._formations):
-            raise JsonDataError("阵法必须各由一个地点独占开放")
+        opened = {item for master in self._masters.values() for item in master.formation_ids}
+        if opened != set(self._formations):
+            raise JsonDataError("阵法必须全部有阵师开放")
         for formation_id, raw in self._raw_formations.items():
             grades = tuple(
                 _text(_mapping(item, "阵法.品级[]").get("品级"), "阵法.品级")

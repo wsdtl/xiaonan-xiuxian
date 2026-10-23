@@ -68,7 +68,6 @@ class ForgingArtisan:
     location_name: str
     title: str
     furnace_name: str
-    school: str
     speech_style: str
     speech: Mapping[str, str]
 

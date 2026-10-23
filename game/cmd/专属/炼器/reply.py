@@ -38,7 +38,6 @@ def overview(
 
         .section(artisan.title, icon="weapon")
         .field(text(copy, "总览", "工匠"), artisan.name)
-        .field(text(copy, "总览", "流派"), artisan.school)
         .line(text(copy, "总览", "引言", {"工匠": artisan.name}))
         .small(value.artisan.speech["总览"].format_map({"主持": value.artisan.name}))
         .section(text(copy, "总览", "器阶"), icon="item")

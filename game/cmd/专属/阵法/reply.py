@@ -30,7 +30,6 @@ def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[Forma
 
         .section(master.title, icon="combat")
         .field(text(copy, "总览", "阵师"), master.name)
-        .field(text(copy, "总览", "传承"), master.heritage)
         .line(text(copy, "总览", "引言", {"阵师": master.name}))
         .small(master.speech["总览"].format_map({"主持": master.name}))
         .section(text(copy, "总览", "阵法"), icon="item")

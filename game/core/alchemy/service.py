@@ -746,7 +746,6 @@ class AlchemyService:
                 location,
                 _text(raw.get("称号"), f"炼丹师 {alchemist_id}.称号"),
                 _text(raw.get("炉名"), f"炼丹师 {alchemist_id}.炉名"),
-                _text(raw.get("丹道传承"), f"炼丹师 {alchemist_id}.丹道传承"),
                 _text(raw.get("话语风格"), f"炼丹师 {alchemist_id}.话语风格"),
                 speech(raw.get("话语"), f"炼丹师 {alchemist_id}.话语"),
             )

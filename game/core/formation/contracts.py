@@ -71,7 +71,6 @@ class FormationMaster:
     location_name: str
     title: str
     platform_name: str
-    heritage: str
     speech_style: str
     speech: Mapping[str, str]
     formation_ids: tuple[str, ...]
