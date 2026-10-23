@@ -39,7 +39,6 @@ class GrowthService:
         self._cultivator_rule: Mapping[str, object] = {}
         self._realms: dict[str, RealmDefinition] = {}
         self._conflicts: tuple[tuple[str, tuple[frozenset[str], ...]], ...] = ()
-        self._attempt_limit = 0
 
     def initialize(self) -> GrowthStatus:
         if self._initialized:
@@ -66,8 +65,6 @@ class GrowthService:
                 _positive_int(value.get("寿元"), f"境界 {realm_id}.寿元"),
             )
         build_rules = self._data.dataset("构筑生成规则")
-        generation = _mapping(build_rules.get("生成"), "构筑/生成.json")
-        self._attempt_limit = _positive_int(generation.get("尝试上限"), "构筑.尝试上限")
         self._conflicts = tuple(
             (
                 _text(_mapping(row, "构筑/相冲.json[]").get("名称"), "相冲.名称"),
