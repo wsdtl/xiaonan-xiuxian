@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from math import ceil
 from types import MappingProxyType
 
 from game.core.asset import (
@@ -197,10 +198,12 @@ class AlchemyService:
         )
 
     def assess(
-        self, identifier: str, entries: tuple[AssetEntry, ...]
+        self, identifier: str, entries: tuple[AssetEntry, ...], grade_name: str = "黄品"
     ) -> AlchemyAssessment:
         self._require_initialized()
         recipe = self._resolve_recipe(identifier)
+        if recipe.materials:
+            return self._assess_materials(recipe, entries, grade_name)
         difficulty = self._difficulties[recipe.difficulty]
         beast = self._select_beast(entries, difficulty.beast_grade_id)
         herbs, missing, secondary_count = self._match_herbs(
@@ -297,13 +300,15 @@ class AlchemyService:
             page_count,
         )
 
-    async def preview(self, user_id: str, identifier: str) -> AlchemyPreview:
+    async def preview(
+        self, user_id: str, identifier: str, grade_name: str = "黄品"
+    ) -> AlchemyPreview:
         normalized = _request_text(user_id, "user_id")
         recipe = self._resolve_recipe(identifier)
         location_name, alchemist = await self._current_alchemist(normalized)
         entries = await self._material_entries(normalized)
         return self._build_preview(
-            normalized, location_name, alchemist, recipe, entries
+            normalized, location_name, alchemist, recipe, entries, grade_name
         )
 
     async def refine(
@@ -464,8 +469,9 @@ class AlchemyService:
         alchemist: Alchemist,
         recipe: AlchemyRecipe,
         entries: tuple[AssetEntry, ...],
+        grade_name: str = "黄品",
     ) -> AlchemyPreview:
-        value = self.assess(recipe.recipe_id, entries)
+        value = self.assess(recipe.recipe_id, entries, grade_name)
         grade = self._asset.grade(value.medicine_grade_id)
         town_max_grade = self._asset.grade(self._town_max_grade_id)
         if grade.order > town_max_grade.order:
@@ -483,6 +489,78 @@ class AlchemyService:
             value.secondary_substitutions,
             value.secondary_substitution_limit,
             value.can_refine,
+        )
+
+    def _assess_materials(
+        self,
+        recipe: AlchemyRecipe,
+        entries: tuple[AssetEntry, ...],
+        grade_name: str,
+    ) -> AlchemyAssessment:
+        grade = self._asset.grade(grade_name)
+        town_max = self._asset.grade(self._town_max_grade_id)
+        if grade.order > town_max.order:
+            grade = town_max
+        factor = float(grade.craft_multiplier)
+        matched: list[AlchemyMaterial] = []
+        missing: list[AlchemyMissingMaterial] = []
+        for raw in recipe.materials:
+            category = _text(raw.get("类别"), f"{recipe.name}.材料.类别")
+            item_id = str(raw.get("编号") or "")
+            base_count = _positive_int(raw.get("数量"), f"{recipe.name}.材料.数量")
+            need = max(base_count, ceil(base_count * factor))
+            minimum = self._asset.grade(str(raw.get("最低品级") or "黄品"))
+            candidates = sorted(
+                (
+                    entry
+                    for entry in entries
+                    if entry.subcategory == category
+                    and (not item_id or entry.content_id == item_id)
+                    and self._asset.grade(entry.grade_id).order >= minimum.order
+                ),
+                key=lambda entry: (
+                    self._asset.grade(entry.grade_id).order,
+                    entry.content_id,
+                    entry.instance_key,
+                ),
+            )
+            for entry in candidates:
+                if need <= 0:
+                    break
+                take = min(need, entry.quantity)
+                matched.append(
+                    AlchemyMaterial(
+                        entry.content_id,
+                        entry.name,
+                        entry.grade_id,
+                        entry.grade_name,
+                        "主材" if item_id else "辅材",
+                        category,
+                        "指定" if item_id else "同类",
+                        take,
+                    )
+                )
+                need -= take
+            if need > 0:
+                missing.append(
+                    AlchemyMissingMaterial(
+                        "主材" if item_id else "辅材",
+                        f"{minimum.name}及以上{category}" + (f"（{item_id}）" if item_id else ""),
+                        need,
+                    )
+                )
+        main = next((item for item in matched if item.role == "主材"), None)
+        herbs = tuple(item for item in matched if item is not main)
+        return AlchemyAssessment(
+            recipe,
+            grade.grade_id,
+            grade.name,
+            main,
+            herbs,
+            tuple(missing),
+            0,
+            0,
+            not missing,
         )
 
     def _select_beast(
@@ -725,6 +803,7 @@ class AlchemyService:
                 method,
                 medicine_id,
                 name,
+                tuple(_mapping(item, f"丹药 {name}.材料[]") for item in _sequence(raw.get("材料", ()), f"丹药 {name}.材料")),
             )
         return result
 

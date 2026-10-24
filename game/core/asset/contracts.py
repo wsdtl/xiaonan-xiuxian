@@ -79,6 +79,7 @@ class AssetGrade:
     order: int
     ability_multiplier: Decimal
     price_multiplier: Decimal
+    craft_multiplier: Decimal
 
 
 @dataclass(frozen=True)
