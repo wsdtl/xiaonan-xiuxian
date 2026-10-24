@@ -368,6 +368,57 @@ def test_formation_activation_plan_reaches_battle(services) -> None:
     assert any(event.kind == "阵法冲击后" for event in result.events)
 
 
+def test_formation_craft_arm_and_battle(services) -> None:
+    """真实人物库存：炼阵 → 布阵 → 激活快照 → 实战。"""
+
+    from game.core.asset.contracts import InventoryAdjustment
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+
+    user_id = "formation-e2e"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(
+                user_id, "create-formation", "炼阵测试", "男", (15, 17), ""
+            )
+        )
+    )
+    plan = asyncio.run(
+        services.asset.plan_inventory_changes(
+            user_id,
+            (
+                InventoryAdjustment("220032", "01", 6),
+                InventoryAdjustment("220086", "01", 6),
+            ),
+        )
+    )
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "seed-formation", "测试", plan.operations, {})
+        )
+    )
+    preview = asyncio.run(services.formation.preview(user_id, "530001", "黄品"))
+    assert preview.can_form
+    assert preview.core_names == ("丘脉青晶", "丘腹赤铁")
+    assert preview.detection is not None
+
+    formed = asyncio.run(services.formation.form(user_id, "form-1", "530001", "黄品"))
+    armed = asyncio.run(services.formation.arm(user_id, "arm-1", formed.reserve_key))
+    assert armed.prepared.formation_id == "530001"
+    activation = asyncio.run(services.formation.activation_plan(user_id))
+    assert activation is not None
+    assert activation.profile.detection is not None
+
+    result = _fight(
+        services,
+        limit=30,
+        left_team=(replace(_spec("L"), health=600),),
+        right_team=(_spec("R"),),
+        left_formation=CombatFormationSpec("530001", "黄品"),
+    )
+    assert any(event.kind == "阵法冲击后" for event in result.events)
+
+
 def test_all_builds_enter_one_real_battle(services) -> None:
     """功法/真意/气机全部 1224 张构筑至少进入一次真实战斗。"""
 
