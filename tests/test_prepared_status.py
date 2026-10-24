@@ -50,7 +50,10 @@ def _battle_pills() -> list[dict]:
 
 
 def _injuries() -> list[dict]:
-    return json.loads((DATA / "角色" / "内容" / "伤势.json").read_text(encoding="utf-8"))
+    entries: list[dict] = []
+    for path in sorted((DATA / "角色" / "内容" / "伤势").glob("*.json")):
+        entries.extend(json.loads(path.read_text(encoding="utf-8")))
+    return entries
 
 
 @pytest.fixture(scope="module")

@@ -920,6 +920,105 @@ def check_life_attribute_pairs() -> list[str]:
     return issues
 
 
+def check_number_sequences() -> list[str]:
+    """每个两位前缀下的六位编号必须从 0001 连续排。"""
+
+    ids: dict[str, set[str]] = {}
+    issues: list[str] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, dict):
+            code = str(value.get("编号") or "")
+            if len(code) == 6 and code.isdigit():
+                ids.setdefault(code[:2], set()).add(code)
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    for path in sorted(DATA.rglob("*.json")):
+        try:
+            walk(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+    for prefix, values in sorted(ids.items()):
+        expected = {f"{prefix}{index:04d}" for index in range(1, len(values) + 1)}
+        if values != expected:
+            missing = sorted(expected - values)[:5]
+            extra = sorted(values - expected)[:5]
+            issues.append(f"{prefix} 段不连续：缺 {missing} 多 {extra}")
+    return issues
+
+
+def check_injury_soul_damage() -> list[str]:
+    """长期伤势的每一条血量伤害，必须有同列表的神魂伤害同构。"""
+
+    issues: list[str] = []
+    root = DATA / "角色" / "内容" / "伤势"
+    if not root.is_dir():
+        return issues
+
+    def inspect(value: object, path: pathlib.Path) -> None:
+        if isinstance(value, list):
+            for index, item in enumerate(value):
+                if isinstance(item, dict) and item.get("能力") == "造成伤害":
+                    resource = str(item.get("资源") or "血气")
+                    if resource != "神魂" and not any(
+                        isinstance(sibling, dict)
+                        and sibling.get("能力") == "造成伤害"
+                        and str(sibling.get("资源") or "") == "神魂"
+                        for sibling in value[index + 1 :]
+                    ):
+                        issues.append(f"{path.relative_to(PROJECT_ROOT)} {item.get('名称') or '伤害'} 缺神魂伤害")
+                inspect(item, path)
+        elif isinstance(value, dict):
+            for child in value.values():
+                inspect(child, path)
+
+    for path in sorted(root.glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        inspect(document, path)
+    return issues
+
+
+def check_button_ids_unique() -> list[str]:
+    """展示按钮的编号按全项目唯一处理；同一页面内更不允许重复。"""
+
+    seen: dict[str, str] = {}
+    issues: list[str] = []
+    for path in sorted(DATA.rglob("*.json")):
+        if "展示" not in path.parts:
+            continue
+        if "按钮" not in path.parts and not path.name.startswith("按钮"):
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+
+        def walk(value: object) -> None:
+            if isinstance(value, list):
+                for child in value:
+                    walk(child)
+            elif isinstance(value, dict):
+                if "编号" in value:
+                    button_id = str(value.get("编号") or "")
+                    if button_id:
+                        previous = seen.get(button_id)
+                        if previous and previous != str(path):
+                            issues.append(f"{button_id} 同时出现在 {previous} 与 {path}")
+                        seen[button_id] = str(path)
+                for child in value.values():
+                    walk(child)
+
+        walk(document)
+    return issues
+
+
 def check_duplicate_quotes() -> list[str]:
     """说明里的古典引文全局只能出现一次。
 
@@ -1171,6 +1270,9 @@ def main() -> int:
     print("说明里没有代码引用")
     引文 = check_duplicate_quotes()
     命线属性 = check_life_attribute_pairs()
+    编号连续 = check_number_sequences()
+    伤势神魂 = check_injury_soul_damage()
+    按钮编号 = check_button_ids_unique()
     功法说明 = check_gongfa_outlines()
     三脉说明 = check_build_descriptions()
     三脉状态 = check_build_status_names()
@@ -1195,6 +1297,30 @@ def main() -> int:
         print("数值型血气上限必须同时写同值神魂上限：两条命线同构。")
         return 1
     print("血气/神魂属性：数值成对")
+    if 编号连续:
+        print(f"编号段不连续 {len(编号连续)} 处：")
+        for item in 编号连续[:20]:
+            print(f"  {item}")
+        print()
+        print("每个两位编号前缀都必须从 0001 连续排，不能留缺口。")
+        return 1
+    print("编号：每个前缀都从 0001 连续")
+    if 伤势神魂:
+        print(f"伤势缺神魂伤害 {len(伤势神魂)} 处：")
+        for item in 伤势神魂[:20]:
+            print(f"  {item}")
+        print()
+        print("长期伤势里每条血气伤害都必须有同列表的神魂伤害：两条命线同构。")
+        return 1
+    print("伤势：血气伤害均有神魂同构")
+    if 按钮编号:
+        print(f"按钮编号重复 {len(按钮编号)} 处：")
+        for item in 按钮编号[:20]:
+            print(f"  {item}")
+        print()
+        print("按钮编号按全项目唯一处理：不同页面也不能复用同一个编号。")
+        return 1
+    print("按钮编号：全项目唯一")
     if 功法说明:
         print(f"功法总纲不一致 {len(功法说明)} 处：")
         for item in 功法说明[:20]:

@@ -1,7 +1,7 @@
 [
   {
     "页面": "概览",
-    "编号": "nearby.cultivators",
+    "编号": "nearby.overview.cultivators",
     "名称": "附近的修士",
     "命令": "附近 修士",
     "行为": "callback",
@@ -10,7 +10,7 @@
   {
     "页面": "概览",
     "条件": "地表",
-    "编号": "nearby.locations",
+    "编号": "nearby.overview.locations",
     "名称": "查看地点",
     "命令": "附近 地点",
     "行为": "callback",
@@ -18,7 +18,7 @@
   },
   {
     "页面": "概览",
-    "编号": "nearby.position",
+    "编号": "nearby.overview.position",
     "名称": "返回位置",
     "命令": "位置",
     "行为": "callback",
@@ -44,7 +44,7 @@
   },
   {
     "页面": "修士",
-    "编号": "nearby.overview",
+    "编号": "nearby.cultivators.overview",
     "名称": "附近概览",
     "命令": "附近",
     "行为": "callback",
@@ -53,7 +53,7 @@
   {
     "页面": "修士",
     "条件": "地表",
-    "编号": "nearby.locations",
+    "编号": "nearby.cultivators.locations",
     "名称": "查看地点",
     "命令": "附近 地点",
     "行为": "callback",
@@ -61,7 +61,7 @@
   },
   {
     "页面": "修士",
-    "编号": "nearby.position",
+    "编号": "nearby.cultivators.position",
     "名称": "返回位置",
     "命令": "位置",
     "行为": "callback",
@@ -77,7 +77,7 @@
   },
   {
     "页面": "地点",
-    "编号": "nearby.overview",
+    "编号": "nearby.locations.overview",
     "名称": "附近概览",
     "命令": "附近",
     "行为": "callback",
@@ -85,7 +85,7 @@
   },
   {
     "页面": "地点",
-    "编号": "nearby.cultivators",
+    "编号": "nearby.locations.cultivators",
     "名称": "附近的修士",
     "命令": "附近 修士",
     "行为": "callback",
@@ -93,7 +93,7 @@
   },
   {
     "页面": "地点",
-    "编号": "nearby.position",
+    "编号": "nearby.locations.position",
     "名称": "返回位置",
     "命令": "位置",
     "行为": "callback",

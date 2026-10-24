@@ -9,7 +9,7 @@
   },
   {
     "页面": "查看",
-    "编号": "companion.gift",
+    "编号": "companion.view.gift",
     "名称": "赠予灵植",
     "命令": "赠予 {道侣} ",
     "行为": "fill",
@@ -35,7 +35,7 @@
   },
   {
     "页面": "交谈",
-    "编号": "companion.inspect",
+    "编号": "companion.talk.inspect",
     "名称": "查看",
     "命令": "查看 {道侣}",
     "行为": "callback",
@@ -43,7 +43,7 @@
   },
   {
     "页面": "交谈",
-    "编号": "companion.gift",
+    "编号": "companion.talk.gift",
     "名称": "赠予灵植",
     "命令": "赠予 {道侣} ",
     "行为": "fill",
@@ -51,7 +51,7 @@
   },
   {
     "页面": "赠礼",
-    "编号": "companion.inspect",
+    "编号": "companion.gift.inspect",
     "名称": "查看关系",
     "命令": "查看 {道侣}",
     "行为": "callback",
@@ -59,7 +59,7 @@
   },
   {
     "页面": "邀约",
-    "编号": "companion.inspect",
+    "编号": "companion.invite.inspect",
     "名称": "查看",
     "命令": "查看 {道侣}",
     "行为": "callback",

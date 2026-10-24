@@ -67,12 +67,15 @@ class PlayerStateService:
             raise RuntimeError("核心数据库必须先于玩家状态服务启动")
 
         documents = self._data.dataset("人物状态规则")
+        # 状态按编号实体加载；文件不再按行为/队伍/控制分组，分组键写在实体里。
+        state_entities = self._data.entities("人物状态")
         states = {
-            state_type: _index_states(
-                documents.get(file_name),
-                f"{file_name}.json",
-            )
-            for state_type, file_name in STATE_FILES.items()
+            state_type: {
+                state_id: rule
+                for state_id, rule in state_entities.items()
+                if str(rule.get("类型") or "") == state_type
+            }
+            for state_type in STATE_FILES
         }
         contract = ContractSet.from_dataset(
             self._data.dataset("角色字段契约"), "角色/规则/角色字段契约.json"

@@ -65,7 +65,32 @@ class XuemaiFeature:
         body = rule_block.get("血脉")
         if not isinstance(body, Mapping):
             raise RuntimeError("血脉规则数据集缺少「血脉」块")
-        self._rules = load_bloodline_rules(body)
+        content = self._data.dataset("血脉内容")
+        rows: list[object] = []
+        if isinstance(content, Mapping):
+            if "血脉" in content and isinstance(content["血脉"], Mapping):
+                content = content["血脉"]
+            if "普通血脉" in content or "天外" in content:
+                rows.extend(content.get("普通血脉") or ())
+                rows.extend(content.get("天外") or ())
+            else:
+                for value in content.values():
+                    if isinstance(value, (list, tuple)):
+                        rows.extend(value)
+                    elif isinstance(value, Mapping):
+                        rows.append(value)
+        elif isinstance(content, (list, tuple)):
+            rows.extend(content)
+        else:
+            raise RuntimeError("血脉内容数据集格式不正确")
+        merged = dict(body)
+        merged["普通血脉"] = tuple(
+            row for row in rows if isinstance(row, Mapping) and str(row.get("类别") or "普通") == "普通"
+        )
+        merged["天外"] = tuple(
+            row for row in rows if isinstance(row, Mapping) and str(row.get("类别") or "") == "天外"
+        )
+        self._rules = load_bloodline_rules(merged)
         self._initialized = True
 
     def copy(self) -> GenealogyCopy:
