@@ -71,7 +71,9 @@ def recipe_list(
             ),
             " · ",
             M.status(state, tone="positive" if entry.can_refine else "warning"),
-        ).small(f"材料：{len(entry.recipe.materials)} 项")
+        ).small(
+            f"困境：{entry.recipe.plight or '无'} · 材料：{len(entry.recipe.materials)} 项"
+        )
     builder.small(
         text(copy, "列表", "页码", {"当前页": value.page, "总页数": value.page_count})
     )
@@ -96,6 +98,7 @@ def preview(
                 text(copy, "预览", "成丹"),
                 f"{value.medicine_grade_name}{value.recipe.medicine_name}",
             ),
+            ("困境", value.recipe.plight or "无"),
         )
     )
     # 没有药引就整个栏目都不开：只印一个「无」不说明任何事，空栏目更是白占地方。

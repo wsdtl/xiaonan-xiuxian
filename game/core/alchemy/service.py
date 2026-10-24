@@ -825,6 +825,7 @@ class AlchemyService:
                 name,
                 materials,
                 bool(raw.get("无品级")),
+                str(raw.get("困境") or ""),
             )
         return result
 
