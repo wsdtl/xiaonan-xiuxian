@@ -129,9 +129,11 @@ class AlchemyService:
             if not ready:
                 raise RuntimeError(f"{label}必须先于炼丹核心启动")
         rules = self._data.dataset("炼药规则")
-        self._methods = MappingProxyType(self._load_methods(rules.get("炉法")))
+        self._methods = MappingProxyType(
+            self._load_methods(rules.get("炉法")) if rules.get("炉法") else {}
+        )
         self._difficulties = MappingProxyType(
-            self._load_difficulties(rules.get("难度"))
+            self._load_difficulties(rules.get("难度")) if rules.get("难度") else {}
         )
         dan_rule = _mapping(rules.get("丹则"), "炼药规则.丹则")
         self._town_max_grade_id = _text(
@@ -145,7 +147,9 @@ class AlchemyService:
         )
         if grade_rule.get("算法") != "最低余量进阶":
             raise JsonDataError("成丹品级算法必须是「最低余量进阶」")
-        self._herbs = MappingProxyType(self._load_herbs(rules.get("归脉")))
+        self._herbs = MappingProxyType(
+            self._load_herbs(rules.get("归脉")) if rules.get("归脉") else {}
+        )
         self._beast_ids = frozenset(_item_ids(self._data, "兽宝"))
         self._recipes = MappingProxyType(self._load_recipes())
         self._recipe_by_name = MappingProxyType(
