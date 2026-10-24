@@ -1113,6 +1113,19 @@ class FormationService:
                 detection = _mapping(raw.get("检测"), f"阵法 {formation_id}.检测")
                 if _text(detection.get("字段"), f"阵法 {formation_id}.检测.字段") not in _DETECTION_FIELDS:
                     raise JsonDataError(f"阵法检测字段不是战斗真实字段：{formation_id}")
+                description_rule = _mapping(self._rules.get("说明规则"), "阵法规则.说明规则")
+                separator = str(description_rule.get("分隔") or "")
+                if not separator:
+                    raise JsonDataError("说明规则.分隔不能为空")
+                paragraphs = str(raw.get("说明") or "").split(separator)
+                if len(paragraphs) != int(_number(description_rule.get("段数"), "说明规则.段数")):
+                    raise JsonDataError(f"阵法说明必须正好两段：{formation_id}")
+                for token in _sequence(description_rule.get("首段关键词"), "说明规则.首段关键词"):
+                    if _text(token, "说明规则.首段关键词[]") not in paragraphs[0]:
+                        raise JsonDataError(f"阵法说明首段缺少「{token}」：{formation_id}")
+                for token in _sequence(description_rule.get("次段关键词"), "说明规则.次段关键词"):
+                    if _text(token, "说明规则.次段关键词[]") not in paragraphs[1]:
+                        raise JsonDataError(f"阵法说明次段缺少「{token}」：{formation_id}")
                 continue
             grades = tuple(
                 _text(_mapping(item, "阵法.品级[]").get("品级"), "阵法.品级")
