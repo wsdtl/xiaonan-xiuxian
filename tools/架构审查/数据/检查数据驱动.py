@@ -1000,6 +1000,45 @@ def check_build_names() -> list[str]:
     return issues
 
 
+def check_build_status_names() -> list[str]:
+    """三类状态名必须以本书书名全称为前缀。"""
+
+    issues: list[str] = []
+    for kind, (relative, _header) in BUILD_DESCRIPTION_DIRS.items():
+        root = DATA / relative
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.json")):
+            try:
+                document = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            entries = document if isinstance(document, list) else [document]
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                match = re.search(r"《([^》]+)》", str(entry.get("说明") or ""))
+                if not match:
+                    continue
+                book = match.group(1)
+
+                def walk(value: object) -> None:
+                    if isinstance(value, dict):
+                        status = value.get("状态")
+                        if isinstance(status, dict):
+                            name = str(status.get("名称") or "")
+                            if name and not name.startswith(f"{book}·"):
+                                issues.append(f"{kind} {entry.get('名称', path.name)} 状态不是书脉全称：{name}")
+                        for child in value.values():
+                            walk(child)
+                    elif isinstance(value, list):
+                        for child in value:
+                            walk(child)
+
+                walk(entry)
+    return issues
+
+
 def check_build_descriptions() -> list[str]:
     """功法/真意/气机说明：单段定稿句式，来源、名称、总纲齐全。"""
 
@@ -1096,6 +1135,7 @@ def main() -> int:
     引文 = check_duplicate_quotes()
     功法说明 = check_gongfa_outlines()
     三脉说明 = check_build_descriptions()
+    三脉状态 = check_build_status_names()
     三脉名 = check_build_names()
     if 引文:
         print(f"说明引文重复 {len(引文)} 处：")
@@ -1127,6 +1167,16 @@ def main() -> int:
         print("说明必须按定稿单句：此为《书》…·名篇。其…一脉绝学。其…总纲为：……。")
         return 1
     print("功法/真意/气机说明：定稿单句、来源与总纲齐全")
+    if 三脉状态:
+        print(f"状态名未用书脉全称 {len(三脉状态)} 处：")
+        for item in 三脉状态[:20]:
+            print(f"  {item}")
+        if len(三脉状态) > 20:
+            print(f"  …… 另 {len(三脉状态) - 20} 条")
+        print()
+        print("状态名必须是「书名全称·状态核心」，不能再用短书脉或三段式。")
+        return 1
+    print("功法/真意/气机状态名：书脉全称前缀")
     if 三脉名:
         print(f"功法/真意/气机名称问题 {len(三脉名)} 处：")
         for item in 三脉名[:20]:
