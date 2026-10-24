@@ -345,7 +345,9 @@ class SectFacilityService:
     ) -> SectFormationPreview:
         member, entries, stones = await self._context(user_id, material_source)
         assessment = self._formation.assess(identifier, grade, entries, investments)
-        grade_key = f"{assessment.grade_name}品"
+        grade_key = str(assessment.grade_name)
+        if not grade_key.endswith("品"):
+            grade_key = f"{grade_key}品"
         self.authorize(member.role, material_source, grade_key)
         cost = self.cost("炼阵", grade_key)
         if grade_key == "圣品":
@@ -585,7 +587,7 @@ class SectFacilityService:
             material_source,
             request_key,
             assessment.formation.name,
-            f"{assessment.grade_name}品",
+            str(assessment.grade_name),
             destination,
             preview.spirit_stone_cost,
             public.spirit_stones_after,
