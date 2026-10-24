@@ -368,6 +368,101 @@ def test_formation_activation_plan_reaches_battle(services) -> None:
     assert any(event.kind == "阵法冲击后" for event in result.events)
 
 
+def test_bloodline_data_boundary(services) -> None:
+    """普通/天外、能觉醒/不能觉醒、固定属性与觉醒档都按数据解释。"""
+
+    from game.features.xuemai import XuemaiFeature
+    from game.features.xuemai.matching import matched
+
+    xuemai = XuemaiFeature(services.data, services.character, services.database)
+    xuemai.initialize()
+    rules = xuemai.rules()
+    assert len(rules.bloodlines) == 32
+    assert any(blood.outer for blood in rules.bloodlines)
+    assert any(blood.awake for blood in rules.bloodlines)
+    assert any(not blood.awake for blood in rules.bloodlines)
+
+    # 普通血脉：新芽血，固定治疗加成
+    normal_hits = {blood.name for blood in matched(rules, "100000000000")}
+    assert "新芽血" in normal_hits
+    assert xuemai.bloodline_growth("100000000000").get("治疗加成", 0) > 0
+    # 天外血脉：凤凰血，全偶数位
+    outer_hits = {blood.name for blood in matched(rules, "101010101010")}
+    assert "凤凰血" in outer_hits
+    assert xuemai.bloodline_growth("101010101010").get("治疗加成", 0) >= 15.0
+    # 觉醒档边界：70 是 1.0，39 落 20~40 档，4 落 5 以下档
+    assert float(xuemai.awaken("70")) == 1.0
+    assert float(xuemai.awaken("39")) == 1.5
+    assert float(xuemai.awaken("19")) == 2.0
+    assert float(xuemai.awaken("4")) == 2.5
+
+
+def test_bloodline_real_character_reaches_battle(services) -> None:
+    """真实人物 + 真实 DNA：血脉固定属性进入战斗，觉醒档按气血取倍率。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import StateMutation, TransactionCommand
+    from game.features.xuemai import XuemaiFeature
+
+    xuemai = XuemaiFeature(services.data, services.character, services.database)
+    xuemai.initialize()
+    assert xuemai.awaken("39") > 1.0
+    assert xuemai.awaken("70") == 1.0
+
+    user_id = "bloodline-e2e"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(
+                user_id, "create-bloodline", "血脉测试", "女", (15, 17), ""
+            )
+        )
+    )
+    dna = "000000759999"  # 满月血：G4/G5>=75、G6>=50，能觉醒
+    state = {"DNA": dna, "代次": 0, "胎次": 0, "族谱": []}
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(
+                user_id,
+                "seed-bloodline",
+                "血脉定DNA",
+                (
+                    StateMutation(
+                        user_id,
+                        xuemai.state_type(),
+                        xuemai.state_key(),
+                        state,
+                        0,
+                    ),
+                ),
+                {"DNA": dna},
+            )
+        )
+    )
+    spec = asyncio.run(services.character.combatant(user_id))
+    assert spec.dna == dna
+    assert spec.bloodline_disabled is False
+    result = _fight(
+        services,
+        limit=3,
+        left_team=(spec,),
+        right_team=(_spec("R"),),
+    )
+    attributes = result.left_results[0].attributes
+    base_attack = float(spec.attributes.get("攻击", 0))
+    assert float(attributes.get("攻击", 0)) >= base_attack + 7.0  # 满月血固定攻击 +7
+
+    disabled = replace(spec, bloodline_disabled=True)
+    disabled_result = _fight(
+        services,
+        limit=3,
+        left_team=(disabled,),
+        right_team=(_spec("R"),),
+    )
+    assert float(disabled_result.left_results[0].attributes.get("攻击", 0)) < float(
+        attributes.get("攻击", 0)
+    )
+
+
 def test_formation_craft_arm_and_battle(services) -> None:
     """真实人物库存：炼阵 → 布阵 → 激活快照 → 实战。"""
 

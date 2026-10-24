@@ -1632,7 +1632,7 @@ class BattleEngine(AbilityRuntime):
         factor = float(actor.growth_amplifier or 1.0)
         # 觉醒倍数按**当前气血**取档：它跟意境百分比一样，是「放大等级成长」的那一类。
         awaken = self._bloodline_awaken
-        if awaken is not None and actor.dna:
+        if awaken is not None and actor.dna and not actor.bloodline_disabled:
             limit = float(actor.value("血气上限", 0.0)) or 1.0
             percent = float(actor.health) / limit * 100.0
             factor += float(awaken(actor.dna, percent)) - 1.0
