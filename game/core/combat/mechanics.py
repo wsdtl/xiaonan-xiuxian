@@ -1992,6 +1992,19 @@ class AbilityRuntime(ChainRuntime):
             success = resolution.actual_damage > 0 or success
             if resolution.actual_damage > 0:
                 self._mark_team_synergy(context, source, effect)
+                leech = float(effect.get("吸血比例", 0) or 0) / 100.0
+                if leech > 0 and source.alive:
+                    self._ability_recover_resource(
+                        context,
+                        source,
+                        source,
+                        {
+                            "资源": "血气",
+                            "目标": {"能力": "选择目标", "范围": "自身"},
+                            "数值": resolution.actual_damage * leech,
+                        },
+                        1.0,
+                    )
             context.last_result = {**context.last_result, **resolution.values()}
         return success
 
