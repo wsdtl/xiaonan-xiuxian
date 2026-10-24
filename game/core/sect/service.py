@@ -76,7 +76,9 @@ class SectService:
         rule = _mapping(self._data.dataset("宗门创造规则").get("宗门"), "宗门.json")
         name = _mapping(rule.get("名称"), "宗门.名称")
         creation = _mapping(rule.get("创建"), "宗门.创建")
-        follow = _mapping(rule.get("同行"), "宗门.同行")
+        follow = _mapping(
+            self._data.dataset("宗门同行规则").get("同行"), "同行.json"
+        )
         invitation = _mapping(rule.get("邀请"), "宗门.邀请")
         roles = _mapping(rule.get("身份"), "宗门.身份")
         self._name_min = _positive_int(name.get("最短长度"), "宗门.名称.最短长度")

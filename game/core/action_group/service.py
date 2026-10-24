@@ -31,10 +31,9 @@ class ActionGroupService:
             raise RuntimeError("队伍核心必须先于行动编排核心启动")
         if not self._sect.status().initialized:
             raise RuntimeError("宗门核心必须先于行动编排核心启动")
-        rule = _json_mapping(
-            self._data.dataset("宗门创造规则").get("宗门"), "宗门.json"
+        follow = _json_mapping(
+            self._data.dataset("宗门同行规则").get("同行"), "同行.json"
         )
-        follow = _json_mapping(rule.get("同行"), "宗门.同行")
         self._common_actions = _actions(follow.get("共同行动"), "宗门.同行.共同行动")
         self._common_action_set = frozenset(self._common_actions)
         self._initialized = True

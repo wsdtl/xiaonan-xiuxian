@@ -39,6 +39,9 @@ from typing import Any
 )
 async def sect_command(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen
+    if not await feature.can_manage(user_id):
+        await manager.send(reply.error(feature.copy(), "not_in_cave"))
+        return
     parts = str(message or "").strip().split(maxsplit=2)
     try:
         if not parts:

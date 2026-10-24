@@ -54,16 +54,44 @@ class GateFeature:
             raise RuntimeError("世界核心必须先于山门玩法启动")
         rule = require_mapping(self._data.dataset("宗门洞天进出规则").get("山门"), "山门.json")
         self._space_type = _text(rule.get("空间类型"), "山门.空间类型")
-        # 山门在哪由**数据**决定：世界核心保证「宗门」是唯一的地点专属功能，
-        # 这里读它的配置，顺便把守卫也取出来（声明有人读，不是摆设）。
-        gate = self._world.feature_config("宗门")
-        self._enter_guard = _text(gate.get("状态守卫"), "宗门.状态守卫")
-        # 入山门/出山门命令已删，山门只做到达/离开时的自动空间切换，不再读展示。
+        gate = self._world.feature_config("山门")
+        self._enter_guard = _text(gate.get("状态守卫"), "山门.状态守卫")
+        text = require_mapping(
+            self._data.dataset("山门页面文案").get("文本"), "山门页面文案.文本"
+        )
+        buttons = self._data.dataset("山门页面按钮").get("按钮")
+        self._copy = GateCopy({str(key): str(value) for key, value in text.items()})
+        self._buttons = tuple(dict(value) for value in buttons or ())
 
     def copy(self) -> GateCopy:
         if self._copy is None:
             raise RuntimeError("山门玩法尚未初始化")
         return self._copy
+
+    def page_actions(self, page: str) -> tuple[GateAction, ...]:
+        return tuple(
+            GateAction(
+                str(value["编号"]),
+                str(value["名称"]),
+                str(value["命令"]),
+                str(value["行为"]),
+                str(value["样式"]),
+            )
+            for value in self._buttons
+            if str(value.get("页面") or "") == page
+        )
+
+    async def page(self, user_id: str) -> str:
+        """返回当前山门页面：外圈、洞天、无宗门、不在山门。"""
+
+        self._require_initialized()
+        current = await self._location.current(user_id)
+        if current.space_type == self._space_type:
+            return "洞天"
+        if current.space_type != "地表" or not self._at_gate(current.xy):
+            return "不在山门"
+        member = await self._sect.membership(user_id)
+        return "外圈" if member is not None else "无宗门"
 
     async def gate_actions(self, user_id: str) -> tuple[GateAction, ...]:
         self._require_initialized()
@@ -75,9 +103,9 @@ class GateFeature:
         if sect is None:
             return ()
         if current.space_type == self._space_type and current.space_id == sect.cave_id:
-            return actions(self._buttons, "宗门洞天")
+            return self.page_actions("洞天")
         if current.space_type == "地表" and self._at_gate(current.xy):
-            return actions(self._buttons, "宗门园区")
+            return self.page_actions("外圈")
         return ()
 
     async def leave_if_available(self, user_id: str, request_id: str) -> bool:

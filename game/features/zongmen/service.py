@@ -68,6 +68,15 @@ class SectFeature:
     def page_actions(self, page: str) -> tuple[SectAction, ...]:
         return actions(self._buttons, page)
 
+    async def can_manage(self, user_id: str) -> bool:
+        """宗门成员只能在宗门洞天内看到完整宗门功能；无宗门仍可看加入页。"""
+
+        member = await self._sect.membership(user_id)
+        if member is None:
+            return True
+        current = await self._location.current(user_id)
+        return current.space_type == "宗门洞天"
+
     async def page(self, user_id: str, *, now: datetime | None = None) -> SectPage:
         invitation = await self._sect.pending_invitation(user_id, now=now)
         member = await self._sect.membership(user_id)

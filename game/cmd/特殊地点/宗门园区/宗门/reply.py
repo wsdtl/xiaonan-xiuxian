@@ -25,6 +25,7 @@ _ERROR_KEYS = {
     "cannot_invite_self": "不能邀请自己",
     "not_same_location": "不在同处",
     "not_surface": "不在地表",
+    "not_in_cave": "不在洞天",
     "target_busy": "目标忙碌",
     "target_already_member": "目标已经加入",
     "pending_invitation_exists": "已有邀请",

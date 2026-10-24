@@ -23,7 +23,7 @@ class GateAction:
 
 @dataclass(frozen=True)
 class GateCopy:
-    text: Mapping[str, Mapping[str, str]]
+    text: Mapping[str, str]
 
 
 @dataclass(frozen=True)

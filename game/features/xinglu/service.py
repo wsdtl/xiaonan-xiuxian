@@ -86,9 +86,6 @@ class TravelFeature:
                 raise TravelQueryError(
                     f"{profile.name if profile else '有参与修士'}当前不能行路：{guard.reason}"
                 )
-        # 身处洞天时先自动回地表：离开园区即离开洞天，不再需要「出山门」。
-        if self._gate is not None:
-            await self._gate.leave_if_available(request.user_id, request.request_id)
         current = await self._location.current(request.user_id)
         if current.space_type != "地表":
             raise TravelQueryError("当前身处特殊空间，不能直接行路")
@@ -119,9 +116,6 @@ class TravelFeature:
             raise TravelConflictError(str(exc)) from exc
         if not moved.changed:
             raise TravelQueryError("你已经身在此处，无须再次动身。")
-        # 到达宗门园区就视为进了本宗洞天，不再需要「入山门」这一步。
-        if self._gate is not None:
-            await self._gate.enter_if_available(request.user_id, request.request_id)
         return TravelResult(
             plan=plan,
             participant_user_ids=participants,

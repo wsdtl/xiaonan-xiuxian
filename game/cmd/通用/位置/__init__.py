@@ -11,14 +11,14 @@ from typing import Any
 
 
 @GameCommand.fullmatch(
-    cmd=("位置", "山门"),
+    cmd="位置",
     metadata={
         "scope": "通用",
         "guard_rule": "已创建",
         "help": {
             "category": "世界",
             "summary": "查看当前地点、地势与此地开放功能",
-            "usage": ("位置", "山门"),
+            "usage": ("位置",),
             "side_effect": "只查看，不会改变人物状态",
             "order": 20,
         },
@@ -28,7 +28,6 @@ async def show_position(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.weizhi
     services = current_game_services()
     result = await feature.current(user_id)
-    gate_actions = await services.features.zongmen_shanmen.gate_actions(user_id)
     position_actions = feature.position_actions(
         result.location.available_functions,
         plant_pool=result.location.plant_pool,
@@ -38,7 +37,7 @@ async def show_position(user_id: str, manager: Any) -> None:
         reply.current(
             feature.copy(),
             result,
-            position_actions + gate_actions,
+            position_actions,
         )
     )
 

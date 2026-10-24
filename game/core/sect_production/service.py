@@ -81,7 +81,9 @@ class SectProductionService:
             raise RuntimeError("宗门资源生产核心已经初始化")
         if not self._data.status().loaded:
             raise RuntimeError("JSON 数据微服务必须先于宗门资源生产核心启动")
-        raw = _mapping(self._data.dataset("宗门生产循环规则").get("生产"), "宗门生产")
+        raw = dict(self._data.dataset("宗门生产周期").get("生产"))
+        raw["设施"] = dict(self._data.dataset("宗门生产设施"))
+        raw["产出"] = dict(self._data.dataset("宗门生产产出"))
         self._rule_version = _text(raw.get("规则版本"), "宗门生产.规则版本")
         period = _positive_int(raw.get("周期秒"), "宗门生产.周期秒")
         catch_up = _positive_int(raw.get("累计轮数上限"), "宗门生产.累计轮数上限")
