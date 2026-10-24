@@ -767,20 +767,25 @@ class ForgingService:
                 raise JsonDataError(f"器律名称重复：{name}")
             names.add(name)
             stage = _text(raw.get("器阶"), f"器律 {law_id}.器阶")
-            method_name = _text(raw.get("铸法"), f"器律 {law_id}.铸法")
-            method = self._methods.get(method_name)
-            if method is None:
-                raise JsonDataError(f"器律 {name} 引用不存在铸法：{method_name}")
-            if method[0] != stage:
-                raise JsonDataError(f"器律 {name} 的器阶与铸法不一致")
+            materials = tuple(
+                _mapping(item, f"器律 {name}.材料[]")
+                for item in _sequence(raw.get("材料", ()), f"器律 {name}.材料")
+            )
+            method_name = str(raw.get("铸法") or "")
+            method = self._methods.get(method_name) if method_name else None
+            if not materials:
+                if method is None:
+                    raise JsonDataError(f"器律 {name} 引用不存在铸法：{method_name}")
+                if method[0] != stage:
+                    raise JsonDataError(f"器律 {name} 的器阶与铸法不一致")
             result[law_id] = ForgingLaw(
                 law_id,
                 name,
                 stage,
                 method_name,
-                _texts(raw.get("兽引"), f"器律 {name}.兽引"),
-                method[1],
-                tuple(_mapping(item, f"器律 {name}.材料[]") for item in _sequence(raw.get("材料", ()), f"器律 {name}.材料")),
+                _texts(raw.get("兽引", ()), f"器律 {name}.兽引") if not materials else (),
+                method[1] if method else (),
+                materials,
             )
         return result
 
@@ -824,6 +829,8 @@ class ForgingService:
             stage = self._stage_by_name.get(law.stage)
             if stage is None or law.stage == "凡器":
                 raise JsonDataError(f"器律使用未知器阶：{law.name} -> {law.stage}")
+            if law.materials:
+                continue
             if len(law.beast_traits) != stage.beast_requirement_count:
                 raise JsonDataError(f"器律兽引数量与器阶不一致：{law.name}")
             if (
