@@ -722,11 +722,10 @@ class FormationService:
         self._require_initialized()
         current = await self._location.current(user_id)
         place = self._world.locate(LocationQuery(xy=current.xy))
-        if not place.location_name or "炼阵" not in place.available_functions:
-            raise FormationUnavailableError("此地没有能够主持炼阵的阵师")
         master = self._masters.get(place.location_name)
         if master is None:
-            raise FormationUnavailableError("此地没有能够主持炼阵的阵师")
+            master = next(iter(self._masters.values()))
+            return "随身", master
         return place.location_name, master
 
     async def _resolve_reserve_key(self, user_id: str, identifier: str) -> str:

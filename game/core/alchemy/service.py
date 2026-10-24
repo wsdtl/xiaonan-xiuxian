@@ -709,11 +709,10 @@ class AlchemyService:
         self._require_initialized()
         current = await self._location.current(user_id)
         place = self._world.locate(LocationQuery(xy=current.xy))
-        if not place.location_name or "炼丹" not in place.available_functions:
-            raise AlchemyUnavailableError("此地没有能够主持炼丹的丹师")
         alchemist = self._alchemists.get(place.location_name)
         if alchemist is None:
-            raise AlchemyUnavailableError("此地没有能够主持炼丹的丹师")
+            alchemist = next(iter(self._alchemists.values()))
+            return "随身", alchemist
         return place.location_name, alchemist
 
     def _resolve_recipe(self, identifier: str) -> AlchemyRecipe:

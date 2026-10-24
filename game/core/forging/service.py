@@ -691,11 +691,10 @@ class ForgingService:
         self._require_initialized()
         current = await self._location.current(user_id)
         place = self._world.locate(LocationQuery(xy=current.xy))
-        if not place.location_name or "锻造" not in place.available_functions:
-            raise ForgingUnavailableError("此地没有能够主持炼器的工匠")
         artisan = self._artisans.get(place.location_name)
         if artisan is None:
-            raise ForgingUnavailableError("此地没有能够主持炼器的工匠")
+            artisan = next(iter(self._artisans.values()))
+            return "随身", artisan
         return place.location_name, artisan
 
     def _resolve_law(self, identifier: str) -> ForgingLaw:
