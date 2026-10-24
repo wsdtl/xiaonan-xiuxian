@@ -731,13 +731,10 @@ class AssetService:
         materials: Mapping[str, str] | None = None,
         treasure_id: str = "",
         modifiers: Mapping[str, str] | None = None,
-        quantity: int = 1,
     ) -> FormationReserveAcquisitionPlan:
         """为炼阵事务生成固定品阵法增量或独立圣品实例。"""
 
         self._require_initialized()
-        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
-            raise AssetStateError("阵法取得数量必须是正整数")
         normalized_user_id = _required_text(user_id, "user_id")
         normalized_formation_id = _required_text(formation_id, "阵法编号")
         formation = self._data.entity("阵法", normalized_formation_id)
@@ -786,7 +783,6 @@ class AssetService:
                 normalized_modifiers,
                 before=before,
                 version=version,
-                quantity=quantity,
             )
         if materials:
             raise AssetStateError("天地玄黄阵法不能保存额外材料投入")
@@ -821,7 +817,7 @@ class AssetService:
                 raise AssetStateError("阵藏堆叠包含不同的灵宝效果")
             before = _positive_int(value.get("数量"), "阵藏.数量")
             version = snapshot.version
-        after = before + quantity
+        after = before + 1
         stack = FormationReserveStack(
             state_key,
             formation_id,
@@ -865,7 +861,6 @@ class AssetService:
         *,
         before: int = 0,
         version: int = 0,
-        quantity: int = 1,
     ) -> FormationReserveAcquisitionPlan:
         """圣品（05）走独立实例：每次一件、身份用一次性键，投入三项必须齐。""",
 
@@ -876,7 +871,7 @@ class AssetService:
         if set(values) != {"兽宝", "灵矿", "灵植"}:
             raise AssetStateError("圣品阵法必须完整保存兽宝、灵矿和灵植投入")
         # 同键堆叠：同样的（阵法＋品级＋灵宝＋投入）就是同一件东西，第二件把数量加上去。
-        after = before + quantity
+        after = before + 1
         # 键就是统一形式＋扩展位：品级＋阵法编号[灵宝]{投入}——光看键就能解析出这一件的全部身份。
         state_key = format_item_ref(
             ItemRef(
