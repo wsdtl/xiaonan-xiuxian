@@ -924,16 +924,22 @@ class SectAssetService:
                 held[grade_id] += int(value.get("数量") or 0)
         if delta < 0:
             need = -delta
-            for grade_id in ordered:
-                if need <= 0:
-                    break
+            total = sum(held[grade_id] * units[grade_id] for grade_id in ordered)
+            if total < need:
+                raise SectAssetError(f"宗门灵石不足：还差{need - total}枚黄品当量")
+            # 灵石是整枚的，付款额未必能由整枚高品灵石整除。先把余额
+            # 整体折算成黄品当量，再按品级从高到低重新找零，避免
+            # 「手握一枚圣品灵石却付不起 3600」被误报成余额不足。
+            remaining = total - need
+            held = {grade_id: 0 for grade_id in ordered}
+            for grade_id in reversed(ordered):
                 unit = units[grade_id]
-                count = min(held[grade_id], need // unit)
+                count = remaining // unit
                 if count:
-                    held[grade_id] -= count
-                    need -= count * unit
-            if need > 0:
-                raise SectAssetError(f"宗门灵石不足：还差{need}枚黄品当量")
+                    held[grade_id] = count
+                    remaining -= count * unit
+            if remaining:
+                held[ordered[0]] += remaining
         elif delta > 0:
             need = delta
             for grade_id in reversed(ordered):
