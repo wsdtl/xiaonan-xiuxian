@@ -427,6 +427,22 @@ def test_health_soul_are_isomorphic(services) -> None:
     assert CombatantResult.alive.fget(SimpleNamespace(health=0.0, soul=1.0)) is False
 
 
+def test_lifespan_full_drops_level_growth(services) -> None:
+    """寿元将尽：等级成长那一份从属性与资源上限里扣掉，基础属性保留。"""
+
+    from game.core.character.service import _clamp_life_resources
+
+    growth = services.growth.cultivator_attribute_growth(2)
+    key = next(key for key in growth if key not in {"血气上限", "神魂上限", "精神上限"})
+    attributes = {str(key): 100.0, "血气上限": 500.0, "神魂上限": 500.0}
+    result = services.character._without_level_growth(attributes, 3)
+    assert result[str(key)] == 100.0 - float(growth[key])
+    for cap in ("血气上限", "神魂上限"):
+        assert result[cap] == 500.0 - float(growth.get(cap, 0))
+    resources = _clamp_life_resources({"血气": 500.0, "神魂": 500.0}, result)
+    assert resources["血气"] <= result["血气上限"]
+
+
 def test_yijing_tier_nine_enters_real_battle(services) -> None:
     """意境九阶：真实战斗快照、状态、质变监听都要能跑。"""
 

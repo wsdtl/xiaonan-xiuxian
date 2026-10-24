@@ -425,17 +425,37 @@ class CompanionService:
             for index, content_id in enumerate(instance.weapon_laws, start=1)
             if content_id
         )
+        expired = await self.lifespan_full(user_id, instance.companion_id)
+        attributes = dict(instance.attributes)
+        resources = dict(instance.resources)
+        if expired:
+            growth = self._growth.cultivator_attribute_growth(
+                max(0, int(instance.level) - 1)
+            )
+            for key, value in growth.items():
+                attributes[str(key)] = max(
+                    0.0, float(attributes.get(str(key), 0.0)) - float(value)
+                )
+            for resource, cap in (
+                ("血气", "血气上限"),
+                ("神魂", "神魂上限"),
+                ("精神", "精神上限"),
+            ):
+                if resource in resources and cap in attributes:
+                    resources[resource] = min(
+                        float(resources[resource]), float(attributes[cap])
+                    )
         return CombatantSpec(
             id=f"companion:{user_id}:{instance.companion_id}",
             name=definition.name,
-            attributes=instance.attributes,
+            attributes=attributes,
             level=instance.level,
             combatant_type="修士",
             weapon_attack=self._forging.weapon_attack(instance.weapon_level),
             build=build,
-            health=float(instance.resources["血气"]),
-            spirit=float(instance.resources["精神"]),
-            soul=float(instance.resources.get("神魂", instance.attributes.get("神魂上限", 0))),
+            health=float(resources["血气"]),
+            spirit=float(resources["精神"]),
+            soul=float(resources.get("神魂", attributes.get("神魂上限", 0))),
             auto_medicine=instance.automatic_medicine,
             owner_id=user_id,
             controller_id=user_id,
@@ -448,16 +468,17 @@ class CompanionService:
                 if self._dna_of is not None
                 else ""
             ),
-            bloodline_disabled=await self.lifespan_full(user_id, instance.companion_id),
-            # 道侣也吃「等级成长 ×（觉醒倍数 + 意境百分比）」：这里给出那一份，
-            # 资质倍率照它自己的成长结算用同一份（见上方 plan_growth）。
-            # 觉醒倍数由引擎按 actor.dna 取档加上；道侣目前没有意境，所以意境那半是 0。
-            growth_base={
-                str(key): float(value)
-                for key, value in self._growth.cultivator_attribute_growth(
-                    max(0, int(instance.level) - 1),
-                ).items()
-            },
+            bloodline_disabled=expired,
+            growth_base=(
+                {}
+                if expired
+                else {
+                    str(key): float(value)
+                    for key, value in self._growth.cultivator_attribute_growth(
+                        max(0, int(instance.level) - 1),
+                    ).items()
+                }
+            ),
             growth_amplifier=1.0,
         )
 

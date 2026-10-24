@@ -320,6 +320,17 @@ class CharacterService:
         progress = trained if trained else days * ratio
         return int(base + progress)
 
+    def _without_level_growth(
+        self, attributes: Mapping[str, float], level: int
+    ) -> dict[str, float]:
+        """寿元将尽：扣掉等级成长那一份，只留基础、装备、血脉等非成长加成。"""
+
+        growth = self._growth.cultivator_attribute_growth(max(0, level - 1))
+        result = dict(attributes)
+        for name, amount in growth.items():
+            result[str(name)] = max(0.0, float(result.get(str(name), 0.0)) - float(amount))
+        return result
+
 
     def status(self) -> CharacterStatus:
         initial_items = _initial_items(self._role_rule) if self._initialized else ()
@@ -378,14 +389,18 @@ class CharacterService:
         weapon_profile = self._weapon_profile(weapon)
         inventory = _inventory_summary(states)
         race = _state_text(character.get("种族"), "人物.种族")
-        # 寿元上限 = 当前境界的寿元 × 种族的寿元系数（这一轮只算上限，不做衰老与寿终）。
+        # 寿元上限 = 当前境界的寿元 × 种族的寿元系数。
         lifespan = int(
             round(self._growth.realm(realm_id).lifespan * self.race_lifespan_factor(race))
         )
-        # 年龄：展示用——以人物状态里的「诞生」时间戳为起点、按 `创建.年岁比例` 推进，钳在寿元上限内。
-        # 没有衰老与寿终，所以「超过上限」这个情形不该出现，也不需要任何处理。
         lifetime = self._age(character, lifespan)
         age, lifespan_full = _clamp_age(lifetime, lifespan)
+        level = _state_positive_int(character.get("等级"), "人物.等级")
+        attributes = _state_numbers(character.get("属性"), "人物.属性")
+        resources = _state_numbers(character.get("资源"), "人物.资源")
+        if lifespan_full:
+            attributes = self._without_level_growth(attributes, level)
+            resources = _clamp_life_resources(resources, attributes)
         return CharacterProfile(
             user_id=normalized_user_id,
             name=_state_text(character.get("姓名"), "人物.姓名"),
@@ -393,7 +408,7 @@ class CharacterService:
             character_type=_state_text(character.get("角色类型"), "人物.角色类型"),
             realm_id=realm_id,
             realm_name=realm_name,
-            level=_state_positive_int(character.get("等级"), "人物.等级"),
+            level=level,
             experience=_state_nonnegative_int(character.get("经验"), "人物.经验"),
             spirit_stones=await self._asset.spirit_stone_balance(normalized_user_id),
             sect_contribution=_state_nonnegative_int(
@@ -403,8 +418,8 @@ class CharacterService:
             prepared_battle_medicine=_prepared_battle_medicine(
                 character.get("待战战丹"), "人物.待战战丹"
             ),
-            attributes=_state_numbers(character.get("属性"), "人物.属性"),
-            resources=_state_numbers(character.get("资源"), "人物.资源"),
+            attributes=attributes,
+            resources=resources,
             cultivation_slots=cultivation_slots,
             equipped_content=equipped_content,
             weapon=weapon_profile,
@@ -658,12 +673,16 @@ class CharacterService:
             inherent_rules=self.inherent_rules(profile.race),
             prepared_statuses=yijing_statuses,
             # 铁律：等级成长那一份 ×（觉醒倍数 + 意境百分比）。觉醒按战斗内气血取，由引擎加。
-            growth_base={
-                str(key): float(value)
-                for key, value in self._growth.cultivator_attribute_growth(
-                    max(0, int(profile.level) - 1)
-                ).items()
-            },
+            growth_base=(
+                {}
+                if profile.lifespan_full
+                else {
+                    str(key): float(value)
+                    for key, value in self._growth.cultivator_attribute_growth(
+                        max(0, int(profile.level) - 1)
+                    ).items()
+                }
+            ),
             growth_amplifier=1.0 + yijing_amplifier,
         )
 
@@ -2153,6 +2172,19 @@ class CharacterService:
 
 def _state_mapping(value: object, label: str) -> Mapping[str, object]:
     return mapping(value, label, error=CharacterStateError)
+
+
+def _clamp_life_resources(
+    resources: Mapping[str, float], attributes: Mapping[str, float]
+) -> dict[str, float]:
+    """寿元将尽后属性上限下降，当前资源不能高于新上限。"""
+
+    caps = {"血气": "血气上限", "神魂": "神魂上限", "精神": "精神上限"}
+    result = dict(resources)
+    for resource, attribute in caps.items():
+        if resource in result and attribute in attributes:
+            result[resource] = min(float(result[resource]), float(attributes[attribute]))
+    return result
 
 
 def _clamp_age(lifetime: int, lifespan: int) -> tuple[int, bool]:
