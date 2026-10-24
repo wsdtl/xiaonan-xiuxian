@@ -397,6 +397,56 @@ def test_bloodline_data_boundary(services) -> None:
     assert float(xuemai.awaken("4")) == 2.5
 
 
+def test_yijing_tier_nine_enters_real_battle(services) -> None:
+    """意境九阶：真实战斗快照、状态、质变监听都要能跑。"""
+
+    from types import SimpleNamespace
+
+    routes = (
+        ("630001", "不尽长江意境"),
+        ("630002", "山不让尘意境"),
+        ("630003", "润物无声意境"),
+        ("630004", "载舟覆舟意境"),
+        ("630005", "日削月割意境"),
+        ("630006", "匣中夜鸣意境"),
+    )
+    for index, (content_id, name) in enumerate(routes):
+        attributes = {
+            "血气上限": 4000,
+            "精神上限": 1000,
+            "攻击": 80,
+            "防御": 20,
+            "速度": 100,
+        }
+        weapon_attack, statuses, amplifier = services.character._yijing_battle(
+            SimpleNamespace(
+                yijing=(
+                    SimpleNamespace(content_id=content_id, name=name, tier=9),
+                )
+            ),
+            attributes,
+            0.0,
+        )
+        assert weapon_attack >= 0.0
+        assert statuses
+        spec = CombatantSpec(
+            id=f"yijing-9-{index}",
+            name=f"九阶{name}",
+            attributes=attributes,
+            prepared_statuses=statuses,
+            growth_amplifier=1.0 + amplifier,
+        )
+        result = _fight(
+            services,
+            limit=12,
+            left_team=(spec,),
+            right_team=(_spec("R"),),
+        )
+        assert result.left_results
+        names = {status.name for status in result.left_results[0].statuses}
+        assert any("意境" in name for name in names)
+
+
 def test_bloodline_can_set_soul_max_only(services) -> None:
     """血脉固定属性可以给神魂上限；这是属性边界，不碰神魂当前值。"""
 
