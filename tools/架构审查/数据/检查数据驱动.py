@@ -940,7 +940,7 @@ BUILD_DESCRIPTION_DIRS = {
 def check_gongfa_outlines() -> list[str]:
     """同一本书的六式功法必须共用同一段总纲。"""
 
-    groups: dict[int, list[tuple[str, str]]] = {}
+    groups: dict[str, list[tuple[str, str]]] = {}
     root = DATA / "战斗/内容/功法"
     for path in sorted(root.rglob("*.json")):
         try:
@@ -951,18 +951,45 @@ def check_gongfa_outlines() -> list[str]:
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            try:
-                index = (int(str(entry.get("编号"))) - 1) // 6
-            except (TypeError, ValueError):
-                continue
             first = str(entry.get("说明") or "").split("\n\n")[0]
-            groups.setdefault(index, []).append((str(entry.get("名称") or path.name), first))
+            groups.setdefault(str(path.parent), []).append(
+                (str(entry.get("名称") or path.name), first)
+            )
     issues: list[str] = []
-    for index, values in sorted(groups.items()):
+    for folder, values in sorted(groups.items()):
         outlines = {value for _, value in values}
         if len(outlines) > 1:
             names = "、".join(name for name, _ in values)
-            issues.append(f"第{index + 1}组总纲不一致：{names}")
+            issues.append(f"{folder} 同组总纲不一致：{names}")
+    return issues
+
+
+def check_build_names() -> list[str]:
+    """功法/真意/气机名称：3–4 字，三类合起来不重名。"""
+
+    seen: dict[str, str] = {}
+    issues: list[str] = []
+    for kind, (relative, _header) in BUILD_DESCRIPTION_DIRS.items():
+        root = DATA / relative
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.json")):
+            try:
+                document = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            entries = document if isinstance(document, list) else [document]
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                name = str(entry.get("名称") or "")
+                if len(name) < 3 or len(name) > 4:
+                    issues.append(f"{kind} {name or path.name} 名称不是 3–4 字")
+                previous = seen.get(name)
+                if previous:
+                    issues.append(f"名称重复「{name}」：{previous} / {kind} {path.name}")
+                else:
+                    seen[name] = f"{kind} {path.name}"
     return issues
 
 
@@ -1070,6 +1097,7 @@ def main() -> int:
     引文 = check_duplicate_quotes()
     功法说明 = check_gongfa_outlines()
     三脉说明 = check_build_descriptions()
+    三脉名 = check_build_names()
     if 引文:
         print(f"说明引文重复 {len(引文)} 处：")
         for item in 引文[:20]:
@@ -1100,6 +1128,16 @@ def main() -> int:
         print("说明必须两段：首段有来源，次段有「所长：」「所短：」。")
         return 1
     print("功法/真意/气机说明：两段、来源、所长所短齐全")
+    if 三脉名:
+        print(f"功法/真意/气机名称问题 {len(三脉名)} 处：")
+        for item in 三脉名[:20]:
+            print(f"  {item}")
+        if len(三脉名) > 20:
+            print(f"  …… 另 {len(三脉名) - 20} 条")
+        print()
+        print("名称必须 3–4 字，功法/真意/气机三类合起来不能重名。")
+        return 1
+    print("功法/真意/气机名称：3–4 字且全局唯一")
     if 住处:
         print(f"契约住错面 {len(住处)} 处：")
         for item in 住处:
