@@ -65,7 +65,7 @@ def law_list(copy: ForgingCopy, value: ForgingLawList) -> DocumentMessage:
             ),
             " · ",
             M.status(state, tone="positive" if entry.can_forge else "warning"),
-        ).small(f"铸法：{entry.law.method}")
+        )
     builder.small(text(copy, "列表", "页码", {"当前页": 1, "总页数": 1}))
     return builder.build()
 
@@ -86,7 +86,6 @@ def preview(
         .row(
             (text(copy, "预览", "器阶"), value.law.stage),
         )
-        .field(text(copy, "预览", "铸法"), value.law.method)
     )
     # 没有材料就整个栏目都不开：空栏目与只印一个「无」一样，白占玩家的地方。
     if value.beast_materials:

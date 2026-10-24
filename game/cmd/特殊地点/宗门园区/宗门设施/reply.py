@@ -67,7 +67,6 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
         title = assessment.law.name
         rows = [
             ("器阶", assessment.law.stage),
-            ("铸法", assessment.law.method),
         ]
         materials = [*assessment.beast_materials, *assessment.mineral_materials]
     elif value.facility.facility_type == "炼丹":

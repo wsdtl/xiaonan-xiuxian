@@ -149,12 +149,16 @@ class ForgingService:
         self._stage_by_name = MappingProxyType(
             {stage.name: stage for stage in self._stages}
         )
-        self._methods = MappingProxyType(self._load_methods(rules.get("铸法")))
+        self._methods = MappingProxyType(
+            self._load_methods(rules.get("铸法")) if rules.get("铸法") else {}
+        )
         self._beast_materials = MappingProxyType(
-            self._load_beast_materials(rules.get("归引"))
+            self._load_beast_materials(rules.get("归引")) if rules.get("归引") else {}
         )
         self._mineral_materials = MappingProxyType(
             self._load_mineral_materials(rules.get("炼器-归脉"))
+            if rules.get("炼器-归脉")
+            else {}
         )
         self._laws = MappingProxyType(self._load_laws())
         self._law_by_name = MappingProxyType(
@@ -856,9 +860,9 @@ class ForgingService:
             )
         beast_ids = _item_ids(self._data, "兽宝")
         mineral_ids = _item_ids(self._data, "灵矿")
-        if set(self._beast_materials) != beast_ids:
+        if self._beast_materials and set(self._beast_materials) != beast_ids:
             raise JsonDataError("归引没有完整且唯一覆盖全部兽宝")
-        if set(self._mineral_materials) != mineral_ids:
+        if self._mineral_materials and set(self._mineral_materials) != mineral_ids:
             raise JsonDataError("归脉没有完整且唯一覆盖全部灵矿")
         forging = _mapping(law_rule.get("炼制"), "器则.炼制")
         if (

@@ -84,7 +84,7 @@ def _build_description_lines(detail: ItemDetail, rendered: tuple[str, ...] = ())
             + " · ".join(f"{key}{value}%" for key, value in attributes.items())
         )
     if detail.section == "器律":
-        for key in ("器阶", "铸法"):
+        for key in ("器阶",):
             if key in fields:
                 lines.append(f"{key}：{fields[key]}")
 
