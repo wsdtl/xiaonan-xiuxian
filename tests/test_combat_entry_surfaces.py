@@ -397,6 +397,36 @@ def test_bloodline_data_boundary(services) -> None:
     assert float(xuemai.awaken("4")) == 2.5
 
 
+def test_health_soul_are_isomorphic(services) -> None:
+    """血气与神魂是同一套命线：同百分比同时长，上限变化一致；任一归零都死。"""
+
+    from types import SimpleNamespace
+
+    from game.core.combat.contracts import CombatantResult
+
+    attributes = {
+        "血气上限": 100.0,
+        "神魂上限": 100.0,
+        "精神上限": 100.0,
+        "攻击": 10.0,
+        "防御": 10.0,
+        "速度": 100.0,
+    }
+    services.character._yijing_battle(
+        SimpleNamespace(
+            yijing=(
+                SimpleNamespace(content_id="630002", name="山不让尘意境", tier=9),
+            )
+        ),
+        attributes,
+        0.0,
+    )
+    assert attributes["血气上限"] == attributes["神魂上限"] == 145.0
+    assert CombatantResult.alive.fget(SimpleNamespace(health=1.0, soul=1.0)) is True
+    assert CombatantResult.alive.fget(SimpleNamespace(health=1.0, soul=0.0)) is False
+    assert CombatantResult.alive.fget(SimpleNamespace(health=0.0, soul=1.0)) is False
+
+
 def test_yijing_tier_nine_enters_real_battle(services) -> None:
     """意境九阶：真实战斗快照、状态、质变监听都要能跑。"""
 

@@ -479,7 +479,7 @@ class BattleReportCatalog:
         for key in required_settlements:
             if not _strings(settlement, key):
                 raise ValueError(f"战报结算事件不能为空：{key}")
-        for resource_id in ("health", "spirit", "shield"):
+        for resource_id in ("health", "spirit", "soul", "shield"):
             definition = _mapping(self.resources, resource_id)
             if not str(definition.get("label") or "").strip():
                 raise ValueError(f"战报资源缺少名称：{resource_id}")

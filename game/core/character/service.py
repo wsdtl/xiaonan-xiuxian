@@ -506,8 +506,8 @@ class CharacterService:
                 if owner == "状态修正":
                     modifiers_list.append((key, float(baseline.get(key, 0)) + step * yijing.tier))
                     continue
-                if key == "神魂上限":
-                    # 气血上限走成长放大；神魂上限没有成长那一份，必须直接落成实际上限。
+                if key in {"血气上限", "神魂上限"}:
+                    # 两条命线的上限是同一类资源上限：百分比直接扩大上限，不走等级成长。
                     base = float(attributes.get(key, 100.0))
                     attributes[key] = (
                         base * (1.0 + step * yijing.tier / 100.0)

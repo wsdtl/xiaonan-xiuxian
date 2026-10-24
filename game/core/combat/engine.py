@@ -1200,7 +1200,7 @@ class BattleEngine(AbilityRuntime):
         attributes = self._normalize_attributes(attributes)
         health_max = max(1.0, attributes.get("血气上限", 1))
         spirit_max = max(0.0, attributes.get("精神上限", 0))
-        soul_max = max(0.0, attributes.get("神魂上限", 0))
+        soul_max = max(1.0, attributes.get("神魂上限", 0))
         return Fighter(
             id=str(snapshot.id),
             name=str(snapshot.name or "无名参战者"),

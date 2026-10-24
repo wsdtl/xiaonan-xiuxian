@@ -323,9 +323,8 @@ class CombatantResult:
 
     @property
     def alive(self) -> bool:
-        if self.health <= 0:
-            return False
-        return self.soul_max <= 0 or self.soul > 0
+        #: 血气与神魂是两条同构命线，任一归零即死。
+        return self.health > 0 and self.soul > 0
 
 
 @dataclass(frozen=True)
