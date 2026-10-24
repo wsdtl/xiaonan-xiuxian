@@ -479,17 +479,21 @@ class AlchemyService:
         grade_name: str = "黄品",
     ) -> AlchemyPreview:
         value = self.assess(recipe.recipe_id, entries, grade_name)
-        grade = self._asset.grade(value.medicine_grade_id)
-        town_max_grade = self._asset.grade(self._town_max_grade_id)
-        if grade.order > town_max_grade.order:
-            grade = town_max_grade
+        if recipe.no_grade:
+            grade_id, grade_name_value = value.medicine_grade_id, "无品级"
+        else:
+            grade = self._asset.grade(value.medicine_grade_id)
+            town_max_grade = self._asset.grade(self._town_max_grade_id)
+            if grade.order > town_max_grade.order:
+                grade = town_max_grade
+            grade_id, grade_name_value = grade.grade_id, grade.name
         return AlchemyPreview(
             user_id,
             location_name,
             alchemist,
             value.recipe,
-            grade.grade_id,
-            grade.name,
+            grade_id,
+            grade_name_value,
             value.beast_material,
             value.herb_materials,
             value.missing_materials,
@@ -508,7 +512,7 @@ class AlchemyService:
         town_max = self._asset.grade(self._town_max_grade_id)
         if grade.order > town_max.order:
             grade = town_max
-        factor = float(grade.craft_multiplier)
+        factor = 1.0 if recipe.no_grade else float(grade.craft_multiplier)
         matched: list[AlchemyMaterial] = []
         missing: list[AlchemyMissingMaterial] = []
         for raw in recipe.materials:
@@ -561,7 +565,7 @@ class AlchemyService:
         return AlchemyAssessment(
             recipe,
             grade.grade_id,
-            grade.name,
+            "无品级" if recipe.no_grade else grade.name,
             main,
             herbs,
             tuple(missing),
@@ -817,6 +821,7 @@ class AlchemyService:
                 medicine_id,
                 name,
                 materials,
+                bool(raw.get("无品级")),
             )
         return result
 

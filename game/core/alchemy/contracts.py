@@ -56,6 +56,7 @@ class AlchemyRecipe:
     medicine_id: str
     medicine_name: str
     materials: tuple[Mapping[str, object], ...] = ()
+    no_grade: bool = False
 
 
 @dataclass(frozen=True)
