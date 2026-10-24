@@ -506,7 +506,15 @@ class CharacterService:
                 if owner == "状态修正":
                     modifiers_list.append((key, float(baseline.get(key, 0)) + step * yijing.tier))
                     continue
-                if key == "器的量":
+                if key == "神魂上限":
+                    # 气血上限走成长放大；神魂上限没有成长那一份，必须直接落成实际上限。
+                    base = float(attributes.get(key, 100.0))
+                    attributes[key] = (
+                        base * (1.0 + step * yijing.tier / 100.0)
+                        if caliber == "百分比"
+                        else base + step * yijing.tier
+                    )
+                elif key == "器的量":
                     weapon_attack += step * yijing.tier
                 elif caliber == "百分比":
                     # 这是「放大等级成长」的百分比，**不加到基础值上**（委托方 2026-10-16 最终口径：
