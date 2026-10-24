@@ -931,9 +931,15 @@ def check_duplicate_quotes() -> list[str]:
 
 
 BUILD_DESCRIPTION_DIRS = {
-    "功法": ("战斗/内容/功法", "总纲："),
+    "功法": ("战斗/内容/功法", "功法·"),
     "真意": ("战斗/内容/真意", "真意·"),
     "气机": ("战斗/内容/气机", "气机·"),
+}
+
+BUILD_DESCRIPTION_PATTERNS = {
+    "功法": re.compile(r"^此为《[^》]+》功法·.+?篇。其.+?一脉绝学。其总纲为：.+。$"),
+    "真意": re.compile(r"^此为《[^》]+》真意·.+?篇。其.+?一脉绝学。其真意总纲为：.+。$"),
+    "气机": re.compile(r"^此为《[^》]+》气机·.+?。其.+?一脉绝学。其气机总纲为：.+。$"),
 }
 
 
@@ -951,9 +957,10 @@ def check_gongfa_outlines() -> list[str]:
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            first = str(entry.get("说明") or "").split("\n\n")[0]
+            description = str(entry.get("说明") or "")
+            outline = description.split("其总纲为：", 1)[-1].strip()
             groups.setdefault(str(path.parent), []).append(
-                (str(entry.get("名称") or path.name), first)
+                (str(entry.get("名称") or path.name), outline)
             )
     issues: list[str] = []
     for folder, values in sorted(groups.items()):
@@ -994,14 +1001,15 @@ def check_build_names() -> list[str]:
 
 
 def check_build_descriptions() -> list[str]:
-    """功法/真意/气机说明：两段，首段有来源，次段有所长所短。"""
+    """功法/真意/气机说明：单段定稿句式，来源、名称、总纲齐全。"""
 
     issues: list[str] = []
-    for kind, (relative, header) in BUILD_DESCRIPTION_DIRS.items():
+    for kind, (relative, _header) in BUILD_DESCRIPTION_DIRS.items():
         root = DATA / relative
         if not root.exists():
             issues.append(f"{kind} 目录不存在：{relative}")
             continue
+        pattern = BUILD_DESCRIPTION_PATTERNS[kind]
         for path in sorted(root.rglob("*.json")):
             try:
                 document = json.loads(path.read_text(encoding="utf-8"))
@@ -1012,17 +1020,8 @@ def check_build_descriptions() -> list[str]:
                 if not isinstance(entry, dict):
                     continue
                 description = entry.get("说明")
-                if not isinstance(description, str):
-                    issues.append(f"{kind} {path.name} 缺说明")
-                    continue
-                paragraphs = description.split("\n\n")
-                if len(paragraphs) != 2:
-                    issues.append(f"{kind} {entry.get('名称', path.name)} 说明不是两段")
-                    continue
-                if "《" not in paragraphs[0] or header not in paragraphs[0]:
-                    issues.append(f"{kind} {entry.get('名称', path.name)} 首段缺来源或{header}")
-                if "所长：" not in paragraphs[1] or "所短：" not in paragraphs[1]:
-                    issues.append(f"{kind} {entry.get('名称', path.name)} 次段缺所长/所短")
+                if not isinstance(description, str) or not pattern.fullmatch(description):
+                    issues.append(f"{kind} {entry.get('名称', path.name)} 说明不符定稿句式")
     return issues
 
 
@@ -1125,9 +1124,9 @@ def main() -> int:
         if len(三脉说明) > 20:
             print(f"  …… 另 {len(三脉说明) - 20} 条")
         print()
-        print("说明必须两段：首段有来源，次段有「所长：」「所短：」。")
+        print("说明必须按定稿单句：此为《书》…·名篇。其…一脉绝学。其…总纲为：……。")
         return 1
-    print("功法/真意/气机说明：两段、来源、所长所短齐全")
+    print("功法/真意/气机说明：定稿单句、来源与总纲齐全")
     if 三脉名:
         print(f"功法/真意/气机名称问题 {len(三脉名)} 处：")
         for item in 三脉名[:20]:
