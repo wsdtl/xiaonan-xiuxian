@@ -439,11 +439,17 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
         )
         result = _fight(
             services,
-            limit=12,
+            limit=30,
             left_team=(spec,),
-            right_team=(_spec("R"),),
+            right_team=(
+                replace(
+                    _spec("R"),
+                    attributes={**ATTRS, "血气上限": 100_000},
+                    health=100_000,
+                ),
+            ),
         )
-        assert result.left_results
+        assert result.left_results and result.right_results
         names = {status.name for status in result.left_results[0].statuses}
         assert any("意境" in name for name in names)
 
