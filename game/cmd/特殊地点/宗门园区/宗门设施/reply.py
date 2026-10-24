@@ -78,8 +78,6 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
                 "成丹",
                 f"{assessment.medicine_grade_name}{assessment.recipe.medicine_name}",
             ),
-            ("难度", assessment.recipe.difficulty),
-            ("炉法", assessment.recipe.method),
         ]
         materials = (
             [assessment.beast_material] if assessment.beast_material else []

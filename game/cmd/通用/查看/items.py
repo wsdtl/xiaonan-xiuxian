@@ -287,16 +287,9 @@ def _injury_lines(
 def _medicine_lines(
     source: SectionInput,
 ) -> tuple[str, ...]:
-    """丹药：既有炼出来是什么（渲染正文写的使用效果），也有怎么炼（炼制难度、炉法）。
+    """丹药：成品效果与材料清单都在丹药实体里，一处读全。"""
 
-    丹方并进丹药之后，一处就能读全——不再需要在「丹方」与「丹药」两份资料之间对着看。
-    """
-
-    lines = list(source.rendered)
-    for key in ("炼制难度", "炉法"):
-        if key in source.fields:
-            lines.append(f"{key}：{source.fields[key]}")
-    return tuple(lines)
+    return tuple(source.rendered)
 
 
 def _realm_lines(
