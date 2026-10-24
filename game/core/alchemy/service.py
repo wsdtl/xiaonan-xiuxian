@@ -312,7 +312,7 @@ class AlchemyService:
         )
 
     async def refine(
-        self, user_id: str, request_id: str, identifier: str
+        self, user_id: str, request_id: str, identifier: str, grade_name: str = "黄品"
     ) -> AlchemyResult:
         normalized = _request_text(user_id, "user_id")
         request = _request_text(request_id, "request_id")
@@ -325,7 +325,7 @@ class AlchemyService:
             ):
                 raise AlchemyConflictError("请求编号已经用于其他操作")
             return self._replayed_result(normalized, recipe, committed.payload)
-        preview = await self.preview(normalized, recipe.recipe_id)
+        preview = await self.preview(normalized, recipe.recipe_id, grade_name)
         if not preview.can_refine or preview.beast_material is None:
             raise AlchemyMaterialError("纳戒中的兽宝和灵植不足以炼成该丹药")
         materials = (preview.beast_material,) + preview.herb_materials

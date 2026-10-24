@@ -51,11 +51,15 @@ class AlchemyFeature:
     async def recipes(self, user_id: str, category: str, page: int = 1) -> AlchemyRecipeList:
         return await self._call(self._alchemy.list_recipes(user_id, category, page))
 
-    async def preview(self, user_id: str, identifier: str) -> AlchemyPreview:
-        return await self._call(self._alchemy.preview(user_id, identifier))
+    async def preview(
+        self, user_id: str, identifier: str, grade_name: str = "黄品"
+    ) -> AlchemyPreview:
+        return await self._call(self._alchemy.preview(user_id, identifier, grade_name))
 
-    async def refine(self, user_id: str, request_id: str, identifier: str) -> AlchemyResult:
-        return await self._call(self._alchemy.refine(user_id, request_id, identifier))
+    async def refine(
+        self, user_id: str, request_id: str, identifier: str, grade_name: str = "黄品"
+    ) -> AlchemyResult:
+        return await self._call(self._alchemy.refine(user_id, request_id, identifier, grade_name))
 
 
     def format_actions(self) -> tuple[object, ...]:

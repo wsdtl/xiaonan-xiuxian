@@ -11,6 +11,26 @@ from launch.adapter import MessageContext
 from typing import Any
 
 _CATEGORIES = frozenset({"恢复丹", "战丹", "突破丹", "特殊丹"})
+_GRADES = ("黄品", "玄品", "地品", "天品", "圣品")
+
+
+def _parse_recipe(query: str) -> tuple[str, str]:
+    parts = query.split()
+    grade = "黄品"
+    if parts:
+        token = parts[0]
+        for name in _GRADES:
+            short = name.removesuffix("品")
+            for prefix in (name, short):
+                if token.startswith(prefix):
+                    grade = name
+                    rest = token[len(prefix):]
+                    parts = ([rest] if rest else []) + parts[1:]
+                    break
+            else:
+                continue
+            break
+    return grade, " ".join(parts).strip()
 
 
 @GameCommand.command(
@@ -21,7 +41,7 @@ _CATEGORIES = frozenset({"恢复丹", "战丹", "突破丹", "特殊丹"})
         "help": {
             "category": "炼制",
             "summary": "查看当地丹师可炼丹药，或请丹师验看一颗丹药",
-            "usage": ("炼丹", "炼丹 恢复丹", "炼丹 战丹 2", "炼丹 小还丹"),
+            "usage": ("炼丹", "炼丹 恢复丹", "炼丹 战丹 2", "炼丹 圣品聚气丹"),
             "side_effect": "只验药，不消耗材料",
             "order": 63,
         },
@@ -45,7 +65,8 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
                 reply.recipe_list(feature.copy(), value, feature.list_actions(value))
             )
             return
-        value = await feature.preview(user_id, query)
+        grade, identifier = _parse_recipe(query)
+        value = await feature.preview(user_id, identifier, grade)
         await manager.send(
             reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
@@ -61,7 +82,7 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地丹师按验药结果炼成一枚丹药",
-            "usage": ("开丹炉 小还丹", "开丹炉 丹药编号或丹药名称",),
+            "usage": ("开丹炉 聚气丹", "开丹炉 圣品聚气丹",),
             "side_effect": "消耗一件兽宝和所需灵植，把丹药收入纳戒",
             "order": 64,
         },
@@ -78,7 +99,8 @@ async def commit_alchemy(user_id: str, message: str, message_context: MessageCon
         )
         return
     try:
-        value = await feature.refine(user_id, message_context.request_id, query)
+        grade, identifier = _parse_recipe(query)
+        value = await feature.refine(user_id, message_context.request_id, identifier, grade)
         await manager.send(
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
