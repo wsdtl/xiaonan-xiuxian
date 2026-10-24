@@ -416,6 +416,15 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         data, formation, bloodline_growth=_bloodline_growth, bloodline_awaken=_bloodline_awaken
     )
 
+    async def _bloodline_raw(user_id: str) -> dict[str, float]:
+        """角色侧：血脉基础加法的原值，不因寿元将尽清空。"""
+
+        xuemai_service = _bloodline_holder.get("xuemai")
+        if xuemai_service is None:
+            return {}
+        dna = await xuemai_service.dna(user_id)
+        return dict(xuemai_service.bloodline_growth(dna))
+
     async def _bloodline_basic(user_id: str) -> dict[str, float]:
         """角色侧：给【基础加法】（不乘任何倍率）。"""
         xuemai_service = _bloodline_holder.get("xuemai")
@@ -466,6 +475,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         forging,
         sect_library,
         bloodline_growth=_bloodline_basic,
+        bloodline_base=_bloodline_raw,
         bloodline_dna=_bloodline_dna,
     )
     sect_library.attach_character(character)

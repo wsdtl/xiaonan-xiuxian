@@ -108,6 +108,7 @@ class CharacterService:
         forging: ForgingService,
         sect_library: SectLibraryService | None = None,
         bloodline_growth: object | None = None,
+        bloodline_base: object | None = None,
         bloodline_dna: object | None = None,
     ) -> None:
         self._data = data
@@ -121,6 +122,8 @@ class CharacterService:
         #: 血脉基础加法回调（玩法注入，async）：(用户) -> {属性: 数值}。
         #: 它给的是【基础加法】，不乘任何倍率。
         self._bloodline_growth = bloodline_growth
+        #: 血脉基础加法原值回调（不因寿元将尽清空，用于寿元将尽时从生效属性里扣掉）。
+        self._bloodline_base = bloodline_base
         #: 取血脉 DNA 的回调（玩法注入，async）：(用户) -> DNA 串。
         #: 同理，核心不依赖玩法；没注入时进战斗就不带 DNA。
         self._bloodline_dna = bloodline_dna
@@ -400,7 +403,13 @@ class CharacterService:
         resources = _state_numbers(character.get("资源"), "人物.资源")
         if lifespan_full:
             attributes = self._without_level_growth(attributes, level)
+            if self._bloodline_base is not None:
+                raw_bloodline = await self._bloodline_base(normalized_user_id)
+                attributes = _subtract_numbers(attributes, raw_bloodline or {})
             resources = _clamp_life_resources(resources, attributes)
+        yijing = () if lifespan_full else _yijing_profiles(
+            self._data, character.get("意境"), character.get("境界")
+        )
         return CharacterProfile(
             user_id=normalized_user_id,
             name=_state_text(character.get("姓名"), "人物.姓名"),
@@ -425,9 +434,7 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
-            yijing=_yijing_profiles(
-                self._data, character.get("意境"), character.get("境界")
-            ),
+            yijing=yijing,
             age=age,
             lifespan_full=lifespan_full,
             race=race,
@@ -2303,6 +2310,21 @@ def _add_numbers(
     for name, raw in additions.items():
         before = result.get(str(name), 0)
         value = float(before) + float(raw)
+        result[str(name)] = int(value) if value.is_integer() else round(value, 4)
+    return result
+
+
+def _subtract_numbers(
+    source: Mapping[str, object], subtractions: Mapping[str, int | float]
+) -> dict[str, int | float]:
+    """从生效属性里扣掉一份来源；结果不落到负数。"""
+
+    result: dict[str, int | float] = {
+        str(name): raw for name, raw in source.items() if isinstance(raw, (int, float)) and not isinstance(raw, bool)
+    }
+    for name, raw in subtractions.items():
+        before = float(result.get(str(name), 0.0))
+        value = max(0.0, before - float(raw))
         result[str(name)] = int(value) if value.is_integer() else round(value, 4)
     return result
 
