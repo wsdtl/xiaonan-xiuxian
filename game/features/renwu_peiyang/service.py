@@ -246,6 +246,7 @@ class CharacterCultivationFeature:
                 request.user_id,
                 medicine_id=medicine_id,
                 permanent_attribute_ratio=permanent_ratio,
+                permanent_attribute_multiplier=float(stack.grade.ability_multiplier),
             )
             if permanent_ratio and character_plan.permanent_attributes:
                 activation = InnateTreasureActivation(

@@ -1679,6 +1679,7 @@ class CharacterService:
         *,
         medicine_id: str,
         permanent_attribute_ratio: float = 0.0,
+        permanent_attribute_multiplier: float = 1.0,
     ) -> CharacterBreakthroughPlan:
         """校验突破丹并结算人物境界、永久属性和积压经验。"""
 
@@ -1710,6 +1711,11 @@ class CharacterService:
         if permanent and permanent_attribute_ratio:
             permanent = {
                 key: value + max(1, math.ceil(float(value) * permanent_attribute_ratio))
+                for key, value in permanent.items()
+            }
+        if permanent and permanent_attribute_multiplier != 1.0:
+            permanent = {
+                key: float(value) * permanent_attribute_multiplier
                 for key, value in permanent.items()
             }
         records = [
