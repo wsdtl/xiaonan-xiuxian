@@ -54,9 +54,11 @@ class ForgingFeature:
         return await self._call(self._forging.preview(user_id, identifier))
 
     async def forge(
-        self, user_id: str, request_id: str, identifier: str
+        self, user_id: str, request_id: str, identifier: str, quantity: int = 1
     ) -> ForgingResult:
-        return await self._call(self._forging.forge(user_id, request_id, identifier))
+        return await self._call(
+            self._forging.forge(user_id, request_id, identifier, quantity)
+        )
 
 
     def format_actions(self) -> tuple[object, ...]:

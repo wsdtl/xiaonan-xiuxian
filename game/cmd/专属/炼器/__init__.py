@@ -13,6 +13,15 @@ from typing import Any
 _STAGES = frozenset({"灵器", "法器", "法宝", "后天灵宝"})
 
 
+def _parse_forge(query: str) -> tuple[str, int]:
+    parts = query.split()
+    quantity = 1
+    if len(parts) > 1 and parts[-1].isdigit():
+        quantity = int(parts[-1])
+        parts = parts[:-1]
+    return " ".join(parts).strip(), quantity
+
+
 @GameCommand.command(
     cmd="炼器",
     metadata={
@@ -73,7 +82,10 @@ async def commit_forging(user_id: str, message: str, message_context: MessageCon
         )
         return
     try:
-        value = await feature.forge(user_id, message_context.request_id, query)
+        identifier, quantity = _parse_forge(query)
+        value = await feature.forge(
+            user_id, message_context.request_id, identifier, quantity
+        )
         await manager.send(
             reply.completed(feature.copy(), value, feature.completed_actions())
         )

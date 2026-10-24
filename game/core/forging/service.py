@@ -378,10 +378,12 @@ class ForgingService:
         return self._build_preview(normalized, location_name, artisan, law, entries)
 
     async def forge(
-        self, user_id: str, request_id: str, identifier: str
+        self, user_id: str, request_id: str, identifier: str, quantity: int = 1
     ) -> ForgingResult:
         normalized = _request_text(user_id, "user_id")
         request = _request_text(request_id, "request_id")
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
+            raise ForgingError("炼制数量必须是正整数")
         law = self._resolve_law(identifier)
         committed = await self._database.committed_transaction(normalized, request)
         if committed is not None:
@@ -395,7 +397,7 @@ class ForgingService:
         if not preview.can_forge:
             raise ForgingMaterialError("纳戒中的兽宝和灵矿不足以炼成该器律")
         adjustments = [
-            InventoryAdjustment(material.item_id, material.grade_id, -material.quantity)
+            InventoryAdjustment(material.item_id, material.grade_id, -material.quantity * quantity)
             for material in preview.beast_materials + preview.mineral_materials
         ]
         activation: InnateTreasureActivation | None = None
@@ -443,7 +445,7 @@ class ForgingService:
                 normalized, tuple(adjustments)
             )
             reserve = await self._asset.plan_law_reserve_acquisition(
-                normalized, preview.law.law_id
+                normalized, preview.law.law_id, quantity
             )
             payload = {
                 "地点": preview.location_name,
