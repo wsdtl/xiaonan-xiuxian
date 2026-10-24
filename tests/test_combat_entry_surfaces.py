@@ -417,6 +417,7 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
             "攻击": 80,
             "防御": 20,
             "速度": 100,
+            "护盾上限": 100,
         }
         weapon_attack, statuses, amplifier = services.character._yijing_battle(
             SimpleNamespace(
@@ -455,6 +456,10 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
         kinds = {event.kind for event in result.events}
         if content_id in ("630001", "630002", "630006"):
             assert "追加攻击后" in kinds, f"{name}九阶没有追加攻击"
+        if content_id == "630003":
+            assert result.left_results[0].shield > 0 or any(
+                "护盾" in str(event.values) for event in result.events
+            )
         if content_id == "630005":
             assert any(
                 event.kind == "添加状态后" and "日削月割" in str(event.values)
