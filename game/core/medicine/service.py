@@ -261,6 +261,10 @@ class MedicineService:
         )
         prepared = _mapping(effect.get("战前状态"), "战丹.战前状态")
         grade = self._asset.grade(grade_id)
+        for listener in listeners:
+            for node in listener.get("效果", ()):
+                if isinstance(node, dict):
+                    self._scale_effect_value(node, float(grade.ability_multiplier))
         attributes = _mapping(prepared.get("属性", {}), "战丹.战前状态.属性")
         prepared = dict(prepared)
         prepared["属性"] = {
@@ -276,6 +280,27 @@ class MedicineService:
             dict(prepared),
             grade.order,
         )
+
+    @classmethod
+    def _scale_effect_value(cls, node: dict[str, object], multiplier: float) -> None:
+        """只放大效果数值，不碰条件、触发次数与持续时间。"""
+
+        def visit(value: object, key: str = "") -> None:
+            if isinstance(value, dict):
+                for child_key, child_value in list(value.items()):
+                    if child_key in {"数值", "属性"} and isinstance(child_value, dict):
+                        for name, raw in list(child_value.items()):
+                            if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                                child_value[name] = _clean_number(float(raw) * multiplier)
+                    elif child_key in {"数值", "属性"} and isinstance(child_value, (int, float)) and not isinstance(child_value, bool):
+                        value[child_key] = _clean_number(float(child_value) * multiplier)
+                    else:
+                        visit(child_value, child_key)
+            elif isinstance(value, list):
+                for item in value:
+                    visit(item, key)
+
+        visit(node)
 
     def prepared_status(self, medicine: BattleMedicine) -> CombatStatusSpec:
         """把战丹定义转换为战斗核心的纯状态快照。"""
