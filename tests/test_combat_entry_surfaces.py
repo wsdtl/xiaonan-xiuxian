@@ -397,6 +397,42 @@ def test_bloodline_data_boundary(services) -> None:
     assert float(xuemai.awaken("4")) == 2.5
 
 
+def test_bloodline_can_set_soul_max_only(services) -> None:
+    """血脉固定属性可以给神魂上限；这是属性边界，不碰神魂当前值。"""
+
+    from decimal import Decimal
+
+    from game.features.xuemai import XuemaiFeature
+    from game.features.xuemai.matching import Bloodline, BloodlineRules
+
+    xuemai = XuemaiFeature(services.data, services.character, services.database)
+    xuemai.initialize()
+    custom = BloodlineRules(
+        bloodlines=(
+            Bloodline(
+                "999999",
+                "测试魂血",
+                "弱",
+                False,
+                ((1, 0, 100),),
+                "",
+                "",
+                (
+                    {
+                        "能力": "固定属性加成",
+                        "属性": {"神魂上限": 5.0},
+                    },
+                ),
+                False,
+            ),
+        ),
+        awaken_tiers=((Decimal("0"), Decimal("100"), Decimal("1.0")),),
+    )
+    xuemai.rules = lambda: custom  # type: ignore[method-assign]
+    growth = xuemai.bloodline_growth("000000000000")
+    assert growth == {"神魂上限": 5.0}
+
+
 def test_bloodline_real_character_reaches_battle(services) -> None:
     """真实人物 + 真实 DNA：血脉固定属性进入战斗，觉醒档按气血取倍率。"""
 
