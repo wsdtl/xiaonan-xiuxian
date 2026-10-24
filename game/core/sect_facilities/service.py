@@ -318,10 +318,10 @@ class SectFacilityService:
         )
 
     async def preview_alchemy(
-        self, user_id: str, identifier: str, material_source: str
+        self, user_id: str, identifier: str, material_source: str, grade: str = "黄品"
     ) -> SectAlchemyPreview:
         member, entries, stones = await self._context(user_id, material_source)
-        assessment = self._alchemy.assess(identifier, entries)
+        assessment = self._alchemy.assess(identifier, entries, grade)
         self.authorize(member.role, material_source, assessment.medicine_grade_name)
         cost = self.cost("炼丹", assessment.medicine_grade_name)
         if material_source == "宗门灵藏":
@@ -430,13 +430,18 @@ class SectFacilityService:
 
     @_translate_asset_errors
     async def refine(
-        self, user_id: str, request_id: str, identifier: str, material_source: str
+        self,
+        user_id: str,
+        request_id: str,
+        identifier: str,
+        material_source: str,
+        grade: str = "黄品",
     ) -> SectCraftResult:
         member = await self._member_in_cave(user_id)
         replay = await self._replay(user_id, request_id, "宗门炼丹", identifier, material_source)
         if replay is not None:
             return replay
-        preview = await self.preview_alchemy(user_id, identifier, material_source)
+        preview = await self.preview_alchemy(user_id, identifier, material_source, grade)
         assessment = preview.assessment
         if not assessment.can_refine or assessment.beast_material is None:
             raise SectFacilityError("兽宝和灵植不足以炼成该丹药")

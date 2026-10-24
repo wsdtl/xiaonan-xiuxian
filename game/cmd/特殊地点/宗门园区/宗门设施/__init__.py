@@ -14,6 +14,20 @@ from typing import Any
 _SOURCES = {"个人", "自备", "纳戒", "个人纳戒", "宗门", "灵藏", "宗门灵藏"}
 _FORGING_STAGES = {"灵器", "法器", "法宝", "后天灵宝"}
 _ALCHEMY_CATEGORIES = {"恢复丹", "战丹", "突破丹", "特殊丹"}
+_GRADES = ("黄品", "玄品", "地品", "天品", "圣品")
+
+
+def _parse_grade(identifier: str) -> tuple[str, str]:
+    parts = identifier.split()
+    if parts:
+        token = parts[0]
+        for name in _GRADES:
+            short = name.removesuffix("品")
+            for prefix in (name, short):
+                if token.startswith(prefix):
+                    rest = token[len(prefix):]
+                    return name, " ".join(([rest] if rest else []) + parts[1:]).strip()
+    return "黄品", identifier
 
 
 @GameCommand.command(
@@ -116,8 +130,9 @@ async def _dispatch(
                 identifier = " ".join(parts[1:]).strip()
                 if not identifier:
                     raise ValueError(feature.copy()["错误"]["需要丹药"])
+                grade, identifier = _parse_grade(identifier)
                 value = await feature.craft(
-                    facility, user_id, request_id, source, identifier
+                    facility, user_id, request_id, source, identifier, grade
                 )
                 await manager.send(reply.completed(feature.copy(), value))
                 return
@@ -126,7 +141,10 @@ async def _dispatch(
                 value = await feature.page(facility, user_id, source, parts[0], page)
                 await manager.send(reply.page(feature.copy(), value))
                 return
-            value = await feature.preview(facility, user_id, source, " ".join(parts))
+            grade, identifier = _parse_grade(" ".join(parts))
+            value = await feature.preview(
+                facility, user_id, source, identifier, grade
+            )
             await manager.send(reply.preview(feature.copy(), value))
             return
         if not parts:

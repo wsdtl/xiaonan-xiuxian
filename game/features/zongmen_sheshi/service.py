@@ -120,7 +120,9 @@ class SectFacilityFeature:
             if facility == "炼器":
                 return await self._facilities.preview_forging(user_id, identifier, source)
             if facility == "炼丹":
-                return await self._facilities.preview_alchemy(user_id, identifier, source)
+                return await self._facilities.preview_alchemy(
+                    user_id, identifier, source, grade or "黄品"
+                )
             if facility == "炼阵":
                 if not grade:
                     raise SectFacilityError("炼阵必须指定品级")
@@ -140,7 +142,9 @@ class SectFacilityFeature:
             if facility == "炼器":
                 return await self._facilities.forge(user_id, request_id, identifier, source)
             if facility == "炼丹":
-                return await self._facilities.refine(user_id, request_id, identifier, source)
+                return await self._facilities.refine(
+                    user_id, request_id, identifier, source, grade or "黄品"
+                )
             if facility == "炼阵":
                 return await self._facilities.form(
                     user_id, request_id, identifier, grade, source, investments
