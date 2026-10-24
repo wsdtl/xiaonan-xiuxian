@@ -555,11 +555,16 @@ class FormationService:
                 for key, value in _mapping(grade_raw.get("圣品权重"), "圣品.权重").items()
             }
             total = 1.0
+            algorithm = _text(growth.get("算法"), "圣品增长.算法")
             for direction in _sequence(growth.get("方向"), "圣品增长.方向"):
                 value = _mapping(direction, "圣品增长.方向[]")
                 material = _text(value.get("材料"), "圣品增长.材料")
                 part = _text(value.get("部位"), "圣品增长.部位")
-                total *= (actual[material] / minimum[material]) ** weights[part]
+                ratio = actual[material] / minimum[material]
+                if algorithm == "线性加成":
+                    total += (ratio - 1.0) * weights[part]
+                else:
+                    total *= ratio ** weights[part]
             derived: dict[str, float] = {}
             for direction in _sequence(growth.get("方向"), "圣品增长.方向"):
                 value = _mapping(direction, "圣品增长.方向[]")
@@ -913,8 +918,8 @@ class FormationService:
             raise JsonDataError("阵法无上限品级必须为圣品")
         # 圣品投势按「加权几何乘势」连乘（算法本身写在 `_grade_derived` 里）。声明在数据里，
         # 这里读死，免得数据说一套、实现做另一套。
-        if _mapping(self._rules.get("圣品增长"), "阵法规则.圣品增长").get("算法") != "加权几何乘势":
-            raise JsonDataError("圣品增长算法必须是「加权几何乘势」")
+        if _mapping(self._rules.get("圣品增长"), "阵法规则.圣品增长").get("算法") not in {"加权几何乘势", "线性加成"}:
+            raise JsonDataError("圣品增长算法必须是「加权几何乘势」或「线性加成」")
 
     def _replayed_result(
         self,
