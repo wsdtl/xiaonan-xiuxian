@@ -891,6 +891,35 @@ def check_guard_rules_have_consumers() -> list[str]:
 QUOTE_PATTERN = re.compile(r"(?:云|曰|谓)[：:]\s*“([^”]+)”")
 
 
+def check_life_attribute_pairs() -> list[str]:
+    """数值型血气上限必须同时有同值神魂上限。"""
+
+    issues: list[str] = []
+    for path in sorted(DATA.rglob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+
+        def walk(value: object) -> None:
+            if isinstance(value, dict):
+                health = value.get("血气上限")
+                if (
+                    isinstance(health, (int, float))
+                    and not isinstance(health, bool)
+                    and "神魂上限" not in value
+                ):
+                    issues.append(f"{path.relative_to(PROJECT_ROOT)} 血气上限缺同值神魂上限")
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+
+        walk(document)
+    return issues
+
+
 def check_duplicate_quotes() -> list[str]:
     """说明里的古典引文全局只能出现一次。
 
@@ -1141,6 +1170,7 @@ def main() -> int:
         return 1
     print("说明里没有代码引用")
     引文 = check_duplicate_quotes()
+    命线属性 = check_life_attribute_pairs()
     功法说明 = check_gongfa_outlines()
     三脉说明 = check_build_descriptions()
     三脉状态 = check_build_status_names()
@@ -1155,6 +1185,16 @@ def main() -> int:
         print("同一句古典引文全局只能出现一次；换引文或改成不引原句的叙述。")
         return 1
     print("说明引文全局唯一")
+    if 命线属性:
+        print(f"血气/神魂属性不成对 {len(命线属性)} 处：")
+        for item in 命线属性[:20]:
+            print(f"  {item}")
+        if len(命线属性) > 20:
+            print(f"  …… 另 {len(命线属性) - 20} 条")
+        print()
+        print("数值型血气上限必须同时写同值神魂上限：两条命线同构。")
+        return 1
+    print("血气/神魂属性：数值成对")
     if 功法说明:
         print(f"功法总纲不一致 {len(功法说明)} 处：")
         for item in 功法说明[:20]:
