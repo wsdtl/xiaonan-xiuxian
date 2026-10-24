@@ -14,7 +14,7 @@ _CATEGORIES = frozenset({"恢复丹", "战丹", "突破丹", "特殊丹"})
 _GRADES = ("黄品", "玄品", "地品", "天品", "圣品")
 
 
-def _parse_recipe(query: str) -> tuple[str, str]:
+def _parse_recipe(query: str) -> tuple[str, str, int]:
     parts = query.split()
     grade = "黄品"
     if parts:
@@ -30,7 +30,11 @@ def _parse_recipe(query: str) -> tuple[str, str]:
             else:
                 continue
             break
-    return grade, " ".join(parts).strip()
+    quantity = 1
+    if len(parts) > 1 and parts[-1].isdigit():
+        quantity = int(parts[-1])
+        parts = parts[:-1]
+    return grade, " ".join(parts).strip(), quantity
 
 
 @GameCommand.command(
@@ -65,7 +69,7 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
                 reply.recipe_list(feature.copy(), value, feature.list_actions(value))
             )
             return
-        grade, identifier = _parse_recipe(query)
+        grade, identifier, _quantity = _parse_recipe(query)
         value = await feature.preview(user_id, identifier, grade)
         await manager.send(
             reply.preview(feature.copy(), value, feature.preview_actions(value))
@@ -99,8 +103,10 @@ async def commit_alchemy(user_id: str, message: str, message_context: MessageCon
         )
         return
     try:
-        grade, identifier = _parse_recipe(query)
-        value = await feature.refine(user_id, message_context.request_id, identifier, grade)
+        grade, identifier, quantity = _parse_recipe(query)
+        value = await feature.refine(
+            user_id, message_context.request_id, identifier, grade, quantity
+        )
         await manager.send(
             reply.completed(feature.copy(), value, feature.completed_actions())
         )

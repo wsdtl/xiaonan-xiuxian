@@ -57,9 +57,16 @@ class AlchemyFeature:
         return await self._call(self._alchemy.preview(user_id, identifier, grade_name))
 
     async def refine(
-        self, user_id: str, request_id: str, identifier: str, grade_name: str = "黄品"
+        self,
+        user_id: str,
+        request_id: str,
+        identifier: str,
+        grade_name: str = "黄品",
+        quantity: int = 1,
     ) -> AlchemyResult:
-        return await self._call(self._alchemy.refine(user_id, request_id, identifier, grade_name))
+        return await self._call(
+            self._alchemy.refine(user_id, request_id, identifier, grade_name, quantity)
+        )
 
 
     def format_actions(self) -> tuple[object, ...]:

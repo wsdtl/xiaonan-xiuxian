@@ -312,10 +312,17 @@ class AlchemyService:
         )
 
     async def refine(
-        self, user_id: str, request_id: str, identifier: str, grade_name: str = "黄品"
+        self,
+        user_id: str,
+        request_id: str,
+        identifier: str,
+        grade_name: str = "黄品",
+        quantity: int = 1,
     ) -> AlchemyResult:
         normalized = _request_text(user_id, "user_id")
         request = _request_text(request_id, "request_id")
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
+            raise AlchemyError("炼制数量必须是正整数")
         recipe = self._resolve_recipe(identifier)
         committed = await self._database.committed_transaction(normalized, request)
         if committed is not None:
@@ -330,11 +337,11 @@ class AlchemyService:
             raise AlchemyMaterialError("纳戒中的兽宝和灵植不足以炼成该丹药")
         materials = (preview.beast_material,) + preview.herb_materials
         adjustments = [
-            InventoryAdjustment(item.item_id, item.grade_id, -item.quantity)
+            InventoryAdjustment(item.item_id, item.grade_id, -item.quantity * quantity)
             for item in materials
         ]
         activation: InnateTreasureActivation | None = None
-        output_quantity = 1
+        output_quantity = quantity
         treasure_effect = await self._innate_treasure.effect(normalized, "炼丹成功")
         if treasure_effect is not None:
             treasure, effect = treasure_effect
