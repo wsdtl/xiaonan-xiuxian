@@ -2842,6 +2842,24 @@ class AbilityRuntime(ChainRuntime):
         self._apply_damage(context, frame.source, destinations[0], amount, label=str(effect.get("名称") or "分摊伤害"), damage_form="分摊", defense_rule="真实", can_critical=False, can_block=False, tags=("分摊",))
         return True
 
+    def _ability_shield_counter(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
+        shield_pct = max(0.0, float(effect.get("护盾比例", 10) or 0) * multiplier)
+        counter_pct = max(0.0, float(effect.get("反震比例", 20) or 0) * multiplier)
+        self._ability_recover_resource(
+            context, source, source,
+            {"资源": "护盾", "目标": {"能力": "选择目标", "范围": "自身"},
+             "数值": {"能力": "读取数值", "来源": "自身属性", "属性": "血气上限", "百分比": shield_pct}},
+            1.0,
+        )
+        self._ability_damage(
+            context, source, target,
+            {"名称": "护盾反震", "目标": {"能力": "选择目标", "范围": "敌方"},
+             "数值": {"能力": "读取数值", "来源": "自身属性", "属性": "攻击", "百分比": counter_pct},
+             "防御规则": "真实", "能否暴击": False, "能否格挡": False},
+            1.0,
+        )
+        return True
+
     def _ability_guardian(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         frame = self._current_event(context)
         if frame.kind not in {"造成伤害前", "受到致命伤害"}:
