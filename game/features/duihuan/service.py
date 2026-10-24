@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import hashlib
+import random
 import re
 from collections.abc import Mapping
 
@@ -190,6 +191,16 @@ class DuihuanFeature:
                 out.append((kind, str(item.get('编号') or ''), grade, quantity))
         return out
 
+    def _full_category_members(self, category: str) -> tuple[str, ...]:
+        normalized = str(category or '').strip()
+        if normalized == '战丹':
+            return tuple(
+                entity_id
+                for entity_id in self._data.number_category_members('丹药')
+                if entity_id.startswith('12')
+            )
+        return self._data.number_category_members(normalized)
+
     def _pool_names(self, item: Mapping[str, object]) -> tuple[str, ...]:
         """随机物品的候选池：一个内容文件名，或一串文件名。
 
@@ -213,12 +224,18 @@ class DuihuanFeature:
         也不会重抽），不同玩家彼此不同。抽到的编号写进回执，玩家看得到拿到了什么。
         """
 
-        pools = self._pool_names(item)
         count = int(item.get('数量') or 0)
         seed = int.from_bytes(
             hashlib.sha256(f"{row.get('编号')}:{user_id}".encode('utf-8')).digest()[:8],
             'big',
         )
+        full_pool = str(item.get('全类别') or '').strip()
+        if full_pool:
+            members = self._full_category_members(full_pool)
+            if not members:
+                raise JsonDataError(f'兑换码全类别没有候选：{full_pool}')
+            return tuple(random.Random(seed).choices(members, k=count))
+        pools = self._pool_names(item)
         return tuple(str(value) for value in self._pool.draw_pools(pools, count=count, seed=seed))
 
     def _grant_text(self, kind: str, item_id: str, quantity: int) -> str:
@@ -245,6 +262,17 @@ class DuihuanFeature:
                 if kind == '物品':
                     self._inventory_item(code_id, str(item.get('编号') or ''))
                 elif kind == '随机物品':
+                    full_pool = str(item.get('全类别') or '').strip()
+                    if full_pool:
+                        members = self._full_category_members(full_pool)
+                        if not members:
+                            raise JsonDataError(f'兑换码 {code_id} 的全类别 {full_pool} 是空的')
+                        count = int(item.get('数量') or 0)
+                        if count > len(members):
+                            raise JsonDataError(f'兑换码 {code_id} 的全类别只装得下 {len(members)} 件，抽不满 {count} 件')
+                        for member in members:
+                            self._inventory_item(code_id, member)
+                        continue
                     names = self._pool_names(item)
                     members: dict[str, str] = {}
                     for name in names:
