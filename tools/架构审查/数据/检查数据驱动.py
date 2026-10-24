@@ -930,6 +930,75 @@ def check_duplicate_quotes() -> list[str]:
     return issues
 
 
+BUILD_DESCRIPTION_DIRS = {
+    "功法": ("战斗/内容/功法", "总纲："),
+    "真意": ("战斗/内容/真意", "真意·"),
+    "气机": ("战斗/内容/气机", "气机·"),
+}
+
+
+def check_gongfa_outlines() -> list[str]:
+    """同一本书的六式功法必须共用同一段总纲。"""
+
+    groups: dict[int, list[tuple[str, str]]] = {}
+    root = DATA / "战斗/内容/功法"
+    for path in sorted(root.rglob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        entries = document if isinstance(document, list) else [document]
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                index = (int(str(entry.get("编号"))) - 1) // 6
+            except (TypeError, ValueError):
+                continue
+            first = str(entry.get("说明") or "").split("\n\n")[0]
+            groups.setdefault(index, []).append((str(entry.get("名称") or path.name), first))
+    issues: list[str] = []
+    for index, values in sorted(groups.items()):
+        outlines = {value for _, value in values}
+        if len(outlines) > 1:
+            names = "、".join(name for name, _ in values)
+            issues.append(f"第{index + 1}组总纲不一致：{names}")
+    return issues
+
+
+def check_build_descriptions() -> list[str]:
+    """功法/真意/气机说明：两段，首段有来源，次段有所长所短。"""
+
+    issues: list[str] = []
+    for kind, (relative, header) in BUILD_DESCRIPTION_DIRS.items():
+        root = DATA / relative
+        if not root.exists():
+            issues.append(f"{kind} 目录不存在：{relative}")
+            continue
+        for path in sorted(root.rglob("*.json")):
+            try:
+                document = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            entries = document if isinstance(document, list) else [document]
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                description = entry.get("说明")
+                if not isinstance(description, str):
+                    issues.append(f"{kind} {path.name} 缺说明")
+                    continue
+                paragraphs = description.split("\n\n")
+                if len(paragraphs) != 2:
+                    issues.append(f"{kind} {entry.get('名称', path.name)} 说明不是两段")
+                    continue
+                if "《" not in paragraphs[0] or header not in paragraphs[0]:
+                    issues.append(f"{kind} {entry.get('名称', path.name)} 首段缺来源或{header}")
+                if "所长：" not in paragraphs[1] or "所短：" not in paragraphs[1]:
+                    issues.append(f"{kind} {entry.get('名称', path.name)} 次段缺所长/所短")
+    return issues
+
+
 def main() -> int:
     source = _game_source()
     print("JSON 驱动完整性审查")
@@ -999,6 +1068,8 @@ def main() -> int:
         return 1
     print("说明里没有代码引用")
     引文 = check_duplicate_quotes()
+    功法说明 = check_gongfa_outlines()
+    三脉说明 = check_build_descriptions()
     if 引文:
         print(f"说明引文重复 {len(引文)} 处：")
         for item in 引文[:20]:
@@ -1009,6 +1080,26 @@ def main() -> int:
         print("同一句古典引文全局只能出现一次；换引文或改成不引原句的叙述。")
         return 1
     print("说明引文全局唯一")
+    if 功法说明:
+        print(f"功法总纲不一致 {len(功法说明)} 处：")
+        for item in 功法说明[:20]:
+            print(f"  {item}")
+        if len(功法说明) > 20:
+            print(f"  …… 另 {len(功法说明) - 20} 条")
+        print()
+        print("同一本书的六式功法必须共用同一段总纲，不能各写各的。")
+        return 1
+    print("功法总纲：同组六式共用")
+    if 三脉说明:
+        print(f"功法/真意/气机说明格式问题 {len(三脉说明)} 处：")
+        for item in 三脉说明[:20]:
+            print(f"  {item}")
+        if len(三脉说明) > 20:
+            print(f"  …… 另 {len(三脉说明) - 20} 条")
+        print()
+        print("说明必须两段：首段有来源，次段有「所长：」「所短：」。")
+        return 1
+    print("功法/真意/气机说明：两段、来源、所长所短齐全")
     if 住处:
         print(f"契约住错面 {len(住处)} 处：")
         for item in 住处:
