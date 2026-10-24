@@ -62,8 +62,18 @@ class FormationCraftFeature:
     async def preview(self, user_id: str, identifier: str, grade: str, investments: Mapping[str, int] | None=None) -> FormationPreview:
         return await self._call(self._formation.preview(user_id, identifier, grade, investments))
 
-    async def form(self, user_id: str, request_id: str, identifier: str, grade: str, investments: Mapping[str, int] | None=None) -> FormationResult:
-        return await self._call(self._formation.form(user_id, request_id, identifier, grade, investments))
+    async def form(
+        self,
+        user_id: str,
+        request_id: str,
+        identifier: str,
+        grade: str,
+        investments: Mapping[str, int] | None = None,
+        quantity: int = 1,
+    ) -> FormationResult:
+        return await self._call(
+            self._formation.form(user_id, request_id, identifier, grade, investments, quantity)
+        )
 
 
     def format_actions(self) -> tuple[object, ...]:

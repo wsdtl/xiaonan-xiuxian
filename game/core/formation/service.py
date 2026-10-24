@@ -293,9 +293,12 @@ class FormationService:
         identifier: str,
         grade: str,
         investments: Mapping[str, int] | None = None,
+        quantity: int = 1,
     ) -> FormationResult:
         normalized = _request_text(user_id, "user_id")
         request = _request_text(request_id, "request_id")
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
+            raise FormationError("炼制数量必须是正整数")
         formation = self._resolve_formation(identifier)
         grade_name = _grade_name(grade)
         committed = await self._database.committed_transaction(normalized, request)
@@ -311,7 +314,7 @@ class FormationService:
         if not preview.can_form:
             raise FormationMaterialError("纳戒中的兽宝、灵矿和灵植不足以炼成该阵法")
         adjustments = tuple(
-            InventoryAdjustment(item.item_id, item.grade_id, -item.quantity)
+            InventoryAdjustment(item.item_id, item.grade_id, -item.quantity * quantity)
             for item in preview.materials
         )
         actual = {item.category: item.required for item in preview.requirements}
@@ -351,6 +354,7 @@ class FormationService:
                 ),
                 treasure_id=activation.treasure_id if activation else "",
                 modifiers=modifiers,
+                quantity=quantity,
             )
             payload = {
                 "地点": preview.location_name,
