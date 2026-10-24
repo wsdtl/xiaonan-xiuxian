@@ -452,6 +452,9 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
         assert result.left_results and result.right_results
         names = {status.name for status in result.left_results[0].statuses}
         assert any("意境" in name for name in names)
+        kinds = {event.kind for event in result.events}
+        if content_id in ("630001", "630002", "630006"):
+            assert "追加攻击后" in kinds, f"{name}九阶没有追加攻击"
         if content_id == "630005":
             assert any(
                 event.kind == "添加状态后" and "日削月割" in str(event.values)
