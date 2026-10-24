@@ -888,6 +888,48 @@ def check_guard_rules_have_consumers() -> list[str]:
     ]
 
 
+QUOTE_PATTERN = re.compile(r"(?:云|曰|谓)[：:]\s*“([^”]+)”")
+
+
+def check_duplicate_quotes() -> list[str]:
+    """说明里的古典引文全局只能出现一次。
+
+    同一句引文在多份说明里复用，会把内容写成模板；这里按归一化后的引文
+    文本查重，跨数据集、跨文件都算。
+    """
+
+    seen: dict[str, list[str]] = {}
+    for path in sorted(DATA.rglob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+
+        def walk(value: object) -> None:
+            if isinstance(value, dict):
+                description = value.get("说明")
+                if isinstance(description, str):
+                    name = str(value.get("名称") or value.get("编号") or path.name)
+                    for quote in QUOTE_PATTERN.findall(description):
+                        normalized = re.sub(r"\s+", "", quote)
+                        seen.setdefault(normalized, []).append(
+                            f"{path.relative_to(PROJECT_ROOT)}:{name}"
+                        )
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+
+        walk(document)
+    issues = [
+        f"『{quote}』×{len(places)}：{'；'.join(places[:6])}"
+        for quote, places in seen.items()
+        if len(places) > 1
+    ]
+    return issues
+
+
 def main() -> int:
     source = _game_source()
     print("JSON 驱动完整性审查")
@@ -956,6 +998,17 @@ def main() -> int:
         print("说明写中文逻辑：`game/…`、函数名、类名都删掉，只留数据路径与工具入口。")
         return 1
     print("说明里没有代码引用")
+    引文 = check_duplicate_quotes()
+    if 引文:
+        print(f"说明引文重复 {len(引文)} 处：")
+        for item in 引文[:20]:
+            print(f"  {item}")
+        if len(引文) > 20:
+            print(f"  …… 另 {len(引文) - 20} 条")
+        print()
+        print("同一句古典引文全局只能出现一次；换引文或改成不引原句的叙述。")
+        return 1
+    print("说明引文全局唯一")
     if 住处:
         print(f"契约住错面 {len(住处)} 处：")
         for item in 住处:
