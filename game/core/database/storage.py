@@ -202,16 +202,11 @@ def _unpack_json(stored: object) -> str:
     return zlib.decompress(base64.b64decode(text[len(_PACK_PREFIX):])).decode("utf-8")
 
 
-# 玩家存档折叠：每玩家一行（state_type='player', state_key='main'），行内为
-# { "类型/键": {"值": …, "版本": n, "时间": …} }；老形态（一个状态键一行）读写时现场合并。
+# 玩家存档：每玩家一行，行内为 { 类型/键: {value, version, updated_at} }。
 _ENTRY_VALUE = "value"
 _ENTRY_VERSION = "version"
 _ENTRY_UPDATED = "updated_at"
 
-
-#: 存档结构版本。每次「加一种状态」或「改一次状态语义」+1，并在迁移表里补一档。
-#: 迁移函数由组合根注入（核心不 import 玩法），见 `register_migration`。
-SCHEMA_VERSION = 1
 
 #: `player_state` 的期望列：建表 DDL 与「补缺列」都从这里出，只此一处。
 _PLAYER_STATE_COLUMNS: tuple[tuple[str, str], ...] = (
@@ -219,17 +214,7 @@ _PLAYER_STATE_COLUMNS: tuple[tuple[str, str], ...] = (
     ("state_json", "TEXT NOT NULL"),
     ("version", "INTEGER NOT NULL CHECK (version > 0)"),
     ("updated_at", "TEXT NOT NULL"),
-    ("schema_version", "INTEGER NOT NULL DEFAULT 0"),
 )
-
-#: 逐级迁移表：版本号 -> 迁移函数（entries 就地改）。由组合根注入。
-_MIGRATIONS: dict = {}
-
-
-def register_migration(version: int, migrate) -> None:
-    """登记一档迁移（结构版本 1..SCHEMA_VERSION）。组合根启动时调用。"""
-
-    _MIGRATIONS[int(version)] = migrate
 
 
 def _sync_columns(connection, table: str, expected: tuple[tuple[str, str], ...]) -> None:
@@ -249,29 +234,17 @@ def _logical_key(state_type: str, state_key: str) -> str:
 
 
 def _load_logical_state(
-    connection: sqlite3.Connection, user_id: str, *, migrate: bool = True
+    connection: sqlite3.Connection, user_id: str
 ) -> dict[str, dict[str, object]]:
-    """读出某玩家全部逻辑状态（只认 player_state，一人一行）。
-
-    顺手做「结构版本」懒迁移：落后才动，正常路径只多一次整数比较。
-    迁移结果**只补在内存里**，不在此处写库；写路径的调用方随后会用
-    `_store_logical_state` 把 `schema_version` 一并落盘，于是迁移自然生效。
-    """
+    """读出某玩家全部逻辑状态（只认 player_state，一人一行）。"""
     entries: dict[str, dict[str, object]] = {}
     row = connection.execute(
-        "SELECT state_json, schema_version FROM player_state WHERE user_id = ?", (user_id,)
+        "SELECT state_json FROM player_state WHERE user_id = ?", (user_id,)
     ).fetchone()
     if row is None:
         return entries
     for key, entry in json.loads(str(row[0])).items():
         entries[str(key)] = entry
-    version = int(row[1])
-    if not migrate or version >= SCHEMA_VERSION:
-        return entries
-    for target in range(version + 1, SCHEMA_VERSION + 1):
-        step = _MIGRATIONS.get(target)
-        if step is not None:
-            step(entries)
     return entries
 
 def _store_logical_state(connection: sqlite3.Connection, user_id: str, payload, committed_at: str) -> None:
@@ -280,14 +253,13 @@ def _store_logical_state(connection: sqlite3.Connection, user_id: str, payload, 
     next_row_version = (int(current[0]) + 1) if current is not None else 1
     connection.execute("DELETE FROM player_state WHERE user_id = ?", (user_id,))
     connection.execute(
-        "INSERT INTO player_state (user_id, state_json, version, updated_at, schema_version)"
-        " VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO player_state (user_id, state_json, version, updated_at)"
+        " VALUES (?, ?, ?, ?)",
         (
             user_id,
             json.dumps(payload, ensure_ascii=False, sort_keys=True),
             next_row_version,
             committed_at,
-            SCHEMA_VERSION,
         ),
     )
 
@@ -324,8 +296,7 @@ class SQLiteStateStore:
                 user_id TEXT PRIMARY KEY,
                 state_json TEXT NOT NULL,
                 version INTEGER NOT NULL CHECK (version > 0),
-                updated_at TEXT NOT NULL,
-                schema_version INTEGER NOT NULL DEFAULT 0
+                updated_at TEXT NOT NULL
             );
                 CREATE INDEX IF NOT EXISTS ix_player_location_xy
                 ON player_location(x, y, user_id);

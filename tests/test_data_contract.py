@@ -64,7 +64,7 @@ def test_unknown_entity_is_rejected(data_service: JsonDataService) -> None:
         data_service.entity("不存在的类别", "000000")
 
 
-def test_legacy_compatibility_names_are_absent() -> None:
+def test_obsolete_names_are_absent() -> None:
     json_files = DATA_ROOT.rglob("*.json")
     assert all("兼容名" not in path.read_text(encoding="utf-8") for path in json_files)
 

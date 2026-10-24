@@ -266,7 +266,7 @@ def _index_content(
                     # 快照承诺只读，而 `entity_records[..].value` 是**另一条**读取路径
                     # （`numbered_entities()`、`实体查询`）。原先这里放普通字典，
                     # 于是同一个实体从 `entities` 拿是只读、从 `records` 拿是可写——
-                    # 迁移后把功能测试的读取路径从前者换到后者才暴露出来。
+                    # 功能测试的读取路径必须与当前数据布局一致。
                     value=MappingProxyType(dict(value)),
                 )
                 continue

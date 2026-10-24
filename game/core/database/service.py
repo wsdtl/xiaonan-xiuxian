@@ -71,7 +71,7 @@ class DatabaseService:
         return self._store.path
 
     def initialize(self) -> DatabaseStatus:
-        """启动时建表；服务运行期间不做结构迁移。"""
+        """启动时建表；服务运行期间不改变结构。"""
 
         if self._initialized:
             raise RuntimeError("核心数据库已经初始化")

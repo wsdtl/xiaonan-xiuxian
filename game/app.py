@@ -909,11 +909,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     xuemai.initialize()
     _bloodline_holder["xuemai"] = xuemai
     _bloodline_holder["character"] = character
-    # 存档结构迁移：核心只提供注册口，迁移函数由玩法侧给（核心不 import 玩法）。
-    from game.core.database import register_migration
-    from game.features.xuemai.migrations import migrate_v1
-
-    register_migration(1, migrate_v1)
     from game.features.hunpei.store import BirthRequestStore
 
     # 求子请求住非资产日志库：路径与战报、消息流水同源，过期即失效。

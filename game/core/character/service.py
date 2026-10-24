@@ -2357,34 +2357,16 @@ def _check_yijing_id(content_id: str) -> None:
 
 
 def _state_yijing(value: object) -> tuple[dict[str, int], int] | None:
-    """意境：状态里存「路」（编号 → 阶）与**六路共享**的道行；名称按编号现取。
-
-    旧形状（只有一个「编号」「阶」）按**迁移读**：那一路记着原来的阶，其余按 0 算——
-    存档里已经练过的人不丢进度。写回一律新形状，见 plan_yijing_point。
-    """
+    """意境：状态里存「路」（编号 → 阶）与**六路共享**的道行；名称按编号现取。"""
 
     if value is None:
         return None
     row = _state_mapping(value, "人物.意境")
-    if set(row) - {"路", "道行", "编号", "阶"}:
-        raise CharacterStateError("人物.意境只认「路」「道行」（迁移读时容得下旧的「编号」「阶」）")
+    if set(row) - {"路", "道行"}:
+        raise CharacterStateError("人物.意境只认「路」「道行」")
     paths: dict[str, int] = {}
     raw_paths = row.get("路")
-    if raw_paths is None:
-        content_id = str(row.get("编号") or "")
-        tier = int(row.get("阶") or 0)
-        if not content_id:
-            # 没点过任何路：允许只攒道行（面板不显示，点不会丢）。
-            if tier:
-                raise CharacterStateError("人物.意境.没有编号时阶必须是0")
-        else:
-            _check_yijing_id(content_id)
-            if tier < 0 or tier > 9:
-                raise CharacterStateError("人物.意境.阶必须在0到9之间")
-            # 阶 0 ＝ 旧形状里「选了路但还没激活」：新模型没有认路这回事，直接不记。
-            if tier:
-                paths[content_id] = tier
-    else:
+    if raw_paths is not None:
         mapping = _state_mapping(raw_paths, "人物.意境.路")
         for key, raw_tier in mapping.items():
             content_id = str(key)
