@@ -460,6 +460,11 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
             assert result.left_results[0].shield > 0 or any(
                 "护盾" in str(event.values) for event in result.events
             )
+        if content_id == "630004":
+            assert any(
+                "载舟覆舟" in str(event.values) and "造成伤害后" == event.kind
+                for event in result.events
+            ), "载舟覆舟九阶没有实际伤害"
         if content_id == "630005":
             assert any(
                 event.kind == "添加状态后" and "日削月割" in str(event.values)
