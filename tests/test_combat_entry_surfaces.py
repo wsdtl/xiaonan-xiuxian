@@ -159,7 +159,7 @@ def test_every_formation_grade_fights(services) -> None:
 
     formations = [
         entry
-        for entry in _load("物品/内容/*.json")
+        for entry in _load("物品/内容/阵法/*.json")
         if isinstance(entry, dict) and str(entry.get("编号", "")).startswith("53")
     ]
     assert len(formations) >= 54
@@ -258,7 +258,7 @@ def test_entry_surfaces_reach_their_deep_paths(services) -> None:
 
     formation = next(
         entry
-        for entry in _load("物品/内容/*.json")
+        for entry in _load("物品/内容/阵法/*.json")
         if isinstance(entry, dict) and str(entry.get("编号", "")).startswith("53")
     )
     # 首轮阵法轮转要等到 `ceil(12 × 周期倍率 / 传导)` 个行动之后，而一场仗有多长
