@@ -78,7 +78,13 @@ async def dandingge(user_id: str, message: str, message_context: MessageContext,
         "help": {
             "category": "炼制",
             "summary": "在演阵台炼制一次性阵法（宗门洞天·宗门设施）",
-            "usage": ("演阵台", "演阵台 宗门", "演阵台 1", "演阵台 炼阵 圣品<阵法名>"),
+            "usage": (
+                "演阵台",
+                "演阵台 宗门",
+                "演阵台 1",
+                "演阵台 黄品周天星斗大阵",
+                "演阵台 炼阵 圣品周天星斗大阵 兽宝数 灵矿数 灵植数",
+            ),
             "side_effect": "按次消耗宗门灵石；圣品按实际三相投入追加消耗；走宗门材料与炼制圣品限宗主或长老",
             "order": 76,
         },
@@ -158,19 +164,19 @@ async def _dispatch(
             return
         if action == "炼阵":
             parts = parts[1:]
-            if len(parts) < 2:
+            if not parts:
                 raise ValueError(feature.copy()["错误"]["炼阵需要阵法"])
-            identifier, grade = parts[:2]
-            investments = _investments(parts[2:], feature.copy()["错误"]["圣品投入"])
+            grade, identifier = _parse_grade(parts[0])
+            investments = _investments(parts[1:], feature.copy()["错误"]["圣品投入"])
             value = await feature.craft(
                 facility, user_id, request_id, source, identifier, grade, investments
             )
             await manager.send(reply.completed(feature.copy(), value))
             return
-        if len(parts) < 2:
+        if not parts:
             raise ValueError(feature.copy()["错误"]["审材需要阵法"])
-        identifier, grade = parts[:2]
-        investments = _investments(parts[2:], feature.copy()["错误"]["圣品投入"])
+        grade, identifier = _parse_grade(parts[0])
+        investments = _investments(parts[1:], feature.copy()["错误"]["圣品投入"])
         value = await feature.preview(
             facility, user_id, source, identifier, grade, investments
         )
