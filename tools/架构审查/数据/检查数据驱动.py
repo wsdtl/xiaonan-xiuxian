@@ -937,37 +937,45 @@ BUILD_DESCRIPTION_DIRS = {
 }
 
 BUILD_DESCRIPTION_PATTERNS = {
-    "功法": re.compile(r"^此为《[^》]+》功法·.+?篇。其为.+?一脉绝学。其总纲为：.+。$"),
-    "真意": re.compile(r"^此为《[^》]+》真意·.+?篇。其为.+?一脉绝学。其真意总纲为：.+。$"),
-    "气机": re.compile(r"^此为《[^》]+》气机·.+?。其为.+?一脉绝学。其气机总纲为：.+。$"),
+    "功法": re.compile(r"^此为《[^》]+》功法·.+?。其为.+?一脉绝学。其总纲为：.+。$"),
+    "真意": re.compile(r"^此为《[^》]+》真意·.+?。其为.+?一脉绝学。其总纲为：.+。$"),
+    "气机": re.compile(r"^此为《[^》]+》气机·.+?。其为.+?一脉绝学。其总纲为：.+。$"),
 }
 
 
 def check_gongfa_outlines() -> list[str]:
-    """同一本书的六式功法必须共用同一段总纲。"""
+    """同一流派的功法/真意/气机必须共用同一句总纲，且总纲短。"""
 
-    groups: dict[str, list[tuple[str, str]]] = {}
-    root = DATA / "战斗/内容/功法"
-    for path in sorted(root.rglob("*.json")):
-        try:
-            document = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
+    groups: dict[str, list[tuple[str, str, str]]] = {}
+    for kind, (relative, _header) in BUILD_DESCRIPTION_DIRS.items():
+        root = DATA / relative
+        if not root.exists():
             continue
-        entries = document if isinstance(document, list) else [document]
-        for entry in entries:
-            if not isinstance(entry, dict):
+        for path in sorted(root.rglob("*.json")):
+            try:
+                document = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
                 continue
-            description = str(entry.get("说明") or "")
-            outline = description.split("其总纲为：", 1)[-1].strip()
-            groups.setdefault(str(path.parent), []).append(
-                (str(entry.get("名称") or path.name), outline)
-            )
+            entries = document if isinstance(document, list) else [document]
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                description = str(entry.get("说明") or "")
+                outline = description.split("其总纲为：", 1)[-1].strip()
+                groups.setdefault(path.parent.name, []).append(
+                    (kind, str(entry.get("名称") or path.name), outline)
+                )
     issues: list[str] = []
-    for folder, values in sorted(groups.items()):
-        outlines = {value for _, value in values}
+    for book, values in sorted(groups.items()):
+        outlines = {value for _, _, value in values}
         if len(outlines) > 1:
-            names = "、".join(name for name, _ in values)
-            issues.append(f"{folder} 同组总纲不一致：{names}")
+            names = "、".join(name for _, name, _ in values)
+            issues.append(f"{book} 三类总纲不一致：{names}")
+        for value in outlines:
+            if len(value) > 24:
+                issues.append(f"{book} 总纲超过24字：{value}")
+            if "篇" in value:
+                issues.append(f"{book} 总纲仍带篇：{value}")
     return issues
 
 
