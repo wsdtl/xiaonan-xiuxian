@@ -41,10 +41,8 @@ class WeaponStage:
     minimum_level: int
     maximum_level: int
     open_law_slots: int
-    beast_requirement_count: int
     mineral_requirement_range: tuple[int, int]
     secondary_substitution_limit: int
-    minimum_beast_grade_id: str
     minimum_mineral_grade_id: str
 
 

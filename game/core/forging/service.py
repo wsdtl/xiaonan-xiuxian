@@ -199,39 +199,7 @@ class ForgingService:
         law = self._resolve_law(identifier)
         if law.materials:
             return self._assess_materials(law, entries)
-        stage = self._stage_by_name[law.stage]
-        beasts, missing_beasts, _ = self._match(
-            law.beast_traits,
-            entries,
-            self._beast_materials,
-            stage.minimum_beast_grade_id,
-            allow_secondary=False,
-        )
-        minerals, missing_minerals, secondary_count = self._match(
-            law.mineral_traits,
-            entries,
-            self._mineral_materials,
-            stage.minimum_mineral_grade_id,
-            allow_secondary=True,
-        )
-        missing = list(missing_beasts + missing_minerals)
-        if not missing and secondary_count > stage.secondary_substitution_limit:
-            missing.append(
-                ForgingMissingMaterial(
-                    "灵矿",
-                    "本脉材料",
-                    secondary_count - stage.secondary_substitution_limit,
-                )
-            )
-        return ForgingAssessment(
-            law,
-            beasts,
-            minerals,
-            tuple(missing),
-            secondary_count,
-            stage.secondary_substitution_limit,
-            not missing,
-        )
+        raise ForgingError("器律缺少材料表")
 
     def initial_weapon_level(self) -> int:
         self._require_initialized()
@@ -836,8 +804,6 @@ class ForgingService:
                 raise JsonDataError(f"器律使用未知器阶：{law.name} -> {law.stage}")
             if law.materials:
                 continue
-            if len(law.beast_traits) != stage.beast_requirement_count:
-                raise JsonDataError(f"器律兽引数量与器阶不一致：{law.name}")
             if (
                 not stage.mineral_requirement_range[0]
                 <= len(law.mineral_traits)
@@ -950,10 +916,8 @@ def _weapon_stage(value: Mapping[str, object]) -> WeaponStage:
         bounds[0],
         bounds[1],
         _nonnegative_int(value.get("开放器律孔"), "器阶.开放器律孔"),
-        _nonnegative_int(value.get("兽引数量"), "器阶.兽引数量"),
         minerals,
         _nonnegative_int(value.get("旁脉替代上限"), "器阶.旁脉替代上限"),
-        _text(value.get("最低兽宝品级"), "器阶.最低兽宝品级"),
         _text(value.get("最低灵矿品级"), "器阶.最低灵矿品级"),
     )
 
