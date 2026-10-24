@@ -2184,8 +2184,13 @@ class BattleEngine(AbilityRuntime):
                 tags=tags,
             )
             if fatal.cancelled:
-                resolution = self.damage.with_minimum_health(
-                    resolution, float(fatal.facts.get("保留血气", 1))
+                keep_key = (
+                    "保留神魂"
+                    if resolution.request.resource == "神魂"
+                    else "保留血气"
+                )
+                resolution = self.damage.with_minimum_resource(
+                    resolution, float(fatal.facts.get(keep_key, 1))
                 )
         target.shield = resolution.shield_after
         if resolution.request.resource == "神魂":

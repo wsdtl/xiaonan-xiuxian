@@ -1703,8 +1703,12 @@ class CardText:
         return f"将{self._target(node.get('目标'))}受到的{self._value(node.get('数值'))}点伤害转移出去"
 
     def _ability_resist_lethal_damage(self, node: Mapping) -> str:
-        keep = node.get("保留血气")
-        suffix = f"，并至少保留{_number(keep)}点血气" if keep is not None else ""
+        parts = []
+        if node.get("保留血气") is not None:
+            parts.append(f"血气{_number(node['保留血气'])}")
+        if node.get("保留神魂") is not None:
+            parts.append(f"神魂{_number(node['保留神魂'])}")
+        suffix = f"，并至少保留{'、'.join(parts)}点" if parts else ""
         return f"抵挡一次致命伤害{suffix}"
 
     def _ability_revive(self, node: Mapping) -> str:

@@ -500,12 +500,12 @@ class DamageEngine:
         )
 
     @staticmethod
-    def with_minimum_health(
+    def with_minimum_resource(
         resolution: DamageResolution,
-        minimum_health: float,
+        minimum_resource: float,
     ) -> DamageResolution:
         if resolution.request.resource == "神魂":
-            floor = max(0.0, min(resolution.soul_before, float(minimum_health)))
+            floor = max(0.0, min(resolution.soul_before, float(minimum_resource)))
             pending = max(0.0, resolution.breakdown.limited - resolution.shield_damage)
             soul_damage = min(max(0.0, resolution.soul_before - floor), pending)
             soul_after = max(floor, resolution.soul_before - soul_damage)
@@ -517,7 +517,7 @@ class DamageEngine:
                 soul_after=soul_after,
                 overkill=overkill,
             )
-        floor = max(0.0, min(resolution.health_before, float(minimum_health)))
+        floor = max(0.0, min(resolution.health_before, float(minimum_resource)))
         pending = max(0.0, resolution.breakdown.limited - resolution.shield_damage)
         health_damage = min(max(0.0, resolution.health_before - floor), pending)
         health_after = max(floor, resolution.health_before - health_damage)
