@@ -80,6 +80,7 @@ class ForgingLaw:
     method: str
     beast_traits: tuple[str, ...]
     mineral_traits: tuple[str, ...]
+    materials: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True)

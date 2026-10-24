@@ -193,6 +193,8 @@ class ForgingService:
     ) -> ForgingAssessment:
         self._require_initialized()
         law = self._resolve_law(identifier)
+        if law.materials:
+            return self._assess_materials(law, entries)
         stage = self._stage_by_name[law.stage]
         beasts, missing_beasts, _ = self._match(
             law.beast_traits,
@@ -541,6 +543,60 @@ class ForgingService:
             value.can_forge,
         )
 
+    def _assess_materials(
+        self, law: ForgingLaw, entries: tuple[AssetEntry, ...]
+    ) -> ForgingAssessment:
+        beasts: list[ForgingMaterial] = []
+        minerals: list[ForgingMaterial] = []
+        missing: list[ForgingMissingMaterial] = []
+        for raw in law.materials:
+            category = _text(raw.get("类别"), f"{law.name}.材料.类别")
+            item_id = str(raw.get("编号") or "")
+            need = _positive_int(raw.get("数量"), f"{law.name}.材料.数量")
+            minimum = self._asset.grade(str(raw.get("最低品级") or "黄品"))
+            candidates = sorted(
+                (
+                    entry
+                    for entry in entries
+                    if entry.subcategory == category
+                    and (not item_id or entry.content_id == item_id)
+                    and self._asset.grade(entry.grade_id).order >= minimum.order
+                ),
+                key=lambda entry: (
+                    self._asset.grade(entry.grade_id).order,
+                    entry.content_id,
+                    entry.instance_key,
+                ),
+            )
+            target = beasts if category == "兽宝" else minerals
+            for entry in candidates:
+                if need <= 0:
+                    break
+                take = min(need, entry.quantity)
+                target.append(
+                    ForgingMaterial(
+                        entry.content_id,
+                        entry.name,
+                        entry.grade_id,
+                        entry.grade_name,
+                        category,
+                        "指定" if item_id else "同类",
+                        take,
+                    )
+                )
+                need -= take
+            if need > 0:
+                missing.append(
+                    ForgingMissingMaterial(
+                        category,
+                        f"{minimum.name}及以上{category}" + (f"（{item_id}）" if item_id else ""),
+                        need,
+                    )
+                )
+        return ForgingAssessment(
+            law, tuple(beasts), tuple(minerals), tuple(missing), 0, 0, not missing
+        )
+
     def _match(
         self,
         traits: tuple[str, ...],
@@ -724,6 +780,7 @@ class ForgingService:
                 method_name,
                 _texts(raw.get("兽引"), f"器律 {name}.兽引"),
                 method[1],
+                tuple(_mapping(item, f"器律 {name}.材料[]") for item in _sequence(raw.get("材料", ()), f"器律 {name}.材料")),
             )
         return result
 
