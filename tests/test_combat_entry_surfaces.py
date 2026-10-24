@@ -429,6 +429,7 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
         )
         assert weapon_attack >= 0.0
         assert statuses
+        assert any(status.action_limits for status in statuses)
         spec = CombatantSpec(
             id=f"yijing-9-{index}",
             name=f"九阶{name}",
