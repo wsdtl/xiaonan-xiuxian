@@ -671,17 +671,8 @@ class FormationService:
         impact = float(_number(base.get("冲击"), "阵法.基础.冲击")) * ability * multipliers["兽宝"]
         nodes = max(1, int(float(_number(base.get("节点"), "阵法.基础.节点")) * ability * multipliers["灵植"]))
         transmission = float(_number(base.get("传导"), "阵法.基础.传导")) * ability * multipliers["灵植"]
-        grade_raw = self._grade_raw(raw, grade_name)
         stages = tuple(
-            FormationStageProfile(
-                _number(value.get("环境阶段阈值倍率"), "阵法.环境阶段阈值倍率"),
-                _number(value.get("行动周期倍率"), "阵法.行动周期倍率"),
-                _number(value.get("阵势倍率"), "阵法.阵势倍率"),
-            )
-            for value in (
-                _mapping(raw_stage, "阵法.地势阶段[]")
-                for raw_stage in _sequence(grade_raw.get("地势阶段"), "阵法.地势阶段")
-            )
+            FormationStageProfile(1.0, 1.0, 1.0) for _ in range(4)
         )
         return FormationBattleProfile(
             formation.formation_id,
@@ -1091,6 +1082,14 @@ class FormationService:
         if opened != set(self._formations):
             raise JsonDataError("阵法必须全部有阵师开放")
         for formation_id, raw in self._raw_formations.items():
+            if "阵核" in raw:
+                core_ids = _sequence(raw.get("阵核"), f"阵法 {formation_id}.阵核")
+                if len(core_ids) != 2:
+                    raise JsonDataError(f"阵法阵核必须正好两条：{formation_id}")
+                base = _mapping(raw.get("基础"), f"阵法 {formation_id}.基础")
+                for key in ("承载", "冲击", "节点", "传导"):
+                    _number(base.get(key), f"阵法 {formation_id}.基础.{key}")
+                continue
             grades = tuple(
                 _text(_mapping(item, "阵法.品级[]").get("品级"), "阵法.品级")
                 for item in _sequence(raw.get("品级"), f"阵法 {formation_id}.品级")

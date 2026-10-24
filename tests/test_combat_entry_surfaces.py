@@ -162,16 +162,16 @@ def test_every_formation_grade_fights(services) -> None:
         for entry in _load("物品/内容/*.json")
         if isinstance(entry, dict) and str(entry.get("编号", "")).startswith("53")
     ]
-    assert len(formations) >= 40
+    assert len(formations) >= 54
 
     cases: list[tuple[str, dict]] = []
     for entry in formations:
         formation_id = str(entry["编号"])
         name = str(entry.get("名称"))
-        for grade in GRADES:
+        for grade in (*GRADES, "圣品"):
             cases.append(
                 (
-                    f"{formation_id} {name} {grade}品",
+                    f"{formation_id} {name} {grade}",
                     {
                         "left_formation": CombatFormationSpec(
                             formation_id=formation_id, grade=grade, position=0
@@ -182,31 +182,6 @@ def test_every_formation_grade_fights(services) -> None:
                     },
                 )
             )
-        holy = next(
-            (
-                block
-                for block in entry.get("品级") or ()
-                if str(block.get("品级")) == "圣品"
-            ),
-            None,
-        )
-        if holy is None:
-            continue
-        materials = {
-            str(key): float(value)
-            for key, value in (holy.get("最低消耗") or {}).items()
-        }
-        assert materials, f"{formation_id} 的圣品缺少最低消耗"
-        cases.append(
-            (
-                f"{formation_id} {name} 圣品",
-                {
-                    "left_formation": CombatFormationSpec(
-                        formation_id=formation_id, grade="圣品", materials=materials
-                    )
-                },
-            )
-        )
     assert not _failures(services, cases)
 
 
