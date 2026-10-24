@@ -278,6 +278,133 @@ def test_entry_surfaces_reach_their_deep_paths(services) -> None:
     assert {"阵法展开", "阵法轮转后", "阵法冲击后"} <= formation_kinds, "阵法没有完整轮转"
 
 
+def test_formation_detection_scales_impact(services) -> None:
+    """阵法的检测字段必须进入真实冲击，而不是只校验数据。"""
+
+    sturdy = replace(
+        _spec("L"),
+        attributes={**ATTRS, "血气上限": 200_000},
+        health=100_000,
+    )
+    result = _fight(
+        services,
+        limit=30,
+        left_team=(sturdy,),
+        right_team=(replace(sturdy, id="R", name="R"),),
+        left_formation=CombatFormationSpec(formation_id="530001", grade="黄品"),
+    )
+    rotations = [event for event in result.events if event.kind == "阵法轮转后"]
+    assert rotations
+    assert any(
+        event.values.get("检测字段") == "已损失血气"
+        and float(event.values.get("检测倍率") or 1) > 1
+        for event in rotations
+    )
+    assert any(event.kind == "阵法冲击后" for event in result.events)
+
+
+def test_formation_assessment_reaches_battle(services) -> None:
+    """阵核评估 → 战斗快照 → 真实战斗，阵核与检测字段一路带过去。"""
+
+    from game.core.asset.contracts import AssetEntry
+
+    entries = (
+        AssetEntry("物品", "灵矿", "220032", "core-1", "丘脉青晶", "01", "黄品", 6),
+        AssetEntry("物品", "灵矿", "220086", "core-2", "丘腹赤铁", "01", "黄品", 6),
+    )
+    assessment = services.formation.assess("530001", "黄品", entries)
+    assert assessment.can_form
+    assert assessment.core_names == ("丘脉青晶", "丘腹赤铁")
+    assert assessment.detection is not None
+    profile = services.formation.battle_profile("530001", "黄品", {"灵矿": 2})
+    assert profile.detection is not None
+
+    result = _fight(
+        services,
+        limit=30,
+        left_team=(replace(_spec("L"), health=600),),
+        right_team=(_spec("R"),),
+        left_formation=CombatFormationSpec("530001", "黄品"),
+    )
+    assert any(event.kind == "阵法冲击后" for event in result.events)
+
+
+def test_all_builds_enter_one_real_battle(services) -> None:
+    """功法/真意/气机全部 1224 张构筑至少进入一次真实战斗。"""
+
+    builds = []
+    for kind, directory in (
+        ("功法", "战斗/内容/功法"),
+        ("真意", "战斗/内容/真意"),
+        ("气机", "战斗/内容/气机"),
+    ):
+        for path in sorted((DATA / directory).glob("*/*.json")):
+            document = json.loads(path.read_text(encoding="utf-8"))
+            entry = document[0] if isinstance(document, list) else document
+            builds.append((kind, str(entry["编号"])))
+    assert len(builds) == 1224
+
+    refs = tuple(
+        CombatBuildRef(kind, build_id, instance_id=f"L:{kind}:{build_id}", born_order=index)
+        for index, (kind, build_id) in enumerate(builds)
+    )
+    fighter = CombatantSpec(
+        id="L",
+        name="全部构筑",
+        attributes=dict(ATTRS),
+        build=refs,
+    )
+    result = _fight(
+        services,
+        limit=3,
+        left_team=(fighter,),
+        right_team=(_spec("R"),),
+    )
+    assert result.left_results
+
+
+def test_formation_preview_shows_core_and_detection() -> None:
+    """演阵台必须显示阵核、辅材倍数、检测与难度，不再用旧阵基/阵眼标签。"""
+
+    from types import SimpleNamespace
+
+    from game.cmd.特殊地点.宗门园区.宗门设施.site import _formation_view
+    from game.core.formation import FormationDetection
+
+    assessment = SimpleNamespace(
+        formation=SimpleNamespace(formation_id="530001", name="叠翠盘根阵"),
+        grade_name="黄品",
+        capacity=240.0,
+        impact=180.0,
+        nodes=3,
+        transmission=0.8,
+        materials=(),
+        core_names=("丘脉青晶", "丘腹赤铁"),
+        supplement_multipliers=(
+            ("灵矿", 1.2),
+            ("兽宝", 1.0),
+            ("灵植", 1.1),
+        ),
+        detection=FormationDetection("已损失血气", "每10%", 0.06, "易", "血气"),
+    )
+    value = SimpleNamespace(
+        facility=SimpleNamespace(name="演阵台"),
+        role="阵师",
+        material_source="个人纳戒",
+        assessment=assessment,
+        materials=(),
+        spirit_stone_cost=0,
+    )
+    feature = SimpleNamespace(copy=lambda: {"通用": {"职位": "职位", "材料来源": "来源"}})
+    view = _formation_view(feature, value)
+    fields = {item["键"]: item["值"] for item in view["字段"]}
+    assert "阵基" not in fields and "阵眼" not in fields
+    assert fields["阵核"] == "丘脉青晶、丘腹赤铁"
+    assert "灵矿 ×1.2" in fields["辅材倍数"]
+    assert fields["检测"] == "已损失血气｜每10%｜冲击 +6%"
+    assert fields["难度"] == "易"
+
+
 def test_groups_report_and_snapshots(services) -> None:
     """编组、战报、原始状态快照、五行根性、装备与冷却都要能提交。"""
 

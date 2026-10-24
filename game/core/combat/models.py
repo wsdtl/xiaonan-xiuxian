@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field as dataclass_field
 from typing import TYPE_CHECKING, Any
 
-from game.core.formation import FormationNodeRules
+from game.core.formation import FormationDetection, FormationNodeRules
 
 if TYPE_CHECKING:
     from .engine import BattleEngine
@@ -978,6 +978,7 @@ class PreparedFormation:
     nodes: int
     transmission: float
     stages: tuple[PreparedFormationStage, ...]
+    detection: FormationDetection | None = None
 
 
 @dataclass

@@ -22,6 +22,7 @@ from .models import (
 import copy
 import math
 import random
+import re
 import sys
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -756,6 +757,90 @@ class BattleEngine(AbilityRuntime):
         )
         self._announce_formation_collapses(context, collapsed)
 
+    def _formation_detection_multiplier(
+        self, context: BattleContext, formation: RuntimeFormation
+    ) -> tuple[float, dict[str, Any]]:
+        """按阵法检测字段计算本轮冲击倍率；没有检测数据就是 1。"""
+
+        detection = formation.definition.detection
+        if detection is None:
+            return 1.0, {}
+        side = formation.side
+        own_team = context.left_team if side == 0 else context.right_team
+        enemy_team = context.right_team if side == 0 else context.left_team
+        source = context.left if side == 0 else context.right
+        own_alive = [value for value in own_team if value.alive]
+        enemy_alive = [value for value in enemy_team if value.alive]
+        field = detection.field
+        health_max = max(1.0, float(source.value("血气上限", source.health)))
+        spirit_max = max(1.0, float(source.value("精神上限", source.spirit)))
+        if field == "已损失血气":
+            value = max(0.0, (health_max - source.health) / health_max * 100)
+        elif field == "已损失精神":
+            value = max(0.0, (spirit_max - source.spirit) / spirit_max * 100)
+        elif field == "护盾比例":
+            shield_max = max(1.0, float(source.shield_max))
+            value = max(0.0, source.shield / shield_max * 100)
+        elif field == "行动条进度":
+            value = max(0.0, context.action_progress.get(source.id, 0.0) * 100)
+        elif field in ("负面状态层数", "正面状态层数"):
+            category = "负面" if field == "负面状态层数" else "正面"
+            value = sum(
+                max(1, int(status.stacks))
+                for status in source.statuses
+                if status.category == category
+            )
+        elif field == "冷却中技能":
+            value = sum(1 for turns in source.cooldowns.values() if turns > 0)
+        elif field == "敌我存活人数差":
+            value = max(0, len(enemy_alive) - len(own_alive))
+        elif field == "阵核剩余承载比例":
+            capacity = max(1.0, formation.definition.capacity)
+            value = max(0.0, formation.remaining_capacity / capacity * 100)
+        elif field == "本场击杀数":
+            value = sum(
+                1
+                for event in context.events
+                if event.kind == "死亡后"
+                and event.source is not None
+                and event.source.side == side
+                and event.target is not None
+                and event.target.side != side
+            )
+        elif field == "本场死亡数":
+            value = sum(1 for value in own_team if not value.alive)
+        elif field == "当前回合数":
+            value = max(1, context.action_number)
+        elif field == "当前形态":
+            value = 1 if source.form != "本相" else 0
+        elif field == "双方等级差":
+            enemy_level = max((value.level for value in enemy_team), default=source.level)
+            value = max(0, source.level - enemy_level)
+        elif field == "召唤物数量":
+            value = sum(1 for value in own_team if value.summoned)
+        elif field == "本场触发次数":
+            value = sum(context.battle_trigger_counts.values())
+        elif field == "目标已损失血气":
+            ratios = []
+            for target in enemy_team:
+                target_max = max(1.0, float(target.value("血气上限", target.health)))
+                ratios.append(max(0.0, (target_max - target.health) / target_max * 100))
+            value = max(ratios, default=0.0)
+        else:
+            return 1.0, {}
+        match = re.search(r"每(?:损失|有|多|过|触发|剩)?\s*(\d+(?:\.\d+)?)", detection.relation)
+        step = float(match.group(1)) if match else 1.0
+        units = max(0.0, float(value)) / max(1.0, step)
+        multiplier = 1.0 + float(detection.coefficient) * units
+        return multiplier, {
+            "检测字段": detection.field,
+            "检测关系": detection.relation,
+            "检测值": round(float(value), 3),
+            "检测单位": round(units, 3),
+            "检测倍率": round(multiplier, 4),
+            "检测难度": detection.difficulty,
+        }
+
     def _prepare_rotations(
         self,
         context: BattleContext,
@@ -794,7 +879,14 @@ class BattleEngine(AbilityRuntime):
             )
             formation.next_rotation = context.action_number + interval
             formation.rotations += 1
-            impact = formation.definition.impact * stage.impact_multiplier
+            detection_multiplier, detection_values = self._formation_detection_multiplier(
+                context, formation
+            )
+            impact = (
+                formation.definition.impact
+                * stage.impact_multiplier
+                * detection_multiplier
+            )
             targets = self._rotation_targets(context, formation, active, node_rules)
             if targets is None:
                 continue
@@ -811,6 +903,7 @@ class BattleEngine(AbilityRuntime):
                     "轮转次数": formation.rotations,
                     "阵势倍率": stage.impact_multiplier,
                     "行动周期倍率": stage.cycle_multiplier,
+                    **detection_values,
                 },
             )
         return prepared

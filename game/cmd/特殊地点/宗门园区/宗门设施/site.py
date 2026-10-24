@@ -157,14 +157,28 @@ def _formation_view(feature: object, value: object) -> dict[str, object]:
     pick = (lambda key: str(groups.get(key) or '')) if isinstance(groups, Mapping) else (lambda key: '')
     assessment = value.assessment
     formation = assessment.formation
+    detection = assessment.detection
+    detection_text = (
+        f'{detection.field}｜{detection.relation}｜冲击 +{detection.coefficient * 100:g}%'
+        if detection is not None
+        else '无'
+    )
+    multipliers = '，'.join(
+        f'{name} ×{value:g}'
+        for name, value in assessment.supplement_multipliers
+    ) or '无'
     return {
         '标题': f'{value.facility.name} · {formation.name}',
         '字段': [
             {'键': '阵法', '值': str(formation.formation_id)},
             {'键': '品级', '值': str(assessment.grade_name)},
-            {'键': '阵基', '值': f'承载 {assessment.capacity:g}'},
-            {'键': '阵眼', '值': f'冲击 {assessment.impact:g}'},
+            {'键': '阵核', '值': '、'.join(assessment.core_names) or '—'},
+            {'键': '承载', '值': f'{assessment.capacity:g}'},
+            {'键': '冲击', '值': f'{assessment.impact:g}'},
             {'键': '节点', '值': f'{assessment.nodes}位 · 传导 {assessment.transmission:g}'},
+            {'键': '辅材倍数', '值': multipliers},
+            {'键': '检测', '值': detection_text},
+            {'键': '难度', '值': detection.difficulty if detection is not None else '—'},
             {'键': pick('职位'), '值': str(value.role)},
             {'键': pick('材料来源'), '值': str(value.material_source)},
         ],

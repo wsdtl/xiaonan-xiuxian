@@ -54,6 +54,7 @@ from .contracts import (
     FormationBattleProfile,
     FormationConflictError,
     FormationDefinition,
+    FormationDetection,
     FormationEntry,
     FormationCandidate,
     FormationChoiceError,
@@ -106,6 +107,22 @@ _DETECTION_FIELDS = frozenset(
         "目标已损失血气",
     }
 )
+
+
+def _detection(raw: Mapping[str, object], formation_id: str) -> FormationDetection | None:
+    value = raw.get("检测")
+    if value is None:
+        return None
+    detection = _mapping(value, f"阵法 {formation_id}.检测")
+    return FormationDetection(
+        field=_text(detection.get("字段"), f"阵法 {formation_id}.检测.字段"),
+        relation=_text(detection.get("关系"), f"阵法 {formation_id}.检测.关系"),
+        coefficient=float(
+            _number(detection.get("系数"), f"阵法 {formation_id}.检测.系数")
+        ),
+        difficulty=str(detection.get("难度") or ""),
+        monitor=str(detection.get("监测") or ""),
+    )
 
 
 class FormationService:
@@ -258,6 +275,7 @@ class FormationService:
             profile.nodes,
             profile.transmission,
             all(not item.missing for item in requirements),
+            _detection(raw, formation.formation_id),
         )
 
     async def overview(self, user_id: str, page: int = 1) -> FormationOverview:
@@ -316,6 +334,9 @@ class FormationService:
             value.nodes,
             value.transmission,
             value.can_form,
+            value.detection,
+            value.core_names,
+            value.supplement_multipliers,
         )
 
     async def form(
@@ -705,6 +726,7 @@ class FormationService:
             nodes,
             transmission,
             stages,
+            _detection(raw, formation.formation_id),
         )
 
     def node_rules(self) -> FormationNodeRules:
@@ -833,6 +855,13 @@ class FormationService:
         nodes = max(1, int(float(_number(base.get("节点"), "阵法.基础.节点")) * ability * multipliers["灵植"]))
         transmission = float(_number(base.get("传导"), "阵法.基础.传导")) * ability * multipliers["灵植"]
         can_form = all(selected[key] >= requirements[key] for key in _CATEGORIES)
+        core_names = tuple(
+            next(
+                (entry.name for entry in entries if entry.content_id == core_id),
+                core_id,
+            )
+            for core_id in core_ids
+        )
         return FormationAssessment(
             formation,
             grade_id,
@@ -844,6 +873,9 @@ class FormationService:
             nodes,
             transmission,
             can_form,
+            _detection(raw, formation.formation_id),
+            core_names,
+            tuple((key, multipliers[key]) for key in _CATEGORIES),
         )
 
     def _required_materials(
@@ -1190,6 +1222,9 @@ class FormationService:
             profile.nodes,
             profile.transmission,
             True,
+            profile.detection,
+            (),  # 事务重放只恢复结果，不从阵材反推阵核展示
+            (),
         )
         return FormationResult(preview, reserve_key, before, after, True, activation)
 

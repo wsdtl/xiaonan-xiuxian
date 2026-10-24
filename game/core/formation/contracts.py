@@ -106,6 +106,15 @@ class FormationRequirement:
 
 
 @dataclass(frozen=True)
+class FormationDetection:
+    field: str
+    relation: str
+    coefficient: float
+    difficulty: str = ""
+    monitor: str = ""
+
+
+@dataclass(frozen=True)
 class FormationAssessment:
     formation: FormationDefinition
     grade_id: str
@@ -117,6 +126,9 @@ class FormationAssessment:
     nodes: int
     transmission: float
     can_form: bool
+    detection: FormationDetection | None = None
+    core_names: tuple[str, ...] = ()
+    supplement_multipliers: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -135,6 +147,9 @@ class FormationPreview:
     nodes: int
     transmission: float
     can_form: bool
+    detection: FormationDetection | None = None
+    core_names: tuple[str, ...] = ()
+    supplement_multipliers: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -212,6 +227,7 @@ class FormationBattleProfile:
     nodes: int
     transmission: float
     stages: tuple[FormationStageProfile, ...]
+    detection: FormationDetection | None = None
 
 
 @dataclass(frozen=True)
@@ -229,6 +245,7 @@ __all__ = [
     "FormationConflictError",
     "FormationChoiceError",
     "FormationDefinition",
+    "FormationDetection",
     "FormationEntry",
     "FormationError",
     "FormationMaster",

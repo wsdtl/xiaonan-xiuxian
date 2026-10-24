@@ -261,6 +261,7 @@ class CombatService:
             profile.nodes,
             profile.transmission,
             stages,
+            profile.detection,
         )
 
     def _prepared_field(
