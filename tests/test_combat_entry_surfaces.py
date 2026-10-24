@@ -448,6 +448,7 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
         assert any("意境" in name for name in names)
 
 
+
 def test_bloodline_can_set_soul_max_only(services) -> None:
     """血脉固定属性可以给神魂上限；这是属性边界，不碰神魂当前值。"""
 
