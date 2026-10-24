@@ -792,12 +792,18 @@ class AlchemyService:
         for medicine_id, raw in self._data.entities("丹药").items():
             contract.validate(raw, "丹药", f"丹药 {medicine_id}")
             name = _text(raw.get("名称"), f"丹药 {medicine_id}.名称")
-            method = _text(raw.get("炉法"), f"丹药 {name}.炉法")
-            difficulty = _positive_int(raw.get("炼制难度"), f"丹药 {name}.炼制难度")
+            materials = tuple(
+                _mapping(item, f"丹药 {name}.材料[]")
+                for item in _sequence(raw.get("材料", ()), f"丹药 {name}.材料")
+            )
+            method = str(raw.get("炉法") or "")
+            difficulty = int(raw.get("炼制难度") or 1)
             if name in names:
                 raise JsonDataError(f"丹药名称重复：{name}")
-            if method not in self._methods or difficulty not in self._difficulties:
+            if not materials and (method not in self._methods or difficulty not in self._difficulties):
                 raise JsonDataError(f"丹药引用未知炉法或难度：{name}")
+            if materials and method and method not in self._methods:
+                raise JsonDataError(f"丹药引用未知炉法：{name}")
             category = _RECIPE_CATEGORIES.get(medicine_id[:2], "")
             if category not in _CATEGORIES:
                 raise JsonDataError(f"丹药类别错误：{name} -> {category}")
@@ -810,7 +816,7 @@ class AlchemyService:
                 method,
                 medicine_id,
                 name,
-                tuple(_mapping(item, f"丹药 {name}.材料[]") for item in _sequence(raw.get("材料", ()), f"丹药 {name}.材料")),
+                materials,
             )
         return result
 
@@ -839,6 +845,8 @@ class AlchemyService:
 
     def _validate_static_rules(self, rules: Mapping[str, object]) -> None:
         for recipe in self._recipes.values():
+            if recipe.materials:
+                continue
             difficulty = self._difficulties[recipe.difficulty]
             count = len(self._methods[recipe.method])
             if not difficulty.herb_range[0] <= count <= difficulty.herb_range[1]:
