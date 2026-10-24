@@ -85,6 +85,27 @@ _GRADE_IDS = dict(zip(_GRADES, ("01", "02", "03", "04", "05"), strict=True))
 _GRADE_NAMES_BY_ID = {grade_id: name for name, grade_id in _GRADE_IDS.items()}
 _PREPARED_STATE = "prepared_formation"
 _PREPARED_KEY = "main"
+_DETECTION_FIELDS = frozenset(
+    {
+        "已损失血气",
+        "已损失精神",
+        "护盾比例",
+        "行动条进度",
+        "负面状态层数",
+        "正面状态层数",
+        "冷却中技能",
+        "敌我存活人数差",
+        "阵核剩余承载比例",
+        "本场击杀数",
+        "本场死亡数",
+        "当前回合数",
+        "当前形态",
+        "双方等级差",
+        "召唤物数量",
+        "本场触发次数",
+        "目标已损失血气",
+    }
+)
 
 
 class FormationService:
@@ -1089,6 +1110,9 @@ class FormationService:
                 base = _mapping(raw.get("基础"), f"阵法 {formation_id}.基础")
                 for key in ("承载", "冲击", "节点", "传导"):
                     _number(base.get(key), f"阵法 {formation_id}.基础.{key}")
+                detection = _mapping(raw.get("检测"), f"阵法 {formation_id}.检测")
+                if _text(detection.get("字段"), f"阵法 {formation_id}.检测.字段") not in _DETECTION_FIELDS:
+                    raise JsonDataError(f"阵法检测字段不是战斗真实字段：{formation_id}")
                 continue
             grades = tuple(
                 _text(_mapping(item, "阵法.品级[]").get("品级"), "阵法.品级")
