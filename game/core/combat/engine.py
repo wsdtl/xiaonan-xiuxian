@@ -798,14 +798,13 @@ class BattleEngine(AbilityRuntime):
             capacity = max(1.0, formation.definition.capacity)
             value = max(0.0, formation.remaining_capacity / capacity * 100)
         elif field == "本场击杀数":
+            sides = {fighter.id: fighter.side for fighter in context.fighters}
             value = sum(
                 1
                 for event in context.events
                 if event.kind == "死亡后"
-                and event.source is not None
-                and event.source.side == side
-                and event.target is not None
-                and event.target.side != side
+                and sides.get(event.source_id) == side
+                and sides.get(event.target_id) not in (None, side)
             )
         elif field == "本场死亡数":
             value = sum(1 for value in own_team if not value.alive)

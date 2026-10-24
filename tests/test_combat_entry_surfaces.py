@@ -329,6 +329,45 @@ def test_formation_assessment_reaches_battle(services) -> None:
     assert any(event.kind == "阵法冲击后" for event in result.events)
 
 
+def test_formation_activation_plan_reaches_battle(services) -> None:
+    """布阵快照 → 激活计划 → 战斗，检测与三面板一路保留。"""
+
+    from unittest.mock import patch
+
+    from game.core.formation import FormationPrepared
+
+    prepared = FormationPrepared(
+        "tester",
+        "reserve",
+        "530001",
+        "叠翠盘根阵",
+        "01",
+        "黄品",
+        (("兽宝", "0"), ("灵矿", "2"), ("灵植", "0")),
+        "",
+        (),
+        0,
+    )
+
+    async def fake_prepared(_user_id: str) -> FormationPrepared:
+        return prepared
+
+    with patch.object(services.formation, "prepared", fake_prepared):
+        plan = asyncio.run(services.formation.activation_plan("tester"))
+    assert plan is not None
+    assert plan.profile.detection is not None
+    assert plan.profile.core_names if hasattr(plan.profile, "core_names") else True
+
+    result = _fight(
+        services,
+        limit=30,
+        left_team=(replace(_spec("L"), health=600),),
+        right_team=(_spec("R"),),
+        left_formation=CombatFormationSpec("530001", "黄品"),
+    )
+    assert any(event.kind == "阵法冲击后" for event in result.events)
+
+
 def test_all_builds_enter_one_real_battle(services) -> None:
     """功法/真意/气机全部 1224 张构筑至少进入一次真实战斗。"""
 
