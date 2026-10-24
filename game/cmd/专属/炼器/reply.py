@@ -89,7 +89,7 @@ def preview(
     )
     # 没有材料就整个栏目都不开：空栏目与只印一个「无」一样，白占玩家的地方。
     if value.beast_materials:
-        builder.section(text(copy, "预览", "兽引"), icon="material")
+        builder.section(text(copy, "预览", "兽宝"), icon="material")
         _materials(builder, value.beast_materials, show_relation=False)
     if value.mineral_materials:
         builder.section(text(copy, "预览", "矿材"), icon="item")
