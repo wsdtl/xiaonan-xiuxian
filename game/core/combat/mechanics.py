@@ -2842,6 +2842,28 @@ class AbilityRuntime(ChainRuntime):
         self._apply_damage(context, frame.source, destinations[0], amount, label=str(effect.get("名称") or "分摊伤害"), damage_form="分摊", defense_rule="真实", can_critical=False, can_block=False, tags=("分摊",))
         return True
 
+    def _ability_guardian(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
+        frame = self._current_event(context)
+        if frame.kind not in {"造成伤害前", "受到致命伤害"}:
+            raise ValueError("护主只能修改伤害前或致命伤害事件")
+        if not source.alive or frame.target is source:
+            return False
+        amount = min(frame.amount, max(0.0, frame.amount * float(effect.get("比例", 30) or 0) / 100.0 * multiplier))
+        if amount <= 0:
+            return False
+        remaining = max(0.0, frame.amount - amount)
+        if frame.kind == "受到致命伤害":
+            frame.cancelled = True
+            frame.facts["保留血气"] = max(1.0, frame.target.health - remaining)
+        else:
+            frame.facts["当前数值"] = remaining
+        self._apply_damage(
+            context, frame.source, source, amount,
+            label=str(effect.get("名称") or "护主"), damage_form="护主",
+            defense_rule="真实", can_critical=False, can_block=False, tags=("护主",),
+        )
+        return True
+
     def _ability_transfer_damage(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
         frame = self._current_event(context)
         if frame.kind not in {"造成伤害前", "受到致命伤害"}:

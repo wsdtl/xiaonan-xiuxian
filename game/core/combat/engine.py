@@ -159,6 +159,7 @@ class BattleEngine(AbilityRuntime):
             "追加攻击": self._ability_additional_attack,
             "分摊伤害": self._ability_share_damage,
             "转移伤害": self._ability_transfer_damage,
+            "护主": self._ability_guardian,
             "连携攻击": self._ability_assist_strike,
             "破架势": self._ability_break_poise,
             "抵挡致命伤害": self._ability_fatal_guard,
