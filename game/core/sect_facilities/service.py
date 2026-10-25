@@ -125,7 +125,7 @@ class SectFacilityService:
                 _text(value.get("范围"), f"宗门设施.建筑.{facility_type}.范围"),
                 supported,
             )
-        permissions = self._data.dataset("宗门设施权限").get("身份权限")
+        permissions = self._data.dataset("身份权限").get("身份权限")
         for role, value in permissions.items():
             item = _mapping(value, f"宗门设施.身份权限.{role}")
             self._permissions[str(role)] = FacilityPermission(
@@ -135,12 +135,12 @@ class SectFacilityService:
                 _bool(item.get("允许圣品"), f"宗门设施.身份权限.{role}.允许圣品"),
                 _bool(item.get("允许发放"), f"宗门设施.身份权限.{role}.允许发放"),
             )
-        costs = self._data.dataset("宗门设施消耗").get("灵石消耗")
+        costs = self._data.dataset("灵石消耗").get("灵石消耗")
         base = _mapping(costs.get("基础"), "宗门设施.灵石消耗.基础")
         self._base_cost = {kind: _positive_int(base.get(kind), f"宗门设施.灵石消耗.基础.{kind}") for kind in _FACILITY_TYPES}
         self._grade_multiplier = _positive_map(costs.get("品级倍率"), "宗门设施.灵石消耗.品级倍率")
         self._stage_multiplier = _positive_map(costs.get("器阶倍率"), "宗门设施.灵石消耗.器阶倍率")
-        settlement = _mapping(self._data.dataset("宗门设施结算").get("结算"), "宗门设施.结算")
+        settlement = _mapping(self._data.dataset("结算").get("结算"), "宗门设施.结算")
         if settlement.get("失败") != "不扣灵石、不扣材料、不产出":
             raise JsonDataError("宗门设施炼制失败必须不扣灵石、不扣材料、不产出")
         self._initialized = True

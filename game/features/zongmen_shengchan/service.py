@@ -34,7 +34,7 @@ class SectProductionFeature:
     def initialize(self) -> None:
         if self._copy is not None:
             raise RuntimeError("宗门资源生产玩法已经初始化")
-        common = self._data.dataset("宗门生产通用文案").get("通用")
+        common = self._data.dataset("产出通用文案").get("产出通用")
         if not isinstance(common, Mapping):
             raise JsonDataError("宗门生产展示缺少通用.json")
         raw = {"通用": common.get("通用")}

@@ -47,7 +47,7 @@ class SectFacilityFeature:
     def initialize(self) -> None:
         if self._copy is not None:
             raise RuntimeError("宗门设施玩法已经初始化")
-        common = self._data.dataset("宗门设施通用文案").get("通用")
+        common = self._data.dataset("炼制通用文案").get("炼制通用")
         if not isinstance(common, Mapping):
             raise JsonDataError("宗门设施展示缺少通用.json")
         raw = {
