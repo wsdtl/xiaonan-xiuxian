@@ -45,14 +45,16 @@ KNOWN_LOOPING: set[str] = set()
 def _battle_pills() -> list[dict]:
     entries: list[dict] = []
     for path in sorted((DATA / "物品/内容/丹药/战丹").rglob("*.json")):
-        entries.extend(json.loads(path.read_text(encoding="utf-8")))
+        document = json.loads(path.read_text(encoding="utf-8"))
+        entries.extend(document if isinstance(document, list) else [document])
     return entries
 
 
 def _injuries() -> list[dict]:
     entries: list[dict] = []
     for path in sorted((DATA / "角色" / "内容" / "伤势").glob("*.json")):
-        entries.extend(json.loads(path.read_text(encoding="utf-8")))
+        document = json.loads(path.read_text(encoding="utf-8"))
+        entries.extend(document if isinstance(document, list) else [document])
     return entries
 
 

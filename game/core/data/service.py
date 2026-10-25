@@ -174,6 +174,9 @@ class JsonDataService:
         """
 
         loaded = self._require_loaded()
+        pool = loaded.pool_definitions.get(str(file_id))
+        if pool is not None:
+            return pool.section
         document = loaded.catalog.content_file(str(file_id))
         pool = loaded.pool_definitions.get(document.file_id)
         if pool is None:

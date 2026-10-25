@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from pathlib import PurePosixPath
 from types import MappingProxyType
 from typing import Any
 
@@ -12,6 +13,7 @@ from .files import (
     ENTITY_ID_POOL,
     NAMED_ENTITY,
     NAMED_ENTITY_POOL,
+    NUMBERED_ENTITY,
     NUMBERED_ENTITY_LIST,
     NUMBERED_ENTITY_POOL,
     OBJECT,
@@ -117,14 +119,20 @@ class LoadedGameData:
         section: str,
         stack: tuple[str, ...],
     ) -> list[tuple[str, Mapping[str, Any]]]:
-        document = self.catalog.content_file(file_id)
-        canonical = document.file_id
-        pool = self.pool_definitions.get(canonical)
+        pool = self.pool_definitions.get(str(file_id))
         if pool is None:
-            raise JsonDataError(f"内容文件不是资源池：{document.relative_path}")
+            document = self.catalog.content_file(file_id)
+            canonical = document.file_id
+            display = document.relative_path
+            pool = self.pool_definitions.get(canonical)
+        else:
+            canonical = str(file_id)
+            display = canonical
+        if pool is None:
+            raise JsonDataError(f"内容文件不是资源池：{display}")
         if pool.section != section:
             raise JsonDataError(
-                f"资源池集合不匹配：{document.relative_path} 是 {pool.section}，不是 {section}"
+                f"资源池集合不匹配：{display} 是 {pool.section}，不是 {section}"
             )
         cached = self._pool_members.get((canonical, section))
         if cached is not None:
@@ -140,7 +148,7 @@ class LoadedGameData:
             value = entities.get(entity_id)
             if value is None:
                 raise JsonDataError(
-                    f"资源池引用不存在的{section}：{document.relative_path} -> {entity_id}"
+                    f"资源池引用不存在的{section}：{display} -> {entity_id}"
                 )
             result.append((entity_id, value))
         next_stack = (*stack, canonical)
@@ -235,6 +243,7 @@ def _index_content(
     sources: dict[str, dict[str, str]] = {section: {} for section in entities}
     records: dict[str, dict[str, JsonEntity]] = {section: {} for section in entities}
     pools: dict[str, PoolDefinition] = {}
+    directory_groups: dict[str, tuple[str, list[str]]] = {}
     for document in catalog.documents:
         descriptor = document.descriptor
         _validate_document_shape(document)
@@ -244,6 +253,14 @@ def _index_content(
             pools[document.file_id] = _reference_pool(document, descriptor.section)
             continue
         entries = _document_entries(document)
+        if descriptor.directory_pool:
+            parent = PurePosixPath(document.relative_path).parent.name
+            pool_name = descriptor.directory_pool.replace("{目录}", parent)
+            if pool_name not in directory_groups:
+                directory_groups[pool_name] = (descriptor.section, [])
+            directory_groups[pool_name][1].extend(
+                entity_id for entity_id, _ in entries
+            )
         if descriptor.source_pool:
             pools[document.file_id] = PoolDefinition(
                 section=descriptor.section,
@@ -275,6 +292,13 @@ def _index_content(
                     f"实体身份冲突：{descriptor.section} {entity_id} 同时定义于 "
                     f"{sources[descriptor.section][entity_id]} 与 {document.relative_path}"
                 )
+    for pool_name, (section, entity_ids) in sorted(directory_groups.items()):
+        if pool_name in pools:
+            raise JsonDataError(f"目录池与文件池重名：{pool_name}")
+        pools[pool_name] = PoolDefinition(
+            section=section,
+            entity_ids=tuple(sorted(set(entity_ids))),
+        )
     return entities, records, pools
 
 
@@ -298,6 +322,19 @@ def _document_entries(
     descriptor = document.descriptor
     value = document.value
     section = descriptor.section
+    if descriptor.shape == NUMBERED_ENTITY:
+        if not isinstance(value, Mapping):
+            raise JsonDataError(f"编号实体文件根值必须是对象：{document.relative_path}")
+        entity_id = str(value.get("编号") or "").strip()
+        name = str(value.get("名称") or "").strip()
+        if not entity_id or not name:
+            raise JsonDataError(f"编号实体缺少编号或名称：{document.relative_path}")
+        expected = f"{entity_id}-{name}"
+        if document.file_id != expected:
+            raise JsonDataError(
+                f"编号实体文件名必须是 编号-名称：{document.relative_path} -> {expected}.json"
+            )
+        return ((entity_id, value),)
     if descriptor.shape in {NUMBERED_ENTITY_LIST, NUMBERED_ENTITY_POOL}:
         return _numbered_entries(value, document, section)
     if descriptor.shape == NAMED_ENTITY_POOL:
@@ -407,6 +444,8 @@ def _validate_document_shape(document: JsonDocument) -> None:
         raise JsonDataError(f"字典列表文档根值必须是字典数组：{document.relative_path}")
     if shape == NAMED_ENTITY and not isinstance(value, Mapping):
         raise JsonDataError(f"命名实体文档根值必须是对象：{document.relative_path}")
+    if shape == NUMBERED_ENTITY and not isinstance(value, Mapping):
+        raise JsonDataError(f"编号实体文档根值必须是对象：{document.relative_path}")
 
 
 def _validate_all_pools(loaded: LoadedGameData) -> None:
@@ -425,8 +464,10 @@ def _validate_pool_references(loaded: LoadedGameData) -> None:
                 raise JsonDataError(
                     f"未登记的资源池引用字段：{document.relative_path} -> {key}"
                 )
-            target = loaded.catalog.content_file(reference)
-            pool = loaded.pool_definitions.get(target.file_id)
+            pool = loaded.pool_definitions.get(str(reference))
+            if pool is None:
+                target = loaded.catalog.content_file(reference)
+                pool = loaded.pool_definitions.get(target.file_id)
             if pool is None or pool.section != expected:
                 actual = pool.section if pool is not None else "非资源池"
                 raise JsonDataError(
@@ -459,17 +500,17 @@ def _validate_number_prefixes(
         allowed.setdefault(category, set()).add(prefix)
     for document in catalog.documents:
         descriptor = document.descriptor
-        if descriptor.shape not in {NUMBERED_ENTITY_LIST, NUMBERED_ENTITY_POOL}:
+        if descriptor.shape not in {
+            NUMBERED_ENTITY,
+            NUMBERED_ENTITY_LIST,
+            NUMBERED_ENTITY_POOL,
+        }:
             continue
         category = descriptor.number_category
         prefixes = allowed.get(category, set())
         if not prefixes:
             raise JsonDataError(f"基础/定义/编号.json 没有登记{category}编号前缀")
-        for entity_id, _ in _numbered_entries(
-            document.value,
-            document,
-            descriptor.section,
-        ):
+        for entity_id, _ in _document_entries(document):
             if len(entity_id) != digits or not entity_id.isdigit():
                 raise JsonDataError(
                     f"{descriptor.section}编号不符合{digits}位数字规则：{entity_id}"

@@ -40,9 +40,9 @@ def test_numbered_entities_are_unique_and_resolvable(
 def test_pool_expansion_is_stable_and_deduplicated(
     data_service: JsonDataService,
 ) -> None:
-    records = data_service.numbered_entities()
-    record = next(record for record in records if record.source_file)
-    members = data_service.pool_members((record.source_file,), record.section)
+    pools = data_service.pools()
+    name = next(name for name in pools if name.startswith("灵植-"))
+    members = data_service.pool_members((name,), pools[name])
     assert members
     assert len(members) == len(set(members))
 
@@ -121,15 +121,16 @@ def test_breakthrough_pills_cover_base_growth_and_speed(data_service: JsonDataSe
 
 
 def test_pills_are_flat_one_entity_per_file() -> None:
-    """四类丹药都像战丹一样铺开：一个文件一颗，文件里只有一条实体。"""
+    """四类丹药都像战丹一样铺开：一个文件一颗，文件根是单个对象。"""
 
     expected = {"恢复丹": 6, "战丹": 125, "突破丹": 108, "特殊丹": 8}
     for kind, count in expected.items():
-        files = sorted((DATA_ROOT / "物品/内容/丹药" / kind).glob("*.json"))
+        files = sorted((DATA_ROOT / "物品/内容/丹药" / kind).rglob("*.json"))
         assert len(files) == count, (kind, len(files))
         for path in files:
-            rows = json.loads(path.read_text(encoding="utf-8"))
-            assert isinstance(rows, list) and len(rows) == 1, path
+            row = json.loads(path.read_text(encoding="utf-8"))
+            assert isinstance(row, dict), path
+            assert path.stem == f"{row['编号']}-{row['名称']}", path
 
 
 def test_builds_carry_their_own_combat_text() -> None:
@@ -139,7 +140,7 @@ def test_builds_carry_their_own_combat_text() -> None:
         "战斗/内容/功法/*.json",
         "战斗/内容/真意/*.json",
         "战斗/内容/气机/*.json",
-        "物品/内容/器律/*.json",
+        "物品/内容/器律/**/*.json",
     )
     files = [path for pattern in patterns for path in DATA_ROOT.glob(pattern)]
     assert files

@@ -26,6 +26,7 @@ _READ_WORKERS = 8
 
 OBJECT = "对象"
 OBJECT_LIST = "字典列表"
+NUMBERED_ENTITY = "编号实体"
 NUMBERED_ENTITY_LIST = "编号实体列表"
 NUMBERED_ENTITY_POOL = "编号实体池"
 NAMED_ENTITY_POOL = "命名实体池"
@@ -37,6 +38,7 @@ DOCUMENT_SHAPES = frozenset(
     {
         OBJECT,
         OBJECT_LIST,
+        NUMBERED_ENTITY,
         NUMBERED_ENTITY_LIST,
         NUMBERED_ENTITY_POOL,
         NAMED_ENTITY_POOL,
@@ -47,6 +49,7 @@ DOCUMENT_SHAPES = frozenset(
 )
 ENTITY_SHAPES = frozenset(
     {
+        NUMBERED_ENTITY,
         NUMBERED_ENTITY_LIST,
         NUMBERED_ENTITY_POOL,
         NAMED_ENTITY_POOL,
@@ -69,6 +72,7 @@ class ReadRule:
     number_category: str = ""
     filename_matches_parent: bool = False
     directory_owner_depth: int = 0
+    directory_pool: str = ""
 
     def matches(self, relative_path: str, file_id: str) -> bool:
         if self.matcher.fullmatch(relative_path) is None:
@@ -111,6 +115,7 @@ class DataReadRules:
             number_category=rule.number_category,
             source_pool=rule.shape in {NUMBERED_ENTITY_POOL, NAMED_ENTITY_POOL},
             directory_owner=directory_owner,
+            directory_pool=rule.directory_pool,
         )
 
 
@@ -125,6 +130,7 @@ class DocumentDescriptor:
     number_category: str = ""
     source_pool: bool = False
     directory_owner: str = ""
+    directory_pool: str = ""
 
 
 @dataclass(frozen=True)
@@ -439,6 +445,7 @@ def _parse_read_rule(
         "编号类别",
         "目录主体",
         "归属目录层级",
+        "目录池",
     }
     unknown = set(value) - allowed
     if unknown:
@@ -456,6 +463,7 @@ def _parse_read_rule(
         value.get("归属目录层级", 0),
         f"{path}.归属目录层级",
     )
+    directory_pool = _optional_string(value.get("目录池"), f"{path}.目录池")
     pattern_path = PurePosixPath(pattern)
     if pattern_path.is_absolute() or ".." in pattern_path.parts:
         raise JsonDataError(f"{path}.路径必须是 data 内相对路径")
@@ -471,10 +479,15 @@ def _parse_read_rule(
         raise JsonDataError(f"{path}.实体类别不能为空")
     if shape not in ENTITY_SHAPES and section:
         raise JsonDataError(f"{path}的结构不能声明实体类别")
-    if shape in {NUMBERED_ENTITY_LIST, NUMBERED_ENTITY_POOL} and not number_category:
+    if shape in {NUMBERED_ENTITY, NUMBERED_ENTITY_LIST, NUMBERED_ENTITY_POOL} and not number_category:
         raise JsonDataError(f"{path}.编号类别不能为空")
-    if shape not in {NUMBERED_ENTITY_LIST, NUMBERED_ENTITY_POOL} and number_category:
+    if shape not in {NUMBERED_ENTITY, NUMBERED_ENTITY_LIST, NUMBERED_ENTITY_POOL} and number_category:
         raise JsonDataError(f"{path}的结构不能声明编号类别")
+    if directory_pool:
+        if shape != NUMBERED_ENTITY:
+            raise JsonDataError(f"{path}.目录池只用于编号实体")
+        if "{目录}" not in directory_pool:
+            raise JsonDataError(f"{path}.目录池必须包含 {{目录}} 占位符")
     if directory_owner_depth and shape not in ENTITY_SHAPES:
         raise JsonDataError(f"{path}的结构不能声明归属目录层级")
     if directory_owner_depth >= len(pattern_path.parts):
@@ -488,6 +501,7 @@ def _parse_read_rule(
         number_category=number_category,
         filename_matches_parent=filename_matches_parent,
         directory_owner_depth=directory_owner_depth,
+        directory_pool=directory_pool,
     )
 
 

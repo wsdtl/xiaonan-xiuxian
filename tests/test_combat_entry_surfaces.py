@@ -188,7 +188,7 @@ def test_every_formation_grade_fights(services) -> None:
 def test_every_recovery_pill_can_be_used(services) -> None:
     """6 种恢复丹都要能装配，并在对应资源偏低时被真正服用。"""
 
-    pills = _load("物品/内容/丹药/恢复丹/*.json")
+    pills = _load("物品/内容/丹药/恢复丹/*/*.json")
     assert len(pills) >= 6
     resource_of = {"恢复血气": "血气", "恢复精神": "精神"}
 
