@@ -465,19 +465,20 @@ class EnemyService:
         weapon_exp = source.randint(
             *_range(rewards.get("本命武器经验"), f"{name}.本命武器经验")
         )
-        pool_names: list[str] = []
+        pool_groups: list[tuple[str, ...]] = []
         if role_name == "灵兽":
-            pool_names.append(f"兽宝-{display_name}")
+            pool_groups.append((f"兽宝-{display_name}",))
         extra = loot.get("丹药池", ())
         if extra:
-            pool_names.extend(_texts(extra, f"{name}.丹药池"))
+            # 同一组候选只抽一次，避免三个恢复丹文件各掉一颗。
+            pool_groups.append(tuple(_texts(extra, f"{name}.丹药池")))
         drops: list[EnemyDrop] = []
-        for pool_name in pool_names:
+        for group in pool_groups:
             # 每个池子按**它自己声明的集合**抽：兽宝是基础物品、丹药池是丹药。
             # 这里原先一律当基础物品抽（`section="基础物品"`），于是带丹药池的敌人
             # 一生成就报「资源池集合不匹配」——83 个敌方池里有 21 个整条进不去。
             item_id = self._pool.draw_pools(
-                (pool_name,), count=1, seed=source.getrandbits(64)
+                group, count=1, seed=source.getrandbits(64)
             )[0]
             grade = self._asset.draw_drop_grade(seed=source.getrandbits(64))
             drops.append(EnemyDrop(item_id, grade.grade_id, 1))

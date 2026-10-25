@@ -1,5 +1,6 @@
 """正式 JSON 数据服务的最小契约测试。"""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -97,7 +98,7 @@ def test_recipes_and_laws_use_explicit_materials(data_service: JsonDataService) 
 
 
 def test_breakthrough_pills_cover_base_growth_and_speed(data_service: JsonDataService) -> None:
-    """每个突破境界都必须有五行基础成长属性各一份，并且有速度丹。"""
+    """突破丹共 108 颗：每境五基础成长属性齐全，并且每境都有速度丹。"""
 
     base = {"血气上限", "神魂上限", "精神上限", "攻击", "防御"}
     by_realm: dict[str, list[set[str]]] = {}
@@ -109,11 +110,26 @@ def test_breakthrough_pills_cover_base_growth_and_speed(data_service: JsonDataSe
             set(effect.get("永久属性") or {})
         )
     assert by_realm
+    assert sum(len(entries) for entries in by_realm.values()) == 108
+    assert sum(1 for entries in by_realm.values() if len(entries) == 6) == 13
+    assert sum(1 for entries in by_realm.values() if len(entries) == 5) == 6
     for realm, entries in by_realm.items():
-        assert len(entries) == 6, (realm, len(entries))
+        assert len(entries) in (5, 6), (realm, len(entries))
         covered = set().union(*entries)
         assert base <= covered, (realm, base - covered)
         assert "速度" in covered, realm
+
+
+def test_pills_are_flat_one_entity_per_file() -> None:
+    """四类丹药都像战丹一样铺开：一个文件一颗，文件里只有一条实体。"""
+
+    expected = {"恢复丹": 6, "战丹": 125, "突破丹": 108, "特殊丹": 8}
+    for kind, count in expected.items():
+        files = sorted((DATA_ROOT / "物品/内容/丹药" / kind).glob("*.json"))
+        assert len(files) == count, (kind, len(files))
+        for path in files:
+            rows = json.loads(path.read_text(encoding="utf-8"))
+            assert isinstance(rows, list) and len(rows) == 1, path
 
 
 def test_builds_carry_their_own_combat_text() -> None:
