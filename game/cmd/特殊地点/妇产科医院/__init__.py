@@ -13,11 +13,11 @@ from . import input as command_input, reply
 @GameCommand.command(
     cmd="生育",
     metadata={
-        "scope": "通用",
+        "scope": "专属",
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "道侣",
-            "summary": "与当前同行道侣生育，生成下一代",
+            "summary": "在妇产科医院与当前同行道侣生育，消耗生育丹生成下一代",
             "usage": ("生育",),
             "side_effect": "消耗生育丹并记本代胎次；新生儿入族谱，血脉按新生儿 DNA 匹配",
             "order": 25,
@@ -43,11 +43,11 @@ async def birth(user_id: str, message: str, manager: Any) -> None:
 @GameCommand.command(
     cmd="求子",
     metadata={
-        "scope": "通用",
+        "scope": "专属",
         "guard_rule": "已创建",
         "help": {
             "category": "道侣",
-            "summary": "向附近的异性玩家求子：一男一女、对方同意，孩子归求方",
+            "summary": "在妇产科医院向附近的异性玩家求子：一男一女、求方需生育丹，孩子归求方",
             "usage": ("求子 玩家名", "求子 待办", "求子 同意 [编号]", "求子 拒绝 [编号]"),
             "side_effect": "同意时消耗求方的生育丹并按求方胎次计；孩子只进求方族谱，被求者不留记录",
             "order": 26,

@@ -18,8 +18,8 @@ def load_hunpei_presentation(dataset: Mapping[str, object]) -> tuple[HunpeiCopy,
 
     if set(dataset) != {"文本", "图标", "婚配"}:
         raise JsonDataError("婚配展示必须包含文本、图标和婚配按钮")
-    text_value = require_mapping(dataset["文本"], "玩法/婚配/展示/规则/文本.json")
-    icons_value = require_mapping(dataset["图标"], "玩法/婚配/展示/规则/图标.json")
+    text_value = require_mapping(dataset["文本"], "玩法/特殊地点/妇产科医院/展示/规则/文本.json")
+    icons_value = require_mapping(dataset["图标"], "玩法/特殊地点/妇产科医院/展示/规则/图标.json")
     text: dict[str, Mapping[str, str]] = {}
     for page, row in text_value.items():
         key = str(page)
@@ -28,5 +28,5 @@ def load_hunpei_presentation(dataset: Mapping[str, object]) -> tuple[HunpeiCopy,
         cells = require_mapping(row, "婚配文本.%s" % key)
         text[key] = MappingProxyType({str(n): _text(v, "婚配文本.%s.%s" % (key, n)) for n, v in cells.items()})
     icons = MappingProxyType({str(n): _text(v, "婚配图标.%s" % n) for n, v in icons_value.items()})
-    buttons = project_unique_buttons(dataset["婚配"], label="玩法/婚配/展示/按钮/婚配.json", keys=BUTTON_KEYS_WITHOUT_CONDITION)
+    buttons = project_unique_buttons(dataset["婚配"], label="玩法/特殊地点/妇产科医院/展示/按钮/婚配.json", keys=BUTTON_KEYS_WITHOUT_CONDITION)
     return HunpeiCopy(text=MappingProxyType(text), icons=icons), buttons
