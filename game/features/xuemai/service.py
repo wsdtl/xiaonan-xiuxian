@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from game.core.bloodline import BloodlineService
 from game.core.character import CharacterNotFoundError, CharacterService
 from game.core.data import JsonDataService
-from game.core.database import DatabaseService, StateAddress, StateMutation, TransactionCommand
+from game.core.database import DatabaseService, TransactionCommand
 
 from .contracts import (
     GenealogyCopy,
@@ -19,12 +19,6 @@ from .contracts import (
     XuemaiError,
 )
 from .presentation import load_xuemai_presentation
-
-#: 族谱状态的类型名（与既有 inventory / law_reserve 同一套 StateAddress）。
-STATE_TYPE = "xuemai_genealogy"
-
-#: 族谱状态的键（state_key 必须是非空、无首尾空白的字符串）。
-STATE_KEY = "main"
 
 _USAGE = "传位 新生儿编号或名字"
 
@@ -91,16 +85,6 @@ class XuemaiFeature:
         except CharacterNotFoundError as exc:
             raise GenealogyQueryError("尚未创建人物") from exc
         return await self._bloodline.ensure_dna(user_id, profile.gender)
-
-    def state_type(self) -> str:
-        """族谱状态的类型名（婚配生育要往同一份状态里写）。"""
-
-        return STATE_TYPE
-
-    def state_key(self) -> str:
-        """族谱状态的键。"""
-
-        return STATE_KEY
 
     def random_dna(self, gender: str) -> str:
         """实例化随机：6 组各自 0~99，G6 按性别取奇/偶。"""
@@ -170,7 +154,7 @@ class XuemaiFeature:
             profile = await self._character.profile(user_id)
         except CharacterNotFoundError as exc:
             raise GenealogyQueryError("尚未创建人物") from exc
-        snapshot = await self._database.get(StateAddress(user_id, STATE_TYPE, STATE_KEY))
+        snapshot = await self._bloodline.genealogy_snapshot(user_id)
         entries: list[GenealogyEntry] = []
         generation = 0
         if snapshot is not None and isinstance(snapshot.value, Mapping):
@@ -205,8 +189,7 @@ class XuemaiFeature:
             profile = await self._character.profile(user_id)
         except CharacterNotFoundError as exc:
             raise GenealogyQueryError("尚未创建人物") from exc
-        address = StateAddress(user_id, STATE_TYPE, STATE_KEY)
-        snapshot = await self._database.get(address)
+        snapshot = await self._bloodline.genealogy_snapshot(user_id)
         rows = []
         generation = 0
         if snapshot is not None and isinstance(snapshot.value, Mapping):
@@ -258,12 +241,10 @@ class XuemaiFeature:
             "当前壳": str(child_row.get("编号") or ""),
         }
         operations = [
-            StateMutation(
-                user_id=user_id,
-                state_type=STATE_TYPE,
-                state_key=STATE_KEY,
-                value=payload,
-                expected_version=snapshot.version if snapshot is not None else 0,
+            self._bloodline.genealogy_mutation(
+                user_id,
+                payload,
+                snapshot.version if snapshot is not None else 0,
             )
         ]
         if child_dna:
