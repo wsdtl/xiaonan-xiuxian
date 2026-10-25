@@ -1,4 +1,4 @@
-"""宗门设施入口编排；炼器、炼丹和炼阵公式仍归各自核心。"""
+"""炼制入口编排；炼器、炼丹和炼阵公式仍归各自核心。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class _SheshiAction:
-    """宗门设施回执上的动作，字段名与 CommandAction 契约一致。"""
+    """炼制回执上的动作，字段名与 CommandAction 契约一致。"""
 
     action_id: str
     label: str
@@ -46,10 +46,10 @@ class SectFacilityFeature:
 
     def initialize(self) -> None:
         if self._copy is not None:
-            raise RuntimeError("宗门设施玩法已经初始化")
+            raise RuntimeError("炼制玩法已经初始化")
         common = self._data.dataset("炼制通用文案").get("炼制通用")
         if not isinstance(common, Mapping):
-            raise JsonDataError("宗门设施展示缺少通用.json")
+            raise JsonDataError("炼制展示缺少通用.json")
         raw = {
             "通用": common.get("通用"),
             "错误": common.get("错误"),
@@ -111,7 +111,7 @@ class SectFacilityFeature:
 
     def copy(self) -> Mapping[str, Mapping[str, str]]:
         if self._copy is None:
-            raise RuntimeError("宗门设施玩法尚未初始化")
+            raise RuntimeError("炼制玩法尚未初始化")
         return self._copy
 
     async def page(
@@ -135,7 +135,7 @@ class SectFacilityFeature:
             raise
         except (SectFacilityError, ValueError) as exc:
             raise SectFacilityFeatureError(str(exc)) from exc
-        raise SectFacilityFeatureError("未知宗门设施")
+        raise SectFacilityFeatureError("未知炼制")
 
     async def preview(self, facility: str, user_id: str, source: str, identifier: str, grade: str = "", investments: Mapping[str, int] | None=None) -> SectForgingPreview | SectAlchemyPreview | SectFormationPreview:
         source = _source(source)
@@ -157,7 +157,7 @@ class SectFacilityFeature:
             raise
         except (SectFacilityError, ValueError) as exc:
             raise SectFacilityFeatureError(str(exc)) from exc
-        raise SectFacilityFeatureError("未知宗门设施")
+        raise SectFacilityFeatureError("未知炼制")
 
     async def craft(self, facility: str, user_id: str, request_id: str, source: str, identifier: str, grade: str = "", investments: Mapping[str, int] | None=None) -> SectCraftResult:
         source = _source(source)
@@ -177,7 +177,7 @@ class SectFacilityFeature:
             raise
         except (SectFacilityError, ValueError) as exc:
             raise SectFacilityFeatureError(str(exc)) from exc
-        raise SectFacilityFeatureError("未知宗门设施")
+        raise SectFacilityFeatureError("未知炼制")
 
 
 def _source(value: str) -> str:

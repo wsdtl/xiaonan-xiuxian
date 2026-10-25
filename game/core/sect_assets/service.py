@@ -390,7 +390,7 @@ class SectAssetService:
         materials: tuple[SectMaterialCost, ...] = (),
         product: SectProductGain | None = None,
     ) -> SectProductionAssetPlan:
-        """规划一次宗门生产的公共资产变化，由调用方与个人资产一起提交。"""
+        """规划一次产出的公共资产变化，由调用方与个人资产一起提交。"""
 
         self._require_initialized()
         normalized_sect_id = str(sect_id or "").strip()

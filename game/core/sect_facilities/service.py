@@ -1,4 +1,4 @@
-"""解释宗门园区建筑规则，并原子完成宗门生产。"""
+"""解释宗门园区建筑规则，并原子完成产出。"""
 
 from __future__ import annotations
 
@@ -104,9 +104,9 @@ class SectFacilityService:
 
     def initialize(self) -> SectFacilityStatus:
         if self._initialized:
-            raise RuntimeError("宗门设施核心已经初始化")
+            raise RuntimeError("炼制核心已经初始化")
         if not self._data.status().loaded:
-            raise RuntimeError("JSON 数据服务必须先于宗门设施核心启动")
+            raise RuntimeError("JSON 数据服务必须先于炼制核心启动")
         building_sources = {
             "炼器": ("百炼堂规则", "百炼堂"),
             "炼丹": ("丹鼎阁规则", "丹鼎阁"),
@@ -116,33 +116,33 @@ class SectFacilityService:
             dataset, key = building_sources[facility_type]
             value = _mapping(
                 self._data.dataset(dataset).get(key),
-                f"宗门设施.建筑.{facility_type}",
+                f"炼制.建筑.{facility_type}",
             )
-            supported = _texts(value.get("支持品级"), f"宗门设施.建筑.{facility_type}.支持品级")
+            supported = _texts(value.get("支持品级"), f"炼制.建筑.{facility_type}.支持品级")
             self._facilities[facility_type] = SectFacility(
                 facility_type,
-                _text(value.get("名称"), f"宗门设施.建筑.{facility_type}.名称"),
-                _text(value.get("范围"), f"宗门设施.建筑.{facility_type}.范围"),
+                _text(value.get("名称"), f"炼制.建筑.{facility_type}.名称"),
+                _text(value.get("范围"), f"炼制.建筑.{facility_type}.范围"),
                 supported,
             )
         permissions = self._data.dataset("身份权限").get("身份权限")
         for role, value in permissions.items():
-            item = _mapping(value, f"宗门设施.身份权限.{role}")
+            item = _mapping(value, f"炼制.身份权限.{role}")
             self._permissions[str(role)] = FacilityPermission(
                 str(role),
-                _bool(item.get("允许个人材料"), f"宗门设施.身份权限.{role}.允许个人材料"),
-                _bool(item.get("允许宗门材料"), f"宗门设施.身份权限.{role}.允许宗门材料"),
-                _bool(item.get("允许圣品"), f"宗门设施.身份权限.{role}.允许圣品"),
-                _bool(item.get("允许发放"), f"宗门设施.身份权限.{role}.允许发放"),
+                _bool(item.get("允许个人材料"), f"炼制.身份权限.{role}.允许个人材料"),
+                _bool(item.get("允许宗门材料"), f"炼制.身份权限.{role}.允许宗门材料"),
+                _bool(item.get("允许圣品"), f"炼制.身份权限.{role}.允许圣品"),
+                _bool(item.get("允许发放"), f"炼制.身份权限.{role}.允许发放"),
             )
         costs = self._data.dataset("灵石消耗").get("灵石消耗")
-        base = _mapping(costs.get("基础"), "宗门设施.灵石消耗.基础")
-        self._base_cost = {kind: _positive_int(base.get(kind), f"宗门设施.灵石消耗.基础.{kind}") for kind in _FACILITY_TYPES}
-        self._grade_multiplier = _positive_map(costs.get("品级倍率"), "宗门设施.灵石消耗.品级倍率")
-        self._stage_multiplier = _positive_map(costs.get("器阶倍率"), "宗门设施.灵石消耗.器阶倍率")
-        settlement = _mapping(self._data.dataset("结算").get("结算"), "宗门设施.结算")
+        base = _mapping(costs.get("基础"), "炼制.灵石消耗.基础")
+        self._base_cost = {kind: _positive_int(base.get(kind), f"炼制.灵石消耗.基础.{kind}") for kind in _FACILITY_TYPES}
+        self._grade_multiplier = _positive_map(costs.get("品级倍率"), "炼制.灵石消耗.品级倍率")
+        self._stage_multiplier = _positive_map(costs.get("器阶倍率"), "炼制.灵石消耗.器阶倍率")
+        settlement = _mapping(self._data.dataset("结算").get("结算"), "炼制.结算")
         if settlement.get("失败") != "不扣灵石、不扣材料、不产出":
-            raise JsonDataError("宗门设施炼制失败必须不扣灵石、不扣材料、不产出")
+            raise JsonDataError("炼制炼制失败必须不扣灵石、不扣材料、不产出")
         self._initialized = True
         return self.status()
 
@@ -154,7 +154,7 @@ class SectFacilityService:
         try:
             return self._facilities[str(facility_type).strip()]
         except KeyError as exc:
-            raise SectFacilityError("未知宗门设施") from exc
+            raise SectFacilityError("未知炼制") from exc
 
     def permission(self, role: str) -> FacilityPermission:
         self._require()
@@ -637,7 +637,7 @@ class SectFacilityService:
         sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
         if sect is None or current.xy != sect.entrance_xy:
-            raise SectFacilityError("只有在本宗园区才能使用宗门设施")
+            raise SectFacilityError("只有在本宗园区才能使用炼制")
         return member
 
     async def _replay(
@@ -701,11 +701,11 @@ class SectFacilityService:
                 self._location,
             )
         ):
-            raise RuntimeError("宗门设施核心没有装配生产依赖")
+            raise RuntimeError("炼制核心没有装配生产依赖")
 
     def _require(self) -> None:
         if not self._initialized:
-            raise RuntimeError("宗门设施核心尚未初始化")
+            raise RuntimeError("炼制核心尚未初始化")
 
 
 def _texts(value: object, label: str) -> tuple[str, ...]:

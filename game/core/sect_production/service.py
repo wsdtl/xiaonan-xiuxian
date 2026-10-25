@@ -82,23 +82,23 @@ class SectProductionService:
         if not self._data.status().loaded:
             raise RuntimeError("JSON 数据微服务必须先于宗门资源生产核心启动")
         raw = dict(self._data.dataset("产出周期").get("周期"))
-        self._rule_version = _text(raw.get("规则版本"), "宗门生产.规则版本")
-        period = _positive_int(raw.get("周期秒"), "宗门生产.周期秒")
-        catch_up = _positive_int(raw.get("累计轮数上限"), "宗门生产.累计轮数上限")
-        multiplier = _positive_float(raw.get("基础产量倍率"), "宗门生产.基础产量倍率")
+        self._rule_version = _text(raw.get("规则版本"), "产出.规则版本")
+        period = _positive_int(raw.get("周期秒"), "产出.周期秒")
+        catch_up = _positive_int(raw.get("累计轮数上限"), "产出.累计轮数上限")
+        multiplier = _positive_float(raw.get("基础产量倍率"), "产出.基础产量倍率")
         rule_sources = {"灵脉": "灵脉规则", "灵田": "灵田规则"}
         outputs: dict[str, object] = {}
         for kind in _FACILITY_TYPES:
             value = _mapping(
                 self._data.dataset(rule_sources[kind]).get(kind),
-                f"宗门生产.规则.{kind}",
+                f"产出.规则.{kind}",
             )
-            if _text(value.get("名称"), f"宗门生产.规则.{kind}.名称") != kind:
-                raise JsonDataError(f"宗门生产设施名称必须为{kind}")
-            outputs[kind] = _mapping(value.get("产出"), f"宗门生产.规则.{kind}.产出")
+            if _text(value.get("名称"), f"产出.规则.{kind}.名称") != kind:
+                raise JsonDataError(f"产出设施名称必须为{kind}")
+            outputs[kind] = _mapping(value.get("产出"), f"产出.规则.{kind}.产出")
         loaded: dict[str, SectProductionFacility] = {}
         for kind in _FACILITY_TYPES:
-            output = _mapping(outputs.get(kind), f"宗门生产.产出.{kind}")
+            output = _mapping(outputs.get(kind), f"产出.产出.{kind}")
             primary_key = "灵石范围" if kind == "灵脉" else "灵植数量"
             material_key = "灵矿数量" if kind == "灵脉" else "灵植数量"
             loaded[kind] = SectProductionFacility(
@@ -107,9 +107,9 @@ class SectProductionService:
                 period,
                 catch_up,
                 multiplier,
-                _range(output.get(primary_key), f"宗门生产.产出.{kind}.{primary_key}"),
+                _range(output.get(primary_key), f"产出.产出.{kind}.{primary_key}"),
                 _range(
-                    output.get(material_key), f"宗门生产.产出.{kind}.{material_key}"
+                    output.get(material_key), f"产出.产出.{kind}.{material_key}"
                 ),
                 self._terrain_options(kind, output),
             )
@@ -392,9 +392,9 @@ class SectProductionService:
         declared = output.get("可选地形")
         if kind != "灵田":
             if declared is not None:
-                raise JsonDataError(f"宗门生产.产出.{kind} 不能声明可选地形")
+                raise JsonDataError(f"产出.产出.{kind} 不能声明可选地形")
             return ()
-        options = _texts(declared, f"宗门生产.产出.{kind}.可选地形")
+        options = _texts(declared, f"产出.产出.{kind}.可选地形")
         if not options:
             raise JsonDataError("宗门灵田必须声明可选地形")
         if len(set(options)) != len(options):
@@ -523,13 +523,13 @@ class SectProductionService:
 
     def _validate_outputs(self, outputs: Mapping[str, object]) -> None:
         for kind in _FACILITY_TYPES:
-            value = _mapping(outputs.get(kind), f"宗门生产.产出.{kind}")
+            value = _mapping(outputs.get(kind), f"产出.产出.{kind}")
             if kind == "灵脉" and _texts(
-                value.get("类别"), f"宗门生产.产出.{kind}.类别"
+                value.get("类别"), f"产出.产出.{kind}.类别"
             ) != ("灵石", "灵矿"):
                 raise JsonDataError("灵脉产出必须是灵石和灵矿")
             if kind == "灵田" and _texts(
-                value.get("类别"), f"宗门生产.产出.{kind}.类别"
+                value.get("类别"), f"产出.产出.{kind}.类别"
             ) != ("灵植",):
                 raise JsonDataError("灵田产出必须是灵植")
 

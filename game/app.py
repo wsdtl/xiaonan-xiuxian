@@ -504,7 +504,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     sect_facilities_status = sect_facilities.initialize()
     logger.opt(colors=True).success(
         C.join(
-            C.ok("宗门设施核心微服务已启动"),
+            C.ok("炼制核心微服务已启动"),
             C.kv("facilities", len(sect_facilities_status.facilities)),
             C.kv("roles", len(sect_facilities_status.roles)),
         )

@@ -11,7 +11,7 @@ from game.core.formation import FormationAssessment
 
 
 class SectFacilityError(ValueError):
-    """宗门设施规则或请求不成立。"""
+    """炼制规则或请求不成立。"""
 
 
 @dataclass(frozen=True)

@@ -36,7 +36,7 @@ class SectProductionFeature:
             raise RuntimeError("宗门资源生产玩法已经初始化")
         common = self._data.dataset("产出通用文案").get("产出通用")
         if not isinstance(common, Mapping):
-            raise JsonDataError("宗门生产展示缺少通用.json")
+            raise JsonDataError("产出展示缺少通用.json")
         raw = {"通用": common.get("通用")}
         texts = {
             "灵脉": self._data.dataset("灵脉页面文案").get("文本"),
@@ -60,7 +60,7 @@ class SectProductionFeature:
         self._buttons = tuple(
             MappingProxyType(
                 {
-                    key: str(require_mapping(row, "宗门生产按钮[]").get(key) or "").strip()
+                    key: str(require_mapping(row, "产出按钮[]").get(key) or "").strip()
                     for key in (
                         "页面",
                         "设施",
@@ -156,20 +156,20 @@ class SectProductionFeature:
 
 def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:
     if any(button["页面"] != "查看" for button in buttons):
-        raise JsonDataError("宗门生产按钮只能用于查看页")
+        raise JsonDataError("产出按钮只能用于查看页")
     expected = {
         (facility, condition)
         for facility in ("灵脉", "灵田")
         for condition in ("尚未开始", "已经开始")
     }
     if {(button["设施"], button["条件"]) for button in buttons} != expected:
-        raise JsonDataError("宗门生产按钮必须为灵脉和灵田分别定义开启与收取条件")
+        raise JsonDataError("产出按钮必须为灵脉和灵田分别定义开启与收取条件")
     if any(
         not button[key]
         for button in buttons
         for key in ("设施", "编号", "名称", "命令", "行为", "样式")
     ):
-        raise JsonDataError("宗门生产按钮字段不能为空")
+        raise JsonDataError("产出按钮字段不能为空")
 
 
 __all__ = ["SectProductionFeature", "SectProductionFeatureError"]
