@@ -54,19 +54,7 @@ class SectLibraryService:
         self._sect = sect
         self._asset = asset
         self._growth = growth
-        self._character: CharacterService | None = None
         self._initialized = False
-
-    def attach_character(self, character: CharacterService) -> None:
-        """由角色核心在自己的 initialize() 里自注册；借阅槽位写入归它。"""
-
-        self._character = character
-
-    def require_character(self) -> None:
-        """启动收尾断言：借阅槽位写入者必须已经接入。"""
-
-        if self._character is None:
-            raise RuntimeError("角色核心必须先回填给藏经阁核心")
 
     def initialize(self) -> SectLibraryStatus:
         if self._initialized:
@@ -94,32 +82,36 @@ class SectLibraryService:
         member = await self._member(user_id)
         return SectLibraryView(member.sect_id, await self._techniques(member.sect_id))
 
-    async def borrow(
-        self,
-        user_id: str,
-        request_id: str,
-        identifier: str,
-        slot: int,
-    ) -> SectBorrowResult:
+    async def borrow_target(
+        self, user_id: str, identifier: str, slot: int
+    ) -> tuple[SectMember, SectTechnique]:
+        """校验会员、槽位与功法，返回目标；人物槽位计划由角色/玩法层完成。"""
+
         member = await self._member(user_id)
         if isinstance(slot, bool) or not isinstance(slot, int) or slot < 1:
             raise SectLibraryError("功法槽位必须是正整数")
         technique = self._resolve(await self._techniques(member.sect_id), identifier)
-        try:
-            if self._character is None:
-                raise SectLibraryError("角色核心尚未接入")
-            plan = await self._character.plan_borrow_slot(
-                user_id, slot, technique.content_id, technique.grade_id, member.sect_id
-            )
-        except CharacterStateError as exc:
-            raise SectLibraryError(str(exc)) from exc
+        return member, technique
+
+    async def commit_borrow(
+        self,
+        user_id: str,
+        request_id: str,
+        member: SectMember,
+        technique: SectTechnique,
+        slot: int,
+        operations: Sequence[StateMutation],
+    ) -> SectBorrowResult:
+        """提交已经由角色核心规划好的借阅槽位写入。"""
+
+        self._require_initialized()
         try:
             receipt = await self._database.commit(
                 TransactionCommand(
                     user_id,
                     request_id,
                     "藏经阁借阅",
-                    plan.operations,
+                    tuple(operations),
                     {
                         "宗门编号": member.sect_id,
                         "功法编号": technique.content_id,
@@ -132,34 +124,34 @@ class SectLibraryService:
             raise SectLibraryConflictError("人物构筑刚刚发生变化，请重试") from exc
         return SectBorrowResult(slot, technique, receipt.replayed)
 
-    async def clear_borrowed(
-        self, user_id: str, request_id: str
-    ) -> int:
-        """离开宗门时清掉借阅记录，把借出过的槽还原成原本的功法。
-
-        规则的三条失效条件（`退出宗门`、`被逐出宗门`、`宗门解散`）都落到这里：调用点
-        在成员关系已经删除之后，因此只按「槽里的借阅记录还指着哪个宗门」判——成员关系
-        还在同一宗门时保留借阅，否则还原。重复调用是安全的：借阅记录清掉之后本方法
-        再也找不到可清的槽，直接返回 0，不写事务。
-        """
+    async def clear_target(self, user_id: str) -> str:
+        """离开宗门时，返回仍然保留借阅的有效宗门编号（空串表示全清）。"""
 
         self._require_initialized()
         user = _rule_text(user_id, "user_id")
         member = await self._sect.membership(user)
-        keep = member.sect_id if member is not None else ""
-        if self._character is None:
-            raise SectLibraryError("角色核心尚未接入")
-        plan = await self._character.plan_restore_borrowed(user, keep)
-        if not plan.operations:
+        return member.sect_id if member is not None else ""
+
+    async def commit_clear(
+        self,
+        user_id: str,
+        request_id: str,
+        operations: Sequence[StateMutation],
+        cleared: int,
+    ) -> int:
+        """提交角色核心规划好的还原操作；没有操作就不写事务。"""
+
+        self._require_initialized()
+        user = _rule_text(user_id, "user_id")
+        if not operations:
             return 0
-        cleared = plan.cleared
         try:
             await self._database.commit(
                 TransactionCommand(
                     user,
                     _rule_text(request_id, "request_id"),
                     "清除宗门借阅",
-                    plan.operations,
+                    tuple(operations),
                     {"宗门编号": "", "清除槽位数": cleared},
                 )
             )

@@ -15,7 +15,7 @@ from .contracts import (
 import math
 from datetime import datetime, timezone
 
-from game.core.character import CharacterPublicProfile, CharacterService
+from game.core.character import CharacterPublicProfile, CharacterService, CharacterStateError
 from game.core.location import (
     LocationConflictError,
     LocationService,
@@ -267,7 +267,16 @@ class SectFeature:
         if self._library is None:
             return
         try:
-            await self._library.clear_borrowed(user_id, f"{request_id}:清除借阅")
+            keep = await self._library.clear_target(user_id)
+            plan = await self._character.plan_restore_borrowed(user_id, keep)
+            await self._library.commit_clear(
+                user_id,
+                f"{request_id}:清除借阅",
+                plan.operations,
+                plan.cleared,
+            )
+        except CharacterStateError as exc:
+            raise SectFeatureError("借阅功法清理失败") from exc
         except SectLibraryError as exc:
             raise SectFeatureError("借阅功法清理失败") from exc
 

@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from math import ceil
 from types import MappingProxyType
 
-from game.core.character import CharacterService
+from game.core.character import CharacterService, CharacterStateError
 from game.core.data import (
     JsonDataService,
     nonempty_text as _text,
@@ -123,7 +123,26 @@ class CangjingFeature:
         if not result.allowed:
             raise CangjingFeatureError(result.reason)
         try:
-            return await self._library.borrow(user_id, request_id, identifier, slot)
+            member, technique = await self._library.borrow_target(
+                user_id, identifier, slot
+            )
+            plan = await self._character.plan_borrow_slot(
+                user_id,
+                slot,
+                technique.content_id,
+                technique.grade_id,
+                member.sect_id,
+            )
+            return await self._library.commit_borrow(
+                user_id,
+                request_id,
+                member,
+                technique,
+                slot,
+                plan.operations,
+            )
+        except CharacterStateError as exc:
+            raise CangjingFeatureError(str(exc)) from exc
         except SectLibraryError as exc:
             raise CangjingFeatureError(str(exc)) from exc
 

@@ -33,9 +33,6 @@ DNA_STATE_TYPE = "bloodline_dna"
 DNA_STATE_KEY = "main"
 #: 道侣 DNA 的独立状态（按世界道侣编号存，不是按玩家）。
 COMPANION_DNA_STATE_TYPE = "companion_dna"
-#: 旧版把 DNA 混在族谱状态里；只读兜底，等一次性迁移后再删。
-LEGACY_DNA_STATE_TYPE = "xuemai_genealogy"
-LEGACY_COMPANION_DNA_STATE_TYPE = "xuemai_companion_dna"
 #: 族谱状态：由血脉核心统一持有，xuemai/hunpei 只经核心读写。
 GENEALOGY_STATE_TYPE = "xuemai_genealogy"
 GENEALOGY_STATE_KEY = "main"
@@ -121,15 +118,11 @@ class BloodlineService:
         return await self._database.get(StateAddress(owner, state_type, "main"))
 
     async def stored_dna(self, user_id: str) -> str:
-        """只读玩家 DNA；新状态优先，旧族谱状态只读兜底。"""
+        """只读玩家 DNA；没有就是空串。"""
 
         self._require_initialized()
         value = await self._value(user_id, DNA_STATE_TYPE)
-        dna = str(value.get("DNA") or "")
-        if dna:
-            return dna
-        legacy = await self._value(user_id, LEGACY_DNA_STATE_TYPE)
-        return str(legacy.get("DNA") or "")
+        return str(value.get("DNA") or "")
 
     async def plan_dna(
         self, user_id: str, gender: str
@@ -146,10 +139,7 @@ class BloodlineService:
         dna = str(value.get("DNA") or "")
         if dna:
             return dna, None
-        legacy = await self._value(user_id, LEGACY_DNA_STATE_TYPE)
-        dna = str(legacy.get("DNA") or "")
-        if not dna:
-            dna = self.random_dna(gender)
+        dna = self.random_dna(gender)
         return dna, StateMutation(
             user_id,
             DNA_STATE_TYPE,
@@ -159,7 +149,7 @@ class BloodlineService:
         )
 
     async def ensure_dna(self, user_id: str, gender: str) -> str:
-        """读玩家 DNA；没有就落新状态（供旧存档/命令兜底）。"""
+        """读玩家 DNA；没有就落新状态（供缺 DNA 的异常路径补齐）。"""
 
         dna, mutation = await self.plan_dna(user_id, gender)
         if mutation is not None:
@@ -208,17 +198,11 @@ class BloodlineService:
         )
 
     async def companion_dna(self, companion_code: str) -> str:
-        """只读道侣 DNA；新状态优先，旧状态只读兜底。"""
+        """只读道侣 DNA；没有就是空串。"""
 
         self._require_initialized()
         value = await self._value(companion_code, COMPANION_DNA_STATE_TYPE)
-        dna = str(value.get("DNA") or "")
-        if dna:
-            return dna
-        legacy = await self._value(
-            companion_code, LEGACY_COMPANION_DNA_STATE_TYPE
-        )
-        return str(legacy.get("DNA") or "")
+        return str(value.get("DNA") or "")
 
     async def companion_dna_mutation(
         self, companion_code: str, gender: str
@@ -237,12 +221,7 @@ class BloodlineService:
         dna = str(value.get("DNA") or "")
         if dna:
             return dna, None
-        legacy = await self._value(
-            companion_code, LEGACY_COMPANION_DNA_STATE_TYPE
-        )
-        dna = str(legacy.get("DNA") or "")
-        if not dna:
-            dna = self.random_dna(gender)
+        dna = self.random_dna(gender)
         return dna, StateMutation(
             companion_code,
             COMPANION_DNA_STATE_TYPE,
