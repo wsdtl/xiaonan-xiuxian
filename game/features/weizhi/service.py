@@ -15,7 +15,7 @@ from game.core.character.contracts import CharacterPublicProfile
 
 from .contracts import CompanionView
 from game.core.companion import CompanionService, LocalCultivator
-from game.core.data import JsonDataService, positive_int as _positive_int
+from game.core.data import JsonDataError, JsonDataService, positive_int as _positive_int
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.core.team import TeamService
@@ -93,6 +93,7 @@ class PositionFeature:
             location_rule.get("最多数量"), "附近.地点.最多数量"
         )
         presentation = load_position_presentation(self._data.dataset("位置页面文案"))
+        self._validate_function_buttons(presentation.open_functions)
         self._meters_per_li = presentation.meters_per_li
         self._rounding_step = presentation.rounding_step
         self._same_place = presentation.same_place
@@ -513,6 +514,28 @@ class PositionFeature:
             location,
             available_functions=self._visible_functions(location.available_functions),
         )
+
+    def _validate_function_buttons(self, button_functions: frozenset[str]) -> None:
+        """地点功能必须各有且只有一行按钮；缺按钮的功能不能静默消失。"""
+
+        raw = self._data.dataset("世界字段定义").get("地点功能")
+        if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+            raise JsonDataError("世界字段定义.地点功能 必须是字典列表")
+        names: list[str] = []
+        for item in raw:
+            if not isinstance(item, Mapping):
+                raise JsonDataError("世界字段定义.地点功能 只能包含对象")
+            name = str(item.get("名称") or "").strip()
+            if not name:
+                raise JsonDataError("世界字段定义.地点功能 的名称不能为空")
+            names.append(name)
+        functions = set(names)
+        missing = sorted(functions - set(button_functions))
+        unknown = sorted(set(button_functions) - functions)
+        if missing:
+            raise JsonDataError(f"地点功能缺少位置按钮：{missing}")
+        if unknown:
+            raise JsonDataError(f"位置按钮引用了未登记地点功能：{unknown}")
 
     def _visible_functions(self, functions: Sequence[str]) -> tuple[str, ...]:
         return tuple(value for value in functions if value in self._open_functions)

@@ -18,6 +18,7 @@ from game.core.character import CharacterNotFoundError, CharacterService
 from game.core.companion import CompanionService
 from game.core.data import JsonDataService
 from game.core.database import DatabaseService, StateAddress, StateMutation, TransactionCommand
+from game.core.world import WorldService
 from game.features.xuemai import XuemaiFeature
 
 from .contracts import (
@@ -43,6 +44,11 @@ DEFAULT_BIRTH_LIMIT = 10
 #: 求子请求的默认有效期（数据未登记时用）。
 DEFAULT_ASK_SECONDS = 600
 
+#: 生育/求子各自的地点功能名；两者都在妇产科医院。
+BIRTH_FUNCTION = "生育"
+ASK_FUNCTION = "求子"
+LOCATION_LABEL = "妇产科医院"
+
 
 class HunpeiFeature:
     """组合核心服务完成生育，不持有第二份关系状态。"""
@@ -56,6 +62,7 @@ class HunpeiFeature:
         xuemai: XuemaiFeature,
         asset: AssetService,
         weizhi: object,
+        world: WorldService,
         requests: BirthRequestStore,
     ) -> None:
         self._data = data
@@ -66,6 +73,8 @@ class HunpeiFeature:
         self._asset = asset
         #: 位置服务（玩法服务，只用来问「现在站在哪个地点功能上」）。
         self._weizhi = weizhi
+        #: 世界服务（只取地点功能配置，不解释地点内容）。
+        self._world = world
         #: 求子请求的日志库存储（非资产；过期即失效）。
         self._requests = requests
         self._initialized = False
@@ -73,7 +82,6 @@ class HunpeiFeature:
         self._ask_seconds = DEFAULT_ASK_SECONDS
         self._medicine_code = ""
         self._medicine_cost = 0
-        self._location_function = ""
         self._copy: HunpeiCopy | None = None
         self._buttons: tuple[Mapping[str, str], ...] = ()
         self._random = random.SystemRandom()
@@ -85,6 +93,7 @@ class HunpeiFeature:
             (self._character.status().initialized, "角色核心"),
             (self._companion.status().initialized, "道侣核心"),
             (self._database.status().initialized, "数据库核心"),
+            (self._world.status().initialized, "世界核心"),
         ):
             if not ready:
                 raise RuntimeError(f"{label}必须先于婚配玩法启动")
@@ -94,13 +103,16 @@ class HunpeiFeature:
             raise RuntimeError("婚配规则数据集缺少「婚配」块")
         self._copy, self._buttons = load_hunpei_presentation(self._data.dataset("婚配展示"))
         self._limit = int(body.get("每代胎数上限") or DEFAULT_BIRTH_LIMIT)
-        #: 生育必须在哪个地点功能上（名字来自规则，代码不硬编码）。
-        self._location_function = str(body.get("地点功能") or "")
-        medicine = body.get("生育丹")
-        cell = medicine if isinstance(medicine, Mapping) else {}
-        # 「丹药」这一格放的是丹药编号（句柄一律用编号），照既有键名。
-        self._medicine_code = str(cell.get("丹药") or "")
-        self._medicine_cost = int(cell.get("每次消耗") or 0)
+        # 两个地点功能各自有配置；生育丹必须同编号、同消耗。
+        birth_gate = self._world.feature_config(BIRTH_FUNCTION)
+        ask_gate = self._world.feature_config(ASK_FUNCTION)
+        self._medicine_code = str(birth_gate.get("丹药") or "")
+        self._medicine_cost = int(birth_gate.get("每次消耗") or 0)
+        if (
+            str(ask_gate.get("丹药") or "") != self._medicine_code
+            or int(ask_gate.get("每次消耗") or 0) != self._medicine_cost
+        ):
+            raise RuntimeError("生育与求子的生育丹配置不一致")
         ask = body.get("求子")
         if isinstance(ask, Mapping):
             self._ask_seconds = int(ask.get("有效秒数") or DEFAULT_ASK_SECONDS)
@@ -122,7 +134,7 @@ class HunpeiFeature:
         return self._limit
 
     def medicine(self) -> tuple[str, int]:
-        """生育丹：(编号, 每次消耗)，来自规则数据。"""
+        """生育丹：(编号, 每次消耗)，来自地点功能配置。"""
 
         self._require_initialized()
         return self._medicine_code, self._medicine_cost
@@ -167,7 +179,9 @@ class HunpeiFeature:
             births_limit=self._limit,
         )
 
-    async def _own_ready(self, user_id: str) -> tuple[object, dict, int, int, str]:
+    async def _own_ready(
+        self, user_id: str, function: str
+    ) -> tuple[object, dict, int, int, str]:
         """两条路共用的前置：寿元、胎次、生育丹、地点。返回 (档案, 状态值, 代次, 胎次, 拒绝原因)。"""
 
         profile = await self._character.profile(user_id)
@@ -185,30 +199,29 @@ class HunpeiFeature:
             total = sum(int(getattr(stack, "quantity", 0) or 0) for stack in stacks)
             if total < max(1, self._medicine_cost):
                 return profile, value, generation, used, "没有生育丹"
-        if self._location_function:
+        if function:
             position = await self._weizhi.current(user_id)
             location = getattr(position, "location", None)
             functions = tuple(getattr(location, "available_functions", ()) or ())
-            if self._location_function not in functions:
-                return profile, value, generation, used, "须在%s" % self._location_function
+            if function not in functions:
+                return profile, value, generation, used, "须在%s" % LOCATION_LABEL
         return profile, value, generation, used, ""
 
     async def _hospital_ready(self, user_id: str) -> str:
         """求子的另一方：只需要站在妇产科医院；生育丹由求方出。"""
 
-        if self._location_function:
-            position = await self._weizhi.current(user_id)
-            location = getattr(position, "location", None)
-            functions = tuple(getattr(location, "available_functions", ()) or ())
-            if self._location_function not in functions:
-                return "须在%s" % self._location_function
+        position = await self._weizhi.current(user_id)
+        location = getattr(position, "location", None)
+        functions = tuple(getattr(location, "available_functions", ()) or ())
+        if ASK_FUNCTION not in functions:
+            return "须在%s" % LOCATION_LABEL
         return ""
 
     async def _check(self, user_id: str, gender: str, active: object, used: int) -> tuple[bool, str]:
         """规则里的六条条件，逐条落实（道侣那一路）。"""
 
         # 寿元、胎次、生育丹、地点：与求子共用同一段前置。
-        _, _, _, _, reason = await self._own_ready(user_id)
+        _, _, _, _, reason = await self._own_ready(user_id, BIRTH_FUNCTION)
         if reason:
             return False, reason
         # 道侣的性别要从它的定义里取：ActiveCompanion 只存道侣编号与版本号。
@@ -226,7 +239,7 @@ class HunpeiFeature:
         """向附近一位异性玩家发出求子请求（异步：等对方回应）。"""
 
         self._require_initialized()
-        profile, _, _, _, reason = await self._own_ready(user_id)
+        profile, _, _, _, reason = await self._own_ready(user_id, ASK_FUNCTION)
         if reason:
             raise BirthDeniedError(reason)
         wanted = str(target_query or "").strip()
@@ -311,7 +324,7 @@ class HunpeiFeature:
                 agreed=False,
                 result=None,
             )
-        _, _, _, _, asker_reason = await self._own_ready(row.asker_id)
+        _, _, _, _, asker_reason = await self._own_ready(row.asker_id, ASK_FUNCTION)
         if asker_reason:
             raise BirthDeniedError("求方现在不能求子：%s" % asker_reason)
         target_reason = await self._hospital_ready(user_id)
@@ -331,7 +344,7 @@ class HunpeiFeature:
     async def _deliver(self, asker_id: str, target_id: str, request_id: str) -> BirthResult:
         """求子的结算：用双方 DNA 生一个孩子，记进**求方**族谱。"""
 
-        profile, value, generation, used, reason = await self._own_ready(asker_id)
+        profile, value, generation, used, reason = await self._own_ready(asker_id, ASK_FUNCTION)
         if reason:
             raise BirthDeniedError("求方现在不能生育：%s" % reason)
         target_reason = await self._hospital_ready(target_id)

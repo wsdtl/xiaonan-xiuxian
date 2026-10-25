@@ -120,10 +120,18 @@
     "样式": "primary"
   },
   {
-    "功能": "妇产科医院",
-    "编号": "location.fuchanke",
-    "名称": "妇产科医院",
+    "功能": "生育",
+    "编号": "location.birth",
+    "名称": "生育",
     "命令": "生育",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "功能": "求子",
+    "编号": "location.ask-child",
+    "名称": "求子",
+    "命令": "求子",
     "行为": "callback",
     "样式": "secondary"
   },
