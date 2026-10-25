@@ -40,7 +40,7 @@ def _page_headers() -> dict[str, str]:
     }
 
 router = APIRouter(prefix="/baike")
-INDEX_HTML: Path = static_path("baike", "index.html")
+INDEX_HTML: Path = static_path("tool", "baike", "index.html")
 
 
 @router.get("", response_class=HTMLResponse, include_in_schema=False)

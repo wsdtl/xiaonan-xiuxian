@@ -19,7 +19,7 @@ router = APIRouter(prefix='/yijing')
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
 async def yijing_page() -> HTMLResponse:
     return HTMLResponse(
-        static_path('yijing', 'index.html').read_text(encoding='utf-8'),
+        static_path('tool', 'yijing', 'index.html').read_text(encoding='utf-8'),
         headers={
             **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',
