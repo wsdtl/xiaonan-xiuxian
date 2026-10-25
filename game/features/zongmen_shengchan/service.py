@@ -34,13 +34,29 @@ class SectProductionFeature:
     def initialize(self) -> None:
         if self._copy is not None:
             raise RuntimeError("宗门资源生产玩法已经初始化")
-        raw = self._data.dataset("宗门生产页面文案").get("文本")
-        if not isinstance(raw, Mapping):
-            raise JsonDataError("宗门生产展示缺少文本.json")
+        common = self._data.dataset("宗门生产通用文案").get("通用")
+        if not isinstance(common, Mapping):
+            raise JsonDataError("宗门生产展示缺少通用.json")
+        raw = {"通用": common.get("通用")}
+        texts = {
+            "灵脉": self._data.dataset("灵脉页面文案").get("文本"),
+            "灵田": self._data.dataset("灵田页面文案").get("文本"),
+        }
+        button_rows = {
+            "灵脉": self._data.dataset("灵脉页面按钮").get("按钮") or (),
+            "灵田": self._data.dataset("灵田页面按钮").get("按钮") or (),
+        }
+        rows: list[Mapping[str, object]] = []
+        for name in ("灵脉", "灵田"):
+            section = texts[name]
+            if not isinstance(section, Mapping):
+                raise JsonDataError(f"{name}展示缺少文本.json")
+            raw[name] = section
+            buttons = button_rows[name]
+            if not isinstance(buttons, Sequence) or isinstance(buttons, (str, bytes)):
+                raise JsonDataError(f"{name}按钮必须是字典列表")
+            rows.extend(row for row in buttons if isinstance(row, Mapping))
         self._copy = raw
-        rows = self._data.dataset("宗门生产页面按钮").get("按钮")
-        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
-            raise JsonDataError("宗门生产按钮必须是字典列表")
         self._buttons = tuple(
             MappingProxyType(
                 {

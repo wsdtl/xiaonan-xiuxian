@@ -27,7 +27,7 @@ from game.core.sect_facilities import (
     SectFacilityService,
 )
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from game.core.data import JsonDataError, JsonDataService
 
@@ -47,14 +47,37 @@ class SectFacilityFeature:
     def initialize(self) -> None:
         if self._copy is not None:
             raise RuntimeError("宗门设施玩法已经初始化")
-        raw = self._data.dataset("宗门设施页面文案").get("文本")
+        common = self._data.dataset("宗门设施通用文案").get("通用")
+        if not isinstance(common, Mapping):
+            raise JsonDataError("宗门设施展示缺少通用.json")
+        raw = {
+            "通用": common.get("通用"),
+            "错误": common.get("错误"),
+        }
+        texts = {
+            "百炼堂": self._data.dataset("百炼堂页面文案").get("文本"),
+            "丹鼎阁": self._data.dataset("丹鼎阁页面文案").get("文本"),
+            "演阵台": self._data.dataset("演阵台页面文案").get("文本"),
+        }
+        button_rows = {
+            "百炼堂": self._data.dataset("百炼堂页面按钮").get("按钮") or (),
+            "丹鼎阁": self._data.dataset("丹鼎阁页面按钮").get("按钮") or (),
+            "演阵台": self._data.dataset("演阵台页面按钮").get("按钮") or (),
+        }
+        buttons: list[Mapping[str, object]] = []
+        for name in ("百炼堂", "丹鼎阁", "演阵台"):
+            section = texts[name]
+            if not isinstance(section, Mapping):
+                raise JsonDataError(f"{name}展示缺少文本.json")
+            raw[name] = section
+            rows = button_rows[name]
+            if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+                raise JsonDataError(f"{name}按钮必须是字典列表")
+            buttons.extend(row for row in rows if isinstance(row, Mapping))
         self._format_buttons = tuple(
             (str(row["页面"]), str(row["编号"]), str(row["名称"]), str(row["命令"]), str(row["行为"]), str(row["样式"]))
-            for row in (self._data.dataset("宗门设施页面按钮").get("按钮") or ())
-            if isinstance(row, Mapping)
+            for row in buttons
         )
-        if not isinstance(raw, Mapping):
-            raise JsonDataError("宗门设施展示缺少文本.json")
         self._copy = raw
 
     def grades(self, facility: str = "炼阵") -> tuple[str, ...]:

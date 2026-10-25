@@ -787,7 +787,7 @@ def test_formation_preview_shows_core_and_detection() -> None:
 
     from types import SimpleNamespace
 
-    from game.cmd.特殊地点.宗门园区.宗门设施.site import _formation_view
+    from game.cmd.特殊地点.宗门园区.地点.演阵台.site import _formation_view
     from game.core.formation import FormationDetection
 
     assessment = SimpleNamespace(
