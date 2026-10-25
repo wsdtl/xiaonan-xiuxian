@@ -434,7 +434,11 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         xuemai_service = _bloodline_holder.get("xuemai")
         if xuemai_service is None:
             return {}
-        dna = await xuemai_service.dna(user_id)
+        # 只读已存 DNA：这里绝不能触发懒生成，否则寿元将尽时
+        # profile -> raw -> xuemai.dna -> profile 会无限递归。
+        dna = await xuemai_service.stored_dna(user_id)
+        if not dna:
+            return {}
         return dict(xuemai_service.bloodline_growth(dna))
 
     async def _bloodline_basic(user_id: str) -> dict[str, float]:
@@ -916,7 +920,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         sect,
     )
     weizhi.initialize()
-    xinglu = TravelFeature(world, character, location, action_group, player_state, zongmen_shanmen)
+    xinglu = TravelFeature(world, character, location, action_group, player_state)
     xinglu.initialize()
     daolv_jiejiao = CompanionInteractionFeature(
         data,

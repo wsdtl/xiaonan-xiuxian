@@ -109,10 +109,31 @@ class XuemaiFeature:
             raise RuntimeError("血脉规则尚未完成初始化")
         return self._rules
 
+    async def stored_dna(self, user_id: str) -> str:
+        """只读已存的 DNA；不创建、不回调角色。
+
+        「寿元将尽」时角色属性要扣回血脉原值，这条路径必须纯读：
+        一旦在这里懒生成 DNA，就会回调 character.profile()，而 profile
+        在寿元将尽时又回来取原值，形成 profile -> raw -> dna -> profile 递归。
+        """
+
+        self._require_initialized()
+        snapshot = await self._database.get(
+            StateAddress(user_id, STATE_TYPE, STATE_KEY)
+        )
+        value = (
+            dict(snapshot.value)
+            if snapshot is not None and isinstance(snapshot.value, Mapping)
+            else {}
+        )
+        return str(value.get("DNA") or "")
+
     async def dna(self, user_id: str) -> str:
         """读玩家的 DNA；没有就按性别实例化随机并落盘（一次固定，之后不变）。"""
 
-        self._require_initialized()
+        current = await self.stored_dna(user_id)
+        if current:
+            return current
         try:
             profile = await self._character.profile(user_id)
         except CharacterNotFoundError as exc:
@@ -120,9 +141,6 @@ class XuemaiFeature:
         address = StateAddress(user_id, STATE_TYPE, STATE_KEY)
         snapshot = await self._database.get(address)
         value = dict(snapshot.value) if snapshot is not None and isinstance(snapshot.value, Mapping) else {}
-        current = str(value.get("DNA") or "")
-        if current:
-            return current
         value["DNA"] = self.random_dna(profile.gender)
         value.setdefault("代次", 0)
         value.setdefault("胎次", 0)

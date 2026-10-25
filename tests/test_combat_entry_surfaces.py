@@ -488,6 +488,41 @@ def test_lifespan_full_drops_level_growth(services) -> None:
     assert resources["血气"] <= result["血气上限"]
 
 
+def test_lifespan_full_profile_does_not_recurse(services) -> None:
+    """寿元将尽时 profile 不能再回调血脉 DNA：profile -> raw -> dna -> profile 会递归。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import StateAddress, StateMutation, TransactionCommand
+
+    user_id = "lifespan-profile"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(
+                user_id, "create-lifespan", "寿元测试", "女", (15, 17), ""
+            )
+        )
+    )
+    snapshot = asyncio.run(
+        services.database.get(StateAddress(user_id, "character", "main"))
+    )
+    value = dict(snapshot.value)
+    value["修行日数"] = 100000
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(
+                user_id,
+                "age-lifespan",
+                "寿元测试",
+                (StateMutation(user_id, "character", "main", value, snapshot.version),),
+                {},
+            )
+        )
+    )
+    profile = asyncio.run(services.character.profile(user_id))
+    assert profile.lifespan_full is True
+    assert profile.age == profile.lifespan
+
+
 def test_yijing_tier_nine_enters_real_battle(services) -> None:
     """意境九阶：真实战斗快照、状态、质变监听都要能跑。"""
 

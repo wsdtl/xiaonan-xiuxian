@@ -31,14 +31,12 @@ class TravelFeature:
         location: LocationService,
         action_group: ActionGroupService,
         player_state: PlayerStateService,
-        gate: object | None = None,
     ) -> None:
         self._world = world
         self._character = character
         self._location = location
         self._action_group = action_group
         self._player_state = player_state
-        self._gate = gate
         self._initialized = False
 
     def initialize(self) -> None:
