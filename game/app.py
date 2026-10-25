@@ -883,7 +883,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     xuemai = XuemaiFeature(data, character, database, bloodline)
     xuemai.initialize()
     hunpei = HunpeiFeature(
-        data, character, companion, database, xuemai, bloodline, asset, weizhi, world
+        data, character, companion, database, bloodline, asset, location, player_state, world
     )
     hunpei.initialize()
     renwu_peiyang = CharacterCultivationFeature(

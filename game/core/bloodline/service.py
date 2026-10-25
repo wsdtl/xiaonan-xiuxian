@@ -36,6 +36,9 @@ COMPANION_DNA_STATE_TYPE = "companion_dna"
 #: 旧版把 DNA 混在族谱状态里；只读兜底，等一次性迁移后再删。
 LEGACY_DNA_STATE_TYPE = "xuemai_genealogy"
 LEGACY_COMPANION_DNA_STATE_TYPE = "xuemai_companion_dna"
+#: 族谱状态：由血脉核心统一持有，xuemai/hunpei 只经核心读写。
+GENEALOGY_STATE_TYPE = "xuemai_genealogy"
+GENEALOGY_STATE_KEY = "main"
 
 
 @dataclass(frozen=True)
@@ -182,6 +185,26 @@ class BloodlineService:
             DNA_STATE_KEY,
             {"DNA": str(dna or "")},
             snapshot.version if snapshot is not None else 0,
+        )
+
+    async def genealogy_snapshot(self, user_id: str):
+        """族谱状态快照；没有就返回 None。"""
+
+        self._require_initialized()
+        return await self._snapshot(user_id, GENEALOGY_STATE_TYPE)
+
+    def genealogy_mutation(
+        self, user_id: str, value: Mapping[str, object], expected_version: int
+    ) -> StateMutation:
+        """族谱写入操作；让调用方并进自己的事务。"""
+
+        self._require_initialized()
+        return StateMutation(
+            user_id,
+            GENEALOGY_STATE_TYPE,
+            GENEALOGY_STATE_KEY,
+            dict(value),
+            expected_version,
         )
 
     async def companion_dna(self, companion_code: str) -> str:

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import random
 import time
 from collections.abc import Mapping, Sequence
@@ -20,13 +21,12 @@ from game.core.companion import CompanionService
 from game.core.data import JsonDataService
 from game.core.database import (
     DatabaseService,
-    StateAddress,
-    StateMutation,
     TransactionCommand,
     runtime_log_database_path,
 )
-from game.core.world import WorldService
-from game.features.xuemai import XuemaiFeature
+from game.core.location import LocationService
+from game.core.player_state import PlayerStateService
+from game.core.world import LocationQuery, WorldService
 
 from .contracts import (
     BirthAsk,
@@ -43,7 +43,7 @@ from .presentation import load_hunpei_presentation
 from .store import DONE, PENDING, REFUSED, BirthRequestStore
 
 #: 每个道侣的 DNA 另存一份状态（首次需要时固定，不动既有道侣实例契约）。
-COMPANION_STATE_TYPE = "xuemai_companion_dna"
+
 
 #: 每代胎数上限的默认值（数据未登记时用）。
 DEFAULT_BIRTH_LIMIT = 10
@@ -66,22 +66,21 @@ class HunpeiFeature:
         character: CharacterService,
         companion: CompanionService,
         database: DatabaseService,
-        xuemai: XuemaiFeature,
         bloodline: BloodlineService,
         asset: AssetService,
-        weizhi: object,
+        location: LocationService,
+        player_state: PlayerStateService,
         world: WorldService,
     ) -> None:
         self._data = data
         self._character = character
         self._companion = companion
         self._database = database
-        self._xuemai = xuemai
         self._bloodline = bloodline
         self._asset = asset
-        #: 位置服务（玩法服务，只用来问「现在站在哪个地点功能上」）。
-        self._weizhi = weizhi
-        #: 世界服务（只取地点功能配置，不解释地点内容）。
+        #: 核心位置与世界：只问「现在站在哪个地点功能上/附近有谁」。
+        self._location = location
+        self._player_state = player_state
         self._world = world
         #: 求子请求的日志库存储（非资产；过期即失效）；住本玩法内部，不由组合根代建。
         self._requests = BirthRequestStore(runtime_log_database_path())
@@ -171,8 +170,7 @@ class HunpeiFeature:
             profile = await self._character.profile(user_id)
         except CharacterNotFoundError as exc:
             raise HunpeiError("尚未创建人物") from exc
-        address = StateAddress(user_id, self._xuemai.state_type(), self._xuemai.state_key())
-        snapshot = await self._database.get(address)
+        snapshot = await self._bloodline.genealogy_snapshot(user_id)
         value = dict(snapshot.value) if snapshot is not None and isinstance(snapshot.value, Mapping) else {}
         generation = int(value.get("代次") or 0)
         used = int(value.get("胎次") or 0)
@@ -193,8 +191,7 @@ class HunpeiFeature:
         """两条路共用的前置：寿元、胎次、生育丹、地点。返回 (档案, 状态值, 代次, 胎次, 拒绝原因)。"""
 
         profile = await self._character.profile(user_id)
-        address = StateAddress(user_id, self._xuemai.state_type(), self._xuemai.state_key())
-        snapshot = await self._database.get(address)
+        snapshot = await self._bloodline.genealogy_snapshot(user_id)
         value = dict(snapshot.value) if snapshot is not None and isinstance(snapshot.value, Mapping) else {}
         generation = int(value.get("代次") or 0)
         used = int(value.get("胎次") or 0)
@@ -208,19 +205,25 @@ class HunpeiFeature:
             if total < max(1, self._medicine_cost):
                 return profile, value, generation, used, "没有生育丹"
         if function:
-            position = await self._weizhi.current(user_id)
-            location = getattr(position, "location", None)
-            functions = tuple(getattr(location, "available_functions", ()) or ())
+            functions = await self._functions_at(user_id)
             if function not in functions:
                 return profile, value, generation, used, "须在%s" % LOCATION_LABEL
         return profile, value, generation, used, ""
 
+    async def _functions_at(self, user_id: str) -> tuple[str, ...]:
+        """目标玩家所在地点开放的正式功能；洞天/非地表不供应。"""
+
+        current = await self._location.current(user_id)
+        if current.space_type != "地表":
+            return ()
+        return tuple(
+            self._world.locate(LocationQuery(xy=current.xy)).available_functions
+        )
+
     async def _hospital_ready(self, user_id: str) -> str:
         """求子的另一方：只需要站在妇产科医院；生育丹由求方出。"""
 
-        position = await self._weizhi.current(user_id)
-        location = getattr(position, "location", None)
-        functions = tuple(getattr(location, "available_functions", ()) or ())
+        functions = await self._functions_at(user_id)
         if ASK_FUNCTION not in functions:
             return "须在%s" % LOCATION_LABEL
         return ""
@@ -243,6 +246,28 @@ class HunpeiFeature:
             return False, "道侣寿元将尽"
         return True, ""
 
+    async def _nearby_player(
+        self, user_id: str, wanted: str
+    ) -> object | None:
+        """附近可见玩家里按名字或编号找一位；本地修士不是求子目标，不参与。"""
+
+        candidates = await self._location.nearby_players(user_id)
+        ids = tuple(value.user_id for value in candidates.values)
+        if not ids:
+            return None
+        profiles, states = await asyncio.gather(
+            self._character.public_profiles(ids),
+            self._player_state.public_many(ids),
+        )
+        state_by_user = {state.user_id: state for state in states}
+        for profile in profiles:
+            state = state_by_user.get(profile.user_id)
+            if state is None or not state.appears_nearby:
+                continue
+            if wanted in (profile.name, profile.user_id):
+                return profile
+        return None
+
     async def ask(self, user_id: str, target_query: str) -> BirthAsk:
         """向附近一位异性玩家发出求子请求（异步：等对方回应）。"""
 
@@ -253,7 +278,7 @@ class HunpeiFeature:
         wanted = str(target_query or "").strip()
         if not wanted:
             raise HunpeiError("求子要写对方的名字")
-        person = await self._weizhi.inspect_cultivator(user_id, wanted)
+        person = await self._nearby_player(user_id, wanted)
         if person is None:
             raise HunpeiError("附近没有这位修士")
         target_id = str(getattr(person, "user_id", "") or "")
@@ -363,8 +388,8 @@ class HunpeiFeature:
         target_gender = str(getattr(target_profile, "gender", "") or "")
         if not own_gender or not target_gender or own_gender == target_gender:
             raise BirthDeniedError("求子必须一男一女")
-        own_dna = await self._xuemai.dna(asker_id)
-        other_dna = await self._xuemai.dna(target_id)
+        own_dna = await self._bloodline.ensure_dna(asker_id, own_gender)
+        other_dna = await self._bloodline.ensure_dna(target_id, target_gender)
         sex = "女" if self._random.random() < 0.5 else "男"
         if own_gender == "男":
             father_dna, mother_dna = own_dna, other_dna
@@ -372,18 +397,17 @@ class HunpeiFeature:
         else:
             father_dna, mother_dna = other_dna, own_dna
             father_id, mother_id = target_id, asker_id
-        child_dna = self._xuemai.breed(father_dna, mother_dna, sex)
+        child_dna = self._bloodline.breed(father_dna, mother_dna, sex, self._random)
         code = "%06d" % (900000 + self._random.randrange(1, 99999))
         newborn = Newborn(
             code=code,
             name="",
             sex=sex,
             dna=child_dna,
-            bloodlines=self._xuemai.bloodlines(child_dna),
+            bloodlines=self._bloodline.bloodlines(child_dna),
             generation=generation,
         )
-        address = StateAddress(asker_id, self._xuemai.state_type(), self._xuemai.state_key())
-        snapshot = await self._database.get(address)
+        snapshot = await self._bloodline.genealogy_snapshot(asker_id)
         rows = value.get("族谱")
         rows = [dict(r) for r in rows if isinstance(r, Mapping)] if isinstance(rows, Sequence) and not isinstance(rows, (str, bytes)) else []
         rows.append({
@@ -415,12 +439,10 @@ class HunpeiFeature:
                 request_id="求子:%s" % request_id,
                 business_type="婚配求子",
                 operations=(
-                    StateMutation(
-                        user_id=asker_id,
-                        state_type=self._xuemai.state_type(),
-                        state_key=self._xuemai.state_key(),
-                        value=value,
-                        expected_version=snapshot.version if snapshot is not None else 0,
+                    self._bloodline.genealogy_mutation(
+                        asker_id,
+                        value,
+                        snapshot.version if snapshot is not None else 0,
                     ),
                     *tuple(medicine_plan.operations),
                 ),
@@ -445,10 +467,11 @@ class HunpeiFeature:
         state = await self.view(user_id)
         if not state.can_birth:
             raise BirthDeniedError(state.reason)
-        own_dna = await self._xuemai.dna(user_id)
+        own_profile = await self._character.profile(user_id)
+        own_dna = await self._bloodline.ensure_dna(user_id, own_profile.gender)
         mother_dna = await self.companion_dna(state.companion_code)
         sex = "女" if self._random.random() < 0.5 else "男"
-        child_dna = self._xuemai.breed(own_dna, mother_dna, sex)
+        child_dna = self._bloodline.breed(own_dna, mother_dna, sex, self._random)
         generation = state.generation
         code = "%06d" % (900000 + self._random.randrange(1, 99999))
         newborn = Newborn(
@@ -456,11 +479,10 @@ class HunpeiFeature:
             name="",
             sex=sex,
             dna=child_dna,
-            bloodlines=self._xuemai.bloodlines(child_dna),
+            bloodlines=self._bloodline.bloodlines(child_dna),
             generation=generation,
         )
-        address = StateAddress(user_id, self._xuemai.state_type(), self._xuemai.state_key())
-        snapshot = await self._database.get(address)
+        snapshot = await self._bloodline.genealogy_snapshot(user_id)
         value = dict(snapshot.value) if snapshot is not None and isinstance(snapshot.value, Mapping) else {}
         rows = value.get("族谱")
         rows = [dict(r) for r in rows if isinstance(r, Mapping)] if isinstance(rows, Sequence) and not isinstance(rows, (str, bytes)) else []
@@ -494,12 +516,10 @@ class HunpeiFeature:
                 request_id="生育:%s:%d" % (user_id, len(rows)),
                 business_type="婚配生育",
                 operations=(
-                    StateMutation(
-                        user_id=user_id,
-                        state_type=self._xuemai.state_type(),
-                        state_key=self._xuemai.state_key(),
-                        value=value,
-                        expected_version=snapshot.version if snapshot is not None else 0,
+                    self._bloodline.genealogy_mutation(
+                        user_id,
+                        value,
+                        snapshot.version if snapshot is not None else 0,
                     ),
                     *tuple(medicine_plan.operations),
                 ),
