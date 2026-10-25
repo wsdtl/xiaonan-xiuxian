@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from math import ceil
 from types import MappingProxyType
 
+from game.core.character import CharacterService
 from game.core.data import (
     JsonDataService,
     nonempty_text as _text,
@@ -32,12 +33,14 @@ class CangjingFeature:
         data: JsonDataService,
         library: SectLibraryService,
         sect: SectService,
+        character: CharacterService,
         location: LocationService,
         player_state: PlayerStateService,
     ) -> None:
         self._data = data
         self._library = library
         self._sect = sect
+        self._character = character
         self._location = location
         self._player_state = player_state
         self._copy: CangjingCopy | None = None
@@ -85,6 +88,17 @@ class CangjingFeature:
             for button in self._buttons
             if button["条件"] in conditions
         )
+
+    async def borrow_slots(self, user_id: str) -> int:
+        """先确认在洞天且可行动，再返回可借入的功法槽数量。"""
+
+        if self._copy is None:
+            raise RuntimeError("藏经阁玩法尚未初始化")
+        await self._require_cave(user_id)
+        result = await self._player_state.authorize(user_id, self._guard_rule)
+        if not result.allowed:
+            raise CangjingFeatureError(result.reason)
+        return int(self._character.assembly_limits().get("功法", 0))
 
     async def page(self, user_id: str, page: int = 1) -> CangjingPage:
         await self._require_cave(user_id)

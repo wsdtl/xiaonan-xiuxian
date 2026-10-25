@@ -14,7 +14,7 @@ from launch.paths import static_path
 from ....site import PAGE_CSP, PAGE_HEADERS, failure
 
 router = APIRouter(prefix='/wanzhen')
-#: 五类成品与各自的子类（与「捐入万珍殿」命令认的写法一一对应）。
+#: 五类成品与各自的子类（与「万珍殿 捐入」命令认的写法一一对应）。
 CATEGORIES = (
     ('丹药', ('恢复丹', '战丹', '突破丹', '特殊丹')),
     ('真意', ('真意',)),

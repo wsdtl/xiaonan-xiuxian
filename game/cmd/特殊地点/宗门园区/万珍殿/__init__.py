@@ -55,16 +55,32 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
         "guard_rule": "已创建",
         "help": {
             "category": "宗门",
-            "summary": "在本宗洞天分类查看宗门成品",
-            "usage": ("万珍殿", "万珍殿 丹药", "万珍殿 阵法 2"),
-            "side_effect": "只读查询；成品由宗主统一发放",
+            "summary": "在本宗洞天查看万珍殿成品，或向本宗捐入、由执掌者发放成品",
+            "usage": (
+                "万珍殿",
+                "万珍殿 丹药",
+                "万珍殿 阵法 2",
+                "万珍殿 捐入 丹药 01100005 3",
+                "万珍殿 发放 角色名 01100005",
+            ),
+            "side_effect": "查看只读；捐入扣个人成品、发放扣宗门成品，均记入同一事务",
             "order": 82,
         },
     },
 )
-async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
+async def show_wanzhen(
+    user_id: str, message: str, message_context: MessageContext, manager: Any
+) -> None:
     feature = current_game_services().features.zongmen_wanzhen
-    parts = str(message or "").split()
+    raw = str(message or "").strip()
+    head, _, rest = raw.partition(" ")
+    if head == "捐入":
+        await donate_wanzhen(user_id, rest, message_context, manager)
+        return
+    if head == "发放":
+        await grant_wanzhen(user_id, rest, message_context, manager)
+        return
+    parts = raw.split()
     try:
         if len(parts) > 2:
             raise WanzhenFeatureError("格式：万珍殿 [类别] [页码]")
@@ -78,32 +94,12 @@ async def show_wanzhen(user_id: str, message: str, manager: Any) -> None:
         await manager.send(reply.error(feature.copy(), str(exc)))
 
 
-@GameCommand.command(
-    cmd=("捐珍", "捐入万珍殿"),
-    metadata={
-        "scope": "专属",
-        "guard_rule": "自主空闲或休息",
-        "help": {
-            "category": "宗门",
-            "summary": "将个人成品存入本宗万珍殿",
-            "usage": (
-                "捐入万珍殿 丹药 01100005 3",
-                "捐入万珍殿 器律 编号或名称 数量",
-                # help 优先用编号（委托方 2026-10-15 口径）；实在没有编号的才用中文名。
-                "捐入万珍殿 阵法 阵法名[灵宝名]",
-                "捐入万珍殿 阵法 01530001",
-            ),
-            "side_effect": "扣除个人成品，计入万珍殿；阵法每次存入一座",
-            "order": 83,
-        },
-    },
-)
 async def donate_wanzhen(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_wanzhen
     parts = str(message or "").split()
     try:
         if not parts or parts[0] not in _CATEGORIES:
-            raise WanzhenFeatureError("格式：捐入万珍殿 类别 内容 ...")
+            raise WanzhenFeatureError("格式：万珍殿 捐入 类别 内容 ...")
         category = parts[0]
         if category == "阵法" and 2 <= len(parts) <= 3:
             # 新写法：<品级><阵法名>[灵宝]；旧写法 <阵法名> [品级] 仍受理。
@@ -151,29 +147,12 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
         await manager.send(reply.error(feature.copy(), str(exc)))
 
 
-@GameCommand.command(
-    cmd=("发珍", "发放万珍殿"),
-    metadata={
-        "scope": "专属",
-        "guard_rule": "自主空闲或休息",
-        "help": {
-            "category": "宗门",
-            "summary": "由宗主或长老向本宗成员发放万珍殿成品",
-            "usage": (
-                "发放万珍殿 云中鹤 01100005", "发放万珍殿 角色名 珍物名[灵宝名]",
-                "发放万珍殿 角色名或编号 珍物名[灵宝名] 数量",
-            ),
-            "side_effect": "扣除宗门成品，计入目标成员的个人藏库",
-            "order": 84,
-        },
-    },
-)
 async def grant_wanzhen(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_wanzhen
     parts = str(message or "").split()
     try:
         if len(parts) not in {2, 3}:
-            raise WanzhenFeatureError("格式：发放万珍殿 目标 条目编号 [数量]")
+            raise WanzhenFeatureError("格式：万珍殿 发放 目标 条目编号 [数量]")
         quantity = _positive(parts[2], "数量") if len(parts) == 3 else 1
         # 玩家写法 → 条目键（含中文走名字写法、纯编号按内容编号、整条键原汁原味）；
         # 认不出就原样交给核心，由核心用展示数据的话回绝。

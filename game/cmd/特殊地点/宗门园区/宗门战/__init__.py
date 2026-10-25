@@ -108,7 +108,7 @@ def _has_cjk(value: str) -> bool:
 
 
 async def _formation_key(user_id: str, wanted: str) -> str:
-    """把玩家写的阵法换成万珍殿条目键——与「发放万珍殿」共用同一份解析（玩法层 `resolve_vault_entry`）。
+    """把玩家写的阵法换成万珍殿条目键——与「万珍殿 发放」共用同一份解析（玩法层 `resolve_vault_entry`）。
 
     认不出就原样返回，由核心按展示数据的话回绝；玩法层的回绝（多条说不清）翻成宗门战自己的错误类型。
     """

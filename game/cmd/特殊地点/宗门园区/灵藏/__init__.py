@@ -1,5 +1,4 @@
 """宗门洞天专属灵藏命令。"""
-
 from __future__ import annotations
 
 from game.app import current_game_services
@@ -21,17 +20,28 @@ _CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
         "guard_rule": "已创建",
         "help": {
             "category": "宗门",
-            "summary": "在本宗洞天分类查看宗门基础资源",
-            "usage": ("灵藏", "灵藏 灵植", "灵藏 灵矿 2"),
-            "side_effect": "只读查询；玩家只能捐入，取用发生在宗门生产与宗门设施的自动结算里，成品由万珍殿发放",
+            "summary": "在宗门洞天灵藏查看宗门基础资源，或向本宗捐入材料",
+            "usage": (
+                "灵藏",
+                "灵藏 灵植",
+                "灵藏 灵矿 2",
+                "灵藏 捐入 灵石 100",
+                "灵藏 捐入 灵植 黄品云参 3",
+            ),
+            "side_effect": "只读查看；捐入扣个人资源、计入宗门灵藏，取用只发生在宗门生产与设施结算",
             "order": 80,
         },
     },
 )
-async def show_lingcang(user_id: str, message: str, manager: Any) -> None:
+async def lingcang(
+    user_id: str, message: str, message_context: MessageContext, manager: Any
+) -> None:
     feature = current_game_services().features.zongmen_lingcang
     parts = str(message or "").split()
     try:
+        if parts and parts[0] == "捐入":
+            await _donate(feature, user_id, parts[1:], message_context, manager)
+            return
         if len(parts) > 2:
             raise LingcangFeatureError("格式：灵藏 [灵植/灵矿/兽宝] [页码]")
         category = parts[0] if parts else "全部"
@@ -44,26 +54,13 @@ async def show_lingcang(user_id: str, message: str, manager: Any) -> None:
         await manager.send(reply.error(feature.copy(), str(exc)))
 
 
-@GameCommand.command(
-    cmd=("捐藏", "捐入灵藏"),
-    metadata={
-        "scope": "专属",
-        "guard_rule": "自主空闲或休息",
-        "help": {
-            "category": "宗门",
-            "summary": "向本宗灵藏捐献基础材料或灵石",
-            "usage": (
-                "捐入灵藏 灵石 100", "捐入灵藏 灵植 黄品云参 3",
-                "捐入灵藏 类别 <品级><物品> 数量",
-            ),
-            "side_effect": "扣除个人资源，计入宗门灵藏；玩家只能捐入，取用发生在宗门生产与宗门设施的自动结算里",
-            "order": 81,
-        },
-    },
-)
-async def donate_lingcang(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.zongmen_lingcang
-    parts = str(message or "").split()
+async def _donate(
+    feature: Any,
+    user_id: str,
+    parts: list[str],
+    message_context: MessageContext,
+    manager: Any,
+) -> None:
     try:
         if len(parts) == 2 and parts[0] == "灵石":
             quantity = _positive(parts[1], "灵石数量")
@@ -72,11 +69,8 @@ async def donate_lingcang(user_id: str, message: str, message_context: MessageCo
             )
             await manager.send(reply.donated_stones(feature.copy(), quantity, result))
             return
-        # 新写法：类别 <品级><物品> 数量（3 段）；旧的「类别 物品 品级 数量」4 段仍受理。
         if len(parts) not in {3, 4} or parts[0] not in _CATEGORIES:
-            raise LingcangFeatureError(
-                "格式：捐入灵藏 类别 <品级><物品> 数量"
-            )
+            raise LingcangFeatureError("格式：灵藏 捐入 类别 <品级><物品> 数量")
         if len(parts) == 4:
             item, grade = parts[1], parts[2]
         else:

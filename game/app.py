@@ -893,7 +893,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         asset,
     )
     zongmen_wanzhen.initialize()
-    zongmen_cangjing = CangjingFeature(data, sect_library, sect, location, player_state)
+    zongmen_cangjing = CangjingFeature(
+        data, sect_library, sect, character, location, player_state
+    )
     zongmen_cangjing.initialize()
     zongmen_sheshi = SectFacilityFeature(data, sect_facilities)
     zongmen_sheshi.initialize()

@@ -1,5 +1,4 @@
 """宗门洞天专属藏经阁命令。"""
-
 from __future__ import annotations
 
 from game.app import current_game_services
@@ -18,55 +17,71 @@ from typing import Any
         "guard_rule": "已创建",
         "help": {
             "category": "宗门",
-            "summary": "身处本宗洞天时查看本宗成员共享的最高品级功法",
-            "usage": ("藏经阁", "藏经阁 2"),
-            "side_effect": "只读查询，不转移个人道藏所有权",
+            "summary": "在宗门洞天藏经阁查阅、借阅本宗共享功法",
+            "usage": (
+                "藏经阁",
+                "藏经阁 2",
+                "藏经阁 借阅 五朵金花功法",
+                "藏经阁 借阅 五朵金花功法 1",
+            ),
+            "side_effect": "只读查阅；借阅替换人物指定功法槽，离开洞天后仍生效，离宗时恢复原功法",
             "order": 85,
         },
     },
 )
-async def show_cangjing(user_id: str, message: str, manager: Any) -> None:
+async def cangjing(
+    user_id: str, message: str, message_context: MessageContext, manager: Any
+) -> None:
     feature = current_game_services().features.zongmen_cangjing
-    query = str(message or "").strip()
+    copy = feature.copy()
+    parts = str(message or "").strip().split(maxsplit=1)
     try:
-        page_number = _positive(query, "藏经阁页码") if query else 1
-        value = await feature.page(user_id, page_number)
-        await manager.send(
-            reply.page(feature.copy(), value, feature.page_actions(value))
-        )
+        if not parts:
+            await _page(feature, user_id, 1, manager)
+            return
+        action = parts[0]
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if action.isdecimal():
+            await _page(feature, user_id, _positive(action, "藏经阁页码"), manager)
+            return
+        if action == "借阅":
+            await _borrow(feature, user_id, rest, message_context, manager)
+            return
+        raise CangjingFeatureError(copy.text["分支"])
     except CangjingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await manager.send(reply.error(copy, str(exc)))
 
 
-@GameCommand.command(
-    cmd="借阅功法",
-    metadata={
-        "scope": "专属",
-        "guard_rule": "自主空闲或休息",
-        "help": {
-            "category": "宗门",
-            "summary": "身处本宗洞天时把藏经阁功法借入人物指定功法槽",
-            "usage": ("借阅功法 五岳镇界镇岳诀 1", "借阅功法 编号或名称 槽位",),
-            "side_effect": "替换指定人物功法槽；离开洞天后仍生效，离宗时恢复原功法",
-            "order": 86,
-        },
-    },
-)
-async def borrow_technique(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.zongmen_cangjing
-    parts = str(message or "").split()
-    try:
-        if len(parts) != 2:
-            raise CangjingFeatureError("格式：借阅功法 编号或名称 槽位")
-        value = await feature.borrow(
-            user_id,
-            message_context.request_id,
-            parts[0],
-            _positive(parts[1], "功法槽位"),
-        )
-        await manager.send(reply.borrowed(feature.copy(), value))
-    except CangjingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+async def _page(feature: Any, user_id: str, page: int, manager: Any) -> None:
+    value = await feature.page(user_id, page)
+    await manager.send(reply.page(feature.copy(), value, feature.page_actions(value)))
+
+
+async def _borrow(
+    feature: Any,
+    user_id: str,
+    rest: str,
+    message_context: MessageContext,
+    manager: Any,
+) -> None:
+    copy = feature.copy()
+    words = rest.split()
+    if not words:
+        raise CangjingFeatureError(copy.text["借阅写法"])
+    identifier = words[0]
+    if len(words) == 1:
+        slots = await feature.borrow_slots(user_id)
+        if slots < 1:
+            raise CangjingFeatureError("没有可用的功法槽")
+        await manager.send(reply.borrow_prompt(copy, identifier, range(1, slots + 1)))
+        return
+    if len(words) != 2:
+        raise CangjingFeatureError(copy.text["借阅写法"])
+    slot = _positive(words[1], "功法槽位")
+    value = await feature.borrow(
+        user_id, message_context.request_id, identifier, slot
+    )
+    await manager.send(reply.borrowed(copy, value))
 
 
 def _positive(value: str, label: str) -> int:
