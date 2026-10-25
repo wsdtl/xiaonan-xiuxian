@@ -4,7 +4,7 @@
 - BattleReportSink：产报方与仓储之间的协议（game/core/duel、game/core/sect_war 依赖它）；
 - runtime_log_database_path：非资产库路径（核心的 storage 与维护者入口都要用）。
 
-战报自己的读写实现在 game/features/zhanbao/battle_log/，它从这里 import（方向：features -> core）。
+战报自己的读写实现在 game/core/database/battle_report_store.py；zhanbao 玩法只保留展示与页面读取。
 """
 from __future__ import annotations
 

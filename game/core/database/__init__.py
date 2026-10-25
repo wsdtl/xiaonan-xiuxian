@@ -24,6 +24,12 @@ from .contracts import (
     TransactionReceipt,
 )
 from .battle_report import runtime_log_database_path
+from .battle_report_store import BATTLE_RETENTION_SECONDS, BattleReportStore
+from .message_flow_store import (
+    MESSAGE_RETENTION_SECONDS,
+    MessageFlowRow,
+    MessageFlowStore,
+)
 from .service import DatabaseService
 from .storage import open_request_connections
 
@@ -52,4 +58,9 @@ __all__ = [
     "TransactionReceipt",
     "open_request_connections",
     "runtime_log_database_path",
+    "BATTLE_RETENTION_SECONDS",
+    "BattleReportStore",
+    "MESSAGE_RETENTION_SECONDS",
+    "MessageFlowRow",
+    "MessageFlowStore",
 ]

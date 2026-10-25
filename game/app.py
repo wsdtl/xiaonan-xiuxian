@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from game.features.tiandao_houtai import MessageFlowStore
+from game.core.database import MessageFlowStore
 
 from game.core.transaction_log import TransactionLogService
 
@@ -545,9 +545,11 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         )
     )
     # 战报是**非资产数据**：登记进非资产库（同一个 runtime_log 库与清理任务）。
-    from game.features.zhanbao.battle_log import (
+    from game.core.database import (
         BATTLE_RETENTION_SECONDS,
+        MESSAGE_RETENTION_SECONDS,
         BattleReportStore,
+        MessageFlowStore,
         runtime_log_database_path,
     )
 
@@ -556,10 +558,8 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         retention_seconds=BATTLE_RETENTION_SECONDS,
     )
     battle_reports.initialize()
-    from game.features.tiandao_houtai import MESSAGE_RETENTION_SECONDS, MessageFlowStore
-
     message_flows = MessageFlowStore(
-        game_config.runtime_log.path,
+        runtime_log_database_path(),
         retention_seconds=MESSAGE_RETENTION_SECONDS,
     )
     message_flows.initialize()

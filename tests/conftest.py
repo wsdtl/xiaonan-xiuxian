@@ -11,7 +11,7 @@ from dataclasses import replace
 import pytest
 
 import game.app as app
-import game.features.zhanbao.battle_log as battle_log
+import game.core.database.battle_report_store as battle_log
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -27,8 +27,8 @@ def _isolated_database(tmp_path_factory):
         app.game_config,
         database=replace(app.game_config.database, path=root / "game.db"),
     )
-    # 运行期观察库（消息流水与战报）走的是框架自定义项，不经过 game/config.py。
-    # 它按需导入本模块再取路径，所以在这里替换函数即可隔离——不改 launch 一个字节。
+    # 运行期观察库（消息流水与战报）走游戏配置；战报仓储在核心数据库模块里
+    # 按需导入路径函数，所以在这里替换函数即可隔离。
     original = battle_log.runtime_log_database_path
     battle_log.runtime_log_database_path = lambda: root / "runtime_log.db"
     yield
