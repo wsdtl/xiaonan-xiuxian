@@ -46,7 +46,7 @@ async def show_position(user_id: str, manager: Any) -> None:
     cmd="附近",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "世界",
             "summary": "查看附近地点或修士",

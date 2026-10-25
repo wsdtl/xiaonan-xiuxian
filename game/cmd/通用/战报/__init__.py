@@ -15,7 +15,7 @@ from .site import router
     cmd="战报",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "战斗",
             "summary": "查看我的最近未过期战报，可带页码翻页",

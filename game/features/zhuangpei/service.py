@@ -211,7 +211,7 @@ class ZhuangpeiFeature:
         if replay is not None:
             return self._result(replay, replayed=True)
         try:
-            guards = await self._player_state.plan_guard(user_id, "自主空闲或休息")
+            guards = await self._player_state.plan_guard(user_id, "空闲或活动中")
             value = self.scheme(build)
             effect, treasure_guard = await self._treasure.plan_effect(user_id, "真意气机替换")
             retain = effect is not None and effect.ability == "保留被替换资粮"

@@ -18,7 +18,7 @@ from typing import Any
     cmd="交易",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "资源",
             "summary": "查看当前位置固定出售的真意和气机",
@@ -53,7 +53,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
     cmd="购买",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "资源",
             "summary": "从当前位置货架购买真意或气机",

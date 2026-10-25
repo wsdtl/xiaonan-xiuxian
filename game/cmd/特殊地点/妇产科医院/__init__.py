@@ -14,7 +14,7 @@ from . import input as command_input, reply
     cmd="生育",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "道侣",
             "summary": "在妇产科医院与当前同行道侣生育，消耗生育丹生成下一代",

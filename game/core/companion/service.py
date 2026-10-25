@@ -884,6 +884,59 @@ class CompanionService:
             ),
         )
 
+    async def plan_battle_delta(
+        self,
+        user_id: str,
+        *,
+        health_delta: float,
+        spirit_delta: float,
+        weapon_experience: int = 0,
+    ) -> CompanionBattlePlan:
+        """按当前道侣实例合并战后资源增量；探险预演终值不整块覆盖。"""
+
+        current = await self.active_instance(user_id)
+        before = current.instance
+        gained = _request_nonnegative_int(weapon_experience, "道侣本命武器经验")
+        advance = self._forging.advance_weapon(
+            level=before.weapon_level,
+            experience=before.weapon_experience,
+            gained=gained,
+        )
+        resources = dict(before.resources)
+        health_after = bounded_number(
+            _state_number(resources.get("血气"), "道侣.血气")
+            + float(_state_number(health_delta, "道侣战后血气变化")),
+            before.attributes.get("血气上限"),
+            "道侣战后血气",
+        )
+        spirit_after = bounded_number(
+            _state_number(resources.get("精神"), "道侣.精神")
+            + float(_state_number(spirit_delta, "道侣战后精神变化")),
+            before.attributes.get("精神上限"),
+            "道侣战后精神",
+        )
+        resources.update({"血气": health_after, "精神": spirit_after})
+        after = replace(
+            before,
+            weapon_level=advance.level_after,
+            weapon_experience=advance.experience_after,
+            resources=MappingProxyType(resources),
+            version=before.version + 1,
+        )
+        return CompanionBattlePlan(
+            before.companion_id,
+            health_after,
+            spirit_after,
+            gained,
+            StateMutation(
+                _user_id(user_id),
+                INSTANCE_STATE,
+                before.companion_id,
+                _instance_value(after, self._forging),
+                before.version,
+            ),
+        )
+
     async def plan_retreat_settlement(
         self,
         user_id: str,

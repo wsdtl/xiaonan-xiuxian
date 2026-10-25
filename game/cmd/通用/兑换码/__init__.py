@@ -13,7 +13,7 @@ from typing import Any
     cmd=('兑换', '兑换码'),
     metadata={
         'scope': '通用',
-        'guard_rule': '自主空闲或休息',
+        'guard_rule': '空闲或活动中',
         'help': {
             'category': '系统',
             'summary': '用一个兑换码换回数据里写好的发放',

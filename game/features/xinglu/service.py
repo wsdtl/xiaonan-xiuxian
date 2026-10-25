@@ -77,7 +77,7 @@ class TravelFeature:
         }
         for user_id in participants:
             guard = await self._player_state.authorize(
-                user_id, "自主空闲且可行动"
+                user_id, "空闲或活动中"
             )
             if not guard.allowed:
                 profile = participant_profiles.get(user_id)

@@ -19,7 +19,7 @@ from typing import Any
     cmd=("去", "前往"),
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲且可行动",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "行动",
             "summary": "前往指定地点或坐标并立即抵达",

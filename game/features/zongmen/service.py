@@ -309,7 +309,7 @@ class SectFeature:
         return profiles[0]
 
     async def _require_mutable(self, user_id: str) -> None:
-        result = await self._player_state.authorize(user_id, "自主空闲或休息")
+        result = await self._player_state.authorize(user_id, "空闲或活动中")
         if not result.allowed:
             raise SectFeatureError("target_busy")
 

@@ -20,7 +20,7 @@ from typing import Any
     cmd=("交谈", "道侣交谈"),
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "道侣",
             "summary": "与身边的世界道侣交谈",
@@ -50,7 +50,7 @@ async def converse_companion(user_id: str, message: str, manager: Any) -> None:
     cmd="赠予",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "道侣",
             "summary": "向身边道侣赠送其喜欢的灵植",
@@ -88,7 +88,7 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
     cmd=("邀约", "邀约道侣"),
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "道侣",
             "summary": "邀约好感圆满的道侣同行",
@@ -120,7 +120,7 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
     cmd=("暂别", "暂别道侣"),
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "道侣",
             "summary": "让当前同行道侣返回其原本所在地",

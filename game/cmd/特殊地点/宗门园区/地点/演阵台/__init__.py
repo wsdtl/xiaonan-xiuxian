@@ -14,7 +14,7 @@ from typing import Any
     cmd="演阵台",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "在演阵台炼制一次性阵法（宗门园区）",

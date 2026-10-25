@@ -25,7 +25,7 @@ async def my_assembly(user_id: str, manager: Any) -> None:
         await manager.send(reply.error(str(exc)))
 
 
-@GameCommand.command(cmd="导入装配", metadata={"scope": "通用", "guard_rule": "自主空闲或休息", "help": {"category": "修行", "summary": "校验并一次性导入整套装配", "usage": ("导入装配 装配码",), "side_effect": "替换整套装配，按规则消耗库存；空槽清除原装配；同一请求编号绑定同一份装配码，有「保留被替换资粮」灵宝时被替换的资粮回库", "order": 72}})
+@GameCommand.command(cmd="导入装配", metadata={"scope": "通用", "guard_rule": "空闲或活动中", "help": {"category": "修行", "summary": "校验并一次性导入整套装配", "usage": ("导入装配 装配码",), "side_effect": "替换整套装配，按规则消耗库存；空槽清除原装配；同一请求编号绑定同一份装配码，有「保留被替换资粮」灵宝时被替换的资粮回库", "order": 72}})
 async def import_assembly(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zhuangpei
     try:

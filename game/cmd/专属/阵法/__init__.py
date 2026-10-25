@@ -93,7 +93,7 @@ def _request(
     cmd="阵法审查",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "查看此地阵师开放的阵法，或审看一座阵法的三相投入",
@@ -136,7 +136,7 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
     cmd="炼阵",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "请当地阵师把三相材料炼成一份一次性阵法",

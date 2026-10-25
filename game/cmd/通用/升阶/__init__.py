@@ -26,7 +26,7 @@ def _quantity(text: str) -> int:
     cmd=("升阶", "提升品级"),
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "把一件基础材料升到更高品级",

@@ -16,7 +16,7 @@ from . import reply
     cmd=("坐忘", "坐忘台坐忘"),
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "战斗",
             "summary": "在坐忘台服下忘境丹，把六条意境抹去、道行退回重排",

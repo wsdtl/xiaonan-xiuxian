@@ -15,7 +15,7 @@ from typing import Any
     cmd="布阵",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "战斗",
             "summary": "从阵藏取出一座阵法，备入下一场正式战斗",

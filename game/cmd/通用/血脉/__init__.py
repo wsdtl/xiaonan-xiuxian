@@ -17,7 +17,7 @@ _SUBCOMMANDS = ("族谱",)
     cmd=("血脉", "血脉族谱"),
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "角色",
             "summary": "查看自己的族谱（只增不改，可作取名参考）",
@@ -45,7 +45,7 @@ async def xuemai(user_id: str, message: str, manager: Any) -> None:
     cmd=("传位",),
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "角色",
             "summary": "把这一壳传位给一个新生儿，结束这一代，开始下一代",

@@ -20,7 +20,7 @@ from typing import Any
     cmd="道侣培养",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "查看当前同行道侣的独立成长与本命武器",
@@ -43,7 +43,7 @@ async def show_companion_cultivation(user_id: str, manager: Any) -> None:
     cmd="道侣突破",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "消耗突破丹为当前同行道侣独立突破",
@@ -77,7 +77,7 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
     cmd="道侣覆炼",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "把器藏中的器律覆入当前同行道侣本命武器",

@@ -14,7 +14,7 @@ from typing import Any
     cmd=("补天", "裂天原补天"),
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "在裂天原为纯突破节点补入一项永久属性",

@@ -109,3 +109,148 @@ def test_missing_rule_name_is_named(services, monkeypatch):
         assert "守卫规则" in decision.reason
 
     asyncio.run(run())
+
+def test_activity_guard_allows_work_but_not_second_activity(services) -> None:
+    """活动进行中整条命令放行；开始第二条活动仍被原守卫挡住。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+    from game.core.player_state.contracts import StateTransitionCommand
+
+    user_id = "P:守卫用例"
+    asyncio.run(
+        services.core.character.create(
+            CharacterCreateCommand(user_id, "create-activity-guard", "守卫用例", "男", (15, 17), "")
+        )
+    )
+    plan = asyncio.run(
+        services.core.player_state.plan_transition(
+            StateTransitionCommand(
+                user_id,
+                "enter-exploration",
+                "行为",
+                "520004",
+                {"探险编号": "guard-test"},
+            )
+        )
+    )
+    asyncio.run(
+        services.core.database.commit(
+            TransactionCommand(
+                user_id, "enter-exploration", "测试", (plan.mutation,), {}
+            )
+        )
+    )
+
+    allowed = asyncio.run(
+        services.core.player_state.authorize(user_id, "空闲或活动中")
+    )
+    assert allowed.allowed, allowed.reason
+    blocked = asyncio.run(
+        services.core.player_state.authorize(user_id, "自主空闲")
+    )
+    assert not blocked.allowed
+    second = asyncio.run(
+        services.core.player_state.authorize(user_id, "自主空闲且可行动")
+    )
+    assert not second.allowed
+
+
+def test_activity_guard_covers_four_activities() -> None:
+    """新守卫必须覆盖四种活动状态，并允许托管控制。"""
+
+    import json
+    from pathlib import Path
+
+    rules = json.loads(
+        (Path(__file__).resolve().parents[1] / "data/角色/规则/状态/状态守卫.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    rule = next(value for value in rules if value["名称"] == "空闲或活动中")
+    assert set(rule["状态要求"]["行为"]) == {
+        "520001",
+        "520002",
+        "520003",
+        "520004",
+        "520010",
+        "520011",
+    }
+    assert set(rule["状态要求"]["控制"]) == {"520008", "520009"}
+
+
+@pytest.mark.parametrize("state_id", ["520003", "520004", "520010", "520011"])
+def test_activity_guard_authorizes_each_activity(services, state_id: str) -> None:
+    """四种活动状态都必须被新守卫放行。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+    from game.core.player_state.contracts import StateTransitionCommand
+
+    user_id = f"P:活动守卫-{state_id}"
+    asyncio.run(
+        services.core.character.create(
+            CharacterCreateCommand(
+                user_id, f"create-{state_id}", "活动守卫", "男", (15, 17), ""
+            )
+        )
+    )
+    plan = asyncio.run(
+        services.core.player_state.plan_transition(
+            StateTransitionCommand(
+                user_id, f"enter-{state_id}", "行为", state_id, {}
+            )
+        )
+    )
+    asyncio.run(
+        services.core.database.commit(
+            TransactionCommand(
+                user_id, f"enter-{state_id}", "测试", (plan.mutation,), {}
+            )
+        )
+    )
+    decision = asyncio.run(
+        services.core.player_state.authorize(user_id, "空闲或活动中")
+    )
+    assert decision.allowed, decision.reason
+
+
+def test_activity_guard_allows_hosting_control(services) -> None:
+    """托管控制 520009 也必须在活动守卫里放行。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+    from game.core.player_state.contracts import StateTransitionCommand
+
+    user_id = "P:活动守卫-托管"
+    asyncio.run(
+        services.core.character.create(
+            CharacterCreateCommand(user_id, "create-host-guard", "托管守卫", "男", (15, 17), "")
+        )
+    )
+    behavior = asyncio.run(
+        services.core.player_state.plan_transition(
+            StateTransitionCommand(user_id, "enter-explore-host", "行为", "520004", {})
+        )
+    )
+    asyncio.run(
+        services.core.database.commit(
+            TransactionCommand(
+                user_id, "enter-explore-host", "测试", (behavior.mutation,), {}
+            )
+        )
+    )
+    control = asyncio.run(
+        services.core.player_state.plan_transition(
+            StateTransitionCommand(user_id, "enter-host", "控制", "520009", {"托管编号": "guard"})
+        )
+    )
+    asyncio.run(
+        services.core.database.commit(
+            TransactionCommand(user_id, "enter-host", "测试", (control.mutation,), {})
+        )
+    )
+    decision = asyncio.run(
+        services.core.player_state.authorize(user_id, "空闲或活动中")
+    )
+    assert decision.allowed, decision.reason

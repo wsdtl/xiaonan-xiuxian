@@ -41,7 +41,7 @@ def _parse_recipe(query: str) -> tuple[str, str, int]:
     cmd="炼丹",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "查看当地丹师可炼丹药，或请丹师验看一颗丹药",
@@ -82,7 +82,7 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
     cmd="开丹炉",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "请当地丹师按验药结果炼成一枚丹药",

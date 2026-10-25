@@ -76,7 +76,7 @@ async def show_innate_treasure_catalog(user_id: str, message: str, manager: Any)
     cmd="执掌灵宝",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "从个人灵宝谱中选择一件先天灵宝执掌",

@@ -13,7 +13,7 @@ from typing import Any
     cmd="丹鼎阁",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "在丹鼎阁炼制丹药（宗门园区）",

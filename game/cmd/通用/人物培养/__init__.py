@@ -22,7 +22,7 @@ from typing import Any
     cmd="人物培养",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "查看人物修为、修行槽与本命武器培养状态",
@@ -45,7 +45,7 @@ async def show_character_cultivation(user_id: str, manager: Any) -> None:
     cmd="人物装配",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "把功法或一份真意、气机装入人物槽位",
@@ -97,7 +97,7 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
     cmd="人物突破",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "消耗对应突破丹为人物突破境界",
@@ -131,7 +131,7 @@ async def breakthrough_character(user_id: str, message: str, message_context: Me
     cmd="人物覆炼",
     metadata={
         "scope": "通用",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "修行",
             "summary": "把器藏中的器律覆入人物本命武器",

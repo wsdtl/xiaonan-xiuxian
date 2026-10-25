@@ -398,6 +398,8 @@ class ExplorationService:
                         injury_states[combatant.id]
                     ).entries
                 ],
+                "初始血气": _initial_resource(combatant, "血气"),
+                "初始精神": _initial_resource(combatant, "精神"),
                 "血气": _initial_resource(combatant, "血气"),
                 "精神": _initial_resource(combatant, "精神"),
                 "存活": _initial_resource(combatant, "血气") > 0,
@@ -1021,10 +1023,12 @@ class ExplorationService:
                 for raw in characters
                 if not bool(_mapping(raw, "角色").get("道侣"))
             )
-            player_plan = await self._character.plan_battle_settlement(
+            player_plan = await self._character.plan_battle_delta(
                 participant,
-                health=_number(player.get("血气"), "人物.血气"),
-                spirit=_number(player.get("精神"), "人物.精神"),
+                health_delta=_number(player.get("血气"), "人物.血气")
+                - _number(player.get("初始血气"), "人物.初始血气"),
+                spirit_delta=_number(player.get("精神"), "人物.精神")
+                - _number(player.get("初始精神"), "人物.初始精神"),
                 spirit_stones_delta=_nonnegative_int(value.get("灵石"), "用户.灵石"),
                 weapon_experience=_nonnegative_int(
                     player.get("武器经验"), "人物.武器经验"
@@ -1050,10 +1054,12 @@ class ExplorationService:
                 None,
             )
             if companion is not None:
-                companion_plan = await self._companion.plan_battle_settlement(
+                companion_plan = await self._companion.plan_battle_delta(
                     participant,
-                    health=_number(companion.get("血气"), "道侣.血气"),
-                    spirit=_number(companion.get("精神"), "道侣.精神"),
+                    health_delta=_number(companion.get("血气"), "道侣.血气")
+                    - _number(companion.get("初始血气"), "道侣.初始血气"),
+                    spirit_delta=_number(companion.get("精神"), "道侣.精神")
+                    - _number(companion.get("初始精神"), "道侣.初始精神"),
                     weapon_experience=_nonnegative_int(
                         companion.get("武器经验"), "道侣.武器经验"
                     ),

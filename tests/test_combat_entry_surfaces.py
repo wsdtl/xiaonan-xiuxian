@@ -1152,3 +1152,59 @@ def test_exploration_starts_from_tier_location(services) -> None:
     )
     assert started.location_name == "丹泉苑"
     assert started.battle_count >= 1
+    from datetime import timedelta
+
+    settled = asyncio.run(
+        services.exploration.settle(
+            user_id,
+            "settle-exploration",
+            now=started.ends_at + timedelta(seconds=1),
+        )
+    )
+    assert settled.session_id == started.session_id
+
+
+def test_battle_delta_merges_current_resources(services) -> None:
+    """增量结算只改差值，不覆盖当前资源，也不丢神魂。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database import StateAddress, StateMutation, TransactionCommand
+
+    user_id = "battle-delta"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(user_id, "create-delta", "增量测试", "男", (15, 17), "")
+        )
+    )
+    address = StateAddress(user_id, "character", "main")
+    snapshot = asyncio.run(services.database.get(address))
+    value = dict(snapshot.value)
+    resources = dict(value["资源"])
+    resources.update({"血气": 50.0, "精神": 40.0})
+    value["资源"] = resources
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(
+                user_id,
+                "set-delta-resources",
+                "测试",
+                (StateMutation(user_id, "character", "main", value, snapshot.version),),
+                {},
+            )
+        )
+    )
+    plan = asyncio.run(
+        services.character.plan_battle_delta(
+            user_id, health_delta=-20.0, spirit_delta=-10.0
+        )
+    )
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "apply-delta", "测试", plan.operations, {})
+        )
+    )
+    profile = asyncio.run(services.character.profile(user_id))
+    resources_after = dict(profile.resources)
+    assert resources_after["血气"] == 30.0
+    assert resources_after["精神"] == 30.0
+    assert resources_after["神魂"] == 100.0

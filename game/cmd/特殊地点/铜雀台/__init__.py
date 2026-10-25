@@ -20,7 +20,7 @@ from typing import Any
     cmd=("夺元", "铜雀台夺元"),
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "道侣",
             "summary": "在铜雀台预览或执行同行道侣修为归流",

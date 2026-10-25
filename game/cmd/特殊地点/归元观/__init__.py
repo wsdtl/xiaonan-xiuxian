@@ -15,7 +15,7 @@ from typing import Any
     cmd=("归元", "归元观归元"),
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "在归元观重做同行道侣的一类构筑",
@@ -46,7 +46,7 @@ async def reset_build(user_id: str, message: str, message_context: MessageContex
     cmd=('洗根', '归元观洗根'),
     metadata={
         'scope': '专属',
-        'guard_rule': '自主空闲或休息',
+        'guard_rule': '空闲或活动中',
         'help': {
             'category': '炼制',
             'summary': '在归元观重掷自己的五行根性',

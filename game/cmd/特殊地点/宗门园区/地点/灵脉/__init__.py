@@ -13,7 +13,7 @@ from typing import Any
     cmd="灵脉",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "宗门",
             "summary": "查看或收取本宗灵脉的随机灵石与灵矿（宗门园区）",

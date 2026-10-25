@@ -14,7 +14,7 @@ from typing import Any
     cmd=("易形", "太素坊易形"),
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "在太素坊改变玩家自身性别",
@@ -40,7 +40,7 @@ async def change_gender(user_id: str, message_context: MessageContext, manager: 
     cmd=("化形", "太素坊化形"),
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "在太素坊择一族重塑种族",

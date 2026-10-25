@@ -247,7 +247,7 @@ class TeamFeature:
             raise TeamFeatureError("not_same_location")
 
     async def _require_mutable(self, user_id: str, *, target: bool = False) -> None:
-        guard = await self._player_state.authorize(user_id, "自主空闲或休息")
+        guard = await self._player_state.authorize(user_id, "空闲或活动中")
         if not guard.allowed:
             raise TeamFeatureError("target_busy" if target else "actor_busy")
 

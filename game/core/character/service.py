@@ -1127,6 +1127,7 @@ class CharacterService:
         character = dict(_state_mapping(character_snapshot.value, "character/main"))
         weapon = dict(_state_mapping(weapon_snapshot.value, "weapon/main"))
         attributes = _state_mapping(character.get("属性"), "人物.属性")
+        resources = dict(_state_mapping(character.get("资源"), "人物.资源"))
         health_after = bounded_number(health, attributes.get("血气上限"), "战后血气")
         spirit_after = bounded_number(spirit, attributes.get("精神上限"), "战后精神")
         stone_delta = _request_int(spirit_stones_delta, "灵石变化")
@@ -1142,7 +1143,86 @@ class CharacterService:
             )
         except ForgingError as exc:
             raise CharacterCultivationError(str(exc)) from exc
-        character["资源"] = {"血气": health_after, "精神": spirit_after, "护盾": 0}
+        resources.update({"血气": health_after, "精神": spirit_after, "护盾": 0})
+        character["资源"] = resources
+        weapon["等级"] = advance.level_after
+        weapon["经验"] = advance.experience_after
+        weapon["器阶"] = advance.stage_after
+        return CharacterBattlePlan(
+            health_after,
+            spirit_after,
+            stone_delta,
+            gained,
+            (
+                StateMutation(
+                    normalized_user_id,
+                    "character",
+                    "main",
+                    character,
+                    character_snapshot.version,
+                ),
+                StateMutation(
+                    normalized_user_id,
+                    "weapon",
+                    "main",
+                    weapon,
+                    weapon_snapshot.version,
+                ),
+            )
+            + stone_plan.operations,
+        )
+
+    async def plan_battle_delta(
+        self,
+        user_id: str,
+        *,
+        health_delta: float,
+        spirit_delta: float,
+        spirit_stones_delta: int = 0,
+        weapon_experience: int = 0,
+    ) -> CharacterBattlePlan:
+        """只结算战后资源增量、灵石和武器经验。
+
+        探险在开局预演战斗，结算时不能把预演终值整块盖回当前人物；
+        这里读当前资源，加上「本场终值 − 开局快照」的变化量，再夹上限。
+        """
+
+        self._require_initialized()
+        normalized_user_id = _required_user_id(user_id)
+        character_snapshot, weapon_snapshot = await self._growth_snapshots(
+            normalized_user_id
+        )
+        character = dict(_state_mapping(character_snapshot.value, "character/main"))
+        weapon = dict(_state_mapping(weapon_snapshot.value, "weapon/main"))
+        attributes = _state_mapping(character.get("属性"), "人物.属性")
+        resources = dict(_state_mapping(character.get("资源"), "人物.资源"))
+        health_change = _number(health_delta, "战后血气变化")
+        spirit_change = _number(spirit_delta, "战后精神变化")
+        health_after = bounded_number(
+            _number(resources.get("血气"), "人物.血气") + float(health_change),
+            attributes.get("血气上限"),
+            "战后血气",
+        )
+        spirit_after = bounded_number(
+            _number(resources.get("精神"), "人物.精神") + float(spirit_change),
+            attributes.get("精神上限"),
+            "战后精神",
+        )
+        stone_delta = _request_int(spirit_stones_delta, "灵石变化")
+        stone_plan = await self._asset.plan_spirit_stone_change(
+            normalized_user_id, stone_delta
+        )
+        gained = _nonnegative_request_int(weapon_experience, "本命武器经验")
+        try:
+            advance = self._forging.advance_weapon(
+                level=_state_positive_int(weapon.get("等级"), "本命武器.等级"),
+                experience=_state_nonnegative_int(weapon.get("经验"), "本命武器.经验"),
+                gained=gained,
+            )
+        except ForgingError as exc:
+            raise CharacterCultivationError(str(exc)) from exc
+        resources.update({"血气": health_after, "精神": spirit_after, "护盾": 0})
+        character["资源"] = resources
         weapon["等级"] = advance.level_after
         weapon["经验"] = advance.experience_after
         weapon["器阶"] = advance.stage_after

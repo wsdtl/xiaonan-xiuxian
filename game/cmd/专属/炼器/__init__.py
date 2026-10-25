@@ -26,7 +26,7 @@ def _parse_forge(query: str) -> tuple[str, int]:
     cmd="炼器",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "查看可炼器律，或请当地工匠审看一条器律的材料",
@@ -61,7 +61,7 @@ async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
     cmd="开炉",
     metadata={
         "scope": "专属",
-        "guard_rule": "自主空闲或休息",
+        "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
             "summary": "请当地工匠按审材结果炼成一份器律",
