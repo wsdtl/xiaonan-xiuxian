@@ -1208,3 +1208,32 @@ def test_battle_delta_merges_current_resources(services) -> None:
     assert resources_after["血气"] == 30.0
     assert resources_after["精神"] == 30.0
     assert resources_after["神魂"] == 100.0
+
+
+def test_inventory_row_renders_grade_with_command_link() -> None:
+    """纳戒清单：品级与名字同属一个可点控件，不能打出 CommandLink 的 repr。"""
+
+    from game.cmd.通用.纳戒.reply import _entry_parts
+    from game.features.najie import NajieEntry
+    from message import M
+    from message.renderers.markdown import render_markdown
+    from message.schema import CommandLink
+
+    entry = NajieEntry(
+        category="基础物品",
+        content_id="230001",
+        name="灵石",
+        grade_id="05",
+        grade_name="圣品",
+        quantity=118,
+        equipped_slots=(),
+        material_total=None,
+    )
+    document = M.document().section("清单").item(1, *_entry_parts(entry)).build()
+    spans = document.document.blocks[0].lines[0].content
+    link = next(span for span in spans if isinstance(span, CommandLink))
+    assert link.label[0].value == "圣品灵石"
+    assert link.command == "查看 230001"
+    rendered = render_markdown(document.document)
+    assert "CommandLink" not in rendered
+    assert "圣品灵石" in rendered

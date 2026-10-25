@@ -130,13 +130,16 @@ def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
         # 同一条功法有两个动作、参数还不一样（查看只吃编号，装配要品类与器阶），
         # 用「每条分支自带完整命令」的写法合成一个控件：点一次回选择菜单。
         command = f"{command} | 人物装配 功法 {entry.content_id} {entry.grade_id}"
-    name: object = (
-        M.command(M.text(entry.name, tone=_entry_tone(entry.category)), command)
-        if has_stable_id
-        else entry.name
-    )
     # 品级在前连写（规则：品级永远在前、不许加分隔）；没有品级就只留名字。
-    parts: list[object] = [f"{entry.grade_name}{name}" if entry.grade_name else name]
+    # 品级和名字同属一个可点标签，不能再把 CommandLink 拼进 f-string——
+    # 那会打出「圣品CommandLink(label=...)」的 repr。
+    label_text = f"{entry.grade_name}{entry.name}" if entry.grade_name else entry.name
+    label: object = (
+        M.command(M.text(label_text, tone=_entry_tone(entry.category)), command)
+        if has_stable_id
+        else label_text
+    )
+    parts: list[object] = [label]
     if entry.category in {"基础物品", "修行资粮", "器藏"} or entry.quantity > 1:
         parts.append(f" × {entry.quantity}")
     if entry.equipped_slots:
