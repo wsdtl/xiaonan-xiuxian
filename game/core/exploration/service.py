@@ -207,8 +207,8 @@ class ExplorationService:
         location = self._world.locate(LocationQuery(xy=locations[0].xy))
         if not location.location_key or "探险" not in location.available_functions:
             raise ExplorationConflictError("当前位置不能进行普通探险")
-        if len(location.enemy_multiplier) != 2:
-            raise ExplorationStateError("地点缺少单次遭遇敌人倍率")
+        if not location.cultivator_tiers and not location.beast_tiers:
+            raise ExplorationStateError("地点没有修士或灵兽阶级区间")
 
         formation_plan = await self._formation.activation_plan(owner, position=0)
         formation_spec = (
@@ -426,6 +426,8 @@ class ExplorationService:
                 tiers = location.beast_tiers
                 count_range = location.beast_count
                 kind = "灵兽"
+            if len(count_range) != 2:
+                raise ExplorationStateError(f"地点缺少{kind}数量区间")
             tier = source.choice(tiers)
             enemy_groups = self._enemy.generate_groups(
                 pool_names=(f"{tier}{kind}",),
@@ -599,7 +601,7 @@ class ExplorationService:
             battle_record = _battle_value(
                 session_id,
                 battle_index,
-                location.enemy_multiplier,
+                count_range,
                 result,
                 defeated,
                 allocations,

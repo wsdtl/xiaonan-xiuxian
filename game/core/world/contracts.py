@@ -35,7 +35,6 @@ class LocationView:
     mineral_pool: tuple[str, ...]
     companion_pool: tuple[str, ...]
     enemy_pool: tuple[str, ...]
-    enemy_multiplier: tuple[int, ...]
     enemy_level_range: tuple[int, int] = (1, 60)
     cultivator_tiers: tuple[str, ...] = ()
     beast_tiers: tuple[str, ...] = ()

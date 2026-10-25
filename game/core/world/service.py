@@ -315,7 +315,6 @@ class WorldService:
             mineral_pool=mineral_pool,
             companion_pool=companion_pool,
             enemy_pool=enemy_pool,
-            enemy_multiplier=_numbers(raw.get("单次遭遇敌人倍率")),
             enemy_level_range=_level_range(raw.get("敌人等级区间")),
             cultivator_tiers=_texts_from(raw.get("修士阶级区间")),
             beast_tiers=_texts_from(raw.get("灵兽阶级区间")),

@@ -1108,3 +1108,47 @@ def test_promotion_formation_plan(services) -> None:
     assert plan.name == "一线天开阵"
     assert len(plan.plan.missing) == 2
     assert plan.craft_command == "炼阵 黄品一线天开阵"
+
+
+def test_school_enemy_uses_companion_build(services) -> None:
+    """流派卡表由道侣实体建立，不再依赖已删除的卡面标签。"""
+
+    import random
+
+    instance = services.enemy._instance(
+        "300001", random.Random(1), instance_id="school-build"
+    )
+    by_section: dict[str, list[str]] = {}
+    for ref in instance.combatant.build:
+        by_section.setdefault(ref.section, []).append(ref.content_id)
+    assert by_section["功法"] == [f"40000{index}" for index in range(1, 7)]
+    assert by_section["真意"] == [f"41000{index}" for index in range(1, 7)]
+    assert by_section["气机"] == [f"42000{index}" for index in range(1, 7)]
+    assert len(services.enemy._school_builds) == 68
+
+
+def test_exploration_starts_from_tier_location(services) -> None:
+    """探险入口按修士/灵兽阶级与数量区间开战，不依赖旧遭遇倍率。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.exploration import ExplorationStartCommand
+    from game.core.world import LocationQuery
+
+    place = services.world.locate(LocationQuery(location_name="丹泉苑"))
+    user_id = "exploration-tier"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(
+                user_id, "create-exploration", "探险入口", "男", place.xy
+            )
+        )
+    )
+    started = asyncio.run(
+        services.exploration.start(
+            ExplorationStartCommand(
+                user_id, "start-exploration", (user_id,), seed=7
+            )
+        )
+    )
+    assert started.location_name == "丹泉苑"
+    assert started.battle_count >= 1

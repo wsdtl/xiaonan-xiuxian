@@ -99,17 +99,12 @@ class EnemyService:
                 self._validate_definition(name, raw)
             self._definitions_by_section[section] = MappingProxyType(definitions)
         self._definitions = self._definitions_by_section["敌人"]
-        for category in ("功法", "真意", "气机"):
-            for content_id, card in self._data.entities(category).items():
-                school = str(card.get("标签") or "").strip()
-                if not school:
-                    continue
-                self._school_builds.setdefault(school, {}).setdefault(category, []).append(str(content_id))
-        self._school_builds = {
-            school: {category: tuple(sorted(ids)) for category, ids in groups.items()}
-            for school, groups in self._school_builds.items()
-        }
         self._races = MappingProxyType(self._load_races())
+        self._school_builds = self._load_school_builds()
+        for name, raw in self._definitions.items():
+            school = str(raw.get("流派") or "").strip()
+            if school and school not in self._school_builds:
+                raise JsonDataError(f"敌人 {name} 使用未知流派：{school}")
         self._initialized = True
         return self.status()
 
@@ -138,6 +133,38 @@ class EnemyService:
                 _text(node.get("名称"), f"{where}.天生规则[{rule_index}].名称")
             result[name] = entry
         return result
+
+    def _load_school_builds(self) -> dict[str, dict[str, tuple[str, ...]]]:
+        """按「种族 → 流派 → 道侣实体构筑」建立流派卡表。
+
+        卡面的 `标签` 字段已在构筑重构中删除；流派与卡片的对应关系由
+        68 名道侣实体承载：道侣的种族给出流派，道侣的 `构筑` 给出三类六卡。
+        """
+
+        builds: dict[str, dict[str, tuple[str, ...]]] = {}
+        for name, raw in self._data.entities("道侣").items():
+            race = _text(raw.get("种族"), f"道侣 {name}.种族")
+            race_entry = self._races.get(race)
+            if race_entry is None:
+                raise JsonDataError(f"道侣 {name} 使用未登记种族：{race}")
+            school = _text(race_entry.get("流派"), f"种族 {race}.流派")
+            if school in builds:
+                raise JsonDataError(f"流派构筑重复：{school}")
+            build = _mapping(raw.get("构筑"), f"道侣 {name}.构筑")
+            groups: dict[str, tuple[str, ...]] = {}
+            for category in ("功法", "真意", "气机"):
+                ids = _texts(
+                    build.get(category), f"道侣 {name}.构筑.{category}"
+                )
+                if len(ids) != 6:
+                    raise JsonDataError(
+                        f"道侣 {name}.构筑.{category} 必须恰好六条"
+                    )
+                groups[category] = ids
+            builds[school] = groups
+        if not builds:
+            raise JsonDataError("道侣构筑为空，无法建立流派卡表")
+        return builds
 
     def races(self) -> Mapping[str, Mapping[str, object]]:
         """种族登记表（只读）。"""
