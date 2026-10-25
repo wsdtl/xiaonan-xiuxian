@@ -929,3 +929,155 @@ def test_alchemy_material_path_covers_ore(services) -> None:
     assert preview.can_refine
     fitted = asyncio.run(services.alchemy.refine(user_id, "craft-alchemy", "120033"))
     assert fitted.quantity_after == 1
+
+
+def test_spirit_stone_change_makes_change(services) -> None:
+    """1 枚圣品必须能付 3810 并找回零钱，不能报余额不足。"""
+
+    from game.core.asset.contracts import InventoryAdjustment
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+
+    user_id = "currency-change"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(user_id, "create-currency", "找零测试", "男", (15, 17), "")
+        )
+    )
+    seed = asyncio.run(
+        services.asset.plan_inventory_changes(
+            user_id, (InventoryAdjustment("230001", "05", 1),)
+        )
+    )
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "seed-currency", "测试", seed.operations, {})
+        )
+    )
+    before = asyncio.run(services.asset.spirit_stone_balance(user_id))
+    plan = asyncio.run(services.asset.plan_spirit_stone_change(user_id, -3810))
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "pay-3810", "测试", plan.operations, {})
+        )
+    )
+    after = asyncio.run(services.asset.spirit_stone_balance(user_id))
+    assert before - after == 3810
+
+
+def test_promotion_direct_upgrade(services) -> None:
+    """任意低品直接升圣，扣 1 枚圣品灵石。"""
+
+    from game.core.asset.contracts import InventoryAdjustment
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+
+    user_id = "promotion-e2e"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(user_id, "create-promotion", "升阶测试", "男", (15, 17), "")
+        )
+    )
+    seed = asyncio.run(
+        services.asset.plan_inventory_changes(
+            user_id,
+            (
+                InventoryAdjustment("200001", "01", 1),
+                InventoryAdjustment("230001", "05", 1),
+            ),
+        )
+    )
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "seed-promotion", "测试", seed.operations, {})
+        )
+    )
+    before = asyncio.run(services.asset.spirit_stone_balance(user_id))
+    plan = asyncio.run(
+        services.promotion.plan_upgrade(user_id, "200001", "01", "05", 1)
+    )
+    assert plan.total_cost == 10000
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "upgrade-1", "测试", plan.operations, {})
+        )
+    )
+    stacks = asyncio.run(services.asset.inventory_stacks(user_id, "200001"))
+    assert [(stack.grade.grade_id, stack.quantity) for stack in stacks] == [("05", 1)]
+    assert before - asyncio.run(services.asset.spirit_stone_balance(user_id)) == 10000
+
+
+def test_promotion_crafting_plan(services) -> None:
+    """炼丹缺天品材料时，方案应给出兽宝/灵植/灵矿三条升阶并带炼制命令。"""
+
+    import game.app as app
+    from game.core.asset.contracts import InventoryAdjustment
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+    from game.features.shengjie import ShengjieFeature
+
+    user_id = "plan-e2e"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(user_id, "create-plan", "方案测试", "男", (15, 17), "")
+        )
+    )
+    seed = asyncio.run(
+        services.asset.plan_inventory_changes(
+            user_id,
+            (
+                InventoryAdjustment("210064", "01", 1),
+                InventoryAdjustment("200001", "01", 2),
+                InventoryAdjustment("220001", "01", 2),
+            ),
+        )
+    )
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "seed-plan", "测试", seed.operations, {})
+        )
+    )
+    feature = ShengjieFeature(
+        services.data,
+        services.asset,
+        services.database,
+        services.promotion,
+        services.alchemy,
+        services.forging,
+        services.formation,
+    )
+    feature.initialize()
+    plan = asyncio.run(feature.plan_crafting(user_id, "炼丹", "120033", 1))
+    assert plan.name == "一息续命丹"
+    assert len(plan.plan.lines) == 3
+    assert plan.plan.total_cost == 20000
+    assert plan.plan.satisfiable
+    assert plan.craft_command == "开丹炉 一息续命丹"
+
+
+def test_promotion_formation_plan(services) -> None:
+    """炼阵方案按两条阵核矿给出升阶缺口。"""
+
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.features.shengjie import ShengjieFeature
+
+    user_id = "plan-formation"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(user_id, "create-plan-f", "阵方案", "男", (15, 17), "")
+        )
+    )
+    feature = ShengjieFeature(
+        services.data,
+        services.asset,
+        services.database,
+        services.promotion,
+        services.alchemy,
+        services.forging,
+        services.formation,
+    )
+    feature.initialize()
+    plan = asyncio.run(feature.plan_crafting(user_id, "炼阵", "黄品一线天开阵", 1))
+    assert plan.name == "一线天开阵"
+    assert len(plan.plan.missing) == 2
+    assert plan.craft_command == "炼阵 黄品一线天开阵"

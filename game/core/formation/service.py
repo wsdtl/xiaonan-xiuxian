@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping, Sequence
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
@@ -27,7 +26,10 @@ from game.core.data import (
     nonnegative_int,
     positive_int,
     positive_int as _positive_int,
+    sequence as _sequence,
     speech,
+    strict_text,
+    strict_text as _text,
 )
 from game.core.database import (
     DatabaseService,
@@ -44,6 +46,7 @@ from game.core.innate_treasure import (
     treasure_line,
 )
 from game.core.location import LocationService
+from game.core.promotion import MaterialRequirement
 from game.core.world import LocationQuery, WorldService
 from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
 
@@ -72,12 +75,7 @@ from .contracts import (
     FormationStatus,
     FormationUnavailableError,
 )
-from game.core.data import (
-    number as _number,
-    sequence as _sequence,
-    strict_text,
-    strict_text as _text,
-)
+from game.core.data import number as _number
 
 _CATEGORIES = ("兽宝", "灵矿", "灵植")
 # 品级名一律写全（规则：不许用短名，黄 要写 黄品）；编号映射见下一行，与 data/基础/定义/品级.json 对齐。
@@ -252,6 +250,42 @@ class FormationService:
                 raise FormationUnavailableError("此地没有能够主持炼阵的阵师")
             return tuple(self._formations[item] for item in master.formation_ids)
         return tuple(sorted(self._formations.values(), key=lambda value: value.formation_id))
+
+    def formation_name(self, identifier: str) -> str:
+        """给升阶方案显示用：按编号或名称取阵法正式名。"""
+
+        self._require_initialized()
+        return self._resolve_formation(identifier).name
+
+    def requirements(
+        self, identifier: str, grade_name: str, quantity: int = 1
+    ) -> tuple[MaterialRequirement, ...]:
+        """阵法的两条阵核矿按目标品级固定份数展开；辅材由玩家另行追加。"""
+
+        self._require_initialized()
+        count = _positive_int(quantity, "炼阵数量")
+        formation = self._resolve_formation(identifier)
+        raw = _mapping(
+            self._raw_formations.get(formation.formation_id),
+            f"阵法 {formation.formation_id}",
+        )
+        core_ids = tuple(
+            _text(value, f"阵法 {formation.formation_id}.阵核[]")
+            for value in _sequence(
+                raw.get("阵核"), f"阵法 {formation.formation_id}.阵核"
+            )
+        )
+        if len(core_ids) != 2:
+            raise JsonDataError(f"阵法阵核必须正好两条：{formation.formation_id}")
+        grade = self._asset.grade(grade_name)
+        row = self._grade_rows.get(grade.name)
+        if row is None:
+            raise JsonDataError(f"阵法品级不存在：{grade.name}")
+        craft = int(_number(row.get("炼制倍率"), "品级.炼制倍率"))
+        return tuple(
+            MaterialRequirement("灵矿", core_id, craft * count, grade.grade_id)
+            for core_id in core_ids
+        )
 
     def assess(
         self,

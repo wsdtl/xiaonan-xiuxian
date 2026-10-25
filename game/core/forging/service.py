@@ -66,6 +66,7 @@ from game.core.data import (
     strict_text,
     strict_text as _text,
 )
+from game.core.promotion import MaterialRequirement
 
 #: 器律可用器阶从数据的 `阶序` 推导（阶序 1 是凡器，不开放器律孔），代码不再另存一份。
 _LAW_STAGE_FLOOR = 2
@@ -152,6 +153,29 @@ class ForgingService:
             len(_item_ids(self._data, "灵矿")),
             int(self._weapon_rule.get("等级上限") or 0),
         )
+
+    def law_name(self, identifier: str) -> str:
+        """给升阶方案显示用：按编号或名称取器律正式名。"""
+
+        self._require_initialized()
+        return self._resolve_law(identifier).name
+
+    def requirements(self, identifier: str, quantity: int = 1) -> tuple[MaterialRequirement, ...]:
+        """把一件器律的材料表按数量展开成升阶要求。"""
+
+        self._require_initialized()
+        count = _positive_int(quantity, "炼制数量")
+        law = self._resolve_law(identifier)
+        result: list[MaterialRequirement] = []
+        for raw in law.materials:
+            category = _text(raw.get("类别"), f"{law.name}.材料.类别")
+            item_id = str(raw.get("编号") or "")
+            need = _positive_int(raw.get("数量"), f"{law.name}.材料.数量") * count
+            minimum = self._asset.grade(str(raw.get("最低品级") or "黄品"))
+            result.append(
+                MaterialRequirement(category, item_id, need, minimum.grade_id)
+            )
+        return tuple(result)
 
     def laws(self, stage: str) -> tuple[ForgingLaw, ...]:
         self._require_initialized()

@@ -877,7 +877,7 @@ class SectAssetService:
         units: dict[str, int] = {}
         for row in rows:
             entry = _mapping(row, "品级")
-            units[str(entry.get("编号"))] = _positive_int(entry.get("灵石当量"), "品级.灵石当量")
+            units[str(entry.get("编号"))] = _positive_int(entry.get("灵石面值"), "品级.灵石面值")
         return units
 
     def _spirit_stone_total(self, entries: Mapping[str, object]) -> int:

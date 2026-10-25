@@ -56,6 +56,7 @@ from .contracts import (
     AlchemyStatus,
 )
 from game.core.data import sequence as _sequence, strict_text, strict_text as _text
+from game.core.promotion import MaterialRequirement
 
 _CATEGORIES = ("恢复丹", "战丹", "突破丹", "特殊丹")
 #: 编号前缀 → 类别。丹方并进丹药之后，前缀就是**丹药**那四段（10/12/14/16）；
@@ -152,6 +153,29 @@ class AlchemyService:
             len(self._alchemists),
             len(self._beast_ids),
         )
+
+    def recipe_name(self, identifier: str) -> str:
+        """给升阶方案显示用：按编号或名称取丹药正式名。"""
+
+        self._require_initialized()
+        return self._resolve_recipe(identifier).name
+
+    def requirements(self, identifier: str, quantity: int = 1) -> tuple[MaterialRequirement, ...]:
+        """把一颗丹药的材料表按数量展开成升阶要求。"""
+
+        self._require_initialized()
+        count = _positive_int(quantity, "炼制数量")
+        recipe = self._resolve_recipe(identifier)
+        result: list[MaterialRequirement] = []
+        for raw in recipe.materials:
+            category = _text(raw.get("类别"), f"{recipe.name}.材料.类别")
+            item_id = str(raw.get("编号") or "")
+            need = _positive_int(raw.get("数量"), f"{recipe.name}.材料.数量") * count
+            minimum = self._asset.grade(str(raw.get("最低品级") or "黄品"))
+            result.append(
+                MaterialRequirement(category, item_id, need, minimum.grade_id)
+            )
+        return tuple(result)
 
     def recipes(self, category: str) -> tuple[AlchemyRecipe, ...]:
         self._require_initialized()

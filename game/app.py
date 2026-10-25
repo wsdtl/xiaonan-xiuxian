@@ -38,6 +38,7 @@ from .core.location import LocationService
 from .core.medicine import MedicineService
 from .core.player_state import PlayerStateService
 from .core.pool import PoolService
+from .core.promotion import PromotionService
 from .core.retreat import RetreatService
 from .core.sect import SectService
 from .core.sect_assets import SectAssetService
@@ -94,6 +95,7 @@ from .features.zongmen_sheshi import SectFacilityFeature
 from .features.zongmen_tongxing import SectFollowFeature
 from .features.zongmen_wanzhen import WanzhenFeature
 from .features.zhuangpei import ZhuangpeiFeature
+from .features.shengjie import ShengjieFeature
 from .features.zongmen_zhan import SectWarFeature
 from .features.xuemai import XuemaiFeature
 from .features.hunpei import HunpeiFeature
@@ -133,6 +135,7 @@ class CoreServices:
     innate_treasure: InnateTreasureService
     character: CharacterService
     asset: AssetService
+    promotion: PromotionService
     medicine: MedicineService
     enemy: EnemyService
     exploration: ExplorationService
@@ -198,6 +201,7 @@ class FeatureServices:
     zengsong: GiftFeature
     zhanbao: BattleReportFeature
     zhuangpei: ZhuangpeiFeature
+    shengjie: ShengjieFeature
 
 
 @dataclass(frozen=True)
@@ -319,6 +323,15 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("categories", asset_status.category_count),
             C.kv("subcategories", asset_status.subcategory_count),
             C.kv("page_limit", asset_status.page_limit),
+        )
+    )
+    promotion = PromotionService(data, asset)
+    promotion_status = promotion.initialize()
+    logger.opt(colors=True).success(
+        C.join(
+            C.ok("升阶核心微服务已启动"),
+            C.kv("categories", len(promotion_status.allowed_categories)),
+            C.kv("batch_limit", promotion_status.batch_limit),
         )
     )
     forging = ForgingService(data, database, asset, world, location, innate_treasure)
@@ -743,6 +756,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         innate_treasure=innate_treasure,
         character=character,
         asset=asset,
+        promotion=promotion,
         medicine=medicine,
         enemy=enemy,
         exploration=exploration,
@@ -981,6 +995,8 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     lianzhen.initialize()
     buzhen = FormationArmFeature(data, formation)
     buzhen.initialize()
+    shengjie = ShengjieFeature(data, asset, database, promotion, alchemy, forging, formation)
+    shengjie.initialize()
     features = FeatureServices(
         tiandao_houtai=message_flows,
         chuangjian_renwu=create_character,
@@ -1031,6 +1047,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         zengsong=zengsong,
         zhanbao=zhanbao,
         zhuangpei=zhuangpei,
+        shengjie=shengjie,
     )
     return GameServices(core=core, features=features)
 
