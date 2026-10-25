@@ -112,14 +112,7 @@ class LocationService:
         record = await self._database.get_location(normalized_user_id)
         if record is None:
             raise LocationMissingError("人物缺少地表位置")
-        return PlayerLocation(
-            record.user_id,
-            record.xy,
-            record.version,
-            record.updated_at,
-            record.space_type,
-            record.space_id,
-        )
+        return _surface(record)
 
     async def current_many(
         self, user_ids: tuple[str, ...]
@@ -141,16 +134,7 @@ class LocationService:
             record = records.get(user_id)
             if record is None:
                 raise LocationMissingError("人物缺少地表位置")
-            values.append(
-                PlayerLocation(
-                    record.user_id,
-                    record.xy,
-                    record.version,
-                    record.updated_at,
-                    record.space_type,
-                    record.space_id,
-                )
-            )
+            values.append(_surface(record))
         return tuple(values)
 
     async def nearby_players(self, user_id: str) -> NearbyPlayerCandidates:
@@ -377,6 +361,23 @@ class LocationService:
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("玩家位置核心微服务尚未初始化")
+
+
+def _surface(record: object) -> PlayerLocation:
+    """旧存档里的宗门洞天一律按宗门园区地表读取。"""
+
+    space_type = str(getattr(record, "space_type", "地表"))
+    space_id = str(getattr(record, "space_id", ""))
+    if space_type == "宗门洞天":
+        space_type, space_id = "地表", ""
+    return PlayerLocation(
+        str(getattr(record, "user_id")),
+        tuple(getattr(record, "xy")),
+        int(getattr(record, "version")),
+        str(getattr(record, "updated_at")),
+        space_type,
+        space_id,
+    )
 
 
 def _text(value: object, label: str) -> str:

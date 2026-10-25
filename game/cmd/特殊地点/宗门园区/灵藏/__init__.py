@@ -20,7 +20,7 @@ _CATEGORIES = frozenset({"灵植", "灵矿", "兽宝"})
         "guard_rule": "已创建",
         "help": {
             "category": "宗门",
-            "summary": "在宗门洞天灵藏查看宗门基础资源，或向本宗捐入材料",
+            "summary": "在宗门园区灵藏查看宗门基础资源，或向本宗捐入材料",
             "usage": (
                 "灵藏",
                 "灵藏 灵植",

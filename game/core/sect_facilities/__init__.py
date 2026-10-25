@@ -1,4 +1,4 @@
-"""宗门洞天三座生产建筑的公共规则核心。"""
+"""宗门园区三座生产建筑的公共规则核心。"""
 
 from .contracts import (
     FacilityPermission,

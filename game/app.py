@@ -91,7 +91,6 @@ from .features.zhongzu import ZhongzuFeature
 from .features.zongmen import SectFeature
 from .features.zongmen_cangjing import CangjingFeature
 from .features.zongmen_lingcang import LingcangFeature
-from .features.zongmen_shanmen import GateFeature
 from .features.zongmen_shengchan import SectProductionFeature
 from .features.zongmen_sheshi import SectFacilityFeature
 from .features.zongmen_tongxing import SectFollowFeature
@@ -195,7 +194,6 @@ class FeatureServices:
     zongmen_wanzhen: WanzhenFeature
     zongmen_cangjing: CangjingFeature
     zongmen_tongxing: SectFollowFeature
-    zongmen_shanmen: GateFeature
     zongmen_sheshi: SectFacilityFeature
     zongmen_shengchan: SectProductionFeature
     zongmen_zhan: SectWarFeature
@@ -506,7 +504,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     sect_facilities_status = sect_facilities.initialize()
     logger.opt(colors=True).success(
         C.join(
-            C.ok("宗门洞天设施核心微服务已启动"),
+            C.ok("宗门设施核心微服务已启动"),
             C.kv("facilities", len(sect_facilities_status.facilities)),
             C.kv("roles", len(sect_facilities_status.roles)),
         )
@@ -828,8 +826,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         data, sect, character, location, player_state, team
     )
     zongmen_tongxing.initialize()
-    zongmen_shanmen = GateFeature(data, sect, location, player_state, action_group, world)
-    zongmen_shanmen.initialize()
     zongmen_lingcang = LingcangFeature(
         data, sect_assets, item_catalog, sect, location, player_state
     )
@@ -984,7 +980,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         zongmen_wanzhen=zongmen_wanzhen,
         zongmen_cangjing=zongmen_cangjing,
         zongmen_tongxing=zongmen_tongxing,
-        zongmen_shanmen=zongmen_shanmen,
         zongmen_sheshi=zongmen_sheshi,
         zongmen_shengchan=zongmen_shengchan,
         zongmen_zhan=zongmen_zhan,

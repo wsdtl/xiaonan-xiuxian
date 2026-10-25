@@ -24,7 +24,7 @@ from typing import Any
             "category": "行动",
             "summary": "前往指定地点或坐标并立即抵达",
             "usage": ("去 地点名", "去 x y"),
-            "side_effect": "立即改变人物位置，不产生行路等待时间；身处宗门洞天时须先出山门，跟随者不能发起",
+            "side_effect": "立即改变人物位置，不产生行路等待时间；跟随者不能发起",
             "order": 10,
         },
     },

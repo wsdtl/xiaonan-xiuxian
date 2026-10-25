@@ -406,7 +406,7 @@ class SectAssetService:
         entries = dict(_mapping(value.get("条目", {}), "灵藏.条目"))
         before_stones = self._spirit_stone_total(entries)
         if before_stones < cost:
-            raise SectAssetError(f"宗门灵石不足（宗门钱在灵藏里，先入山门再捐入灵藏）：现有{before_stones}，需要{cost}")
+            raise SectAssetError(f"宗门灵石不足（宗门钱在灵藏里，先在宗门园区捐入灵藏）：现有{before_stones}，需要{cost}")
         totals: dict[tuple[str, str, str], int] = {}
         for material in materials:
             if material.category not in self._materials:

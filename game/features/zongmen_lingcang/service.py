@@ -162,12 +162,8 @@ class LingcangFeature:
             raise LingcangFeatureError("尚未加入宗门")
         sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
-        if (
-            sect is None
-            or current.space_type != "宗门洞天"
-            or current.space_id != sect.cave_id
-        ):
-            raise LingcangFeatureError("只有身处本宗洞天时才能使用灵藏（先入山门进洞天）")
+        if sect is None or current.xy != sect.entrance_xy:
+            raise LingcangFeatureError("只有在本宗园区才能使用灵藏")
 
 
 __all__ = ["LingcangFeature"]

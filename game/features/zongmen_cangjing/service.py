@@ -152,12 +152,8 @@ class CangjingFeature:
             raise CangjingFeatureError("尚未加入宗门")
         sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
-        if (
-            sect is None
-            or current.space_type != "宗门洞天"
-            or current.space_id != sect.cave_id
-        ):
-            raise CangjingFeatureError("只有身处本宗洞天时才能使用藏经阁")
+        if sect is None or current.xy != sect.entrance_xy:
+            raise CangjingFeatureError("只有在本宗园区才能使用藏经阁")
 
 
 __all__ = ["CangjingFeature"]

@@ -192,8 +192,6 @@ class GatheringService:
             != 1
         ):
             raise GatheringConflictError("参与修士必须位于同一空间和坐标")
-        if locations[0].space_type != "地表":
-            raise GatheringConflictError("宗门洞天内不能采集地表资源")
         location = self._world.locate(LocationQuery(xy=locations[0].xy))
         pool_names = _pool_names(location, mode.resource_category)
         if not pool_names:

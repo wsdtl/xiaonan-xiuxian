@@ -1,4 +1,4 @@
-"""解释宗门洞天建筑规则，并原子完成宗门生产。"""
+"""解释宗门园区建筑规则，并原子完成宗门生产。"""
 
 from __future__ import annotations
 
@@ -185,11 +185,7 @@ class SectFacilityService:
             return False
         sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
-        return (
-            sect is not None
-            and current.space_type == "宗门洞天"
-            and current.space_id == sect.cave_id
-        )
+        return sect is not None and current.xy == sect.entrance_xy
 
     async def forging_page(
         self, user_id: str, material_source: str, stage: str = "", page: int = 1
@@ -632,12 +628,8 @@ class SectFacilityService:
             raise SectFacilityError("尚未加入宗门")
         sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
-        if (
-            sect is None
-            or current.space_type != "宗门洞天"
-            or current.space_id != sect.cave_id
-        ):
-            raise SectFacilityError("只有身处本宗洞天时才能使用宗门设施")
+        if sect is None or current.xy != sect.entrance_xy:
+            raise SectFacilityError("只有在本宗园区才能使用宗门设施")
         return member
 
     async def _replay(

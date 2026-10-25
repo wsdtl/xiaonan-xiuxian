@@ -285,7 +285,7 @@ class WorldService:
             for function in functions
             for section in self._feature_contents[function]
         }
-        # 门面地点（例如宗门山门）可以在功能配置里写 `可采集: false`：池子照旧存在，
+        # 门面地点（例如宗门园区）可以在功能配置里写 `可采集: false`：池子照旧存在，
         # 但不往地点面板上摆采药/采矿——世界不必认识是哪个功能，只认这个开关。
         gatherable = all(
             (config or {}).get("可采集", True) is not False

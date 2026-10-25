@@ -248,8 +248,6 @@ class RetreatService:
             != 1
         ):
             raise RetreatConflictError("参与修士必须位于同一空间和坐标")
-        if locations[0].space_type != "地表":
-            raise RetreatConflictError("宗门洞天内不能进行闭关")
         location = self._world.locate(LocationQuery(xy=locations[0].xy))
         if not location.location_key or "闭关" not in location.available_functions:
             raise RetreatConflictError("当前位置不能闭关")

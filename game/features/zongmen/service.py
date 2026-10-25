@@ -16,11 +16,7 @@ import math
 from datetime import datetime, timezone
 
 from game.core.character import CharacterPublicProfile, CharacterService, CharacterStateError
-from game.core.location import (
-    LocationConflictError,
-    LocationService,
-    SpaceChangeCommand,
-)
+from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectConflictError, SectService
 from game.core.sect_progress import SectProgressService
@@ -69,13 +65,14 @@ class SectFeature:
         return actions(self._buttons, page)
 
     async def can_manage(self, user_id: str) -> bool:
-        """宗门成员只能在宗门洞天内看到完整宗门功能；无宗门仍可看加入页。"""
+        """宗门成员在本宗园区看到完整功能；无宗门仍可看加入页。"""
 
         member = await self._sect.membership(user_id)
         if member is None:
             return True
+        sect = await self._sect.sect(member.sect_id)
         current = await self._location.current(user_id)
-        return current.space_type == "宗门洞天"
+        return sect is not None and current.xy == sect.entrance_xy
 
     async def page(self, user_id: str, *, now: datetime | None = None) -> SectPage:
         invitation = await self._sect.pending_invitation(user_id, now=now)
@@ -236,24 +233,6 @@ class SectFeature:
         finally:
             for value in members:
                 await self._clear_borrowed(value.user_id, request_id)
-        cave_users = []
-        for value in members:
-            location = await self._location.current(value.user_id)
-            if location.space_type == "宗门洞天":
-                cave_users.append(value.user_id)
-        if cave_users:
-            try:
-                await self._location.change_space(
-                    SpaceChangeCommand(
-                        user_id,
-                        f"{request_id}:清理洞天",
-                        tuple(cave_users),
-                        "地表",
-                        "",
-                    )
-                )
-            except LocationConflictError as exc:
-                raise SectFeatureError("洞天位置清理失败") from exc
         return SectOperationResult("解散", "", await self.page(user_id))
 
     async def _clear_borrowed(self, user_id: str, request_id: str) -> None:

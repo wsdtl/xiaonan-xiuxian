@@ -167,10 +167,13 @@ class PositionFeature:
         self._require_initialized()
         current = await self._location.current(user_id)
         location = self._world.locate(LocationQuery(xy=current.xy))
-        if current.space_type != "地表":
-            return self.position_actions(())
+        functions = location.available_functions
+        if location.location_name == "宗门园区":
+            member = await self._sect.membership(user_id)
+            if member is None:
+                return await self._sect_entry_actions(user_id)
         return self.position_actions(
-            location.available_functions,
+            functions,
             plant_pool=location.plant_pool,
             mineral_pool=location.mineral_pool,
         )
@@ -497,6 +500,30 @@ class PositionFeature:
         if offset == (0, 0):
             return ""
         return self._directions[offset]
+
+    async def _sect_entry_actions(self, user_id: str) -> tuple[PositionAction, ...]:
+        """无宗门时的园区入口：直接给创建/接受/拒绝，不先绕一层宗门页。"""
+
+        invitation = await self._sect.pending_invitation(user_id)
+        page = (
+            "待处理邀请"
+            if invitation is not None and not getattr(invitation, "expired", False)
+            else "未加入"
+        )
+        raw = self._data.dataset("宗门页面按钮").get("园区-按钮")
+        if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+            raise JsonDataError("宗门页面按钮必须是字典列表")
+        return tuple(
+            PositionAction(
+                str(row.get("编号") or ""),
+                str(row.get("名称") or ""),
+                str(row.get("命令") or ""),
+                str(row.get("行为") or "callback"),
+                str(row.get("样式") or "secondary"),
+            )
+            for row in raw
+            if isinstance(row, Mapping) and str(row.get("页面") or "") == page
+        )
 
     def _distance(self, distance_squared_meters: int) -> str:
         if distance_squared_meters == 0:

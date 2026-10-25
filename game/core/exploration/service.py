@@ -204,8 +204,6 @@ class ExplorationService:
             != 1
         ):
             raise ExplorationConflictError("参与修士必须位于同一空间和坐标")
-        if locations[0].space_type != "地表":
-            raise ExplorationConflictError("宗门洞天内不能进行普通探险")
         location = self._world.locate(LocationQuery(xy=locations[0].xy))
         if not location.location_key or "探险" not in location.available_functions:
             raise ExplorationConflictError("当前位置不能进行普通探险")

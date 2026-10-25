@@ -37,7 +37,7 @@ def _parse_grade(identifier: str) -> tuple[str, str]:
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "炼制",
-            "summary": "在百炼堂炼制本命武器器律（宗门洞天·宗门设施）",
+            "summary": "在百炼堂炼制本命武器器律（宗门园区·宗门设施）",
             "usage": ("百炼堂", "百炼堂 宗门", "百炼堂 灵器", "百炼堂 开炉 器律编号或名称"),
             "side_effect": "按次消耗宗门灵石；材料来源按个人或宗门路径结算；走宗门材料与炼制圣品限宗主或长老",
             "order": 74,
@@ -57,7 +57,7 @@ async def bailiantang(user_id: str, message: str, message_context: MessageContex
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "炼制",
-            "summary": "在丹鼎阁炼制丹药（宗门洞天·宗门设施）",
+            "summary": "在丹鼎阁炼制丹药（宗门园区·宗门设施）",
             "usage": ("丹鼎阁", "丹鼎阁 宗门", "丹鼎阁 恢复丹", "丹鼎阁 开炉 丹药编号或名称"),
             "side_effect": "按次消耗宗门灵石；材料来源按个人或宗门路径结算；走宗门材料与炼制圣品限宗主或长老",
             "order": 75,
@@ -77,7 +77,7 @@ async def dandingge(user_id: str, message: str, message_context: MessageContext,
         "guard_rule": "自主空闲或休息",
         "help": {
             "category": "炼制",
-            "summary": "在演阵台炼制一次性阵法（宗门洞天·宗门设施）",
+            "summary": "在演阵台炼制一次性阵法（宗门园区·宗门设施）",
             "usage": (
                 "演阵台",
                 "演阵台 宗门",

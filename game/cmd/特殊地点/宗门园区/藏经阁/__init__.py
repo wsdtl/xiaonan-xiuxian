@@ -17,7 +17,7 @@ from typing import Any
         "guard_rule": "已创建",
         "help": {
             "category": "宗门",
-            "summary": "在宗门洞天藏经阁查阅、借阅本宗共享功法",
+            "summary": "在宗门园区藏经阁查阅、借阅本宗共享功法",
             "usage": (
                 "藏经阁",
                 "藏经阁 2",

@@ -112,14 +112,6 @@
     "样式": "secondary"
   },
   {
-    "功能": "宗门",
-    "编号": "location.sect",
-    "名称": "宗门园区",
-    "命令": "宗门",
-    "行为": "callback",
-    "样式": "primary"
-  },
-  {
     "功能": "生育",
     "编号": "location.birth",
     "名称": "生育",
@@ -136,11 +128,83 @@
     "样式": "secondary"
   },
   {
-    "功能": "山门",
-    "编号": "location.shanmen",
-    "名称": "山门",
-    "命令": "山门",
+    "功能": "藏经阁",
+    "编号": "location.cangjing",
+    "名称": "藏经阁",
+    "命令": "藏经阁",
     "行为": "callback",
     "样式": "primary"
+  },
+  {
+    "功能": "万珍殿",
+    "编号": "location.wanzhen",
+    "名称": "万珍殿",
+    "命令": "万珍殿",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "功能": "灵藏",
+    "编号": "location.lingcang",
+    "名称": "灵藏",
+    "命令": "灵藏",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "功能": "百炼堂",
+    "编号": "location.bailiantang",
+    "名称": "百炼堂",
+    "命令": "百炼堂",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "功能": "丹鼎阁",
+    "编号": "location.dandingge",
+    "名称": "丹鼎阁",
+    "命令": "丹鼎阁",
+    "行为": "callback",
+    "样式": "primary"
+  },
+  {
+    "功能": "演阵台",
+    "编号": "location.yanzhantai",
+    "名称": "演阵台",
+    "命令": "演阵台",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "功能": "灵脉",
+    "编号": "location.lingmai",
+    "名称": "灵脉",
+    "命令": "灵脉",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "功能": "灵田",
+    "编号": "location.lingtian",
+    "名称": "灵田",
+    "命令": "灵田",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "功能": "宗门同行",
+    "编号": "location.sect-follow",
+    "名称": "宗门同行",
+    "命令": "宗门同行",
+    "行为": "callback",
+    "样式": "secondary"
+  },
+  {
+    "功能": "宗门事务",
+    "编号": "location.sect-affairs",
+    "名称": "宗门事务",
+    "命令": "宗门",
+    "行为": "callback",
+    "样式": "secondary"
   }
 ]

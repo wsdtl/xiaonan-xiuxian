@@ -55,7 +55,7 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
         "guard_rule": "已创建",
         "help": {
             "category": "宗门",
-            "summary": "在本宗洞天查看万珍殿成品，或向本宗捐入、由执掌者发放成品",
+            "summary": "在本宗宗门园区查看万珍殿成品，或向本宗捐入、由执掌者发放成品",
             "usage": (
                 "万珍殿",
                 "万珍殿 丹药",
