@@ -14,6 +14,7 @@ import time
 from collections.abc import Mapping, Sequence
 
 from game.core.asset import AssetService, InventoryAdjustment
+from game.core.bloodline import BloodlineService
 from game.core.character import CharacterNotFoundError, CharacterService
 from game.core.companion import CompanionService
 from game.core.data import JsonDataService
@@ -60,6 +61,7 @@ class HunpeiFeature:
         companion: CompanionService,
         database: DatabaseService,
         xuemai: XuemaiFeature,
+        bloodline: BloodlineService,
         asset: AssetService,
         weizhi: object,
         world: WorldService,
@@ -70,6 +72,7 @@ class HunpeiFeature:
         self._companion = companion
         self._database = database
         self._xuemai = xuemai
+        self._bloodline = bloodline
         self._asset = asset
         #: 位置服务（玩法服务，只用来问「现在站在哪个地点功能上」）。
         self._weizhi = weizhi
@@ -514,30 +517,20 @@ class HunpeiFeature:
 
         if not companion_code:
             return "000000000000"
-        address = StateAddress(companion_code, COMPANION_STATE_TYPE, "main")
-        snapshot = await self._database.get(address)
-        if snapshot is not None and isinstance(snapshot.value, Mapping):
-            current = str(snapshot.value.get("DNA") or "")
-            if current:
-                return current
-        dna = self._xuemai.random_dna("女" if self._random.random() < 0.5 else "男")
-        await self._database.commit(
-            TransactionCommand(
-                user_id=companion_code,
-                request_id="定道侣DNA:%s" % companion_code,
-                business_type="血脉定道侣DNA",
-                operations=(
-                    StateMutation(
-                        user_id=companion_code,
-                        state_type=COMPANION_STATE_TYPE,
-                        state_key="main",
-                        value={"DNA": dna},
-                        expected_version=snapshot.version if snapshot is not None else 0,
-                    ),
-                ),
-                payload={"DNA": dna},
-            )
+        gender = "女" if self._random.random() < 0.5 else "男"
+        dna, mutation = await self._bloodline.companion_dna_mutation(
+            companion_code, gender
         )
+        if mutation is not None:
+            await self._database.commit(
+                TransactionCommand(
+                    user_id=companion_code,
+                    request_id="定道侣DNA:%s" % companion_code,
+                    business_type="血脉定道侣DNA",
+                    operations=(mutation,),
+                    payload={"DNA": dna},
+                )
+            )
         return dna
 
     @staticmethod

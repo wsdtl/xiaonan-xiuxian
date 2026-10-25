@@ -175,6 +175,8 @@ class CharacterProfile:
     weapon: WeaponProfile
     inventory: InventorySummary
     five_elements: Mapping[str, float]
+    #: 玩家 DNA（血脉核心拥有）；为空表示还没定过。
+    dna: str = ""
     #: 种族（天生那一层）：人物面板与查看页据此显示，战斗快照据此挂天生锁定技。
     race: str = ""
     #: 寿元上限（年）：当前境界的寿元 × 种族的寿元系数。

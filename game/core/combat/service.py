@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
+from game.core.bloodline import BloodlineService
 from game.core.data import JsonDataService, materialize
 from game.core.formation import FormationService
 
@@ -63,14 +64,11 @@ class CombatService:
         self,
         data: JsonDataService,
         formation: FormationService,
-        bloodline_growth: object | None = None,
-        bloodline_awaken: object | None = None,
+        bloodline: BloodlineService,
     ) -> None:
         self._data = data
         self._formation = formation
-        #: 血脉成长回调（玩法注入），透传给引擎；None = 没接线。
-        self._bloodline_growth = bloodline_growth
-        self._bloodline_awaken = bloodline_awaken
+        self._bloodline = bloodline
         self._engine: BattleEngine | None = None
         self._report_catalog: BattleReportCatalog | None = None
         self._build_count = 0
@@ -80,6 +78,8 @@ class CombatService:
             raise RuntimeError("战斗核心已经初始化")
         if not self._formation.status().initialized:
             raise RuntimeError("阵法核心必须先于战斗核心启动")
+        if not self._bloodline.status().initialized:
+            raise RuntimeError("血脉核心必须先于战斗核心启动")
 
         foundation = load_battle_foundation(
             self._data,
@@ -98,8 +98,7 @@ class CombatService:
         self._engine = BattleEngine(
             foundation,
             recorded_facts=report_catalog.recorded_facts,
-            bloodline_growth=self._bloodline_growth,
-            bloodline_awaken=self._bloodline_awaken,
+            bloodline=self._bloodline,
         )
         report_catalog.validate_event_kinds(tuple(self._engine.catalog.events))
         self._report_catalog = report_catalog

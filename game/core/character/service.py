@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from game.core.bloodline import BloodlineService
 from game.core.database import (
     StateSnapshot,
     DatabaseService,
@@ -106,10 +107,8 @@ class CharacterService:
         asset: AssetService,
         growth: GrowthService,
         forging: ForgingService,
+        bloodline: BloodlineService,
         sect_library: SectLibraryService | None = None,
-        bloodline_growth: object | None = None,
-        bloodline_base: object | None = None,
-        bloodline_dna: object | None = None,
     ) -> None:
         self._data = data
         self._database = database
@@ -119,14 +118,8 @@ class CharacterService:
         self._growth = growth
         self._forging = forging
         self._sect_library = sect_library
-        #: 血脉基础加法回调（玩法注入，async）：(用户) -> {属性: 数值}。
-        #: 它给的是【基础加法】，不乘任何倍率。
-        self._bloodline_growth = bloodline_growth
-        #: 血脉基础加法原值回调（不因寿元将尽清空，用于寿元将尽时从生效属性里扣掉）。
-        self._bloodline_base = bloodline_base
-        #: 取血脉 DNA 的回调（玩法注入，async）：(用户) -> DNA 串。
-        #: 同理，核心不依赖玩法；没注入时进战斗就不带 DNA。
-        self._bloodline_dna = bloodline_dna
+        #: 血脉核心：规则、DNA 与觉醒倍率都由它解释；角色不再接收玩法回调。
+        self._bloodline = bloodline
         self._initialized = False
         self._role_rule: Mapping[str, object] = {}
         self._gender_values: tuple[str, ...] = ()
@@ -137,6 +130,11 @@ class CharacterService:
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._races_by_id: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._initial_race = ""
+
+    def _bloodline_service(self) -> BloodlineService:
+        if self._bloodline is None:
+            raise RuntimeError("血脉核心必须先于角色核心注入")
+        return self._bloodline
 
     def initialize(self) -> CharacterStatus:
         if self._initialized:
@@ -155,6 +153,8 @@ class CharacterService:
             raise RuntimeError("成长核心必须先于角色服务启动")
         if not self._forging.status().initialized:
             raise RuntimeError("炼器核心必须先于角色服务启动")
+        if not self._bloodline_service().status().initialized:
+            raise RuntimeError("血脉核心必须先于角色服务启动")
 
         role_rules = self._data.dataset("角色规则")
         role_rule = role_rules.get("人物")
@@ -401,11 +401,13 @@ class CharacterService:
         level = _state_positive_int(character.get("等级"), "人物.等级")
         attributes = _state_numbers(character.get("属性"), "人物.属性")
         resources = _state_numbers(character.get("资源"), "人物.资源")
+        dna = await self._bloodline_service().stored_dna(normalized_user_id)
         if lifespan_full:
             attributes = self._without_level_growth(attributes, level)
-            if self._bloodline_base is not None:
-                raw_bloodline = await self._bloodline_base(normalized_user_id)
-                attributes = _subtract_numbers(attributes, raw_bloodline or {})
+            if dna:
+                attributes = _subtract_numbers(
+                    attributes, self._bloodline_service().bloodline_growth(dna)
+                )
             resources = _clamp_life_resources(resources, attributes)
         yijing = () if lifespan_full else _yijing_profiles(
             self._data, character.get("意境"), character.get("境界")
@@ -434,6 +436,7 @@ class CharacterService:
             weapon=weapon_profile,
             inventory=inventory,
             five_elements=_state_five_elements(character.get("五行根性")),
+            dna=dna,
             yijing=yijing,
             age=age,
             lifespan_full=lifespan_full,
@@ -641,9 +644,7 @@ class CharacterService:
         weapon_attack, yijing_statuses, yijing_amplifier = self._yijing_battle(
             profile, attributes, float(profile.weapon.attack)
         )
-        dna = ""
-        if self._bloodline_dna is not None:
-            dna = str(await self._bloodline_dna(profile.user_id) or "")
+        dna = profile.dna
         build = tuple(
             CombatBuildRef(
                 section=value.category,
@@ -720,6 +721,11 @@ class CharacterService:
         operations.extend(
             self._asset.initial_inventory_mutations(command.user_id, item_rows)
         )
+        _dna, dna_mutation = await self._bloodline_service().plan_dna(
+            command.user_id, command.gender
+        )
+        if dna_mutation is not None:
+            operations.append(dna_mutation)
         try:
             receipt = await self._database.commit(
                 TransactionCommand(
@@ -789,12 +795,12 @@ class CharacterService:
         character["经验"] = cultivator_advance.experience_after
         # 种族不再提供成长倍率（种族只留天生规则与寿元系数）：等级成长直接并入，不乘任何倍率。
         grown = self._growth.cultivator_attribute_growth(cultivator_advance.levels_gained)
-        bloodline_fn = self._bloodline_growth
-        if bloodline_fn is not None:
+        profile = await self.profile(normalized_user_id)
+        if profile.dna and not profile.lifespan_full:
             # 这里只并入基础加法；觉醒随战内气血，归战斗的「行动开始」。
-            bloodline = await bloodline_fn(normalized_user_id)
-            if bloodline:
-                grown = _add_numbers(grown, bloodline)
+            grown = _add_numbers(
+                grown, self._bloodline_service().bloodline_growth(profile.dna)
+            )
         character["属性"] = _add_numbers(
             _state_mapping(character.get("属性"), "人物.属性"),
             grown,

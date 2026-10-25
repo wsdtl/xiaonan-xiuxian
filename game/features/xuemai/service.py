@@ -78,59 +78,19 @@ class XuemaiFeature:
         return self._bloodline.rules()
 
     async def stored_dna(self, user_id: str) -> str:
-        """只读已存的 DNA；不创建、不回调角色。
-
-        「寿元将尽」时角色属性要扣回血脉原值，这条路径必须纯读：
-        一旦在这里懒生成 DNA，就会回调 character.profile()，而 profile
-        在寿元将尽时又回来取原值，形成 profile -> raw -> dna -> profile 递归。
-        """
+        """只读已存 DNA；不创建、不回调角色。"""
 
         self._require_initialized()
-        snapshot = await self._database.get(
-            StateAddress(user_id, STATE_TYPE, STATE_KEY)
-        )
-        value = (
-            dict(snapshot.value)
-            if snapshot is not None and isinstance(snapshot.value, Mapping)
-            else {}
-        )
-        return str(value.get("DNA") or "")
+        return await self._bloodline.stored_dna(user_id)
 
     async def dna(self, user_id: str) -> str:
-        """读玩家的 DNA；没有就按性别实例化随机并落盘（一次固定，之后不变）。"""
+        """读玩家 DNA；没有就按性别生成并落血脉核心状态。"""
 
-        current = await self.stored_dna(user_id)
-        if current:
-            return current
         try:
             profile = await self._character.profile(user_id)
         except CharacterNotFoundError as exc:
             raise GenealogyQueryError("尚未创建人物") from exc
-        address = StateAddress(user_id, STATE_TYPE, STATE_KEY)
-        snapshot = await self._database.get(address)
-        value = dict(snapshot.value) if snapshot is not None and isinstance(snapshot.value, Mapping) else {}
-        value["DNA"] = self.random_dna(profile.gender)
-        value.setdefault("代次", 0)
-        value.setdefault("胎次", 0)
-        value.setdefault("族谱", [])
-        await self._database.commit(
-            TransactionCommand(
-                user_id=user_id,
-                request_id="定DNA:%s" % user_id,
-                business_type="血脉定DNA",
-                operations=(
-                    StateMutation(
-                        user_id=user_id,
-                        state_type=STATE_TYPE,
-                        state_key=STATE_KEY,
-                        value=value,
-                        expected_version=snapshot.version if snapshot is not None else 0,
-                    ),
-                ),
-                payload={"DNA": value["DNA"]},
-            )
-        )
-        return str(value["DNA"])
+        return await self._bloodline.ensure_dna(user_id, profile.gender)
 
     def state_type(self) -> str:
         """族谱状态的类型名（婚配生育要往同一份状态里写）。"""
@@ -290,27 +250,37 @@ class XuemaiFeature:
                 "已传位": True,
             })
         child_row["代次"] = new_generation
+        child_dna = str(child_row.get("DNA") or "")
         payload = {
             "代次": new_generation,
             "族谱": rows,
             "胎次": 0,
             "当前壳": str(child_row.get("编号") or ""),
         }
+        operations = [
+            StateMutation(
+                user_id=user_id,
+                state_type=STATE_TYPE,
+                state_key=STATE_KEY,
+                value=payload,
+                expected_version=snapshot.version if snapshot is not None else 0,
+            )
+        ]
+        if child_dna:
+            operations.append(
+                await self._bloodline.dna_mutation(user_id, child_dna)
+            )
         await self._database.commit(
             TransactionCommand(
                 user_id=user_id,
                 request_id="传位:%s:%s" % (user_id, child_row.get("编号") or ""),
                 business_type="血脉传位",
-                operations=(
-                    StateMutation(
-                        user_id=user_id,
-                        state_type=STATE_TYPE,
-                        state_key=STATE_KEY,
-                        value=payload,
-                        expected_version=snapshot.version if snapshot is not None else 0,
-                    ),
-                ),
-                payload={"代次": new_generation, "新壳": str(child_row.get("编号") or "")},
+                operations=tuple(operations),
+                payload={
+                    "代次": new_generation,
+                    "新壳": str(child_row.get("编号") or ""),
+                    "DNA": child_dna,
+                },
             )
         )
         return SuccessionResult(

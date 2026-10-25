@@ -657,22 +657,14 @@ def test_bloodline_real_character_reaches_battle(services) -> None:
         )
     )
     dna = "000000759999"  # 满月血：G4/G5>=75、G6>=50，能觉醒
-    state = {"DNA": dna, "代次": 0, "胎次": 0, "族谱": []}
+    mutation = asyncio.run(services.bloodline.dna_mutation(user_id, dna))
     asyncio.run(
         services.database.commit(
             TransactionCommand(
                 user_id,
                 "seed-bloodline",
                 "血脉定DNA",
-                (
-                    StateMutation(
-                        user_id,
-                        xuemai.state_type(),
-                        xuemai.state_key(),
-                        state,
-                        0,
-                    ),
-                ),
+                (mutation,),
                 {"DNA": dna},
             )
         )

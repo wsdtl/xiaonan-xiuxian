@@ -12,6 +12,12 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from game.core.data import JsonDataError, JsonDataService
+from game.core.database import (
+    DatabaseService,
+    StateAddress,
+    StateMutation,
+    TransactionCommand,
+)
 
 from .dna import breed as _breed, random_dna as _random_dna
 from .rules import (
@@ -20,6 +26,16 @@ from .rules import (
     load_bloodline_rules,
     matched,
 )
+
+
+#: 玩家 DNA 的独立状态；与族谱状态分开，DNA 归核心，族谱归玩法。
+DNA_STATE_TYPE = "bloodline_dna"
+DNA_STATE_KEY = "main"
+#: 道侣 DNA 的独立状态（按世界道侣编号存，不是按玩家）。
+COMPANION_DNA_STATE_TYPE = "companion_dna"
+#: 旧版把 DNA 混在族谱状态里；只读兜底，等一次性迁移后再删。
+LEGACY_DNA_STATE_TYPE = "xuemai_genealogy"
+LEGACY_COMPANION_DNA_STATE_TYPE = "xuemai_companion_dna"
 
 
 @dataclass(frozen=True)
@@ -33,8 +49,9 @@ class BloodlineStatus:
 class BloodlineService:
     """血脉规则与 DNA 的公共解释入口，不拥有玩家族谱状态。"""
 
-    def __init__(self, data: JsonDataService) -> None:
+    def __init__(self, data: JsonDataService, database: DatabaseService) -> None:
         self._data = data
+        self._database = database
         self._initialized = False
         self._rules: BloodlineRules | None = None
         self._random = random.SystemRandom()
@@ -44,6 +61,8 @@ class BloodlineService:
             raise RuntimeError("血脉核心微服务已经初始化")
         if not self._data.status().loaded:
             raise RuntimeError("JSON 数据服务必须先于血脉核心启动")
+        if not self._database.status().initialized:
+            raise RuntimeError("核心数据库必须先于血脉核心启动")
         rule_block = self._data.dataset("血脉规则")
         body = rule_block.get("血脉")
         if not isinstance(body, Mapping):
@@ -84,6 +103,130 @@ class BloodlineService:
     def status(self) -> BloodlineStatus:
         count = len(self._rules.bloodlines) if self._rules is not None else 0
         return BloodlineStatus(self._initialized, count)
+
+    async def _value(self, owner: str, state_type: str) -> dict[str, object]:
+        snapshot = await self._database.get(
+            StateAddress(owner, state_type, "main")
+        )
+        return (
+            dict(snapshot.value)
+            if snapshot is not None and isinstance(snapshot.value, Mapping)
+            else {}
+        )
+
+    async def _snapshot(self, owner: str, state_type: str):
+        return await self._database.get(StateAddress(owner, state_type, "main"))
+
+    async def stored_dna(self, user_id: str) -> str:
+        """只读玩家 DNA；新状态优先，旧族谱状态只读兜底。"""
+
+        self._require_initialized()
+        value = await self._value(user_id, DNA_STATE_TYPE)
+        dna = str(value.get("DNA") or "")
+        if dna:
+            return dna
+        legacy = await self._value(user_id, LEGACY_DNA_STATE_TYPE)
+        return str(legacy.get("DNA") or "")
+
+    async def plan_dna(
+        self, user_id: str, gender: str
+    ) -> tuple[str, StateMutation | None]:
+        """给建人物用：返回 DNA 与要并进同一笔事务的写入操作。"""
+
+        self._require_initialized()
+        snapshot = await self._snapshot(user_id, DNA_STATE_TYPE)
+        value = (
+            dict(snapshot.value)
+            if snapshot is not None and isinstance(snapshot.value, Mapping)
+            else {}
+        )
+        dna = str(value.get("DNA") or "")
+        if dna:
+            return dna, None
+        legacy = await self._value(user_id, LEGACY_DNA_STATE_TYPE)
+        dna = str(legacy.get("DNA") or "")
+        if not dna:
+            dna = self.random_dna(gender)
+        return dna, StateMutation(
+            user_id,
+            DNA_STATE_TYPE,
+            DNA_STATE_KEY,
+            {"DNA": dna},
+            snapshot.version if snapshot is not None else 0,
+        )
+
+    async def ensure_dna(self, user_id: str, gender: str) -> str:
+        """读玩家 DNA；没有就落新状态（供旧存档/命令兜底）。"""
+
+        dna, mutation = await self.plan_dna(user_id, gender)
+        if mutation is not None:
+            await self._database.commit(
+                TransactionCommand(
+                    user_id=user_id,
+                    request_id="定DNA:%s" % user_id,
+                    business_type="血脉定DNA",
+                    operations=(mutation,),
+                    payload={"DNA": dna},
+                )
+            )
+        return dna
+
+    async def dna_mutation(self, user_id: str, dna: str) -> StateMutation:
+        """给传位用：把新壳 DNA 写进同一笔事务。"""
+
+        self._require_initialized()
+        snapshot = await self._snapshot(user_id, DNA_STATE_TYPE)
+        return StateMutation(
+            user_id,
+            DNA_STATE_TYPE,
+            DNA_STATE_KEY,
+            {"DNA": str(dna or "")},
+            snapshot.version if snapshot is not None else 0,
+        )
+
+    async def companion_dna(self, companion_code: str) -> str:
+        """只读道侣 DNA；新状态优先，旧状态只读兜底。"""
+
+        self._require_initialized()
+        value = await self._value(companion_code, COMPANION_DNA_STATE_TYPE)
+        dna = str(value.get("DNA") or "")
+        if dna:
+            return dna
+        legacy = await self._value(
+            companion_code, LEGACY_COMPANION_DNA_STATE_TYPE
+        )
+        return str(legacy.get("DNA") or "")
+
+    async def companion_dna_mutation(
+        self, companion_code: str, gender: str
+    ) -> tuple[str, StateMutation | None]:
+        """给道侣定 DNA 用：已有就返回空操作。"""
+
+        self._require_initialized()
+        snapshot = await self._snapshot(
+            companion_code, COMPANION_DNA_STATE_TYPE
+        )
+        value = (
+            dict(snapshot.value)
+            if snapshot is not None and isinstance(snapshot.value, Mapping)
+            else {}
+        )
+        dna = str(value.get("DNA") or "")
+        if dna:
+            return dna, None
+        legacy = await self._value(
+            companion_code, LEGACY_COMPANION_DNA_STATE_TYPE
+        )
+        dna = str(legacy.get("DNA") or "")
+        if not dna:
+            dna = self.random_dna(gender)
+        return dna, StateMutation(
+            companion_code,
+            COMPANION_DNA_STATE_TYPE,
+            "main",
+            {"DNA": dna},
+            snapshot.version if snapshot is not None else 0,
+        )
 
     def rules(self) -> BloodlineRules:
         self._require_initialized()

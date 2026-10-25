@@ -227,14 +227,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("pools", status.pool_count),
         )
     )
-    bloodline = BloodlineService(data)
-    bloodline_status = bloodline.initialize()
-    logger.opt(colors=True).success(
-        C.join(
-            C.ok("血脉核心微服务已启动"),
-            C.kv("bloodlines", bloodline_status.bloodline_count),
-        )
-    )
     item_catalog = ItemCatalogService(data)
     item_status = item_catalog.initialize()
     logger.opt(colors=True).success(
@@ -283,6 +275,14 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("states", database_status.state_count),
             C.kv("locations", database_status.location_count),
             C.kv("transactions", database_status.transaction_count),
+        )
+    )
+    bloodline = BloodlineService(data, database)
+    bloodline_status = bloodline.initialize()
+    logger.opt(colors=True).success(
+        C.join(
+            C.ok("血脉核心微服务已启动"),
+            C.kv("bloodlines", bloodline_status.bloodline_count),
         )
     )
     innate_treasure = InnateTreasureService(data, database)
@@ -416,61 +416,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("masters", formation_status.master_count),
         )
     )
-    # 血脉成长回调：xuemai 在同一次装配里晚于 combat 构造，所以先给一个 holder，
-    # 装配到 xuemai 之后再填进去（回调是**调用时**才取，构造顺序不影响）。
-    _bloodline_holder: dict[str, object] = {}
-
-    def _bloodline_awaken(dna: str, hp_percent: object) -> float:
-        """战斗侧：觉醒倍数（只出倍数；血脉加法不再乘它）。"""
-
-        xuemai_service = _bloodline_holder.get("xuemai")
-        if xuemai_service is None:
-            return 1.0
-        return float(xuemai_service.awaken(hp_percent))
-
-    def _bloodline_growth(dna: str) -> dict[str, float]:
-        xuemai_service = _bloodline_holder.get("xuemai")
-        if xuemai_service is None:
-            return {}
-        return xuemai_service.combat_growth(dna)
-
-    combat = CombatService(
-        data, formation, bloodline_growth=_bloodline_growth, bloodline_awaken=_bloodline_awaken
-    )
-
-    async def _bloodline_raw(user_id: str) -> dict[str, float]:
-        """角色侧：血脉基础加法的原值，不因寿元将尽清空。"""
-
-        xuemai_service = _bloodline_holder.get("xuemai")
-        if xuemai_service is None:
-            return {}
-        # 只读已存 DNA：这里绝不能触发懒生成，否则寿元将尽时
-        # profile -> raw -> xuemai.dna -> profile 会无限递归。
-        dna = await xuemai_service.stored_dna(user_id)
-        if not dna:
-            return {}
-        return dict(xuemai_service.bloodline_growth(dna))
-
-    async def _bloodline_basic(user_id: str) -> dict[str, float]:
-        """角色侧：给【基础加法】（不乘任何倍率）。"""
-        xuemai_service = _bloodline_holder.get("xuemai")
-        character_service = _bloodline_holder.get("character")
-        if xuemai_service is None:
-            return {}
-        # 寿元将尽：血脉失效，加成不再生效（补救的路是传位）。
-        if character_service is not None:
-            profile = await character_service.profile(user_id)
-            if bool(getattr(profile, "lifespan_full", False)):
-                return {}
-        dna = await xuemai_service.dna(user_id)
-        return xuemai_service.bloodline_growth(dna)
-
-    async def _bloodline_dna(user_id: str) -> str:
-        """角色侧：给这一场战斗用的血脉 DNA（寿元将尽也带着，由失效标志决定算不算）。"""
-        xuemai_service = _bloodline_holder.get("xuemai")
-        if xuemai_service is None:
-            return ""
-        return await xuemai_service.dna(user_id)
+    combat = CombatService(data, formation, bloodline)
     combat_status = combat.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -482,7 +428,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("formations", combat_status.formation_count),
         )
     )
-    companion = CompanionService(data, database, growth, forging)
+    companion = CompanionService(data, database, growth, forging, bloodline)
     companion_status = companion.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -499,10 +445,8 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         asset,
         growth,
         forging,
+        bloodline,
         sect_library,
-        bloodline_growth=_bloodline_basic,
-        bloodline_base=_bloodline_raw,
-        bloodline_dna=_bloodline_dna,
     )
     sect_library.attach_character(character)
     character_service_status = character.initialize()
@@ -518,15 +462,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     # 回填当场校验 `道侣.json.种族池`，池子里写了没登记的族名照样是启动错误。
     companion.attach_races(character.races())
 
-    async def _companion_dna_getter(companion_id: str) -> str:
-        """道侣侧：给这一场战斗用的血脉 DNA（hunpei 在同一装配里晚建，用 holder 延迟取）。"""
-
-        hunpei_service = _bloodline_holder.get("hunpei")
-        if hunpei_service is None:
-            return ""
-        return await hunpei_service.companion_dna(companion_id)
-
-    companion.attach_dna(_companion_dna_getter)
     injury = InjuryService(data, database)
     injury_status = injury.initialize()
     logger.opt(colors=True).success(
@@ -947,17 +882,14 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     daolv_jiejiao.initialize()
     xuemai = XuemaiFeature(data, character, database, bloodline)
     xuemai.initialize()
-    _bloodline_holder["xuemai"] = xuemai
-    _bloodline_holder["character"] = character
     from game.features.hunpei.store import BirthRequestStore
 
     # 求子请求住非资产日志库：路径与战报、消息流水同源，过期即失效。
     birth_requests = BirthRequestStore(runtime_log_database_path())
     hunpei = HunpeiFeature(
-        data, character, companion, database, xuemai, asset, weizhi, world, birth_requests
+        data, character, companion, database, xuemai, bloodline, asset, weizhi, world, birth_requests
     )
     hunpei.initialize()
-    _bloodline_holder["hunpei"] = hunpei
     renwu_peiyang = CharacterCultivationFeature(
         data,
         character,

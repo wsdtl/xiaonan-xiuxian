@@ -10,6 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from types import MappingProxyType
 
 from game.core.asset import ItemRef, format_item_ref, parse_item_ref
+from game.core.bloodline import BloodlineService
 from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
 from game.core.data import (
     ContractSet,
@@ -83,11 +84,13 @@ class CompanionService:
         database: DatabaseService,
         growth: GrowthService,
         forging: ForgingService,
+        bloodline: BloodlineService,
     ) -> None:
         self._data = data
         self._database = database
         self._growth = growth
         self._forging = forging
+        self._bloodline = bloodline
         self._initialized = False
         self._rules: CompanionRules | None = None
         self._definitions: Mapping[str, CompanionDefinition] = MappingProxyType({})
@@ -101,8 +104,6 @@ class CompanionService:
         #: 种族：道侣核心构造在角色核心之前，所以种族表由组合根在角色核心就绪后回填
         #: （`attach_races`），回填时当场校验每名道侣的固定种族都登记过。
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
-        #: 取道侣 DNA 的取法（玩法回填）：(道侣编号) -> DNA 串。没回填时进战斗不带 DNA。
-        self._dna_of: object | None = None
 
     def initialize(self) -> CompanionStatus:
         if self._initialized:
@@ -115,6 +116,8 @@ class CompanionService:
             raise RuntimeError("成长核心必须先于道侣核心启动")
         if not self._forging.status().initialized:
             raise RuntimeError("炼器核心必须先于道侣核心启动")
+        if not self._bloodline.status().initialized:
+            raise RuntimeError("血脉核心必须先于道侣核心启动")
         self._five_element_rules = _mapping(
             self._data.dataset("战斗规则").get("五行"), "战斗/规则/五行.json"
         )
@@ -463,11 +466,7 @@ class CompanionService:
             gender=definition.gender,
             five_elements=dict(instance.five_elements),
             inherent_rules=self.inherent_rules(instance.companion_id),
-            dna=(
-                str(await self._dna_of(instance.companion_id) or "")
-                if self._dna_of is not None
-                else ""
-            ),
+            dna=await self._bloodline.companion_dna(instance.companion_id),
             bloodline_disabled=expired,
             growth_base=(
                 {}
@@ -1560,11 +1559,6 @@ class CompanionService:
             _nonnegative_int(weapon.get("经验"), f"道侣 {companion_id}.本命武器.经验"),
             weapon_laws,
         )
-
-    def attach_dna(self, getter: object) -> None:
-        """回填「按道侣编号取 DNA」的取法（玩法注入）；没回填时进战斗就不带 DNA。"""
-
-        self._dna_of = getter
 
     def attach_races(self, races: Mapping[str, Mapping[str, object]]) -> None:
         """回填种族登记表并**当场校验**道侣的种族池（组合根在角色核心就绪后调用）。
