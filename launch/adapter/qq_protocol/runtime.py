@@ -16,7 +16,6 @@ from .event import QqMessageEvent
 
 EventProcessor = Callable[[QqMessageEvent], Awaitable[bool]]
 EventLogParts = Callable[[QqMessageEvent, bool], list[str]]
-ShortId = Callable[[object], str]
 
 
 @dataclass(frozen=True)
@@ -53,20 +52,17 @@ class QqDriverRuntime:
         self._user_guard = asyncio.Lock()
         self._process_event: EventProcessor | None = None
         self._event_log_parts: EventLogParts | None = None
-        self._short_id: ShortId | None = None
 
     async def start(
         self,
         *,
         process_event: EventProcessor,
         event_log_parts: EventLogParts,
-        short_id: ShortId,
     ) -> None:
         """启动固定 worker；重复调用不会创建第二套队列。"""
 
         self._process_event = process_event
         self._event_log_parts = event_log_parts
-        self._short_id = short_id
 
         if not self._event_workers:
             self._event_queue = asyncio.Queue(maxsize=self.settings.max_waiting_events)
@@ -110,7 +106,6 @@ class QqDriverRuntime:
         self._waiting_events = 0
         self._process_event = None
         self._event_log_parts = None
-        self._short_id = None
 
     async def enqueue_event(self, event: QqMessageEvent) -> None:
         """非阻塞地把已经解析的 QQ 事件送入后台队列。"""
@@ -192,7 +187,7 @@ class QqDriverRuntime:
             logger.opt(colors=True).warning(
                 C.join(
                     C.warn("QQ 按钮 ACK 队列已满"),
-                    C.kv("interaction", self._format_short_id(event.interaction_id)),
+                    C.kv("interaction", event.interaction_id or "-"),
                     C.kv("max_waiting", self.settings.max_waiting_interactions),
                 )
             )
@@ -233,7 +228,7 @@ class QqDriverRuntime:
                         C.join(
                             C.warn("QQ 按钮 ACK worker 异常"),
                             C.kv("worker", index),
-                            C.kv("interaction", self._format_short_id(interaction_id)),
+                            C.kv("interaction", interaction_id or "-"),
                         )
                     )
                 finally:
@@ -276,7 +271,7 @@ class QqDriverRuntime:
             logger.opt(colors=True, exception=exc).warning(
                 C.join(
                     C.warn("QQ 按钮回调确认失败"),
-                    C.kv("interaction", self._format_short_id(interaction_id)),
+                    C.kv("interaction", interaction_id or "-"),
                 )
             )
 
@@ -372,11 +367,6 @@ class QqDriverRuntime:
         if self._event_log_parts is None:
             return []
         return self._event_log_parts(event, include_message)
-
-    def _format_short_id(self, value: object) -> str:
-        if self._short_id is None:
-            return str(value or "-")
-        return self._short_id(value)
 
 
 async def _cancel_tasks(tasks: set[asyncio.Task]) -> None:

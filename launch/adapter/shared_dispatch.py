@@ -3,8 +3,7 @@
 QQ 与 Local 两个驱动器各自维护命令索引、消息会话、排队和回复状态，这部分
 **故意不共享**。但"把注册项绑定到业务回调""按 block 规则截取执行计划"
 "先统一过守卫再产生副作用"以及把命令参数注入业务函数，这几段与驱动器会话
-无关，此前在每个驱动器里各写一份，已经出现过不一致（截断符一处 `…`、
-一处 `...`），因此集中在这里。
+无关，此前在每个驱动器里各写一份，已经出现过不一致，因此集中在这里。
 
 各驱动器通过显式参数提供自己的差异，而不是让共享代码反向依赖驱动器：
 
@@ -18,7 +17,6 @@ QQ 与 Local 两个驱动器各自维护命令索引、消息会话、排队和�
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from typing import Any
 
@@ -137,21 +135,6 @@ class MessageDispatchMixin:
             )
         finally:
             reset_current_message_context(context_token)
-
-    @staticmethod
-    def _short_text(value: object, limit: int = 80) -> str:
-        """压缩日志正文长度。
-
-        截断符统一为单字符省略号：此前 QQ 用 `…`、Local 用 `...`，同一功能
-        在两处产生不同输出。
-        """
-
-        text = re.sub(r"\s+", " ", str(value or "")).strip()
-        if not text:
-            return "-"
-        if len(text) <= limit:
-            return text
-        return f"{text[: limit - 1]}…"
 
 
 __all__ = ["MessageDispatchMixin", "MessageContextFactory"]

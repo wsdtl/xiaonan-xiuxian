@@ -28,7 +28,6 @@ from ..context import (
 )
 from .client import client
 from .event import QqMessageEvent
-from .ids import short_id
 from .keyboard import validate_keyboard
 from .render import render_qq_message
 from .target import QqSendTarget
@@ -399,12 +398,10 @@ class QqReplyManager:
 
         return [
             C.kv("type", "群聊" if item.target.is_group else "私聊"),
-            C.kv("user", short_id(item.user_id)),
+            C.kv("user", item.user_id or "-"),
             C.kv(
                 "target",
-                short_id(
-                    item.target.group_id or item.target.user_id
-                ),
+                item.target.group_id or item.target.user_id or "-",
             ),
             C.kv("request_id", item.request_id or "-"),
         ]

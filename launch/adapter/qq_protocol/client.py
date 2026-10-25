@@ -22,8 +22,6 @@ from urllib3.exceptions import (
 from launch.config import config
 from launch.log import C, logger
 
-from .ids import short_id
-
 QQ_TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken"
 QQ_OPEN_API_BASE = "https://api.sgroup.qq.com"
 
@@ -401,21 +399,20 @@ class QqOpenApiClient:
             return [
                 *QqOpenApiClient._path_log_parts(path),
                 C.kv("file_type", payload.get("file_type") or "-"),
-                C.kv("file", short_id(result_data.get("file_uuid"))),
+                C.kv("file", result_data.get("file_uuid") or "-"),
                 C.kv("ttl", result_data.get("ttl", "-")),
             ]
 
         return [
             *QqOpenApiClient._path_log_parts(path),
             C.kv("msg_type", payload.get("msg_type") or "-"),
-            C.kv("msg", short_id(payload.get("msg_id"))),
+            C.kv("msg", payload.get("msg_id") or "-"),
             C.kv(
                 "result",
-                short_id(
-                    result_data.get("id")
-                    or result_data.get("message_id")
-                    or result_data.get("msg_id")
-                ),
+                result_data.get("id")
+                or result_data.get("message_id")
+                or result_data.get("msg_id")
+                or "-",
             ),
         ]
 
@@ -428,7 +425,7 @@ class QqOpenApiClient:
             target_type = "私聊" if parts[-3] == "users" else "群聊"
             return [
                 C.kv("target", target_type),
-                C.kv("target", short_id(parts[-2])),
+                C.kv("target", parts[-2]),
             ]
         return [C.kv("path", path)]
 

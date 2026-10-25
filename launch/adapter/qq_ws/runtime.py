@@ -325,7 +325,7 @@ class QqGatewayRuntime:
                 C.join(
                     C.ok("QQ WebSocket 发送 Resume"),
                     C.kv("shard", shard[0]),
-                    C.kv("session", processor.short_id(session.session_id)),
+                    C.kv("session", session.session_id or "-"),
                     C.kv("seq", session.seq),
                 )
             )
@@ -341,7 +341,7 @@ class QqGatewayRuntime:
                     C.ok("QQ WebSocket 发送 Identify"),
                     C.kv("shard", shard[0]),
                     C.kv("can_resume", session.can_resume),
-                    C.kv("session", processor.short_id(session.session_id)),
+                    C.kv("session", session.session_id or "-"),
                 )
             )
             await connection.send_text(
@@ -397,8 +397,8 @@ class QqGatewayRuntime:
                     C.join(
                         C.ok("QQ WebSocket 已鉴权"),
                         C.kv("shard", shard[0]),
-                        C.kv("bot", processor.short_id(self_id)),
-                        C.kv("session", processor.short_id(session_id)),
+                        C.kv("bot", self_id or "-"),
+                        C.kv("session", session_id or "-"),
                     )
                 )
                 return True
@@ -508,7 +508,7 @@ class QqGatewayRuntime:
                 C.join(
                     C.ok("QQ WebSocket 事件已忽略"),
                     C.kv("type", event_type or "-"),
-                    C.kv("event", processor.short_id(payload.get("id"))),
+                    C.kv("event", payload.get("id") or "-"),
                 )
             )
             return

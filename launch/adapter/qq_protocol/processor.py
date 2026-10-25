@@ -23,7 +23,6 @@ from ..context import (
 from ..request_scope import request_scope
 from ..shared_dispatch import MessageDispatchMixin
 from .event import QqMessageEvent, parse_message_event
-from .ids import short_id
 from .manager import current_event, manager
 from .rules import QqCommandMatch, QqCommandRegistry
 from .runtime import QqDriverRuntime
@@ -66,7 +65,6 @@ async def start_dispatch_runtime(transport: str) -> None:
     await driver_runtime.start(
         process_event=process_message_event,
         event_log_parts=event_log_parts,
-        short_id=short_id,
     )
 
 
@@ -214,16 +212,16 @@ def event_log_parts(event: QqMessageEvent, include_message: bool = True) -> list
 
     parts = [
         C.kv("type", event_type_label(event.event_type)),
-        C.kv("user", short_id(event.user_id)),
-        C.kv("group", short_id(event.group_id)),
-        C.kv("msg", short_id(event.message_id)),
+        C.kv("user", event.user_id or "-"),
+        C.kv("group", event.group_id or "-"),
+        C.kv("msg", event.message_id or "-"),
     ]
     if event.interaction_id:
-        parts.append(C.kv("interaction", short_id(event.interaction_id)))
+        parts.append(C.kv("interaction", event.interaction_id))
     if event.event_id:
-        parts.append(C.kv("event", short_id(event.event_id)))
+        parts.append(C.kv("event", event.event_id))
     if include_message:
-        parts.append(C.kv("message", short_text(event.content)))
+        parts.append(C.kv("message", event.content))
     return parts
 
 
@@ -255,13 +253,7 @@ def matched_commands_text(items: list[QqCommandMatch]) -> str:
     text = "、".join(commands[:3])
     if len(commands) > 3:
         text = f"{text} 等{len(commands)}个"
-    return short_text(text, limit=60)
-
-
-def short_text(value: object, limit: int = 80) -> str:
-    """压缩日志正文；截断符与共享派发层保持一致。"""
-
-    return MessageDispatchMixin._short_text(value, limit)
+    return text
 
 
 def bot_name() -> str:
@@ -277,8 +269,8 @@ def payload_log_parts(payload: dict) -> list[str]:
     return [
         C.kv("op", payload.get("op") or "-"),
         C.kv("type", payload.get("t") or "-"),
-        C.kv("event", short_id(payload.get("id"))),
-        C.kv("msg", short_id(data.get("id"))),
+        C.kv("event", payload.get("id") or "-"),
+        C.kv("msg", data.get("id") or "-"),
     ]
 
 
@@ -294,8 +286,6 @@ __all__ = [
     "process_message_event",
     "registry",
     "registry_log_parts",
-    "short_id",
-    "short_text",
     "start_dispatch_runtime",
     "stop_dispatch_runtime",
     "submit_event",

@@ -114,9 +114,7 @@ class LocalEventHandler(MessageDispatchMixin, BaseMessageHandler):
                         C.join(
                             C.warn("本地消息未命中命令"),
                             C.kv("user", event.user_id or "-"),
-                            C.kv(
-                                "message", LocalEventHandler._short_text(event.raw_message)
-                            ),
+                            C.kv("message", event.raw_message),
                         )
                     )
                     return result
