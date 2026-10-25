@@ -96,6 +96,26 @@ def test_recipes_and_laws_use_explicit_materials(data_service: JsonDataService) 
         assert "铸法" not in value and "兽引" not in value, law_id
 
 
+def test_breakthrough_pills_cover_base_growth_and_speed(data_service: JsonDataService) -> None:
+    """每个突破境界都必须有五行基础成长属性各一份，并且有速度丹。"""
+
+    base = {"血气上限", "神魂上限", "精神上限", "攻击", "防御"}
+    by_realm: dict[str, list[set[str]]] = {}
+    for value in data_service.entities("丹药").values():
+        effect = value.get("使用效果") or {}
+        if effect.get("类型") != "境界突破":
+            continue
+        by_realm.setdefault(str(effect.get("目标境界")), []).append(
+            set(effect.get("永久属性") or {})
+        )
+    assert by_realm
+    for realm, entries in by_realm.items():
+        assert len(entries) == 6, (realm, len(entries))
+        covered = set().union(*entries)
+        assert base <= covered, (realm, base - covered)
+        assert "速度" in covered, realm
+
+
 def test_builds_carry_their_own_combat_text() -> None:
     """构筑必须自带完整能力树：不许按编号回查中间层，也不留词条表。"""
 
