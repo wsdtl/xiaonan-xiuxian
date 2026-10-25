@@ -24,7 +24,7 @@ USUAL = ('灵田', '灵田 开启', '灵田 收取', '灵田 清地形')
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
 async def lingtian_page() -> HTMLResponse:
     return HTMLResponse(
-        static_path('lingtian', 'index.html').read_text(encoding='utf-8'),
+        static_path('tool', 'lingtian', 'index.html').read_text(encoding='utf-8'),
         headers={
             **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',

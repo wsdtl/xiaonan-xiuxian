@@ -27,7 +27,7 @@ CATEGORIES = (
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
 async def wanzhen_page() -> HTMLResponse:
     return HTMLResponse(
-        static_path('wanzhen', 'index.html').read_text(encoding='utf-8'),
+        static_path('tool', 'wanzhen', 'index.html').read_text(encoding='utf-8'),
         headers={
             **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',

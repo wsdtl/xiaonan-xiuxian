@@ -15,7 +15,7 @@ router = APIRouter(prefix="/assembly")
 
 @router.get("", response_class=HTMLResponse, include_in_schema=False)
 async def assembly_page() -> HTMLResponse:
-    return HTMLResponse(static_path("zhuangpei", "index.html").read_text(encoding="utf-8"), headers={
+    return HTMLResponse(static_path("tool", "zhuangpei", "index.html").read_text(encoding="utf-8"), headers={
         **PAGE_HEADERS, "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY",
         "Content-Security-Policy": PAGE_CSP,
     })

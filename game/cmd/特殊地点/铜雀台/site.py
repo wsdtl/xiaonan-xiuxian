@@ -49,7 +49,7 @@ def _preview_view(ui: dict[str, str], value: object) -> dict[str, object]:
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
 async def tongquetai_page() -> HTMLResponse:
     return HTMLResponse(
-        static_path('tongquetai', 'index.html').read_text(encoding='utf-8'),
+        static_path('tool', 'tongquetai', 'index.html').read_text(encoding='utf-8'),
         headers={
             **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',

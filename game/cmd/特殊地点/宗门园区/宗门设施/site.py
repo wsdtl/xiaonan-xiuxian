@@ -22,7 +22,7 @@ router = APIRouter(prefix='/lianzhen')
 @router.get('', response_class=HTMLResponse, include_in_schema=False)
 async def lianzhen_page() -> HTMLResponse:
     return HTMLResponse(
-        static_path('lianzhen', 'index.html').read_text(encoding='utf-8'),
+        static_path('tool', 'lianzhen', 'index.html').read_text(encoding='utf-8'),
         headers={
             **PAGE_HEADERS,
             'Referrer-Policy': 'no-referrer',
