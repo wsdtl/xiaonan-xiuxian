@@ -7,8 +7,8 @@ from typing import Sequence
 from game.features.zongmen import SectAction, SectCopy, SectOperationResult, SectPage
 from message import DocumentMessage, M
 
-from .....actions import CommandAction, message_actions
-from .....presentation import error_document
+from ....actions import CommandAction, message_actions
+from ....presentation import error_document
 
 _ERROR_KEYS = {
     "name_invalid": "名称无效",

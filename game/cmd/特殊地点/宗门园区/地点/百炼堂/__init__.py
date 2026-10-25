@@ -4,7 +4,7 @@ from __future__ import annotations
 from game.app import current_game_services
 
 from .....command import GameCommand
-from .. import refining_common
+from ... import refining_common
 from launch.adapter import MessageContext
 from typing import Any
 

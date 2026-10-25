@@ -5,7 +5,7 @@ from __future__ import annotations
 from game.app import current_game_services
 from game.features.zongmen import SectFeatureError
 
-from .....command import GameCommand
+from ....command import GameCommand
 from . import reply
 from launch.adapter import MessageContext
 from typing import Any

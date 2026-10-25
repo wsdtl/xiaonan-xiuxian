@@ -107,9 +107,17 @@ class SectFacilityService:
             raise RuntimeError("宗门设施核心已经初始化")
         if not self._data.status().loaded:
             raise RuntimeError("JSON 数据服务必须先于宗门设施核心启动")
-        buildings = self._data.dataset("宗门设施建筑")
+        building_sources = {
+            "炼器": ("百炼堂规则", "百炼堂"),
+            "炼丹": ("丹鼎阁规则", "丹鼎阁"),
+            "炼阵": ("演阵台规则", "演阵台"),
+        }
         for facility_type in _FACILITY_TYPES:
-            value = _mapping(buildings.get(facility_type), f"宗门设施.建筑.{facility_type}")
+            dataset, key = building_sources[facility_type]
+            value = _mapping(
+                self._data.dataset(dataset).get(key),
+                f"宗门设施.建筑.{facility_type}",
+            )
             supported = _texts(value.get("支持品级"), f"宗门设施.建筑.{facility_type}.支持品级")
             self._facilities[facility_type] = SectFacility(
                 facility_type,

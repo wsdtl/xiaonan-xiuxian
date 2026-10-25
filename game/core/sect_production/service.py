@@ -82,19 +82,22 @@ class SectProductionService:
         if not self._data.status().loaded:
             raise RuntimeError("JSON 数据微服务必须先于宗门资源生产核心启动")
         raw = dict(self._data.dataset("宗门生产周期").get("生产"))
-        raw["设施"] = dict(self._data.dataset("宗门生产设施"))
-        raw["产出"] = dict(self._data.dataset("宗门生产产出"))
         self._rule_version = _text(raw.get("规则版本"), "宗门生产.规则版本")
         period = _positive_int(raw.get("周期秒"), "宗门生产.周期秒")
         catch_up = _positive_int(raw.get("累计轮数上限"), "宗门生产.累计轮数上限")
         multiplier = _positive_float(raw.get("基础产量倍率"), "宗门生产.基础产量倍率")
-        facilities = _mapping(raw.get("设施"), "宗门生产.设施")
-        outputs = _mapping(raw.get("产出"), "宗门生产.产出")
+        rule_sources = {"灵脉": "灵脉规则", "灵田": "灵田规则"}
+        outputs: dict[str, object] = {}
+        for kind in _FACILITY_TYPES:
+            value = _mapping(
+                self._data.dataset(rule_sources[kind]).get(kind),
+                f"宗门生产.规则.{kind}",
+            )
+            if _text(value.get("名称"), f"宗门生产.规则.{kind}.名称") != kind:
+                raise JsonDataError(f"宗门生产设施名称必须为{kind}")
+            outputs[kind] = _mapping(value.get("产出"), f"宗门生产.规则.{kind}.产出")
         loaded: dict[str, SectProductionFacility] = {}
         for kind in _FACILITY_TYPES:
-            value = _mapping(facilities.get(kind), f"宗门生产.设施.{kind}")
-            if _text(value.get("名称"), f"宗门生产.设施.{kind}.名称") != kind:
-                raise JsonDataError(f"宗门生产设施名称必须为{kind}")
             output = _mapping(outputs.get(kind), f"宗门生产.产出.{kind}")
             primary_key = "灵石范围" if kind == "灵脉" else "灵植数量"
             material_key = "灵矿数量" if kind == "灵脉" else "灵植数量"
@@ -111,7 +114,7 @@ class SectProductionService:
                 self._terrain_options(kind, output),
             )
         self._facilities = MappingProxyType(loaded)
-        self._validate_outputs(raw)
+        self._validate_outputs(outputs)
         self._initialized = True
         return self.status()
 
@@ -518,8 +521,7 @@ class SectProductionService:
             _selected_terrain(value, facility),
         )
 
-    def _validate_outputs(self, raw: Mapping[str, object]) -> None:
-        outputs = _mapping(raw.get("产出"), "宗门生产.产出")
+    def _validate_outputs(self, outputs: Mapping[str, object]) -> None:
         for kind in _FACILITY_TYPES:
             value = _mapping(outputs.get(kind), f"宗门生产.产出.{kind}")
             if kind == "灵脉" and _texts(
