@@ -1247,6 +1247,96 @@ def check_cmd_core_access() -> list[Finding]:
     return findings
 
 
+
+def _absolute_import(node: ast.ImportFrom, path: Path) -> str:
+    """把 ImportFrom 解析成绝对模块名（只用于边界判断）。"""
+
+    if not node.level:
+        return node.module or ""
+    package = list(path.with_suffix("").parts)
+    if path.name == "__init__.py":
+        package = package[:-1]
+    else:
+        package = package[:-1]
+    if node.level > 1:
+        package = package[: -(node.level - 1)]
+    base = ".".join(package)
+    return f"{base}.{node.module}" if node.module else base
+
+
+def check_composition_boundaries() -> list[Finding]:
+    """组合根不写业务，玩法不横向依赖另一个玩法。"""
+
+    findings: list[Finding] = []
+    app_path = PROJECT_ROOT / "game" / "app.py"
+    tree = ast.parse(app_path.read_text(encoding="utf-8"))
+    builder = next(
+        (
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "build_game_services"
+        ),
+        None,
+    )
+    if builder is not None:
+        for node in ast.walk(builder):
+            if node is builder:
+                continue
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                findings.append(
+                    Finding(
+                        "组合根写业务",
+                        _relative(app_path),
+                        node.lineno,
+                        "build_game_services() 内不得定义嵌套函数；业务应下沉服务",
+                    )
+                )
+            if isinstance(node, ast.If):
+                findings.append(
+                    Finding(
+                        "组合根写业务",
+                        _relative(app_path),
+                        node.lineno,
+                        "build_game_services() 内不得写业务分支；只保留构造与注入",
+                    )
+                )
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and "holder" in target.id.lower():
+                        findings.append(
+                            Finding(
+                                "组合根写业务",
+                                _relative(app_path),
+                                node.lineno,
+                                "不得用 holder 做服务定位；改为显式构造/attach",
+                            )
+                        )
+
+    for path in sorted((PROJECT_ROOT / "game" / "features").rglob("*.py")):
+        if "__pycache__" in path.parts or path.name == "presentation.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        current = path.relative_to(PROJECT_ROOT / "game" / "features").parts[0]
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            target = _absolute_import(node, path)
+            parts = target.split(".")
+            if len(parts) < 3 or parts[:2] != ["game", "features"]:
+                continue
+            other = parts[2]
+            if other in {"presentation", current}:
+                continue
+            findings.append(
+                Finding(
+                    "玩法横向依赖",
+                    _relative(path),
+                    node.lineno,
+                    f"不得直接依赖另一个玩法 {other}；公共能力应下沉 core",
+                )
+            )
+    return findings
+
 CHECKS = (
     ("动态导入越界", check_dynamic_imports),
     ("框架反向依赖", check_framework_dependency),
@@ -1274,6 +1364,7 @@ CHECKS = (
     ("写死机器路径", check_hardcoded_machine_paths),
     ("字段校验重写", check_field_validators_are_shared),
     ("忽略文件入库", check_tracked_ignored_files),
+    ("组合根与横向依赖", check_composition_boundaries),
 )
 
 

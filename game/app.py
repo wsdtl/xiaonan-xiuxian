@@ -50,6 +50,7 @@ from .core.sect_progress import SectProgressService
 from .core.sect_war import SectWarService
 from .core.team import TeamService
 from .core.trade import TradeService
+from .core.visibility import VisibilityService
 from .core.world import WorldService
 from .features.biguan import RetreatFeature
 from .features.butian import ButianFeature
@@ -136,6 +137,7 @@ class CoreServices:
     injury: InjuryService
     innate_treasure: InnateTreasureService
     character: CharacterService
+    visibility: VisibilityService
     asset: AssetService
     promotion: PromotionService
     medicine: MedicineService
@@ -449,6 +451,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         sect_library,
     )
     sect_library.attach_character(character)
+    sect_library.require_character()
     character_service_status = character.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -458,9 +461,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("initial_items", character_service_status.initial_item_count),
         )
     )
-    # 种族表归角色核心读（`角色/规则/种族/种族.json`）。道侣核心比它先构造，所以在这里回填：
-    # 回填当场校验 `道侣.json.种族池`，池子里写了没登记的族名照样是启动错误。
-    companion.attach_races(character.races())
+    visibility = VisibilityService(database, character)
+    visibility.initialize()
+    logger.opt(colors=True).success(C.ok("网页可见性核心微服务已启动"))
 
     injury = InjuryService(data, database)
     injury_status = injury.initialize()
@@ -678,6 +681,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     core = CoreServices(
         data=data,
         bloodline=bloodline,
+        visibility=visibility,
         transaction_log=transaction_log,
         item_catalog=item_catalog,
         combat=combat,
@@ -906,9 +910,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     zengsong.initialize()
     zhanbao = BattleReportFeature(combat, sect_war, duel, battle_reports, data=data)
     zhanbao.initialize()
-    wangye = WangyeFeature(data, character, database)
+    wangye = WangyeFeature(data, visibility)
     wangye.initialize()
-    zhuangpei = ZhuangpeiFeature(data, asset, character, database, innate_treasure, player_state, combat, wangye)
+    zhuangpei = ZhuangpeiFeature(data, asset, character, database, innate_treasure, player_state, combat, visibility)
     daolv_peiyang = CompanionCultivationFeature(
         data,
         companion,

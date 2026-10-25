@@ -53,6 +53,7 @@ from game.core.player_state import PlayerStateService
 if TYPE_CHECKING:
     from game.core.sect_library import SectLibraryService
 
+from .races import load_races
 from .contracts import (
     CharacterSlotPlan,
     CharacterAssemblyPlan,
@@ -213,43 +214,9 @@ class CharacterService:
         )
 
     def _load_races(self) -> dict[str, Mapping[str, object]]:
-        """种族登记表：**结构**在启动期查死，语义（登记过 / 正负配对 / 名额）由判据查。
+        """种族登记表：结构由 `races` 模块统一读取。"""
 
-        种族是「天生」那一层：它不挂卡，只给一组天生锁定技（战斗侧叫「参战者固有规则」）。
-        这里读进来给三处用：人物创建（选族）、人物战斗快照（挂天生规则）、以及敌人核心
-        （敌方按档次抽族，见 `data/角色/规则/说明.md` 的「种族」一节）。结构读不通就拒绝启动。
-        """
-
-        entries = _sequence(
-            self._data.dataset("种族").get("种族"), "角色/规则/种族/种族.json"
-        )
-        result: dict[str, Mapping[str, object]] = {}
-        numbers: dict[str, str] = {}
-        for index, raw in enumerate(entries):
-            where = f"种族[{index}]"
-            entry = _mapping(raw, where)
-            name = _text(entry.get("种族"), f"{where}.种族")
-            if name in result:
-                raise JsonDataError(f"{where}.种族重名：{name}")
-            for rule_index, rule in enumerate(
-                _sequence(entry.get("天生规则") or (), f"{where}.天生规则")
-            ):
-                node = _mapping(rule, f"{where}.天生规则[{rule_index}]")
-                _text(node.get("名称"), f"{where}.天生规则[{rule_index}].名称")
-            lifespan_factor = entry.get("寿元系数")
-            if lifespan_factor is not None:
-                try:
-                    factor = float(lifespan_factor)
-                except (TypeError, ValueError) as exc:
-                    raise JsonDataError(f"{where}.寿元系数必须是数字") from exc
-                if not factor > 0:
-                    raise JsonDataError(f"{where}.寿元系数必须大于 0")
-            number = _text(entry.get("编号"), f"{where}.编号")
-            if number in numbers:
-                raise JsonDataError(f"{where}.编号重复：{number}")
-            numbers[number] = name
-            result[name] = entry
-        return result
+        return load_races(self._data)
 
     def races(self) -> Mapping[str, Mapping[str, object]]:
         """种族登记表（只读）。"""

@@ -12,7 +12,7 @@ from game.core.database import (
     StateConflictError, IdempotencyConflictError,
 )
 from game.core.innate_treasure import InnateTreasureService, InnateTreasureError
-from game.features.wangye import WangyeFeature
+from game.core.visibility import VisibilityService
 from game.core.player_state import PlayerStateService, PlayerStateError
 
 from .codec import SECTIONS, decode, encode, normalize
@@ -26,7 +26,7 @@ class ZhuangpeiFeature:
         self, data: JsonDataService, asset: AssetService, character: CharacterService,
         database: DatabaseService, innate_treasure: InnateTreasureService,
         player_state: PlayerStateService, combat: CombatService,
-        web_public: WangyeFeature,
+        web_public: VisibilityService,
     ) -> None:
         self._data = data
         self._asset = asset

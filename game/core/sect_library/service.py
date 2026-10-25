@@ -62,6 +62,12 @@ class SectLibraryService:
 
         self._character = character
 
+    def require_character(self) -> None:
+        """启动收尾断言：借阅槽位写入者必须已经接入。"""
+
+        if self._character is None:
+            raise RuntimeError("角色核心必须先回填给藏经阁核心")
+
     def initialize(self) -> SectLibraryStatus:
         if self._initialized:
             raise RuntimeError("藏经阁核心已经初始化")

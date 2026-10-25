@@ -11,6 +11,7 @@ from types import MappingProxyType
 
 from game.core.asset import ItemRef, format_item_ref, parse_item_ref
 from game.core.bloodline import BloodlineService
+from game.core.character import load_races
 from game.core.combat import CombatantSpec, CombatBuildRef, generate_five_elements
 from game.core.data import (
     ContractSet,
@@ -183,6 +184,17 @@ class CompanionService:
                 for location, values in by_location.items()
             }
         )
+        races = load_races(self._data)
+        unknown = [
+            f"{definition.companion_id}:{definition.race}"
+            for definition in definitions.values()
+            if definition.race not in races
+        ]
+        if unknown:
+            raise JsonDataError(
+                f"道侣固定种族里有未登记的种族：{'、'.join(unknown)}"
+            )
+        self._races = MappingProxyType({str(k): v for k, v in races.items()})
         self._initialized = True
         return self.status()
 
@@ -1559,26 +1571,6 @@ class CompanionService:
             _nonnegative_int(weapon.get("经验"), f"道侣 {companion_id}.本命武器.经验"),
             weapon_laws,
         )
-
-    def attach_races(self, races: Mapping[str, Mapping[str, object]]) -> None:
-        """回填种族登记表并**当场校验**道侣的种族池（组合根在角色核心就绪后调用）。
-
-        道侣核心比角色核心先构造，种族表又归角色核心读，所以这一层用「回填」而不是构造
-        注入；回填发生在启动期，池子里写了没登记的族名照样是启动错误。
-        """
-
-        if self._races:
-            raise RuntimeError("道侣核心的种族表已经回填过")
-        unknown = [
-            f"{definition.companion_id}:{definition.race}"
-            for definition in self._definitions.values()
-            if definition.race not in races
-        ]
-        if unknown:
-            raise JsonDataError(
-                f"道侣固定种族里有未登记的种族：{'、'.join(unknown)}"
-            )
-        self._races = MappingProxyType({str(k): v for k, v in races.items()})
 
     def race_of(self, companion_id: str) -> str:
         """这名道侣固定是哪一族。"""

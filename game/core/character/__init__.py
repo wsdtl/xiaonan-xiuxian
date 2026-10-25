@@ -40,6 +40,7 @@ from .contracts import (
     WeaponProfile,
     YijingProfile,
 )
+from .races import load_races
 from .service import CharacterService
 
 __all__ = [
@@ -82,4 +83,5 @@ __all__ = [
     "InventorySummary",
     "WeaponProfile",
     "YijingProfile",
+    "load_races",
 ]
