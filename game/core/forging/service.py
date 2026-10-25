@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from math import ceil
 from types import MappingProxyType
 
 from game.core.asset import (
-    Choice as _Choice,
-    minimum_cost_matching as _minimum_cost_matching,
     AssetEntry,
     AssetService,
     AssetStateError,
@@ -59,7 +56,6 @@ from .contracts import (
     ForgingPreview,
     ForgingResult,
     ForgingStatus,
-    ForgingUnavailableError,
     WeaponAdvance,
     WeaponStage,
 )
@@ -73,14 +69,6 @@ from game.core.data import (
 
 #: 器律可用器阶从数据的 `阶序` 推导（阶序 1 是凡器，不开放器律孔），代码不再另存一份。
 _LAW_STAGE_FLOOR = 2
-
-
-@dataclass(frozen=True)
-class _MaterialIdentity:
-    item_id: str
-    name: str
-    primary_trait: str
-    secondary_trait: str = ""
 
 
 class ForgingService:
@@ -107,10 +95,7 @@ class ForgingService:
         self._stage_by_name: Mapping[str, WeaponStage] = MappingProxyType({})
         self._laws: Mapping[str, ForgingLaw] = MappingProxyType({})
         self._law_by_name: Mapping[str, str] = MappingProxyType({})
-        self._methods: Mapping[str, tuple[str, tuple[str, ...]]] = MappingProxyType({})
         self._artisans: Mapping[str, ForgingArtisan] = MappingProxyType({})
-        self._beast_materials: Mapping[str, _MaterialIdentity] = MappingProxyType({})
-        self._mineral_materials: Mapping[str, _MaterialIdentity] = MappingProxyType({})
 
     def initialize(self) -> ForgingStatus:
         if self._initialized:
@@ -149,17 +134,6 @@ class ForgingService:
         self._stage_by_name = MappingProxyType(
             {stage.name: stage for stage in self._stages}
         )
-        self._methods = MappingProxyType(
-            self._load_methods(rules.get("铸法")) if rules.get("铸法") else {}
-        )
-        self._beast_materials = MappingProxyType(
-            self._load_beast_materials(rules.get("归引")) if rules.get("归引") else {}
-        )
-        self._mineral_materials = MappingProxyType(
-            self._load_mineral_materials(rules.get("炼器-归脉"))
-            if rules.get("炼器-归脉")
-            else {}
-        )
         self._laws = MappingProxyType(self._load_laws())
         self._law_by_name = MappingProxyType(
             {law.name: law_id for law_id, law in self._laws.items()}
@@ -173,10 +147,9 @@ class ForgingService:
         return ForgingStatus(
             self._initialized,
             len(self._laws),
-            len(self._methods),
             len(self._artisans),
-            len(self._beast_materials),
-            len(self._mineral_materials),
+            len(_item_ids(self._data, "兽宝")),
+            len(_item_ids(self._data, "灵矿")),
             int(self._weapon_rule.get("等级上限") or 0),
         )
 
@@ -466,10 +439,10 @@ class ForgingService:
             ):
                 raise ValueError("炼器事务工匠与地点不一致")
             beasts = _payload_materials(
-                payload.get("兽宝"), self._beast_materials, self._asset, "兽宝"
+                payload.get("兽宝"), self._asset, self._data, "兽宝"
             )
             minerals = _payload_materials(
-                payload.get("灵矿"), self._mineral_materials, self._asset, "灵矿"
+                payload.get("灵矿"), self._asset, self._data, "灵矿"
             )
             before = _payload_nonnegative_int(
                 payload.get("器藏原数量"), "炼器事务.器藏原数量"
@@ -480,7 +453,6 @@ class ForgingService:
             activation = _payload_activation(payload.get("先天灵宝"))
         except (KeyError, TypeError, ValueError) as exc:
             raise ForgingConflictError("已提交炼器事务无法还原") from exc
-        stage = self._stage_by_name[law.stage]
         preview = ForgingPreview(
             user_id,
             location_name,
@@ -489,8 +461,6 @@ class ForgingService:
             beasts,
             minerals,
             (),
-            sum(material.relation == "旁脉" for material in minerals),
-            stage.secondary_substitution_limit,
             True,
         )
         return ForgingResult(preview, before, after, True, activation)
@@ -512,8 +482,6 @@ class ForgingService:
             value.beast_materials,
             value.mineral_materials,
             value.missing_materials,
-            value.secondary_substitutions,
-            value.secondary_substitution_limit,
             value.can_forge,
         )
 
@@ -568,87 +536,7 @@ class ForgingService:
                     )
                 )
         return ForgingAssessment(
-            law, tuple(beasts), tuple(minerals), tuple(missing), 0, 0, not missing
-        )
-
-    def _match(
-        self,
-        traits: tuple[str, ...],
-        entries: tuple[AssetEntry, ...],
-        identities: Mapping[str, _MaterialIdentity],
-        minimum_grade_id: str,
-        *,
-        allow_secondary: bool,
-    ) -> tuple[
-        tuple[ForgingMaterial, ...],
-        tuple[ForgingMissingMaterial, ...],
-        int,
-    ]:
-        minimum_order = self._asset.grade(minimum_grade_id).order
-        by_item: dict[str, list[AssetEntry]] = {}
-        for entry in entries:
-            if entry.content_id in identities:
-                by_item.setdefault(entry.content_id, []).append(entry)
-        choices: list[_Choice] = []
-        for item_rank, item_id in enumerate(sorted(by_item)):
-            identity = identities[item_id]
-            stacks = sorted(
-                (
-                    entry
-                    for entry in by_item[item_id]
-                    if self._asset.grade(entry.grade_id).order >= minimum_order
-                ),
-                key=lambda entry: self._asset.grade(entry.grade_id).order,
-            )
-            for slot, trait in enumerate(traits):
-                relation = ""
-                quantity = 0
-                if identity.primary_trait == trait:
-                    relation, quantity = ("本脉" if allow_secondary else "兽脉"), 1
-                elif allow_secondary and identity.secondary_trait == trait:
-                    relation, quantity = "旁脉", 2
-                if not relation:
-                    continue
-                entry = next(
-                    (value for value in stacks if value.quantity >= quantity), None
-                )
-                if entry is not None:
-                    choices.append(
-                        _Choice(identity, entry, slot, trait, relation, quantity)
-                    )
-        matched = _minimum_cost_matching(
-            tuple(sorted(by_item)),
-            len(traits),
-            choices,
-            self._asset,
-        )
-        materials = tuple(
-            ForgingMaterial(
-                choice.identity.item_id,
-                choice.identity.name,
-                choice.entry.grade_id,
-                choice.entry.grade_name,
-                choice.trait,
-                choice.relation,
-                choice.quantity,
-            )
-            for choice in sorted(matched.values(), key=lambda value: value.slot)
-        )
-        missing_traits = [
-            trait for index, trait in enumerate(traits) if index not in matched
-        ]
-        missing_counts: dict[str, int] = {}
-        for trait in missing_traits:
-            missing_counts[trait] = missing_counts.get(trait, 0) + 1
-        category = "灵矿" if allow_secondary else "兽宝"
-        missing = tuple(
-            ForgingMissingMaterial(category, trait, quantity)
-            for trait, quantity in missing_counts.items()
-        )
-        return (
-            materials,
-            missing,
-            sum(material.relation == "旁脉" for material in materials),
+            law, tuple(beasts), tuple(minerals), tuple(missing), not missing
         )
 
     async def _material_entries(self, user_id: str) -> tuple[AssetEntry, ...]:
@@ -679,58 +567,6 @@ class ForgingService:
             raise ForgingError(f"未找到唯一器律：{query or '<空>'}")
         return law
 
-    def _load_methods(self, value: object) -> dict[str, tuple[str, tuple[str, ...]]]:
-        result: dict[str, tuple[str, tuple[str, ...]]] = {}
-        for raw in _sequence(value, "炼器规则.铸法"):
-            row = _mapping(raw, "铸法[]")
-            name = _text(row.get("名称"), "铸法.名称")
-            if name in result:
-                raise JsonDataError(f"铸法名称重复：{name}")
-            traits: list[str] = []
-            for material in _sequence(row.get("辅材"), f"铸法 {name}.辅材"):
-                material_row = _mapping(material, f"铸法 {name}.辅材[]")
-                trait = _text(material_row.get("铸脉"), f"铸法 {name}.铸脉")
-                traits.extend(
-                    [trait]
-                    * _positive_int(material_row.get("份数"), f"铸法 {name}.份数")
-                )
-            result[name] = (_text(row.get("器阶"), f"铸法 {name}.器阶"), tuple(traits))
-        return result
-
-    def _load_beast_materials(self, value: object) -> dict[str, _MaterialIdentity]:
-        result: dict[str, _MaterialIdentity] = {}
-        for raw in _sequence(value, "炼器规则.归引"):
-            row = _mapping(raw, "归引[]")
-            pool = _text(row.get("兽宝池"), "归引.兽宝池")
-            trait = _text(row.get("兽脉"), "归引.兽脉")
-            for item_id in self._data.pool_members((pool,), "基础物品"):
-                if item_id in result:
-                    raise JsonDataError(f"兽宝重复归引：{item_id}")
-                result[item_id] = _MaterialIdentity(
-                    item_id,
-                    _entity_name(self._data, item_id),
-                    trait,
-                )
-        return result
-
-    def _load_mineral_materials(self, value: object) -> dict[str, _MaterialIdentity]:
-        result: dict[str, _MaterialIdentity] = {}
-        for raw in _sequence(value, "炼器规则.炼器-归脉"):
-            row = _mapping(raw, "归脉[]")
-            pool = _text(row.get("灵矿池"), "归脉.灵矿池")
-            primary = _text(row.get("本脉"), "归脉.本脉")
-            secondary = _text(row.get("旁脉"), "归脉.旁脉")
-            for item_id in self._data.pool_members((pool,), "基础物品"):
-                if item_id in result:
-                    raise JsonDataError(f"灵矿重复归脉：{item_id}")
-                result[item_id] = _MaterialIdentity(
-                    item_id,
-                    _entity_name(self._data, item_id),
-                    primary,
-                    secondary,
-                )
-        return result
-
     def _load_laws(self) -> dict[str, ForgingLaw]:
         result: dict[str, ForgingLaw] = {}
         names: set[str] = set()
@@ -744,22 +580,9 @@ class ForgingService:
                 _mapping(item, f"器律 {name}.材料[]")
                 for item in _sequence(raw.get("材料", ()), f"器律 {name}.材料")
             )
-            method_name = str(raw.get("铸法") or "")
-            method = self._methods.get(method_name) if method_name else None
             if not materials:
-                if method is None:
-                    raise JsonDataError(f"器律 {name} 引用不存在铸法：{method_name}")
-                if method[0] != stage:
-                    raise JsonDataError(f"器律 {name} 的器阶与铸法不一致")
-            result[law_id] = ForgingLaw(
-                law_id,
-                name,
-                stage,
-                method_name,
-                _texts(raw.get("兽引", ()), f"器律 {name}.兽引") if not materials else (),
-                method[1] if method else (),
-                materials,
-            )
+                raise JsonDataError(f"器律 {name} 缺少材料表")
+            result[law_id] = ForgingLaw(law_id, name, stage, materials)
         return result
 
     def _load_artisans(self) -> dict[str, ForgingArtisan]:
@@ -802,14 +625,6 @@ class ForgingService:
             stage = self._stage_by_name.get(law.stage)
             if stage is None or law.stage == "凡器":
                 raise JsonDataError(f"器律使用未知器阶：{law.name} -> {law.stage}")
-            if law.materials:
-                continue
-            if (
-                not stage.mineral_requirement_range[0]
-                <= len(law.mineral_traits)
-                <= stage.mineral_requirement_range[1]
-            ):
-                raise JsonDataError(f"器律矿材份数与器阶不一致：{law.name}")
         world_locations = {
             location.name: location for location in self._world.map_view().locations
         }
@@ -824,12 +639,6 @@ class ForgingService:
             raise JsonDataError(
                 f"锻造地点与工匠不一一对应：缺少{sorted(missing)}，多余{sorted(extra)}"
             )
-        beast_ids = _item_ids(self._data, "兽宝")
-        mineral_ids = _item_ids(self._data, "灵矿")
-        if self._beast_materials and set(self._beast_materials) != beast_ids:
-            raise JsonDataError("归引没有完整且唯一覆盖全部兽宝")
-        if self._mineral_materials and set(self._mineral_materials) != mineral_ids:
-            raise JsonDataError("归脉没有完整且唯一覆盖全部灵矿")
         forging = _mapping(law_rule.get("炼制"), "器则.炼制")
         if (
             forging.get("产出数量") != 1
@@ -848,7 +657,7 @@ def _material_payload(material: ForgingMaterial) -> dict[str, object]:
         "编号": material.item_id,
         "品级": material.grade_id,
         "数量": material.quantity,
-        "脉性": material.trait,
+        "类别": material.trait,
         "关系": material.relation,
     }
 
@@ -867,8 +676,8 @@ def _payload_activation(value: object) -> InnateTreasureActivation | None:
 
 def _payload_materials(
     value: object,
-    identities: Mapping[str, _MaterialIdentity],
     asset: AssetService,
+    data: JsonDataService,
     label: str,
 ) -> tuple[ForgingMaterial, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
@@ -878,17 +687,18 @@ def _payload_materials(
         if not isinstance(raw, Mapping):
             raise TypeError(f"炼器事务.{label}材料必须是对象")
         item_id = _payload_text(raw.get("编号"), f"炼器事务.{label}.编号")
-        identity = identities.get(item_id)
-        if identity is None:
-            raise ValueError(f"炼器事务.{label}引用未知材料")
         grade = asset.grade(_payload_text(raw.get("品级"), f"炼器事务.{label}.品级"))
+        category = str(raw.get("类别") or "").strip()
+        if not category:
+            # 旧回执没有“类别”，但物品编号仍能确定类别；不因此让重放失败。
+            category = data.entity_record("基础物品", item_id).number_category
         result.append(
             ForgingMaterial(
                 item_id,
-                identity.name,
+                _entity_name(data, item_id),
                 grade.grade_id,
                 grade.name,
-                _payload_text(raw.get("脉性"), f"炼器事务.{label}.脉性"),
+                category,
                 _payload_text(raw.get("关系"), f"炼器事务.{label}.关系"),
                 _payload_positive_int(raw.get("数量"), f"炼器事务.{label}.数量"),
             )
@@ -917,7 +727,6 @@ def _weapon_stage(value: Mapping[str, object]) -> WeaponStage:
         bounds[1],
         _nonnegative_int(value.get("开放器律孔"), "器阶.开放器律孔"),
         minerals,
-        _nonnegative_int(value.get("旁脉替代上限"), "器阶.旁脉替代上限"),
         _text(value.get("最低灵矿品级"), "器阶.最低灵矿品级"),
     )
 

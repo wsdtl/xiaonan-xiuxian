@@ -41,7 +41,7 @@ def minimum_cost_matching(
     *,
     secondary_cost: int = 1_000_000_000,
     grade_cost: int = 100_000,
-    secondary_relation: str = "旁脉",
+    secondary_relation: str = "次选",
 ) -> dict[int, Choice]:
     """挑一组「每份材料各进一个槽位」的最小代价匹配。"""
 

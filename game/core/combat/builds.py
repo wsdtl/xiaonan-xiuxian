@@ -113,10 +113,6 @@ def _validate_build(
             raise BuildContractError(f"{path}.{field}不能为空")
     if section != "器律":
         _validate_weight(section, contract, path, value, weights)
-    else:
-        beast = value.get("兽引")
-        if beast is not None and not isinstance(beast, list):
-            raise BuildContractError(f"{path}.兽引必须是数组")
 
     # 能力树：只查「能不能解析、事件挂得上」，不查设计模板。
     abilities = value.get("能力")

@@ -55,7 +55,7 @@ def _player_description(detail: ItemDetail) -> str:
     description = re.sub(r"^五行根基为[^。；]+。\s*", "", description)
 
     # 器律的说明同时承担目录简介和完整规则记录；查看页的器纹区已经
-    # 展开了真实能力树，因此这里只保留铸法引言，避免同一效果占两遍版面。
+    # 展开了真实能力树，因此这里只保留器律引言，避免同一效果占两遍版面。
     if detail.section == "器律" and "。" in description:
         description = description.split("。", 1)[0].strip() + "。"
 

@@ -327,7 +327,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         C.join(
             C.ok("炼器核心微服务已启动"),
             C.kv("laws", forging_status.law_count),
-            C.kv("methods", forging_status.method_count),
             C.kv("artisans", forging_status.artisan_count),
         )
     )

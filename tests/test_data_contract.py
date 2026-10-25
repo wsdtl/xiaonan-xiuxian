@@ -67,6 +67,33 @@ def test_unknown_entity_is_rejected(data_service: JsonDataService) -> None:
 def test_obsolete_names_are_absent() -> None:
     json_files = DATA_ROOT.rglob("*.json")
     assert all("兼容名" not in path.read_text(encoding="utf-8") for path in json_files)
+    assert all("归脉" not in path.read_text(encoding="utf-8") for path in json_files)
+
+
+def test_herbs_carry_their_own_meridian(data_service: JsonDataService) -> None:
+    """归脉映射退役后，本脉落在灵植实体自己身上。"""
+
+    herbs = [
+        item_id
+        for item_id in data_service.entities("基础物品")
+        if data_service.entity_record("基础物品", item_id).number_category == "灵植"
+    ]
+    assert herbs
+    allowed = {"青华", "丹离", "坤载", "太白", "玄冥"}
+    for item_id in herbs:
+        value = data_service.entity("基础物品", item_id)
+        assert value.get("本脉") in allowed, (item_id, value.get("本脉"))
+
+
+def test_recipes_and_laws_use_explicit_materials(data_service: JsonDataService) -> None:
+    """丹药与器律都写显式材料，不再回查炉法/难度/铸法/兽引。"""
+
+    for medicine_id, value in data_service.entities("丹药").items():
+        assert value.get("材料"), medicine_id
+        assert "炉法" not in value and "炼制难度" not in value, medicine_id
+    for law_id, value in data_service.entities("器律").items():
+        assert value.get("材料"), law_id
+        assert "铸法" not in value and "兽引" not in value, law_id
 
 
 def test_builds_carry_their_own_combat_text() -> None:

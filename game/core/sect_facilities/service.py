@@ -215,7 +215,7 @@ class SectFacilityService:
             SectFacilityEntry(
                 law.law_id,
                 law.name,
-                law.method,
+                f"材料{len(law.materials)}项",
                 self._forging.assess(law.law_id, entries).can_forge,
             )
             for law in selected
@@ -255,7 +255,7 @@ class SectFacilityService:
             SectFacilityEntry(
                 recipe.recipe_id,
                 recipe.medicine_name,
-                f"难度{recipe.difficulty} · {recipe.method}",
+                f"材料{len(recipe.materials)}项",
                 self._alchemy.assess(recipe.recipe_id, entries).can_refine,
             )
             for recipe in selected

@@ -832,6 +832,7 @@ def test_report_capture_preserves_settlement(services) -> None:
 
     assert reported.total_event_count == len(full.events)
     assert len(reported.events) < len(full.events)
+
     assert reported.actions == full.actions
     assert reported.trigger_activations == full.trigger_activations
     assert reported.winner_side == full.winner_side
@@ -844,3 +845,39 @@ def test_report_capture_preserves_settlement(services) -> None:
     assert reported.report is not None
     assert reported.report["result"]["total_event_count"] == len(full.events)
     assert reported.report["result"]["event_count"] == len(reported.events)
+
+
+def test_alchemy_material_path_covers_ore(services) -> None:
+    """丹药材料里的灵矿必须进入验药与炼制，不能只扫兽宝和灵植。"""
+
+    from game.core.asset.contracts import InventoryAdjustment
+    from game.core.character.contracts import CharacterCreateCommand
+    from game.core.database.contracts import TransactionCommand
+
+    user_id = "alchemy-e2e"
+    asyncio.run(
+        services.character.create(
+            CharacterCreateCommand(
+                user_id, "create-alchemy", "炼丹测试", "男", (15, 17), ""
+            )
+        )
+    )
+    plan = asyncio.run(
+        services.asset.plan_inventory_changes(
+            user_id,
+            (
+                InventoryAdjustment("210064", "04", 1),
+                InventoryAdjustment("200001", "04", 2),
+                InventoryAdjustment("220001", "04", 2),
+            ),
+        )
+    )
+    asyncio.run(
+        services.database.commit(
+            TransactionCommand(user_id, "seed-alchemy", "测试", plan.operations, {})
+        )
+    )
+    preview = asyncio.run(services.alchemy.preview(user_id, "120033"))
+    assert preview.can_refine
+    fitted = asyncio.run(services.alchemy.refine(user_id, "craft-alchemy", "120033"))
+    assert fitted.quantity_after == 1

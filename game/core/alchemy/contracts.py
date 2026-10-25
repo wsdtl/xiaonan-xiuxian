@@ -29,10 +29,8 @@ class AlchemyStatus:
     initialized: bool
     recipe_count: int
     medicine_count: int
-    method_count: int
     alchemist_count: int
     beast_treasure_count: int
-    herb_count: int
 
 
 @dataclass(frozen=True)
@@ -51,8 +49,6 @@ class AlchemyRecipe:
     recipe_id: str
     name: str
     category: str
-    difficulty: int
-    method: str
     medicine_id: str
     medicine_name: str
     materials: tuple[Mapping[str, object], ...] = ()
@@ -66,7 +62,7 @@ class AlchemyMaterial:
     grade_id: str
     grade_name: str
     role: str
-    trait: str
+    category: str
     relation: str
     quantity: int
 
@@ -74,7 +70,7 @@ class AlchemyMaterial:
 @dataclass(frozen=True)
 class AlchemyMissingMaterial:
     role: str
-    trait: str
+    requirement: str
     quantity: int
 
 
@@ -86,8 +82,6 @@ class AlchemyAssessment:
     beast_material: AlchemyMaterial | None
     herb_materials: tuple[AlchemyMaterial, ...]
     missing_materials: tuple[AlchemyMissingMaterial, ...]
-    secondary_substitutions: int
-    secondary_substitution_limit: int
     can_refine: bool
 
 
@@ -102,8 +96,6 @@ class AlchemyPreview:
     beast_material: AlchemyMaterial | None
     herb_materials: tuple[AlchemyMaterial, ...]
     missing_materials: tuple[AlchemyMissingMaterial, ...]
-    secondary_substitutions: int
-    secondary_substitution_limit: int
     can_refine: bool
 
 

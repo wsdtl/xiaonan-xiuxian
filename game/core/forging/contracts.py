@@ -28,7 +28,6 @@ class ForgingConflictError(ForgingError):
 class ForgingStatus:
     initialized: bool
     law_count: int
-    method_count: int
     artisan_count: int
     beast_treasure_count: int
     mineral_count: int
@@ -42,7 +41,6 @@ class WeaponStage:
     maximum_level: int
     open_law_slots: int
     mineral_requirement_range: tuple[int, int]
-    secondary_substitution_limit: int
     minimum_mineral_grade_id: str
 
 
@@ -75,9 +73,6 @@ class ForgingLaw:
     law_id: str
     name: str
     stage: str
-    method: str
-    beast_traits: tuple[str, ...]
-    mineral_traits: tuple[str, ...]
     materials: tuple[Mapping[str, object], ...] = ()
 
 
@@ -105,8 +100,6 @@ class ForgingAssessment:
     beast_materials: tuple[ForgingMaterial, ...]
     mineral_materials: tuple[ForgingMaterial, ...]
     missing_materials: tuple[ForgingMissingMaterial, ...]
-    secondary_substitutions: int
-    secondary_substitution_limit: int
     can_forge: bool
 
 
@@ -119,8 +112,6 @@ class ForgingPreview:
     beast_materials: tuple[ForgingMaterial, ...]
     mineral_materials: tuple[ForgingMaterial, ...]
     missing_materials: tuple[ForgingMissingMaterial, ...]
-    secondary_substitutions: int
-    secondary_substitution_limit: int
     can_forge: bool
 
 

@@ -1363,10 +1363,10 @@ class CompanionService:
             gift_rules.get("合意推导"), "道侣.赠礼喜好.合意推导"
         )
         if acceptable_rule != {
-            "来源": "炼药规则.归脉",
-            "条件": "与偏爱灵植池本脉相同",
+            "来源": "灵植.本脉",
+            "条件": "与偏爱灵植池同本脉",
         }:
-            raise JsonDataError("道侣合意灵植必须按炼药归脉的同本脉关系推导")
+            raise JsonDataError("道侣合意灵植必须按灵植本脉推导")
         if gift_rules.get("拒绝倍率") != 0:
             raise JsonDataError("道侣拒绝赠礼倍率必须为0")
         reward = _mapping(value.get("圆满回礼"), "道侣.圆满回礼")
@@ -1406,18 +1406,21 @@ class CompanionService:
         )
 
     def _load_plant_pool_meridians(self) -> Mapping[str, str]:
-        rows = _sequence(
-            self._data.dataset("炼药规则").get("归脉"),
-            "物品/规则/丹药/归脉.json",
-        )
         result: dict[str, str] = {}
-        for raw in rows:
-            row = _mapping(raw, "炼药归脉[]")
-            pool_name = _text(row.get("灵植池"), "炼药归脉.灵植池")
-            main = _text(row.get("本脉"), "炼药归脉.本脉")
-            if pool_name in result:
-                raise JsonDataError(f"炼药归脉重复定义灵植池：{pool_name}")
-            result[pool_name] = main
+        for pool_name in self._data.pools():
+            if not pool_name.startswith("灵植-"):
+                continue
+            members = self._data.pool_members((pool_name,), "基础物品")
+            meridians = {
+                _text(
+                    self._data.entity("基础物品", item_id).get("本脉"),
+                    f"{pool_name}.本脉",
+                )
+                for item_id in members
+            }
+            if len(meridians) != 1:
+                raise JsonDataError(f"灵植池 {pool_name} 的本脉必须唯一")
+            result[pool_name] = next(iter(meridians))
         return MappingProxyType(result)
 
     def _realms(self) -> tuple[tuple[str, str, int, int], ...]:
@@ -1466,7 +1469,7 @@ class CompanionService:
             }
         except KeyError as exc:
             raise JsonDataError(
-                f"道侣 {companion_id} 的偏爱灵植池缺少炼药归脉：{exc.args[0]}"
+                f"道侣 {companion_id} 的偏爱灵植池缺少本脉：{exc.args[0]}"
             ) from exc
         acceptable_pools = tuple(
             sorted(

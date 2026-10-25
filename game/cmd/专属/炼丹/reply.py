@@ -110,7 +110,7 @@ def preview(
         builder.section(text(copy, "列表", "缺材"), icon="notice")
         for index, missing in enumerate(value.missing_materials, start=1):
             builder.item(
-                index, f"{missing.role} · {missing.trait} × {missing.quantity}"
+                index, f"{missing.role} · {missing.requirement} × {missing.quantity}"
             )
     builder.line(
         M.status(
@@ -173,7 +173,7 @@ def _material(builder: DocumentBuilder, index: int, material: AlchemyMaterial) -
             M.text(f"{material.grade_name}{material.name}"),
             f"查看 {material.name}",
         ),
-        f" × {material.quantity} · {material.trait} · {material.relation}",
+        f" × {material.quantity} · {material.category} · {material.relation}",
     )
 
 

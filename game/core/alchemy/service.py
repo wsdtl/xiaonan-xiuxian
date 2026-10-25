@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 from math import ceil
 from types import MappingProxyType
 
 from game.core.asset import (
-    Choice as _Choice,
-    minimum_cost_matching as _minimum_cost_matching,
     AssetEntry,
     AssetService,
     AssetStateError,
@@ -23,7 +20,6 @@ from game.core.data import (
     mapping as _mapping,
     nonempty_text,
     nonnegative_int,
-    nonnegative_int as _nonnegative_int,
     positive_int,
     positive_int as _positive_int,
     speech,
@@ -58,7 +54,6 @@ from .contracts import (
     AlchemyRecipeList,
     AlchemyResult,
     AlchemyStatus,
-    AlchemyUnavailableError,
 )
 from game.core.data import sequence as _sequence, strict_text, strict_text as _text
 
@@ -66,23 +61,6 @@ _CATEGORIES = ("恢复丹", "战丹", "突破丹", "特殊丹")
 #: 编号前缀 → 类别。丹方并进丹药之后，前缀就是**丹药**那四段（10/12/14/16）；
 #: 过去的丹方段（11/13/15/17）已经没有实体了。
 _RECIPE_CATEGORIES = {"10": "恢复丹", "12": "战丹", "14": "突破丹", "16": "特殊丹"}
-
-
-@dataclass(frozen=True)
-class _Difficulty:
-    level: int
-    herb_range: tuple[int, int]
-    beast_grade_id: str
-    herb_grade_id: str
-    secondary_limit: int
-
-
-@dataclass(frozen=True)
-class _HerbIdentity:
-    item_id: str
-    name: str
-    primary_trait: str
-    secondary_trait: str
 
 
 class AlchemyService:
@@ -107,10 +85,7 @@ class AlchemyService:
         self._recipes: Mapping[str, AlchemyRecipe] = MappingProxyType({})
         self._recipe_by_name: Mapping[str, str] = MappingProxyType({})
         self._recipe_by_medicine: Mapping[str, str] = MappingProxyType({})
-        self._methods: Mapping[str, tuple[str, ...]] = MappingProxyType({})
-        self._difficulties: Mapping[int, _Difficulty] = MappingProxyType({})
         self._alchemists: Mapping[str, Alchemist] = MappingProxyType({})
-        self._herbs: Mapping[str, _HerbIdentity] = MappingProxyType({})
         self._beast_ids: frozenset[str] = frozenset()
         self._town_max_grade_id = ""
         self._page_limit = 0
@@ -129,12 +104,6 @@ class AlchemyService:
             if not ready:
                 raise RuntimeError(f"{label}必须先于炼丹核心启动")
         rules = self._data.dataset("炼药规则")
-        self._methods = MappingProxyType(
-            self._load_methods(rules.get("炉法")) if rules.get("炉法") else {}
-        )
-        self._difficulties = MappingProxyType(
-            self._load_difficulties(rules.get("难度")) if rules.get("难度") else {}
-        )
         dan_rule = _mapping(rules.get("丹则"), "炼药规则.丹则")
         self._town_max_grade_id = _text(
             _mapping(dan_rule.get("成丹"), "丹则.成丹").get("城镇最高品级"),
@@ -147,9 +116,6 @@ class AlchemyService:
         )
         if grade_rule.get("算法") != "最低余量进阶":
             raise JsonDataError("成丹品级算法必须是「最低余量进阶」")
-        self._herbs = MappingProxyType(
-            self._load_herbs(rules.get("归脉")) if rules.get("归脉") else {}
-        )
         self._beast_ids = frozenset(_item_ids(self._data, "兽宝"))
         self._recipes = MappingProxyType(self._load_recipes())
         self._recipe_by_name = MappingProxyType(
@@ -183,10 +149,8 @@ class AlchemyService:
             self._initialized,
             len(self._recipes),
             len({recipe.medicine_id for recipe in self._recipes.values()}),
-            len(self._methods),
             len(self._alchemists),
             len(self._beast_ids),
-            len(self._herbs),
         )
 
     def recipes(self, category: str) -> tuple[AlchemyRecipe, ...]:
@@ -206,41 +170,7 @@ class AlchemyService:
     ) -> AlchemyAssessment:
         self._require_initialized()
         recipe = self._resolve_recipe(identifier)
-        if recipe.materials:
-            return self._assess_materials(recipe, entries, grade_name)
-        difficulty = self._difficulties[recipe.difficulty]
-        beast = self._select_beast(entries, difficulty.beast_grade_id)
-        herbs, missing, secondary_count = self._match_herbs(
-            self._methods[recipe.method], entries, difficulty.herb_grade_id
-        )
-        missing_values = list(missing)
-        if beast is None:
-            missing_values.insert(
-                0,
-                AlchemyMissingMaterial(
-                    "药引",
-                    f"{self._asset.grade(difficulty.beast_grade_id).name}及以上兽宝",
-                    1,
-                ),
-            )
-        if not missing_values and secondary_count > difficulty.secondary_limit:
-            missing_values.append(
-                AlchemyMissingMaterial(
-                    "辅材", "本脉灵植（旁脉替代已经用满）", secondary_count - difficulty.secondary_limit
-                )
-            )
-        grade_id, grade_name = self._medicine_grade(difficulty, beast, herbs)
-        return AlchemyAssessment(
-            recipe,
-            grade_id,
-            grade_name,
-            beast,
-            herbs,
-            tuple(missing_values),
-            secondary_count,
-            difficulty.secondary_limit,
-            not missing_values,
-        )
+        return self._assess_materials(recipe, entries, grade_name)
 
     async def overview(self, user_id: str) -> AlchemyOverview:
         normalized = _request_text(user_id, "user_id")
@@ -456,7 +386,6 @@ class AlchemyService:
             activation = _payload_activation(payload.get("先天灵宝"))
         except (KeyError, TypeError, ValueError) as exc:
             raise AlchemyConflictError("已提交炼丹事务无法还原") from exc
-        difficulty = self._difficulties[recipe.difficulty]
         preview = AlchemyPreview(
             user_id,
             location_name,
@@ -467,8 +396,6 @@ class AlchemyService:
             beast,
             herbs,
             (),
-            sum(item.relation == "旁脉" for item in herbs),
-            difficulty.secondary_limit,
             True,
         )
         return AlchemyResult(preview, before, after, True, activation)
@@ -501,8 +428,6 @@ class AlchemyService:
             value.beast_material,
             value.herb_materials,
             value.missing_materials,
-            value.secondary_substitutions,
-            value.secondary_substitution_limit,
             value.can_refine,
         )
 
@@ -573,140 +498,16 @@ class AlchemyService:
             main,
             herbs,
             tuple(missing),
-            0,
-            0,
             not missing,
         )
-
-    def _select_beast(
-        self, entries: tuple[AssetEntry, ...], minimum_grade_id: str
-    ) -> AlchemyMaterial | None:
-        minimum_order = self._asset.grade(minimum_grade_id).order
-        candidates = sorted(
-            (
-                entry
-                for entry in entries
-                if entry.content_id in self._beast_ids
-                and self._asset.grade(entry.grade_id).order >= minimum_order
-            ),
-            key=lambda entry: (
-                self._asset.grade(entry.grade_id).order,
-                entry.content_id,
-            ),
-        )
-        if not candidates:
-            return None
-        entry = candidates[0]
-        return AlchemyMaterial(
-            entry.content_id,
-            entry.name,
-            entry.grade_id,
-            entry.grade_name,
-            "药引",
-            "兽宝",
-            "药引",
-            1,
-        )
-
-    def _match_herbs(
-        self,
-        traits: tuple[str, ...],
-        entries: tuple[AssetEntry, ...],
-        minimum_grade_id: str,
-    ) -> tuple[tuple[AlchemyMaterial, ...], tuple[AlchemyMissingMaterial, ...], int]:
-        minimum_order = self._asset.grade(minimum_grade_id).order
-        by_item: dict[str, list[AssetEntry]] = {}
-        for entry in entries:
-            if entry.content_id in self._herbs:
-                by_item.setdefault(entry.content_id, []).append(entry)
-        choices: list[_Choice] = []
-        for item_id in sorted(by_item):
-            identity = self._herbs[item_id]
-            stacks = sorted(
-                (
-                    entry
-                    for entry in by_item[item_id]
-                    if self._asset.grade(entry.grade_id).order >= minimum_order
-                ),
-                key=lambda entry: self._asset.grade(entry.grade_id).order,
-            )
-            for slot, trait in enumerate(traits):
-                relation = ""
-                quantity = 0
-                if identity.primary_trait == trait:
-                    relation, quantity = "本脉", 1
-                elif identity.secondary_trait == trait:
-                    relation, quantity = "旁脉", 2
-                if relation:
-                    entry = next(
-                        (value for value in stacks if value.quantity >= quantity), None
-                    )
-                    if entry is not None:
-                        choices.append(
-                            _Choice(
-                                identity, entry, slot, trait, relation, quantity
-                            )
-                        )
-        matched = _minimum_cost_matching(
-            tuple(sorted(by_item)), len(traits), choices, self._asset
-        )
-        materials = tuple(
-            AlchemyMaterial(
-                choice.identity.item_id,
-                choice.identity.name,
-                choice.entry.grade_id,
-                choice.entry.grade_name,
-                "辅材",
-                choice.trait,
-                choice.relation,
-                choice.quantity,
-            )
-            for choice in sorted(matched.values(), key=lambda value: value.slot)
-        )
-        missing_counts: dict[str, int] = {}
-        for index, trait in enumerate(traits):
-            if index not in matched:
-                missing_counts[trait] = missing_counts.get(trait, 0) + 1
-        missing = tuple(
-            AlchemyMissingMaterial(
-                "辅材",
-                f"{self._asset.grade(minimum_grade_id).name}及以上{trait}灵植",
-                quantity,
-            )
-            for trait, quantity in missing_counts.items()
-        )
-        return materials, missing, sum(item.relation == "旁脉" for item in materials)
-
-    def _medicine_grade(
-        self,
-        difficulty: _Difficulty,
-        beast: AlchemyMaterial | None,
-        herbs: tuple[AlchemyMaterial, ...],
-    ) -> tuple[str, str]:
-        beast_minimum = self._asset.grade(difficulty.beast_grade_id)
-        herb_minimum = self._asset.grade(difficulty.herb_grade_id)
-        base_order = max(beast_minimum.order, herb_minimum.order)
-        surplus = [
-            self._asset.grade(beast.grade_id).order - beast_minimum.order
-        ] if beast is not None else [0]
-        surplus.extend(
-            self._asset.grade(herb.grade_id).order - herb_minimum.order
-            for herb in herbs
-        )
-        target_order = min(5, base_order + max(0, min(surplus)))
-        grade = next(
-            self._asset.grade(grade_id)
-            for grade_id in ("01", "02", "03", "04", "05")
-            if self._asset.grade(grade_id).order == target_order
-        )
-        return grade.grade_id, grade.name
 
     async def _material_entries(self, user_id: str) -> tuple[AssetEntry, ...]:
         snapshot = await self._asset.snapshot(user_id)
         return tuple(
             entry
             for entry in snapshot.entries
-            if entry.category == "基础物品" and entry.subcategory in {"兽宝", "灵植"}
+            if entry.category == "基础物品"
+            and entry.subcategory in {"兽宝", "灵植", "灵矿"}
         )
 
     async def _current_alchemist(self, user_id: str) -> tuple[str, Alchemist]:
@@ -731,63 +532,10 @@ class AlchemyService:
             raise AlchemyError(f"未找到唯一丹药：{query or '<空>'}")
         return recipe
 
-    def _load_methods(self, value: object) -> dict[str, tuple[str, ...]]:
-        result: dict[str, tuple[str, ...]] = {}
-        for raw in _sequence(value, "炼药规则.炉法"):
-            row = _mapping(raw, "炉法[]")
-            name = _text(row.get("名称"), "炉法.名称")
-            if name in result:
-                raise JsonDataError(f"炉法名称重复：{name}")
-            traits: list[str] = []
-            for material in _sequence(row.get("辅材"), f"炉法 {name}.辅材"):
-                material_row = _mapping(material, f"炉法 {name}.辅材[]")
-                trait = _text(material_row.get("药脉"), f"炉法 {name}.药脉")
-                traits.extend(
-                    [trait]
-                    * _positive_int(material_row.get("味数"), f"炉法 {name}.味数")
-                )
-            result[name] = tuple(traits)
-        return result
-
-    def _load_difficulties(self, value: object) -> dict[int, _Difficulty]:
-        result: dict[int, _Difficulty] = {}
-        for raw in _sequence(value, "炼药规则.难度"):
-            row = _mapping(raw, "难度[]")
-            level = _positive_int(row.get("炼制难度"), "难度.炼制难度")
-            if level in result:
-                raise JsonDataError(f"炼制难度重复：{level}")
-            limits = _mapping(row.get("辅材总味数"), f"难度 {level}.辅材总味数")
-            result[level] = _Difficulty(
-                level,
-                (
-                    _positive_int(limits.get("最少"), f"难度 {level}.最少"),
-                    _positive_int(limits.get("最多"), f"难度 {level}.最多"),
-                ),
-                _text(row.get("最低药引品级"), f"难度 {level}.最低药引品级"),
-                _text(row.get("最低辅材品级"), f"难度 {level}.最低辅材品级"),
-                _nonnegative_int(row.get("旁脉替代上限"), f"难度 {level}.旁脉替代上限"),
-            )
-        return result
-
-    def _load_herbs(self, value: object) -> dict[str, _HerbIdentity]:
-        result: dict[str, _HerbIdentity] = {}
-        for raw in _sequence(value, "炼药规则.归脉"):
-            row = _mapping(raw, "归脉[]")
-            pool = _text(row.get("灵植池"), "归脉.灵植池")
-            primary = _text(row.get("本脉"), "归脉.本脉")
-            secondary = _text(row.get("旁脉"), "归脉.旁脉")
-            for item_id in self._data.pool_members((pool,), "基础物品"):
-                if item_id in result:
-                    raise JsonDataError(f"灵植重复归脉：{item_id}")
-                result[item_id] = _HerbIdentity(
-                    item_id, _entity_name(self._data, item_id), primary, secondary
-                )
-        return result
-
     def _load_recipes(self) -> dict[str, AlchemyRecipe]:
-        """丹药**自己就是处方**：`炉法` / `炼制难度` 与 `使用效果` 写在同一份实体里。
+        """丹药**自己就是处方**：药引、辅材与使用效果写在同一份实体里。
 
-        丹方并进丹药之后，`recipe_id` 与 `medicine_id` 是同一个编号（第 76 轮）；
+        丹方并进丹药之后，`recipe_id` 与 `medicine_id` 是同一个编号；
         过去那张「丹方 → 成丹」的跳转表不再存在。
         """
 
@@ -803,14 +551,8 @@ class AlchemyService:
                 _mapping(item, f"丹药 {name}.材料[]")
                 for item in _sequence(raw.get("材料", ()), f"丹药 {name}.材料")
             )
-            method = str(raw.get("炉法") or "")
-            difficulty = int(raw.get("炼制难度") or 1)
             if name in names:
                 raise JsonDataError(f"丹药名称重复：{name}")
-            if not materials and (method not in self._methods or difficulty not in self._difficulties):
-                raise JsonDataError(f"丹药引用未知炉法或难度：{name}")
-            if materials and method and method not in self._methods:
-                raise JsonDataError(f"丹药引用未知炉法：{name}")
             category = _RECIPE_CATEGORIES.get(medicine_id[:2], "")
             if category not in _CATEGORIES:
                 raise JsonDataError(f"丹药类别错误：{name} -> {category}")
@@ -819,8 +561,6 @@ class AlchemyService:
                 medicine_id,
                 name,
                 category,
-                difficulty,
-                method,
                 medicine_id,
                 name,
                 materials,
@@ -852,13 +592,6 @@ class AlchemyService:
         return result
 
     def _validate_static_rules(self, rules: Mapping[str, object]) -> None:
-        for recipe in self._recipes.values():
-            if recipe.materials:
-                continue
-            difficulty = self._difficulties[recipe.difficulty]
-            count = len(self._methods[recipe.method])
-            if not difficulty.herb_range[0] <= count <= difficulty.herb_range[1]:
-                raise JsonDataError(f"丹药炉法味数与难度不一致：{recipe.name}")
         locations = {
             item.name
             for item in self._world.map_view().locations
@@ -869,8 +602,6 @@ class AlchemyService:
                 f"炼丹地点与丹师不一一对应：缺少{sorted(locations - set(self._alchemists))}，"
                 f"多余{sorted(set(self._alchemists) - locations)}"
             )
-        if set(self._herbs) != _item_ids(self._data, "灵植"):
-            raise JsonDataError("归脉没有完整且唯一覆盖全部灵植")
         dan_rule = _mapping(rules.get("丹则"), "炼药规则.丹则")
         if _mapping(dan_rule.get("药引"), "丹则.药引") != {
             "类别": "兽宝",
@@ -894,7 +625,7 @@ def _material_payload(material: AlchemyMaterial) -> dict[str, object]:
         "品级": material.grade_id,
         "数量": material.quantity,
         "用途": material.role,
-        "药脉": material.trait,
+        "类别": material.category,
         "关系": material.relation,
     }
 
@@ -931,13 +662,17 @@ def _payload_material(
     raw = _mapping(value, f"炼丹事务.{label}")
     item_id = _payload_text(raw.get("编号"), f"炼丹事务.{label}.编号")
     grade = asset.grade(_payload_text(raw.get("品级"), f"炼丹事务.{label}.品级"))
+    category = str(raw.get("类别") or "").strip()
+    if not category:
+        # 旧回执没有“类别”，但物品编号仍能确定类别；不因此让重放失败。
+        category = data.entity_record("基础物品", item_id).number_category
     return AlchemyMaterial(
         item_id,
         _entity_name(data, item_id),
         grade.grade_id,
         grade.name,
         _payload_text(raw.get("用途"), f"炼丹事务.{label}.用途"),
-        _payload_text(raw.get("药脉"), f"炼丹事务.{label}.药脉"),
+        category,
         _payload_text(raw.get("关系"), f"炼丹事务.{label}.关系"),
         _payload_positive_int(raw.get("数量"), f"炼丹事务.{label}.数量"),
     )
