@@ -882,12 +882,8 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     daolv_jiejiao.initialize()
     xuemai = XuemaiFeature(data, character, database, bloodline)
     xuemai.initialize()
-    from game.features.hunpei.store import BirthRequestStore
-
-    # 求子请求住非资产日志库：路径与战报、消息流水同源，过期即失效。
-    birth_requests = BirthRequestStore(runtime_log_database_path())
     hunpei = HunpeiFeature(
-        data, character, companion, database, xuemai, bloodline, asset, weizhi, world, birth_requests
+        data, character, companion, database, xuemai, bloodline, asset, weizhi, world
     )
     hunpei.initialize()
     renwu_peiyang = CharacterCultivationFeature(

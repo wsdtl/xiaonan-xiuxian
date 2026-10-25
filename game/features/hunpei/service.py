@@ -18,7 +18,13 @@ from game.core.bloodline import BloodlineService
 from game.core.character import CharacterNotFoundError, CharacterService
 from game.core.companion import CompanionService
 from game.core.data import JsonDataService
-from game.core.database import DatabaseService, StateAddress, StateMutation, TransactionCommand
+from game.core.database import (
+    DatabaseService,
+    StateAddress,
+    StateMutation,
+    TransactionCommand,
+    runtime_log_database_path,
+)
 from game.core.world import WorldService
 from game.features.xuemai import XuemaiFeature
 
@@ -65,7 +71,6 @@ class HunpeiFeature:
         asset: AssetService,
         weizhi: object,
         world: WorldService,
-        requests: BirthRequestStore,
     ) -> None:
         self._data = data
         self._character = character
@@ -78,8 +83,8 @@ class HunpeiFeature:
         self._weizhi = weizhi
         #: 世界服务（只取地点功能配置，不解释地点内容）。
         self._world = world
-        #: 求子请求的日志库存储（非资产；过期即失效）。
-        self._requests = requests
+        #: 求子请求的日志库存储（非资产；过期即失效）；住本玩法内部，不由组合根代建。
+        self._requests = BirthRequestStore(runtime_log_database_path())
         self._initialized = False
         self._limit = DEFAULT_BIRTH_LIMIT
         self._ask_seconds = DEFAULT_ASK_SECONDS

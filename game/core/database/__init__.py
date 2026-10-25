@@ -23,6 +23,7 @@ from .contracts import (
     TransactionCommand,
     TransactionReceipt,
 )
+from .battle_report import runtime_log_database_path
 from .service import DatabaseService
 from .storage import open_request_connections
 
@@ -50,4 +51,5 @@ __all__ = [
     "TransactionCommand",
     "TransactionReceipt",
     "open_request_connections",
+    "runtime_log_database_path",
 ]
