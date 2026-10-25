@@ -193,6 +193,17 @@ class HunpeiFeature:
                 return profile, value, generation, used, "须在%s" % self._location_function
         return profile, value, generation, used, ""
 
+    async def _hospital_ready(self, user_id: str) -> str:
+        """求子的另一方：只需要站在妇产科医院；生育丹由求方出。"""
+
+        if self._location_function:
+            position = await self._weizhi.current(user_id)
+            location = getattr(position, "location", None)
+            functions = tuple(getattr(location, "available_functions", ()) or ())
+            if self._location_function not in functions:
+                return "须在%s" % self._location_function
+        return ""
+
     async def _check(self, user_id: str, gender: str, active: object, used: int) -> tuple[bool, str]:
         """规则里的六条条件，逐条落实（道侣那一路）。"""
 
@@ -230,6 +241,9 @@ class HunpeiFeature:
             raise HunpeiError("附近没有这位修士")
         if target_id == user_id:
             raise HunpeiError("不能向自己求子")
+        target_reason = await self._hospital_ready(target_id)
+        if target_reason:
+            raise BirthDeniedError("对方现在不能求子：%s" % target_reason)
         target_gender = str(getattr(person, "gender", "") or "")
         own_gender = str(getattr(profile, "gender", "") or "")
         if not own_gender or not target_gender or own_gender == target_gender:
@@ -297,6 +311,12 @@ class HunpeiFeature:
                 agreed=False,
                 result=None,
             )
+        _, _, _, _, asker_reason = await self._own_ready(row.asker_id)
+        if asker_reason:
+            raise BirthDeniedError("求方现在不能求子：%s" % asker_reason)
+        target_reason = await self._hospital_ready(user_id)
+        if target_reason:
+            raise BirthDeniedError("你这边现在不能求子：%s" % target_reason)
         if not self._requests.mark(row.request_id, DONE):
             raise HunpeiError("这份求子请求已经处理过")
         result = await self._deliver(row.asker_id, row.target_id, row.request_id)
@@ -314,6 +334,9 @@ class HunpeiFeature:
         profile, value, generation, used, reason = await self._own_ready(asker_id)
         if reason:
             raise BirthDeniedError("求方现在不能生育：%s" % reason)
+        target_reason = await self._hospital_ready(target_id)
+        if target_reason:
+            raise BirthDeniedError("对方现在不能求子：%s" % target_reason)
         target_profile = await self._character.profile(target_id)
         own_gender = str(getattr(profile, "gender", "") or "")
         target_gender = str(getattr(target_profile, "gender", "") or "")
