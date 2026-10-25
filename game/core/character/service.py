@@ -156,6 +156,10 @@ class CharacterService:
             raise RuntimeError("炼器核心必须先于角色服务启动")
         if not self._bloodline_service().status().initialized:
             raise RuntimeError("血脉核心必须先于角色服务启动")
+        if self._sect_library is not None:
+            # 角色是借阅槽位的唯一写入者；在本服务初始化时自注册，组合根不再代做回填。
+            self._sect_library.attach_character(self)
+            self._sect_library.require_character()
 
         role_rules = self._data.dataset("角色规则")
         role_rule = role_rules.get("人物")

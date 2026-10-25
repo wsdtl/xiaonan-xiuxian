@@ -58,7 +58,7 @@ class SectLibraryService:
         self._initialized = False
 
     def attach_character(self, character: CharacterService) -> None:
-        """角色核心晚于本服务装配，借阅槽位的写入由它负责。"""
+        """由角色核心在自己的 initialize() 里自注册；借阅槽位写入归它。"""
 
         self._character = character
 

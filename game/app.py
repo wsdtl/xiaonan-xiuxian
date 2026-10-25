@@ -450,8 +450,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         bloodline,
         sect_library,
     )
-    sect_library.attach_character(character)
-    sect_library.require_character()
     character_service_status = character.initialize()
     logger.opt(colors=True).success(
         C.join(
