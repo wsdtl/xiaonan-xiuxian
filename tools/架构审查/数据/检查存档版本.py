@@ -1,8 +1,8 @@
-"""存档结构审查：数据库结构只认当前列，状态条目必须有值/版本/时间。
+"""存档结构审查：列、条目、以及当前领域能否真正读出来。
 
-本工具只读，直接走一次读路径，再断言每个条目成形。
+前半段查键名/结构；后半段用当前服务逐域读，补上旧字段、失效引用、孤儿关系。
 
-**退出码：0 = 所有人物读出来都合规；1 = 结构或条目不合规。**
+**退出码：0 = 所有人物和当前领域都读得出来；1 = 结构或语义不合规。**
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from game.core.database.storage import _ENTRY_UPDATED, _ENTRY_VALUE, _ENTRY_VERSION  # noqa: E402
 from game.core.database.storage import _load_logical_state  # noqa: E402
+from 存档语义 import audit_saves  # noqa: E402
 
 EXPECTED_COLUMNS = frozenset({"user_id", "state_json", "version", "updated_at"})
 
@@ -81,6 +82,18 @@ def main() -> int:
         f"存档结构审查通过：{len(report)} 个人物、"
         f"{sum(item[1] for item in report)} 条状态都是当前结构"
     )
+
+    try:
+        checks, semantic = audit_saves(path)
+    except Exception as error:  # noqa: BLE001 - 审计失败要带原异常
+        print(f"存档语义审查失败：{type(error).__name__}: {error}")
+        return 1
+    if semantic:
+        for item in semantic:
+            print(f"  {item}")
+        print(f"存档语义审查失败：{len(semantic)} 处当前服务读不出来")
+        return 1
+    print(f"存档语义审查通过：{checks} 项领域读取全部成功")
     return 0
 
 
