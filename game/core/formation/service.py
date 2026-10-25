@@ -146,6 +146,9 @@ class FormationService:
         self._innate_treasure = innate_treasure
         self._initialized = False
         self._rules: Mapping[str, object] = MappingProxyType({})
+        self._fixed_grades: tuple[str, ...] = ()
+        self._unbounded_grade = ""
+        self._fixed_costs: Mapping[str, Mapping[str, int]] = MappingProxyType({})
         self._raw_formations: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._formations: Mapping[str, FormationDefinition] = MappingProxyType({})
         self._formation_by_name: Mapping[str, str] = MappingProxyType({})
@@ -177,6 +180,13 @@ class FormationService:
                 )
             }
         )
+        self._fixed_grades = _texts(
+            self._rules.get("固定品级"), "阵法规则.固定品级"
+        )
+        self._unbounded_grade = _text(
+            self._rules.get("无上限品级"), "阵法规则.无上限品级"
+        )
+        self._fixed_costs = MappingProxyType(self._load_fixed_costs())
         self._town_max_grade_name = _text(
             self._rules.get("城镇最高品级"), "阵法规则.城镇最高品级"
         )
@@ -254,29 +264,9 @@ class FormationService:
         formation = self._resolve_formation(identifier)
         grade_name = _grade_name(grade)
         raw = self._raw_formations[formation.formation_id]
-        if "阵核" in raw and "基础" in raw:
-            return self._assess_core(formation, raw, grade_name, entries, investments)
-        required = self._required_materials(formation.formation_id, grade_name, investments)
-        materials, requirements = self._select_materials(entries, required)
-        profile = self.battle_profile(
-            formation.formation_id,
-            grade_name,
-            {item.category: item.required for item in requirements},
-        )
-        grade_value = self._asset.grade(_GRADE_IDS[grade_name])
-        return FormationAssessment(
-            formation,
-            grade_value.grade_id,
-            grade_name,
-            materials,
-            requirements,
-            profile.capacity,
-            profile.impact,
-            profile.nodes,
-            profile.transmission,
-            all(not item.missing for item in requirements),
-            _detection(raw, formation.formation_id),
-        )
+        if "阵核" not in raw or "基础" not in raw:
+            raise FormationError(f"阵法缺少阵核或基础：{formation.formation_id}")
+        return self._assess_core(formation, raw, grade_name, entries, investments)
 
     async def overview(self, user_id: str, page: int = 1) -> FormationOverview:
         normalized = _request_text(user_id, "user_id")
@@ -583,110 +573,9 @@ class FormationService:
         formation = self._resolve_formation(formation_id)
         grade_name = _grade_name(grade)
         raw = self._raw_formations[formation.formation_id]
-        if "阵核" in raw and "基础" in raw:
-            return self._battle_profile_core(formation, raw, grade_name, materials, position)
-        grade_raw = self._grade_raw(raw, grade_name)
-        effect_values = {str(key): str(value) for key, value in (modifiers or {}).items()}
-        unknown_effects = set(effect_values) - {"总势倍率", "材料", "材料倍率"}
-        if unknown_effects:
-            raise FormationError(f"阵法灵宝效果包含未知字段：{sorted(unknown_effects)}")
-        if grade_name == "圣品":
-            minimum = {
-                str(key): float(value)
-                for key, value in _mapping(grade_raw.get("最低消耗"), "圣品.最低消耗").items()
-            }
-            actual = {str(key): float(value) for key, value in (materials or {}).items()}
-            unknown = set(actual) - set(_CATEGORIES)
-            if unknown or any(actual.get(key, 0) < minimum[key] for key in _CATEGORIES):
-                raise FormationError("圣品阵法材料投入不完整或低于最低消耗")
-            if "材料" in effect_values:
-                material = effect_values["材料"]
-                if material not in _CATEGORIES or "材料倍率" not in effect_values:
-                    raise FormationError("阵法材料灵宝效果不完整")
-                actual[material] *= float(effect_values["材料倍率"])
-            growth = _mapping(self._rules.get("圣品增长"), "阵法规则.圣品增长")
-            weights = {
-                str(key): float(value)
-                for key, value in _mapping(grade_raw.get("圣品权重"), "圣品.权重").items()
-            }
-            total = 1.0
-            algorithm = _text(growth.get("算法"), "圣品增长.算法")
-            for direction in _sequence(growth.get("方向"), "圣品增长.方向"):
-                value = _mapping(direction, "圣品增长.方向[]")
-                material = _text(value.get("材料"), "圣品增长.材料")
-                part = _text(value.get("部位"), "圣品增长.部位")
-                ratio = actual[material] / minimum[material]
-                if algorithm == "线性加成":
-                    total += (ratio - 1.0) * weights[part]
-                else:
-                    total *= ratio ** weights[part]
-            derived: dict[str, float] = {}
-            for direction in _sequence(growth.get("方向"), "圣品增长.方向"):
-                value = _mapping(direction, "圣品增长.方向[]")
-                part = _text(value.get("部位"), "圣品增长.部位")
-                section = _mapping(grade_raw.get(part), f"圣品.{part}")
-                for output in _sequence(value.get("结果"), "圣品增长.结果"):
-                    output_value = _mapping(output, "圣品增长.结果[]")
-                    result = float(section[_text(output_value.get("基础值"), "基础值")]) * total
-                    if output_value.get("取整") == "向下取整":
-                        result = float(math.floor(result))
-                    if "最小值" in output_value:
-                        result = max(float(output_value["最小值"]), result)
-                    derived[_text(output_value.get("运行值"), "运行值")] = result
-            capacity = derived["承载"]
-            impact = derived["冲击"]
-            nodes = int(derived["数量"])
-            transmission = derived["传导"]
-        else:
-            base = _mapping(grade_raw.get("阵基"), "阵法.阵基")
-            eye = _mapping(grade_raw.get("阵眼"), "阵法.阵眼")
-            nodes_raw = _mapping(grade_raw.get("节点"), "阵法.节点")
-            capacity = _number(base.get("承载"), "阵法.承载")
-            impact = _number(eye.get("冲击"), "阵法.冲击")
-            nodes = _positive_int(nodes_raw.get("数量"), "阵法.节点数量")
-            transmission = _number(nodes_raw.get("传导"), "阵法.传导")
-            if "材料" in effect_values:
-                material = effect_values["材料"]
-                multiplier = float(effect_values.get("材料倍率", "0"))
-                if material == "灵矿":
-                    capacity *= multiplier
-                elif material == "兽宝":
-                    impact *= multiplier
-                elif material == "灵植":
-                    nodes = max(1, math.ceil(nodes * multiplier))
-                    transmission *= multiplier
-                else:
-                    raise FormationError("阵法材料灵宝效果引用未知材料")
-        if "总势倍率" in effect_values:
-            multiplier = float(effect_values["总势倍率"])
-            if multiplier <= 0:
-                raise FormationError("阵法总势倍率必须为正数")
-            capacity *= multiplier
-            impact *= multiplier
-            nodes = max(1, math.ceil(nodes * multiplier))
-            transmission *= multiplier
-        stages = tuple(
-            FormationStageProfile(
-                _number(value.get("环境阶段阈值倍率"), "阵法.环境阶段阈值倍率"),
-                _number(value.get("行动周期倍率"), "阵法.行动周期倍率"),
-                _number(value.get("阵势倍率"), "阵法.阵势倍率"),
-            )
-            for value in (
-                _mapping(raw_stage, "阵法.地势阶段[]")
-                for raw_stage in _sequence(grade_raw.get("地势阶段"), "阵法.地势阶段")
-            )
-        )
-        return FormationBattleProfile(
-            formation.formation_id,
-            formation.name,
-            grade_name,
-            int(position),
-            capacity,
-            impact,
-            nodes,
-            transmission,
-            stages,
-        )
+        if "阵核" not in raw or "基础" not in raw:
+            raise FormationError(f"阵法缺少阵核或基础：{formation.formation_id}")
+        return self._battle_profile_core(formation, raw, grade_name, materials, position)
 
     def _battle_profile_core(
         self,
@@ -696,19 +585,18 @@ class FormationService:
         materials: Mapping[str, int | float] | None,
         position: int,
     ) -> FormationBattleProfile:
-        grade_id = _GRADE_IDS[grade_name]
         grade_row = self._grade_rows[grade_name]
         ability = float(_number(grade_row.get("能力倍率"), "品级.能力倍率"))
-        craft = int(_number(grade_row.get("炼制倍率"), "品级.炼制倍率"))
         base = _mapping(raw.get("基础"), "阵法.基础")
+        fixed = self._fixed_costs[grade_name]
         actual = {key: 0 for key in _CATEGORIES}
         if materials:
             for key in _CATEGORIES:
                 actual[key] = max(0, int(float(materials.get(key, 0))))
-        actual["灵矿"] = max(0, actual["灵矿"] - 2 * craft)
+        extra = {key: max(0, actual[key] - fixed[key]) for key in _CATEGORIES}
         unit = float(_number(grade_row.get("灵石当量", 1), "品级.灵石当量"))
         baseline = max(1.0, float(_number(raw.get("基准当量", 1000), "阵法.基准当量")))
-        multipliers = {key: 1.0 + actual[key] * unit / baseline for key in _CATEGORIES}
+        multipliers = {key: 1.0 + extra[key] * unit / baseline for key in _CATEGORIES}
         capacity = float(_number(base.get("承载"), "阵法.基础.承载")) * ability * multipliers["灵矿"]
         impact = float(_number(base.get("冲击"), "阵法.基础.冲击")) * ability * multipliers["兽宝"]
         nodes = max(1, int(float(_number(base.get("节点"), "阵法.基础.节点")) * ability * multipliers["灵植"]))
@@ -752,12 +640,13 @@ class FormationService:
         entries: tuple[AssetEntry, ...],
         investments: Mapping[str, int] | None,
     ) -> FormationAssessment:
-        """阵核版评估：本地双矿定身份，辅材只乘各自面板。"""
+        """阵核版评估：固定品级按固定消耗，圣品在最低值之上无上限追加。"""
 
         grade_id = _GRADE_IDS[grade_name]
         grade_row = self._grade_rows[grade_name]
         ability = float(_number(grade_row.get("能力倍率"), "品级.能力倍率"))
         craft = int(_number(grade_row.get("炼制倍率"), "品级.炼制倍率"))
+        fixed = self._fixed_costs[grade_name]
         base = _mapping(raw.get("基础"), "阵法.基础")
         core_ids = tuple(
             _text(value, "阵法.阵核[]")
@@ -765,16 +654,29 @@ class FormationService:
         )
         if len(core_ids) != 2:
             raise FormationError("阵法阵核必须正好两条本地灵矿")
-        counts = {key: 0 for key in _CATEGORIES}
-        if investments is not None:
+
+        total = dict(fixed)
+        if investments:
             unknown = set(investments) - set(_CATEGORIES)
             if unknown:
                 raise FormationError(f"阵法辅材未知类别：{sorted(unknown)}")
+            values = {}
             for key in _CATEGORIES:
                 value = investments.get(key, 0)
                 if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                     raise FormationError(f"阵法辅材数量必须是非负整数：{key}")
-                counts[key] = value
+                values[key] = value
+            if grade_name in self._fixed_grades:
+                raise FormationError(
+                    "黄品、玄品、地品、天品按固定配方炼制，"
+                    "不能追加兽宝、灵矿、灵植三数；圣品才可追加"
+                )
+            short = [key for key in _CATEGORIES if values[key] < fixed[key]]
+            if short:
+                minimum = "、".join(f"{key}{fixed[key]}" for key in _CATEGORIES)
+                raise FormationError(f"圣品三相投入不得低于最低消耗：{minimum}")
+            total = values
+
         requirements = {key: 0 for key in _CATEGORIES}
         remaining = {id(entry): entry.quantity for entry in entries}
         materials: list[FormationMaterial] = []
@@ -798,6 +700,7 @@ class FormationService:
                 )
             )
 
+        core_count = 2 * craft
         for core_id in core_ids:
             requirements["灵矿"] += craft
             candidates = sorted(
@@ -819,14 +722,15 @@ class FormationService:
                 need -= selected["灵矿"] - before
 
         for category in _CATEGORIES:
-            requirements[category] += counts[category]
-            need = counts[category]
+            need = total[category] - (core_count if category == "灵矿" else 0)
+            if need < 0:
+                raise FormationError(f"固定消耗的{category}不足以容纳阵核")
+            requirements[category] += need
             candidates = sorted(
                 (
                     entry
                     for entry in entries
                     if entry.subcategory == category
-                    and entry.content_id not in core_ids
                 ),
                 key=lambda entry: (self._asset.grade(entry.grade_id).order, entry.content_id),
             )
@@ -838,17 +742,11 @@ class FormationService:
                 need -= selected[category] - before
 
         baseline = max(1.0, float(_number(raw.get("基准当量", 1000), "阵法.基准当量")))
-
-        def grade_units(grade_name_value: str) -> float:
-            row = self._grade_rows.get(grade_name_value)
-            return float(_number(row.get("灵石当量", 1), "品级.灵石当量")) if row else 1.0
-
-        supplement_weight = {key: 0.0 for key in _CATEGORIES}
-        for item in materials:
-            if item.item_id in core_ids and item.category == "灵矿":
-                continue
-            supplement_weight[item.category] += item.quantity * grade_units(item.grade_name)
-        multipliers = {key: 1.0 + supplement_weight[key] / baseline for key in _CATEGORIES}
+        unit = float(_number(grade_row.get("灵石当量", 1), "品级.灵石当量"))
+        extra = {key: total[key] - fixed[key] for key in _CATEGORIES}
+        multipliers = {
+            key: 1.0 + extra[key] * unit / baseline for key in _CATEGORIES
+        }
 
         capacity = float(_number(base.get("承载"), "阵法.基础.承载")) * ability * multipliers["灵矿"]
         impact = float(_number(base.get("冲击"), "阵法.基础.冲击")) * ability * multipliers["兽宝"]
@@ -877,68 +775,6 @@ class FormationService:
             core_names,
             tuple((key, multipliers[key]) for key in _CATEGORIES),
         )
-
-    def _required_materials(
-        self,
-        formation_id: str,
-        grade_name: str,
-        investments: Mapping[str, int] | None,
-    ) -> dict[str, int]:
-        raw = self._grade_raw(self._raw_formations[formation_id], grade_name)
-        if grade_name != "圣品":
-            if investments:
-                raise FormationError("天地玄黄阵法使用固定投入，不能追加材料")
-            source = _mapping(raw.get("消耗"), "阵法.消耗")
-            return {key: _positive_int(source.get(key), f"阵法.消耗.{key}") for key in _CATEGORIES}
-        minimum = _mapping(raw.get("最低消耗"), "圣品阵法.最低消耗")
-        result = {
-            key: _positive_int(minimum.get(key), f"圣品阵法.最低消耗.{key}")
-            for key in _CATEGORIES
-        }
-        if investments is None:
-            return result
-        if set(investments) != set(_CATEGORIES):
-            raise FormationError("圣品投入必须同时给出兽宝、灵矿和灵植数量")
-        for key in _CATEGORIES:
-            value = investments[key]
-            if isinstance(value, bool) or not isinstance(value, int) or value < result[key]:
-                raise FormationError(f"圣品{key}投入不能低于{result[key]}")
-            result[key] = value
-        return result
-
-    def _select_materials(
-        self, entries: tuple[AssetEntry, ...], required: Mapping[str, int]
-    ) -> tuple[tuple[FormationMaterial, ...], tuple[FormationRequirement, ...]]:
-        materials: list[FormationMaterial] = []
-        requirements: list[FormationRequirement] = []
-        for category in _CATEGORIES:
-            remaining = required[category]
-            selected = 0
-            candidates = sorted(
-                (entry for entry in entries if entry.subcategory == category),
-                key=lambda entry: (
-                    self._asset.grade(entry.grade_id).order,
-                    entry.content_id,
-                ),
-            )
-            for entry in candidates:
-                if remaining <= 0:
-                    break
-                quantity = min(remaining, entry.quantity)
-                materials.append(
-                    FormationMaterial(
-                        category,
-                        entry.content_id,
-                        entry.name,
-                        entry.grade_id,
-                        entry.grade_name,
-                        quantity,
-                    )
-                )
-                selected += quantity
-                remaining -= quantity
-            requirements.append(FormationRequirement(category, required[category], selected))
-        return tuple(materials), tuple(requirements)
 
     async def _material_entries(self, user_id: str) -> tuple[AssetEntry, ...]:
         snapshot = await self._asset.snapshot(user_id)
@@ -1067,20 +903,36 @@ class FormationService:
             raise FormationError(f"未找到唯一阵法：{query or '<空>'}")
         return value
 
-    def _grade_raw(
-        self, raw: Mapping[str, object], grade_name: str
-    ) -> Mapping[str, object]:
-        grades = {
-            _text(value.get("品级"), "阵法.品级"): value
-            for value in (
-                _mapping(item, "阵法.品级[]")
-                for item in _sequence(raw.get("品级"), "阵法.品级")
+    def _load_fixed_costs(self) -> dict[str, Mapping[str, int]]:
+        """五品级固定消耗；圣品这一行是最低投入。"""
+
+        raw = _mapping(self._rules.get("固定消耗"), "阵法规则.固定消耗")
+        result: dict[str, Mapping[str, int]] = {}
+        for grade_name in _GRADES:
+            row = _mapping(raw.get(grade_name), f"阵法规则.固定消耗.{grade_name}")
+            unknown = set(row) - set(_CATEGORIES)
+            if unknown:
+                raise JsonDataError(
+                    f"阵法固定消耗.{grade_name} 有未登记类别：{sorted(unknown)}"
+                )
+            counts = {
+                key: nonnegative_int(
+                    row.get(key), f"阵法规则.固定消耗.{grade_name}.{key}"
+                )
+                for key in _CATEGORIES
+            }
+            craft = int(
+                _number(
+                    self._grade_rows[grade_name].get("炼制倍率"),
+                    "品级.炼制倍率",
+                )
             )
-        }
-        try:
-            return grades[grade_name]
-        except KeyError as exc:
-            raise FormationError(f"阵法没有{grade_name}配置") from exc
+            if counts["灵矿"] < 2 * craft:
+                raise JsonDataError(
+                    f"阵法固定消耗.{grade_name}.灵矿 不得少于阵核 {2 * craft} 份"
+                )
+            result[grade_name] = MappingProxyType(counts)
+        return result
 
     def _load_masters(self) -> dict[str, FormationMaster]:
         result: dict[str, FormationMaster] = {}
@@ -1169,10 +1021,8 @@ class FormationService:
             raise JsonDataError("阵法固定品级必须为黄品、玄品、地品、天品")
         if self._rules.get("无上限品级") != "圣品":
             raise JsonDataError("阵法无上限品级必须为圣品")
-        # 圣品投势按「加权几何乘势」连乘（算法本身写在 `_grade_derived` 里）。声明在数据里，
-        # 这里读死，免得数据说一套、实现做另一套。
-        if _mapping(self._rules.get("圣品增长"), "阵法规则.圣品增长").get("算法") not in {"加权几何乘势", "线性加成"}:
-            raise JsonDataError("圣品增长算法必须是「加权几何乘势」或「线性加成」")
+        if set(self._fixed_grades) | {self._unbounded_grade} != set(_GRADES):
+            raise JsonDataError("阵法固定品级与无上限品级必须覆盖五个品级")
 
     def _replayed_result(
         self,

@@ -82,10 +82,10 @@ async def dandingge(user_id: str, message: str, message_context: MessageContext,
                 "演阵台",
                 "演阵台 宗门",
                 "演阵台 1",
-                "演阵台 黄品周天星斗大阵",
-                "演阵台 炼阵 圣品周天星斗大阵 兽宝数 灵矿数 灵植数",
+                "演阵台 黄品叠翠盘根阵",
+                "演阵台 炼阵 圣品叠翠盘根阵 100 200 300",
             ),
-            "side_effect": "按次消耗宗门灵石；圣品按实际三相投入追加消耗；走宗门材料与炼制圣品限宗主或长老",
+            "side_effect": "按次消耗宗门灵石；黄玄地天按固定配方，圣品三相投入为总数（最低 28/56/42）且无上限",
             "order": 76,
         },
     },
@@ -168,6 +168,11 @@ async def _dispatch(
                 raise ValueError(feature.copy()["错误"]["炼阵需要阵法"])
             grade, identifier = _parse_grade(parts[0])
             investments = _investments(parts[1:], feature.copy()["错误"]["圣品投入"])
+            if investments and grade != "圣品":
+                raise ValueError(
+                    "黄品、玄品、地品、天品按固定配方炼制，不能追加兽宝、灵矿、灵植三数；"
+                    "圣品才可追加"
+                )
             value = await feature.craft(
                 facility, user_id, request_id, source, identifier, grade, investments
             )
@@ -177,6 +182,11 @@ async def _dispatch(
             raise ValueError(feature.copy()["错误"]["审材需要阵法"])
         grade, identifier = _parse_grade(parts[0])
         investments = _investments(parts[1:], feature.copy()["错误"]["圣品投入"])
+        if investments and grade != "圣品":
+            raise ValueError(
+                "黄品、玄品、地品、天品按固定配方炼制，不能追加兽宝、灵矿、灵植三数；"
+                "圣品才可追加"
+            )
         value = await feature.preview(
             facility, user_id, source, identifier, grade, investments
         )

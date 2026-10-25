@@ -77,6 +77,11 @@ def _request(
         raise ValueError(usage) from exc
     investments = None
     if tail:
+        if grade != "圣品":
+            raise ValueError(
+                "黄品、玄品、地品、天品按固定配方炼制，不能追加兽宝、灵矿、灵植三数；"
+                "圣品才可追加"
+            )
         values = tuple(int(value) for value in tail)
         if any(value < 1 for value in values):
             raise ValueError("圣品三相投入必须是正整数")
@@ -95,8 +100,8 @@ def _request(
             "usage": (
                 "阵法审查",
                 "阵法审查 2",
-                "阵法审查 黄品周天星斗大阵",
-                "阵法审查 圣品周天星斗大阵 1944 5832 3888",
+                "阵法审查 黄品叠翠盘根阵",
+                "阵法审查 圣品叠翠盘根阵 100 200 300",
             ),
             "side_effect": "只审材，不消耗材料",
             "order": 65,
@@ -135,7 +140,7 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
         "help": {
             "category": "炼制",
             "summary": "请当地阵师把三相材料炼成一份一次性阵法",
-            "usage": ("炼阵 圣品周天星斗大阵 1944 5832 3888", "炼阵 <品级><阵法名> 兽宝数 灵矿数 灵植数",),
+            "usage": ("炼阵 黄品叠翠盘根阵", "炼阵 圣品叠翠盘根阵 100 200 300"),
             "side_effect": "消耗兽宝、灵矿和灵植，把阵法收入阵藏",
             "order": 66,
         },

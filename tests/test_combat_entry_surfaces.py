@@ -155,7 +155,7 @@ def test_every_environment_fights(services) -> None:
 
 
 def test_every_formation_grade_fights(services) -> None:
-    """46 座阵法 × 黄玄地天，以及需要真实材料投入的圣品。"""
+    """54 座阵法 × 黄玄地天，以及需要真实材料投入的圣品。"""
 
     formations = [
         entry
@@ -309,14 +309,19 @@ def test_formation_assessment_reaches_battle(services) -> None:
     from game.core.asset.contracts import AssetEntry
 
     entries = (
-        AssetEntry("物品", "灵矿", "220032", "core-1", "丘脉青晶", "01", "黄品", 6),
-        AssetEntry("物品", "灵矿", "220086", "core-2", "丘腹赤铁", "01", "黄品", 6),
+        AssetEntry("物品", "灵矿", "220032", "core-1", "丘脉青晶", "01", "黄品", 1),
+        AssetEntry("物品", "灵矿", "220086", "core-2", "丘腹赤铁", "01", "黄品", 1),
+        AssetEntry("物品", "兽宝", "210001", "beast-1", "丘兽宝", "01", "黄品", 4),
+        AssetEntry("物品", "灵矿", "220001", "ore-1", "丘灵矿", "01", "黄品", 6),
+        AssetEntry("物品", "灵植", "200001", "herb-1", "丘灵植", "01", "黄品", 6),
     )
     assessment = services.formation.assess("530001", "黄品", entries)
     assert assessment.can_form
     assert assessment.core_names == ("丘脉青晶", "丘腹赤铁")
     assert assessment.detection is not None
-    profile = services.formation.battle_profile("530001", "黄品", {"灵矿": 2})
+    profile = services.formation.battle_profile(
+        "530001", "黄品", {"兽宝": 4, "灵矿": 8, "灵植": 6}
+    )
     assert profile.detection is not None
 
     result = _fight(
@@ -327,6 +332,46 @@ def test_formation_assessment_reaches_battle(services) -> None:
         left_formation=CombatFormationSpec("530001", "黄品"),
     )
     assert any(event.kind == "阵法冲击后" for event in result.events)
+
+
+def test_fixed_and_holy_formation_costs(services) -> None:
+    """黄玄地天固定消耗，圣品最低值之上才无上限追加。"""
+
+    from game.core.formation import FormationError
+
+    expected = {
+        "黄品": {"兽宝": 4, "灵矿": 8, "灵植": 6},
+        "玄品": {"兽宝": 8, "灵矿": 16, "灵植": 12},
+        "地品": {"兽宝": 12, "灵矿": 24, "灵植": 18},
+        "天品": {"兽宝": 16, "灵矿": 32, "灵植": 24},
+    }
+    for grade, counts in expected.items():
+        value = services.formation.assess("530001", grade, ())
+        actual = {item.category: item.required for item in value.requirements}
+        assert actual == counts
+        assert all(multiplier == 1.0 for _, multiplier in value.supplement_multipliers)
+
+    with pytest.raises(FormationError, match="按固定配方炼制"):
+        services.formation.assess(
+            "530001", "黄品", (), {"兽宝": 1, "灵矿": 0, "灵植": 0}
+        )
+
+    minimum = services.formation.assess(
+        "530001", "圣品", (), {"兽宝": 28, "灵矿": 56, "灵植": 42}
+    )
+    assert (minimum.capacity, minimum.impact, minimum.nodes) == (480.0, 360.0, 6)
+    assert all(multiplier == 1.0 for _, multiplier in minimum.supplement_multipliers)
+
+    with pytest.raises(FormationError, match="不得低于最低消耗"):
+        services.formation.assess(
+            "530001", "圣品", (), {"兽宝": 27, "灵矿": 56, "灵植": 42}
+        )
+
+    extra = services.formation.assess(
+        "530001", "圣品", (), {"兽宝": 29, "灵矿": 56, "灵植": 42}
+    )
+    assert extra.impact > minimum.impact
+    assert dict(extra.supplement_multipliers)["兽宝"] > 1.0
 
 
 def test_formation_activation_plan_reaches_battle(services) -> None:
@@ -343,7 +388,7 @@ def test_formation_activation_plan_reaches_battle(services) -> None:
         "叠翠盘根阵",
         "01",
         "黄品",
-        (("兽宝", "0"), ("灵矿", "2"), ("灵植", "0")),
+        (("兽宝", "4"), ("灵矿", "8"), ("灵植", "6")),
         "",
         (),
         0,
@@ -641,8 +686,11 @@ def test_formation_craft_arm_and_battle(services) -> None:
         services.asset.plan_inventory_changes(
             user_id,
             (
-                InventoryAdjustment("220032", "01", 6),
-                InventoryAdjustment("220086", "01", 6),
+                InventoryAdjustment("220032", "01", 1),
+                InventoryAdjustment("220086", "01", 1),
+                InventoryAdjustment("210001", "01", 4),
+                InventoryAdjustment("220001", "01", 6),
+                InventoryAdjustment("200001", "01", 6),
             ),
         )
     )
