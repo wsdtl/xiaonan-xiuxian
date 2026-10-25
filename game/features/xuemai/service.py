@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import random
 from collections.abc import Mapping, Sequence
-from decimal import Decimal
 
+from game.core.bloodline import BloodlineService
 from game.core.character import CharacterNotFoundError, CharacterService
 from game.core.data import JsonDataService
 from game.core.database import DatabaseService, StateAddress, StateMutation, TransactionCommand
@@ -18,8 +18,6 @@ from .contracts import (
     SuccessionResult,
     XuemaiError,
 )
-from .dna import breed as _breed, random_dna as _random_dna
-from .matching import BloodlineRules, awaken_multiplier, load_bloodline_rules, matched
 from .presentation import load_xuemai_presentation
 
 #: 族谱状态的类型名（与既有 inventory / law_reserve 同一套 StateAddress）。
@@ -39,13 +37,14 @@ class XuemaiFeature:
         data: JsonDataService,
         character: CharacterService,
         database: DatabaseService,
+        bloodline: BloodlineService,
     ) -> None:
         self._data = data
         self._character = character
         self._database = database
+        self._bloodline = bloodline
         self._initialized = False
         self._copy: GenealogyCopy | None = None
-        self._rules: BloodlineRules | None = None
         self._buttons: tuple[Mapping[str, str], ...] = ()
         self._random = random.SystemRandom()
 
@@ -55,42 +54,13 @@ class XuemaiFeature:
         if self._initialized:
             raise RuntimeError("血脉玩法微服务已经初始化")
         for ready, label in (
+            (self._bloodline.status().initialized, "血脉核心"),
             (self._character.status().initialized, "角色核心"),
             (self._database.status().initialized, "数据库核心"),
         ):
             if not ready:
                 raise RuntimeError(f"{label}必须先于血脉玩法启动")
         self._copy, self._buttons = load_xuemai_presentation(self._data.dataset("血脉展示"))
-        rule_block = self._data.dataset("血脉规则")
-        body = rule_block.get("血脉")
-        if not isinstance(body, Mapping):
-            raise RuntimeError("血脉规则数据集缺少「血脉」块")
-        content = self._data.dataset("血脉内容")
-        rows: list[object] = []
-        if isinstance(content, Mapping):
-            if "血脉" in content and isinstance(content["血脉"], Mapping):
-                content = content["血脉"]
-            if "普通血脉" in content or "天外" in content:
-                rows.extend(content.get("普通血脉") or ())
-                rows.extend(content.get("天外") or ())
-            else:
-                for value in content.values():
-                    if isinstance(value, (list, tuple)):
-                        rows.extend(value)
-                    elif isinstance(value, Mapping):
-                        rows.append(value)
-        elif isinstance(content, (list, tuple)):
-            rows.extend(content)
-        else:
-            raise RuntimeError("血脉内容数据集格式不正确")
-        merged = dict(body)
-        merged["普通血脉"] = tuple(
-            row for row in rows if isinstance(row, Mapping) and str(row.get("类别") or "普通") == "普通"
-        )
-        merged["天外"] = tuple(
-            row for row in rows if isinstance(row, Mapping) and str(row.get("类别") or "") == "天外"
-        )
-        self._rules = load_bloodline_rules(merged)
         self._initialized = True
 
     def copy(self) -> GenealogyCopy:
@@ -101,13 +71,11 @@ class XuemaiFeature:
             raise RuntimeError("血脉展示契约尚未完成初始化")
         return self._copy
 
-    def rules(self) -> BloodlineRules:
+    def rules(self):
         """血脉规则全表（32 条 ＋ 觉醒档）。"""
 
         self._require_initialized()
-        if self._rules is None:
-            raise RuntimeError("血脉规则尚未完成初始化")
-        return self._rules
+        return self._bloodline.rules()
 
     async def stored_dna(self, user_id: str) -> str:
         """只读已存的 DNA；不创建、不回调角色。
@@ -177,71 +145,37 @@ class XuemaiFeature:
     def random_dna(self, gender: str) -> str:
         """实例化随机：6 组各自 0~99，G6 按性别取奇/偶。"""
 
-        return _random_dna(gender, self._random)
+        return self._bloodline.random_dna(gender, self._random)
 
     def breed(self, father: str, mother: str, gender: str) -> str:
         """父母各出 12 位，逐组算一个新 DNA。"""
 
-        return _breed(father, mother, gender, self._random)
+        return self._bloodline.breed(father, mother, gender, self._random)
 
     def bloodline_growth(self, dna: str) -> dict[str, float]:
-        """血脉加法表（基础值）：命中血脉的固定属性加成汇总。
+        """血脉加法表（基础值）。"""
 
-        只汇总「固定属性加成」这一条；觉醒与否不在这里判断——
-        装配时按当前气血取档（见 awakened_growth）。
-        """
-
-        out: dict[str, float] = {}
-        for blood in matched(self.rules(), dna):
-            for ability in blood.abilities:
-                if str(ability.get("能力")) != "固定属性加成":
-                    continue
-                for key, value in dict(ability.get("属性") or {}).items():
-                    out[str(key)] = out.get(str(key), 0.0) + float(value)
-        return out
+        return self._bloodline.bloodline_growth(dna)
 
     def awakened_growth(self, dna: str, hp_percent: object) -> dict[str, float]:
-        """铁律里的「血脉加法 x 觉醒倍数」。
+        """血脉加法 x 觉醒倍数。"""
 
-        能觉醒的血脉按当前气血百分比取档相乘；
-        不能觉醒的恒 x1.0，跳过重算（不浪费性能）。
-        """
-
-        rules = self.rules()
-        factor = Decimal(str(awaken_multiplier(rules, Decimal(str(hp_percent)))))
-        out: dict[str, float] = {}
-        for blood in matched(rules, dna):
-            scale = factor if blood.awake else Decimal("1.0")
-            for ability in blood.abilities:
-                if str(ability.get("能力")) != "固定属性加成":
-                    continue
-                for key, value in dict(ability.get("属性") or {}).items():
-                    out[str(key)] = out.get(str(key), 0.0) + float(Decimal(str(value)) * scale)
-        return out
+        return self._bloodline.awakened_growth(dna, hp_percent)
 
     def combat_growth(self, dna: str) -> dict[str, float]:
-        """血脉那一份：**只出基础加法**。
+        """战斗侧只出基础加法；觉醒倍率由引擎乘在等级成长那一份上。"""
 
-        属性 = 基础（含覆盖）
-             + 意境 + 血脉
-             + 等级成长 x (觉醒倍数 + 意境百分比)
-             + 武器攻击
-
-        觉醒倍数按当前气血取档（见 `awaken`），由引擎乘在**等级成长那一份**上
-        （`core/combat/engine.py` 的 `_growth_at_action_start`）；这里不再乘任何倍率。
-        """
-
-        return self.bloodline_growth(dna)
+        return self._bloodline.combat_growth(dna)
 
     def awaken(self, hp_percent: object) -> object:
         """按真实气血百分比取觉醒倍率（护盾不计入）。"""
 
-        return awaken_multiplier(self.rules(), Decimal(str(hp_percent)))
+        return self._bloodline.awaken(hp_percent)
 
     def bloodlines(self, dna: str) -> tuple[str, ...]:
         """按 DNA 匹配出的血脉名字，按强度降序。"""
 
-        return tuple(b.name for b in matched(self.rules(), dna))
+        return self._bloodline.bloodlines(dna)
 
     def buttons(self) -> tuple[Mapping[str, str], ...]:
         """血脉页面上的按钮。"""

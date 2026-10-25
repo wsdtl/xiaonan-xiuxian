@@ -416,10 +416,10 @@ def test_formation_activation_plan_reaches_battle(services) -> None:
 def test_bloodline_data_boundary(services) -> None:
     """普通/天外、能觉醒/不能觉醒、固定属性与觉醒档都按数据解释。"""
 
+    from game.core.bloodline import matched
     from game.features.xuemai import XuemaiFeature
-    from game.features.xuemai.matching import matched
 
-    xuemai = XuemaiFeature(services.data, services.character, services.database)
+    xuemai = XuemaiFeature(services.data, services.character, services.database, services.bloodline)
     xuemai.initialize()
     rules = xuemai.rules()
     assert len(rules.bloodlines) == 32
@@ -600,15 +600,15 @@ def test_yijing_tier_nine_enters_real_battle(services) -> None:
 
 
 
-def test_bloodline_can_set_soul_max_only(services) -> None:
+def test_bloodline_can_set_soul_max_only(services, monkeypatch) -> None:
     """血脉固定属性可以给神魂上限；这是属性边界，不碰神魂当前值。"""
 
     from decimal import Decimal
 
+    from game.core.bloodline import Bloodline, BloodlineRules
     from game.features.xuemai import XuemaiFeature
-    from game.features.xuemai.matching import Bloodline, BloodlineRules
 
-    xuemai = XuemaiFeature(services.data, services.character, services.database)
+    xuemai = XuemaiFeature(services.data, services.character, services.database, services.bloodline)
     xuemai.initialize()
     custom = BloodlineRules(
         bloodlines=(
@@ -631,7 +631,7 @@ def test_bloodline_can_set_soul_max_only(services) -> None:
         ),
         awaken_tiers=((Decimal("0"), Decimal("100"), Decimal("1.0")),),
     )
-    xuemai.rules = lambda: custom  # type: ignore[method-assign]
+    monkeypatch.setattr(services.bloodline, "rules", lambda: custom)
     growth = xuemai.bloodline_growth("000000000000")
     assert growth == {"神魂上限": 5.0}
 
@@ -643,7 +643,7 @@ def test_bloodline_real_character_reaches_battle(services) -> None:
     from game.core.database.contracts import StateMutation, TransactionCommand
     from game.features.xuemai import XuemaiFeature
 
-    xuemai = XuemaiFeature(services.data, services.character, services.database)
+    xuemai = XuemaiFeature(services.data, services.character, services.database, services.bloodline)
     xuemai.initialize()
     assert xuemai.awaken("39") > 1.0
     assert xuemai.awaken("70") == 1.0

@@ -16,6 +16,7 @@ from .core.action_group import ActionGroupService
 from .core.activity import ActivityLifecycleService
 from .core.alchemy import AlchemyService
 from .core.asset import AssetService
+from .core.bloodline import BloodlineService
 from .core.character import CharacterService
 from .core.combat import CombatService
 from .core.companion import CompanionService
@@ -108,6 +109,7 @@ class CoreServices:
     """全局基础微服务。"""
 
     data: JsonDataService
+    bloodline: BloodlineService
     item_catalog: ItemCatalogService
     combat: CombatService
     pool: PoolService
@@ -223,6 +225,14 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("documents", status.document_count),
             C.kv("entities", status.entity_count),
             C.kv("pools", status.pool_count),
+        )
+    )
+    bloodline = BloodlineService(data)
+    bloodline_status = bloodline.initialize()
+    logger.opt(colors=True).success(
+        C.join(
+            C.ok("血脉核心微服务已启动"),
+            C.kv("bloodlines", bloodline_status.bloodline_count),
         )
     )
     item_catalog = ItemCatalogService(data)
@@ -732,6 +742,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     logger.opt(colors=True).success(C.ok("事务流水核心微服务已启动"))
     core = CoreServices(
         data=data,
+        bloodline=bloodline,
         transaction_log=transaction_log,
         item_catalog=item_catalog,
         combat=combat,
@@ -934,7 +945,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         innate_treasure,
     )
     daolv_jiejiao.initialize()
-    xuemai = XuemaiFeature(data, character, database)
+    xuemai = XuemaiFeature(data, character, database, bloodline)
     xuemai.initialize()
     _bloodline_holder["xuemai"] = xuemai
     _bloodline_holder["character"] = character

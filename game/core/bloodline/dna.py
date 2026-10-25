@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import random
 
-from .matching import GROUPS, format_dna, parse_dna
+from .rules import GROUPS, format_dna, parse_dna
 
 #: 每组的上限（0~99）。
 GROUP_MAX = 100
