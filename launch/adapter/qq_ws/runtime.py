@@ -3,6 +3,10 @@
 只负责"把网关上的字节变成 `QqMessageEvent` 并交给共用队列"这一段：
 建连、Hello、Identify/Resume、心跳、分片、重连退避和关闭清理。
 
+重连时会重新读取网关信息并现取 access token；连续鉴权失败进入长冷却
+后继续，而不是永久退出。这样启动时缓存的 token/地址不会在两小时后
+被复用，也不会因为一次平台抖动把整个分片任务结束掉。
+
 命令匹配、守卫、业务回调与回复发送全部复用 `launch.adapter.qq_protocol`，
 本文件不重复实现；底层帧与连接由框架级 `launch.adapter.websocket` 提供。
 官方连接维护语义见
@@ -12,6 +16,7 @@ https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/interface-framework/event-e
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field, replace
 
 from launch.log import C, logger
@@ -23,13 +28,20 @@ from . import gateway
 
 TRANSPORT = "websocket"
 
+# 鉴权结果：区分正常、可恢复的会话失效和不可恢复的会话失效，
+# 重连循环据此决定是换凭据立即重试，还是进入退避。
+AUTH_READY = "ready"
+AUTH_RESUMED = "resumed"
+AUTH_INVALID_RESUMABLE = "invalid_resumable"
+AUTH_INVALID_FATAL = "invalid_fatal"
+
 
 @dataclass(frozen=True)
 class QqWsSettings:
     """WebSocket 传输自己的连接参数。
 
-    重连退避从 3 秒起步翻倍到 60 秒封顶：QQ 网关在维护或封禁时不应该被
-    本机以固定频率猛敲，但正常抖动又要能快速恢复。
+    重连退避从 3 秒起步翻倍到 60 秒封顶；连续建连失败达到阈值后进入
+    auth_failure_cooldown_seconds 长冷却，之后继续，不永久退出。
     """
 
     reconnect_interval_seconds: float = 3.0
@@ -38,6 +50,10 @@ class QqWsSettings:
     connect_timeout_seconds: float = 15.0
     shutdown_grace_seconds: float = 3.0
     max_closed_without_ready: int = 8
+    # 网关信息缓存时间；token 不缓存，每次连接前现取。
+    gateway_cache_seconds: float = 60.0
+    # 连续建连失败多少次后进入长冷却，而不是永久退出。
+    auth_failure_cooldown_seconds: float = 300.0
 
 
 @dataclass
@@ -68,6 +84,8 @@ class QqWsStats:
     events: int = 0
     heartbeats: int = 0
     reconnects: int = 0
+    auth_rejections: int = 0
+    gateway_refreshes: int = 0
     last_close_code: int = 0
     failures: list[str] = field(default_factory=list)
 
@@ -82,6 +100,10 @@ class QqGatewayRuntime:
         self._connections: dict[int, WebSocketConnection] = {}
         self._shutdown = asyncio.Event()
         self._intents = 0
+        self._gateway_cache: dict[str, object] | None = None
+        self._gateway_cache_at = 0.0
+        self._gateway_lock = asyncio.Lock()
+        self._override_logged = False
 
     @property
     def running(self) -> bool:
@@ -123,82 +145,104 @@ class QqGatewayRuntime:
         self._tasks.clear()
 
     async def _connect_once(self) -> None:
-        """获取网关地址并建立全部连接。"""
+        """获取网关地址并建立全部分片；取不到就继续退避，不永久退出。"""
 
-        try:
-            info = await self._gateway_info()
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - 网关不可用时只记录并等待重启
-            self._record_failure("QQ 网关地址获取失败", exc)
+        backoff = self.settings.reconnect_interval_seconds
+        while not self._shutdown.is_set():
+            try:
+                info = await self._gateway_info(force=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - 网关不可用时继续等
+                self._record_failure("QQ 网关地址获取失败", exc)
+                await self._sleep_before_reconnect(backoff, None)
+                backoff = min(
+                    backoff * 2, self.settings.max_reconnect_interval_seconds
+                )
+                continue
+
+            shards = int(info["shards"])
+            if not shards or shards < 1:
+                shards = 1
+            gates = info["max_concurrency"]
+
+            logger.opt(colors=True).success(
+                C.join(
+                    C.ok("QQ WebSocket 网关已获取"),
+                    C.kv("shards", shards),
+                    C.kv("remaining", info["remaining"]),
+                    C.kv("concurrency", gates),
+                )
+            )
+
+            for index in range(shards):
+                if self._shutdown.is_set():
+                    return
+                task = asyncio.create_task(
+                    self._shard_loop(index, shards),
+                    name=f"qq-ws-shard-{index}",
+                )
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
+                if index + 1 < shards:
+                    # 官方要求分片建连间隔不小于 max_concurrency 秒。
+                    await asyncio.sleep(max(1, gates))
             return
 
-        url = info["url"]
-        shards = int(info["shards"])
-        if not shards or shards < 1:
-            shards = 1
-        gates = info["max_concurrency"]
+    async def _gateway_info(self, *, force: bool = False) -> dict:
+        """读取网关地址；覆盖项固定，否则按 gateway_cache_seconds 缓存。
 
-        logger.opt(colors=True).success(
-            C.join(
-                C.ok("QQ WebSocket 网关已获取"),
-                C.kv("shards", shards),
-                C.kv("remaining", info["remaining"]),
-                C.kv("concurrency", gates),
-            )
-        )
-
-        for index in range(shards):
-            if self._shutdown.is_set():
-                return
-            task = asyncio.create_task(
-                self._shard_loop(index, shards, url, info["token"]),
-                name=f"qq-ws-shard-{index}",
-            )
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
-            if index + 1 < shards:
-                # 官方要求分片建连间隔不小于 max_concurrency 秒。
-                await asyncio.sleep(max(1, gates))
-
-    async def _gateway_info(self) -> dict:
-        """读取网关地址；配置了覆盖项时跳过 OpenAPI。"""
+        token 不在这里返回：它属于鉴权凭据，必须每次连接前现取，
+        不能把启动时的那一份复用到两小时后的重连上。
+        """
 
         override = gateway.gateway_url()
         if override:
-            logger.opt(colors=True).warning(
-                C.join(
-                    C.warn("QQ WebSocket 网关地址已被配置覆盖"),
-                    C.kv("url", override),
+            if not self._override_logged:
+                logger.opt(colors=True).warning(
+                    C.join(
+                        C.warn("QQ WebSocket 网关地址已被配置覆盖"),
+                        C.kv("url", override),
+                    )
                 )
-            )
+                self._override_logged = True
             return {
                 "url": override,
                 "shards": 1,
                 "remaining": 1,
                 "max_concurrency": 1,
-                "token": await asyncio.to_thread(_access_token),
             }
 
-        info = await asyncio.to_thread(_fetch_gateway_info)
-        if int(info["remaining"]) <= 0:
-            raise RuntimeError(
-                "QQ 网关会话启动次数已用完，请在限额重置后再连接"
-            )
-        return info
+        async with self._gateway_lock:
+            now = time.monotonic()
+            if (
+                not force
+                and self._gateway_cache is not None
+                and now - self._gateway_cache_at < self.settings.gateway_cache_seconds
+            ):
+                return self._gateway_cache
 
-    async def _shard_loop(
-        self,
-        shard_id: int,
-        shard_count: int,
-        url: str,
-        access_token: str,
-    ) -> None:
+            info = await asyncio.to_thread(_fetch_gateway_info)
+            remaining = int(info["remaining"])
+            if remaining <= 0:
+                # 不能把“启动次数为 0”的旧缓存留着，否则下一轮会拿它
+                # 继续判断为可用。
+                self._gateway_cache = None
+                raise RuntimeError(
+                    "QQ 网关会话启动次数已用完，请在限额重置后再连接"
+                )
+            self._gateway_cache = dict(info)
+            self._gateway_cache_at = time.monotonic()
+            self.stats.gateway_refreshes += 1
+            return self._gateway_cache
+
+    async def _shard_loop(self, shard_id: int, shard_count: int) -> None:
         """单分片的连接—鉴权—收消息—重连循环。"""
 
         session = QqWsSession()
         backoff = self.settings.reconnect_interval_seconds
         closed_without_ready = 0
+        auth_retry_used = False
         heartbeat_task: asyncio.Task | None = None
 
         while not self._shutdown.is_set():
@@ -206,9 +250,15 @@ class QqGatewayRuntime:
             session.heartbeat_sent = False
             session_established = False
             connection: WebSocketConnection | None = None
+            retry_now = False
             try:
+                # 每次重连都重新看网关信息并取 token；token 的过期刷新在
+                # client.get_access_token() 里，不能只在启动时取一次。
+                info = await self._gateway_info(force=auth_retry_used)
+                token = await asyncio.to_thread(_access_token)
                 connection = await WebSocketConnection.connect(
-                    url, connect_timeout=self.settings.connect_timeout_seconds
+                    str(info["url"]),
+                    connect_timeout=self.settings.connect_timeout_seconds,
                 )
                 self._connections[shard_id] = connection
                 self.stats.connects += 1
@@ -222,22 +272,31 @@ class QqGatewayRuntime:
                     name=f"qq-ws-heartbeat-{shard_id}",
                 )
 
-                # 鉴权失败（服务端拒绝会话）不能在这里 continue：那会跳过
-                # 下面的退避等待，把网关拖进无间隔重连。这里只记录结果，
-                # 让流程落到统一的退避重连路径。
-                if not await self._authenticate(
-                    connection, session, access_token, (shard_id, shard_count)
-                ):
-                    logger.opt(colors=True).debug(
-                        C.join(
-                            C.ok("QQ WebSocket 会话未被接受，按退避重连"),
-                            C.kv("shard", shard_id),
-                        )
-                    )
-                else:
+                result = await self._authenticate(
+                    connection, session, token, (shard_id, shard_count)
+                )
+                if result in (AUTH_READY, AUTH_RESUMED):
                     session_established = True
+                    auth_retry_used = False
+                    closed_without_ready = 0
                     backoff = self.settings.reconnect_interval_seconds
                     await self._receive_loop(connection, session, shard_id)
+                else:
+                    # 鉴权被拒：会话和 token 都可能已经失效，先清 token、
+                    # 丢弃网关缓存；第一次再给一次立即重试的机会。
+                    self.stats.auth_rejections += 1
+                    _clear_access_token()
+                    self._gateway_cache = None
+                    if not auth_retry_used:
+                        auth_retry_used = True
+                        retry_now = True
+                    logger.opt(colors=True).warning(
+                        C.join(
+                            C.warn("QQ WebSocket 鉴权被拒，准备换凭据重试"),
+                            C.kv("shard", shard_id),
+                            C.kv("retry_now", retry_now),
+                        )
+                    )
             except asyncio.CancelledError:
                 raise
             except WebSocketClosed as exc:
@@ -266,32 +325,53 @@ class QqGatewayRuntime:
             if self._shutdown.is_set():
                 return
 
+            if retry_now:
+                # 第一次鉴权被拒：token 已清、网关缓存已失效，立即再试一次；
+                # 第二次再拒就走退避，不能在这里空转。
+                logger.opt(colors=True).warning(
+                    C.join(
+                        C.warn("QQ WebSocket 刷新凭据后立即重试"),
+                        C.kv("shard", shard_id),
+                    )
+                )
+                continue
+
             self.stats.reconnects += 1
             if closed_without_ready >= self.settings.max_closed_without_ready:
                 logger.opt(colors=True).warning(
                     C.join(
-                        C.warn("QQ WebSocket 连续建连失败，放弃重连"),
+                        C.warn("QQ WebSocket 连续建连失败，进入长冷却"),
                         C.kv("shard", shard_id),
                         C.kv("attempts", closed_without_ready),
+                        C.kv(
+                            "cooldown",
+                            f"{self.settings.auth_failure_cooldown_seconds:.0f}s",
+                        ),
                     )
                 )
-                return
+                await self._sleep_before_reconnect(
+                    self.settings.auth_failure_cooldown_seconds, shard_id
+                )
+                closed_without_ready = 0
+                auth_retry_used = False
+                backoff = self.settings.reconnect_interval_seconds
+                continue
 
             await self._sleep_before_reconnect(backoff, shard_id)
             backoff = min(
                 backoff * 2, self.settings.max_reconnect_interval_seconds
             )
 
-    async def _sleep_before_reconnect(self, delay: float, shard_id: int) -> None:
+    async def _sleep_before_reconnect(
+        self, delay: float, shard_id: int | None
+    ) -> None:
         """按退避时间等待；关闭信号可以立即打断等待。"""
 
-        logger.opt(colors=True).debug(
-            C.join(
-                C.ok("QQ WebSocket 准备重连"),
-                C.kv("shard", shard_id),
-                C.kv("delay", f"{delay:.1f}s"),
-            )
-        )
+        parts = [C.ok("QQ WebSocket 准备重连")]
+        if shard_id is not None:
+            parts.append(C.kv("shard", shard_id))
+        parts.append(C.kv("delay", f"{delay:.1f}s"))
+        logger.opt(colors=True).debug(C.join(*parts))
         try:
             await asyncio.wait_for(
                 self._shutdown.wait(), timeout=max(0.05, float(delay))
@@ -318,8 +398,8 @@ class QqGatewayRuntime:
         session: QqWsSession,
         access_token: str,
         shard: tuple[int, int],
-    ) -> bool:
-        """发送 Identify 或 Resume，并确认服务端接受了本次会话。"""
+    ) -> str:
+        """发送 Identify 或 Resume，返回鉴权结果。"""
 
         if session.can_resume and session.session_id:
             self.stats.resumes += 1
@@ -373,7 +453,11 @@ class QqGatewayRuntime:
                         C.kv("resume", session.can_resume),
                     )
                 )
-                return False
+                return (
+                    AUTH_INVALID_RESUMABLE
+                    if session.can_resume
+                    else AUTH_INVALID_FATAL
+                )
 
             if opcode == gateway.OP_HEARTBEAT_ACK:
                 continue
@@ -403,7 +487,7 @@ class QqGatewayRuntime:
                         C.kv("session", session_id or "-"),
                     )
                 )
-                return True
+                return AUTH_READY
             if event_type == "RESUMED":
                 session.can_resume = True
                 logger.opt(colors=True).success(
@@ -413,7 +497,7 @@ class QqGatewayRuntime:
                         C.kv("seq", session.seq),
                     )
                 )
-                return True
+                return AUTH_RESUMED
 
             # 鉴权期间极少出现业务事件；出现就正常派发，不丢事件。
             self._submit(message, event_type, session.self_id or "qq_ws")
@@ -438,9 +522,11 @@ class QqGatewayRuntime:
                 continue
             if opcode == gateway.OP_RECONNECT:
                 session.can_resume = True
-                logger.opt(colors=True).warning(
+                # 这是网关的正常控制帧，不是错误；降到 INFO，避免用户把
+                # “要求换连接”误读成掉线。
+                logger.opt(colors=True).info(
                     C.join(
-                        C.warn("QQ 网关要求重连"),
+                        C.ok("QQ 网关要求重连"),
                         C.kv("shard", shard_id),
                     )
                 )
@@ -612,6 +698,14 @@ def _fetch_gateway_info() -> dict:
     from ..qq_protocol.client import client
 
     return client.get_gateway_info()
+
+
+def _clear_access_token() -> None:
+    """清掉 HTTP 客户端的 token 缓存；下次 get_access_token() 会重新取。"""
+
+    from ..qq_protocol.client import client
+
+    client.clear_access_token()
 
 
 def _access_token() -> str:
