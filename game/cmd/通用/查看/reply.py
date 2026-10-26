@@ -22,7 +22,7 @@ from .items import (
 def missing_query() -> DocumentMessage:
     return (
         M.document()
-        .section("提示", icon="item")
+        .section("提示", icon="game.box")
         .line(M.status("缺少目标", tone="warning"), " 请提供编号或完整名称。")
         .small("例如：查看 清心散")
         .build()
@@ -38,7 +38,7 @@ def inspection(
         reply = (
             M.document()
 
-            .section("名称不唯一", icon="notice")
+            .section("名称不唯一", icon="game.pin_doc")
             .line(
                 M.status("需要选择", tone="warning"),
                 _normalize_brackets(
@@ -63,7 +63,7 @@ def inspection(
     if result.detail is None:
         return (
             M.document()
-            .section("结果", icon="notice")
+            .section("结果", icon="game.pin_doc")
             .line(
                 M.status("未找到", tone="danger"),
                 _normalize_brackets(f" “{result.query}”没有对应资料。"),
@@ -142,20 +142,20 @@ def _with_held_grade(
 
 def _display_title(category: str) -> tuple[str, str]:
     return {
-        "功法": ("功法", "skill"),
-        "真意": ("真意", "skill"),
-        "气机": ("气机", "status"),
-        "器律": ("器律", "weapon"),
-        "阵法": ("阵法", "skill"),
-        "先天灵宝": ("先天灵宝", "item"),
-        "丹药": ("丹药", "recovery"),
-        "灵植": ("灵植", "recovery"),
-        "灵矿": ("灵矿", "material"),
-        "兽宝": ("兽宝", "material"),
-        "基础物品": ("基础物品", "item"),
-        "道侣": ("道侣", "player"),
-        "伤势": ("伤势", "status"),
-    }.get(category, (category, "docs"))
+        "功法": ("功法", "game.manual"),
+        "真意": ("真意", "game.manual"),
+        "气机": ("气机", "game.seed"),
+        "器律": ("器律", "game.dagger"),
+        "阵法": ("阵法", "game.blue_diamond"),
+        "先天灵宝": ("先天灵宝", "game.amulet"),
+        "丹药": ("丹药", "game.pill"),
+        "灵植": ("灵植", "game.herb"),
+        "灵矿": ("灵矿", "game.material"),
+        "兽宝": ("兽宝", "game.material"),
+        "基础物品": ("基础物品", "game.box"),
+        "道侣": ("道侣", "game.heart"),
+        "伤势": ("伤势", "game.blood_drop"),
+    }.get(category, (category, "game.scroll"))
 
 
 def _detail_title(category: str) -> str:

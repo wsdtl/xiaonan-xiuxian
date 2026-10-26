@@ -89,7 +89,7 @@ def page(
             if names:
                 label = role if role == "宗主" else f"{role}（{len(names)}）"
                 builder.field(label, "、".join(names))
-        builder.section(_text(copy, "查看", "进境"), icon="status").row(
+        builder.section(_text(copy, "查看", "进境"), icon="game.seed").row(
             (
                 _text(copy, "查看", "等级"),
                 M.progress(

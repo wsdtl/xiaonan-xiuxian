@@ -10,7 +10,7 @@ from game.features.weizhi import StatusView
 
 def spirit_stone(copy: dict, view: SpiritStoneView) -> DocumentMessage:
     builder = M.document().section(
-        str(copy.get("标题") or "灵石"), icon="notice"
+        str(copy.get("标题") or "灵石"), icon="game.pin_doc"
     )
     if not view.grades:
         builder.line(str(copy.get("没有") or "纳戒里没有灵石。"))
@@ -34,7 +34,7 @@ def spirit_stone(copy: dict, view: SpiritStoneView) -> DocumentMessage:
 
 def status(copy: dict, view: StatusView) -> DocumentMessage:
     builder = M.document().section(
-        str(copy.get("标题") or "状态"), icon="notice"
+        str(copy.get("标题") or "状态"), icon="game.pin_doc"
     )
     builder.line(
         str(copy.get("位置") or "位置：{place}（{x}, {y}）").format(

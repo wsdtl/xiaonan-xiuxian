@@ -42,7 +42,7 @@ def _render_candidates(
             feature.copy("突破", "缺丹").format_map(
                 {"来源": offer.preview.realm_name, "目标": offer.preview.next_realm_name}
             ),
-            icon="status",
+            icon="game.seed",
         )
         return True
     preview = offer.preview
@@ -184,7 +184,7 @@ def error(
 
     return error_document(
         feature.copy("错误", "标题"),
-        "notice",
+        "game.pin_doc",
         feature.copy("错误", "失败"),
         message,
         tone="danger",

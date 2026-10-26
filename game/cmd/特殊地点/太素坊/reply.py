@@ -8,7 +8,7 @@ def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
     return (
         M.document()
 
-        .section(value.name, icon="character")
+        .section(value.name, icon="game.role")
         .line(M.status("易形完成", tone="positive"))
         .row(
             ("原性别", value.gender_before),
@@ -21,7 +21,7 @@ def result(feature: YixingFeature, value: YixingResult) -> DocumentMessage:
 
 def error(feature: YixingFeature, message: str) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        feature.copy("错误", "标题"), "notice", "易形失败", message, tone="danger"
+    return error_document(        feature.copy("错误", "标题"), "game.pin_doc", "易形失败", message, tone="danger"
     )
 
 
@@ -29,7 +29,7 @@ def fanben_result(feature: FanbenFeature, value: FanbenResult) -> DocumentMessag
     return (
         M.document()
 
-        .section(value.name, icon="character")
+        .section(value.name, icon="game.role")
         .line(M.status("返本完成", tone="positive"))
         .row(
             ("原种族", value.race_before),
@@ -54,7 +54,7 @@ def fanben_result(feature: FanbenFeature, value: FanbenResult) -> DocumentMessag
 def fanben_error(feature: FanbenFeature, message: str) -> DocumentMessage:
     return (
         M.document()
-        .section(feature.copy("错误", "标题"), icon="notice")
+        .section(feature.copy("错误", "标题"), icon="game.pin_doc")
         .line(M.status("返本失败", tone="danger"), " ", message)
         .build()
     )

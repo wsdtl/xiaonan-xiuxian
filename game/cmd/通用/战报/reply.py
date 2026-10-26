@@ -20,7 +20,7 @@ def view(feature: BattleReportFeature, page: MyReportPage) -> DocumentMessage:
     builder = M.document()
     # line/row/item 必须属于 section；分节恒定存在（标题用有信息的一句），
     # 空列表走 line＋状态点，照宗门战 history 的成品写法——不另开空栏目。
-    builder.section(_t(feature, "说明"), icon="combat")
+    builder.section(_t(feature, "说明"), icon="game.swords")
     if page.entries:
         builder.field(_t(feature, "分类"), _t(feature, "总数").format_map({"数量": page.total}))
     else:

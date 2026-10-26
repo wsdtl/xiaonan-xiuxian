@@ -8,7 +8,7 @@ def notice(feature: WangyeFeature, enabled: bool) -> DocumentMessage:
     return (
         M.document()
 
-        .section(feature.copy('公开', '标题'), icon='system')
+        .section(feature.copy('公开', '标题'), icon='game.spark')
         .line(
             M.command(
                 feature.copy('公开', '开启' if enabled else '关闭'),
@@ -22,7 +22,7 @@ def notice(feature: WangyeFeature, enabled: bool) -> DocumentMessage:
 def error(feature: WangyeFeature, message: str) -> DocumentMessage:
     return (
         M.document()
-        .section(feature.copy('错误', '标题'), icon='notice')
+        .section(feature.copy('错误', '标题'), icon='game.pin_doc')
         .line(M.status('没有改成', tone='danger'), ' ', message)
         .build()
     )

@@ -38,11 +38,11 @@ def overview(
     builder = (
         M.document()
 
-        .section(alchemist.title, icon="item")
+        .section(alchemist.title, icon="game.box")
         .field(text(copy, "总览", "丹师"), alchemist.name)
         .line(text(copy, "总览", "引言", {"丹师": alchemist.name}))
         .small(alchemist.speech["总览"].format_map({"主持": alchemist.name}))
-        .section(text(copy, "总览", "分类"), icon="inventory")
+        .section(text(copy, "总览", "分类"), icon="game.bag")
     )
     for index, (category, count) in enumerate(value.category_counts, start=1):
         builder.item(index, f"{category} · {count}种丹药")
@@ -57,9 +57,9 @@ def recipe_list(
     builder = (
         M.document()
 
-        .section(value.alchemist.title, icon="item")
+        .section(value.alchemist.title, icon="game.box")
         .field(text(copy, "列表", "丹师"), value.alchemist.name)
-        .section(value.category, icon="inventory")
+        .section(value.category, icon="game.bag")
     )
     for index, entry in enumerate(value.entries, start=1):
         state = text(copy, "列表", "可炼" if entry.can_refine else "缺材")
@@ -87,10 +87,10 @@ def preview(
     builder = (
         M.document()
 
-        .section(alchemist.title, icon="item")
+        .section(alchemist.title, icon="game.box")
         .field(text(copy, "预览", "丹师"), alchemist.name)
         .small(alchemist.speech["审材"].format_map({"主持": alchemist.name}))
-        .section(value.recipe.medicine_name, icon="inventory")
+        .section(value.recipe.medicine_name, icon="game.bag")
         .row(
             (
                 text(copy, "预览", "成丹"),
@@ -100,14 +100,14 @@ def preview(
     )
     # 没有药引就整个栏目都不开：只印一个「无」不说明任何事，空栏目更是白占地方。
     if value.beast_material is not None:
-        builder.section(text(copy, "预览", "药引"), icon="material")
+        builder.section(text(copy, "预览", "药引"), icon="game.material")
         _material(builder, 1, value.beast_material)
     if value.herb_materials:
-        builder.section(text(copy, "预览", "辅材"), icon="material")
+        builder.section(text(copy, "预览", "辅材"), icon="game.material")
         for index, material in enumerate(value.herb_materials, start=1):
             _material(builder, index, material)
     if value.missing_materials:
-        builder.section(text(copy, "列表", "缺材"), icon="notice")
+        builder.section(text(copy, "列表", "缺材"), icon="game.pin_doc")
         for index, missing in enumerate(value.missing_materials, start=1):
             builder.item(
                 index, f"{missing.role} · {missing.requirement} × {missing.quantity}"
@@ -136,10 +136,10 @@ def completed(
         M.document()
 
         .inline_section("结果", M.status("完成", tone="positive"), icon="game.pill")
-        .section(alchemist.title, icon="item")
+        .section(alchemist.title, icon="game.box")
         .field(text(copy, "完成", "丹师"), alchemist.name)
         .line(text(copy, "完成", "过程", {"丹师": alchemist.name}))
-        .section(text(copy, "完成", "所得"), icon="inventory")
+        .section(text(copy, "完成", "所得"), icon="game.bag")
         .field(
             f"{preview_value.medicine_grade_name}{preview_value.recipe.medicine_name}",
             f"纳戒数量 {value.quantity_after}",
@@ -160,7 +160,7 @@ def error(
     command: str,
 ) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", text(copy, "错误", command), sentence(message), tone="danger",
+    return error_document(        text(copy, "错误", "标题"), "game.pin_doc", text(copy, "错误", command), sentence(message), tone="danger",
         actions=actions,
         hint=text(copy, "错误", "格式"),
     )

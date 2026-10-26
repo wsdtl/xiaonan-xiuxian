@@ -28,11 +28,11 @@ def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[Forma
     builder = (
         M.document()
 
-        .section(master.title, icon="combat")
+        .section(master.title, icon="game.swords")
         .field(text(copy, "总览", "阵师"), master.name)
         .line(text(copy, "总览", "引言", {"阵师": master.name}))
         .small(master.speech["总览"].format_map({"主持": master.name}))
-        .section(text(copy, "总览", "阵法"), icon="item")
+        .section(text(copy, "总览", "阵法"), icon="game.box")
     )
     for index, entry in enumerate(value.entries, start=1):
         builder.item(
@@ -55,10 +55,10 @@ def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[Formati
     builder = (
         M.document()
 
-        .section(master.title, icon="combat")
+        .section(master.title, icon="game.swords")
         .field(text(copy, "预览", "阵师"), master.name)
         .small(master.speech["审材"].format_map({"主持": master.name}))
-        .section(value.formation.name, icon="item")
+        .section(value.formation.name, icon="game.box")
         .row(
             (text(copy, "预览", "品级"), value.grade_name),
         )
@@ -72,7 +72,7 @@ def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[Formati
     )
     # 没有材料项就整个栏目都不开：空栏目白占玩家的地方。
     if value.requirements:
-        builder.section(text(copy, "预览", "材料"), icon="material")
+        builder.section(text(copy, "预览", "材料"), icon="game.material")
     for index, requirement in enumerate(value.requirements, start=1):
         builder.item(
             index,
@@ -105,10 +105,10 @@ def completed(copy: FormationCopy, value: FormationResult, actions: tuple[Format
         M.document()
 
         .inline_section("结果", M.status("完成", tone="positive"), icon="game.blue_diamond")
-        .section(master.title, icon="combat")
+        .section(master.title, icon="game.swords")
         .field(text(copy, "完成", "阵师"), master.name)
         .line(text(copy, "完成", "过程", {"阵师": master.name}))
-        .section(text(copy, "完成", "所得"), icon="item")
+        .section(text(copy, "完成", "所得"), icon="game.box")
         .field(
             f"{preview_value.grade_name}{preview_value.formation.name}",
             f"阵藏条目 {value.reserve_key} · 数量 {value.quantity_after}",
@@ -151,7 +151,7 @@ def error(
     command: str,
 ) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", text(copy, "错误", command), sentence(message), tone="danger",
+    return error_document(        text(copy, "错误", "标题"), "game.pin_doc", text(copy, "错误", command), sentence(message), tone="danger",
         actions=actions,
     )
 

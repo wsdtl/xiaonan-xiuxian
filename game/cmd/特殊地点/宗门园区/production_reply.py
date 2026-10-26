@@ -29,7 +29,7 @@ def viewed(
     builder = (
         M.document()
 
-        .section("生产", icon="location")
+        .section("生产", icon="game.pin")
         .field(
             "周期",
             common["周期"].format_map({"时长": duration(value.facility.period_seconds)}),
@@ -66,7 +66,7 @@ def started(
     return (
         M.document()
 
-        .section(text["开启"], icon="success")
+        .section(text["开启"], icon="game.success")
         .line(M.status("生产已开启", tone="positive"))
         .small(
             common["开启说明"].format_map({"时长": duration(value.view.facility.period_seconds)})
@@ -86,7 +86,7 @@ def collected(
     builder = (
         M.document()
 
-        .section(text["收取"], icon="success")
+        .section(text["收取"], icon="game.success")
         .line(M.status("收取完成", tone="positive"))
         .field("收取轮次", common["结算轮数"].format_map({"轮数": value.settled_cycles}))
     )
@@ -126,7 +126,7 @@ def placed(
     builder = (
         M.document()
 
-        .section(common["选地形"], icon="success")
+        .section(common["选地形"], icon="game.success")
         .line(
             # 地形状态做成一枚分支按钮：点一下回「选地形／清地形」二选一菜单，只填入。
             M.command(
@@ -155,7 +155,7 @@ def terrains(
     builder = (
         M.document()
 
-        .section(common["选地形"], icon="location")
+        .section(common["选地形"], icon="game.pin")
         .field(common["地形"], _terrain(common, value.terrain))
     )
     if not value.started:
@@ -178,7 +178,7 @@ def terrains(
 
 def error(copy: Mapping[str, Mapping[str, str]], message: str) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        copy["通用"]["错误"], "notice", "生产失败", sentence(message), tone="danger"
+    return error_document(        copy["通用"]["错误"], "game.pin_doc", "生产失败", sentence(message), tone="danger"
     )
 
 

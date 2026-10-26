@@ -16,7 +16,7 @@ def _text(copy: Mapping[str, str], key: str) -> str:
 def upgraded(copy: Mapping[str, str], value: ShengjieResult) -> DocumentMessage:
     builder = (
         M.document()
-        .section(_text(copy, "标题"), icon="item")
+        .section(_text(copy, "标题"), icon="game.box")
         .row(
             (_text(copy, "物品"), M.text(value.item_name)),
             (_text(copy, "数量"), str(value.quantity)),
@@ -25,7 +25,7 @@ def upgraded(copy: Mapping[str, str], value: ShengjieResult) -> DocumentMessage:
             (_text(copy, "来源"), f"{value.source_grade_name}"),
             (_text(copy, "目标"), M.text(value.target_grade_name, tone="positive")),
         )
-        .section(_text(copy, "消耗"), icon="recovery")
+        .section(_text(copy, "消耗"), icon="game.herb")
         .line(f"{value.total_cost} 黄品灵石（单件 {value.unit_cost}）")
         .field(
             _text(copy, "灵石"),
@@ -48,13 +48,13 @@ def plan(
         subtitle = f"{value.category} · {value.target_grade_name}"
     builder = (
         M.document()
-        .section(title, icon="system")
+        .section(title, icon="game.spark")
         .line(subtitle)
     )
     if not plan_value.lines:
         builder.line(_text(copy, "无需"))
     else:
-        builder.section(_text(copy, "执行"), icon="inventory")
+        builder.section(_text(copy, "执行"), icon="game.bag")
         for index, line in enumerate(plan_value.lines, start=1):
             command = (
                 f"升阶 {line.source_grade_name}{line.item_name} "
@@ -71,7 +71,7 @@ def plan(
         f"{plan_value.spirit_stone_after}）",
     )
     if plan_value.missing:
-        builder.section(_text(copy, "缺料"), icon="notice")
+        builder.section(_text(copy, "缺料"), icon="game.pin_doc")
         for index, missing in enumerate(plan_value.missing, start=1):
             builder.item(
                 index,
@@ -87,7 +87,7 @@ def plan(
 def error(copy: Mapping[str, str], message: str, command: str) -> DocumentMessage:
     return (
         M.document()
-        .section(_text(copy, "标题"), icon="notice")
+        .section(_text(copy, "标题"), icon="game.pin_doc")
         .line(M.text(message, tone="danger"))
         .small(f"写法：{command}")
         .build()

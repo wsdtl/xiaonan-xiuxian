@@ -1,9 +1,9 @@
 {
   "图标": {
-    "队伍": "status",
-    "邀请": "notice",
-    "成员": "status",
-    "结果": "system"
+    "队伍": "game.seed",
+    "邀请": "game.pin_doc",
+    "成员": "game.seed",
+    "结果": "game.spark"
   },
   "格式": {
     "人数": "{当前}/{上限}",

@@ -24,7 +24,7 @@ def invalid_create_format() -> DocumentMessage:
 def create_error(message: str) -> DocumentMessage:
     return (
         M.document()
-        .section("创建", icon="notice")
+        .section("创建", icon="game.pin_doc")
         .line(M.status("创建失败", tone="danger"), " ", message)
         .build()
     )
@@ -45,7 +45,7 @@ def created(
     builder = (
         M.document()
 
-        .inline_section("创建", M.status("成功", tone="positive"), icon="success")
+        .inline_section("创建", M.status("成功", tone="positive"), icon="game.success")
         .section("身份", icon="game.role")
         .row(("姓名", M.text(result.name, tone="emphasis")), ("性别", result.gender))
         .row(("种族", result.race or "人族"), ("境界", result.realm_name), ("等级", 1))
@@ -70,7 +70,7 @@ def created(
 def overview_error() -> DocumentMessage:
     return (
         M.document()
-        .section("提示", icon="notice")
+        .section("提示", icon="game.pin_doc")
         .line(
             M.status("读取失败", tone="danger"), " 人物状态暂时无法读取，请稍后再试。"
         )

@@ -54,7 +54,7 @@ def candidate_lines(
 
     from message import M
 
-    builder.section(title, icon="success")
+    builder.section(title, icon="game.success")
     for name, command, detail in entries:
         builder.line(M.command(name, command), " ", M.text(detail, tone="muted"))
     builder.small(footer)

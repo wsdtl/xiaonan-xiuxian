@@ -36,11 +36,11 @@ def overview(
     builder = (
         M.document()
 
-        .section(artisan.title, icon="weapon")
+        .section(artisan.title, icon="game.dagger")
         .field(text(copy, "总览", "工匠"), artisan.name)
         .line(text(copy, "总览", "引言", {"工匠": artisan.name}))
         .small(value.artisan.speech["总览"].format_map({"主持": value.artisan.name}))
-        .section(text(copy, "总览", "器阶"), icon="item")
+        .section(text(copy, "总览", "器阶"), icon="game.box")
     )
     for index, (stage, count) in enumerate(value.stage_counts, start=1):
         builder.item(index, f"{stage} · {count}道器律")
@@ -51,9 +51,9 @@ def law_list(copy: ForgingCopy, value: ForgingLawList) -> DocumentMessage:
     builder = (
         M.document()
 
-        .section(value.artisan.title, icon="weapon")
+        .section(value.artisan.title, icon="game.dagger")
         .field(text(copy, "列表", "工匠"), value.artisan.name)
-        .section(value.stage, icon="item")
+        .section(value.stage, icon="game.box")
     )
     for index, entry in enumerate(value.entries, start=1):
         state = text(copy, "列表", "可炼" if entry.can_forge else "缺材")
@@ -79,23 +79,23 @@ def preview(
     builder = (
         M.document()
 
-        .section(artisan.title, icon="weapon")
+        .section(artisan.title, icon="game.dagger")
         .field(text(copy, "预览", "工匠"), artisan.name)
         .small(artisan.speech["审材"].format_map({"主持": artisan.name}))
-        .section(value.law.name, icon="item")
+        .section(value.law.name, icon="game.box")
         .row(
             (text(copy, "预览", "器阶"), value.law.stage),
         )
     )
     # 没有材料就整个栏目都不开：空栏目与只印一个「无」一样，白占玩家的地方。
     if value.beast_materials:
-        builder.section(text(copy, "预览", "兽宝"), icon="material")
+        builder.section(text(copy, "预览", "兽宝"), icon="game.material")
         _materials(builder, value.beast_materials, show_relation=False)
     if value.mineral_materials:
-        builder.section(text(copy, "预览", "矿材"), icon="item")
+        builder.section(text(copy, "预览", "矿材"), icon="game.box")
         _materials(builder, value.mineral_materials, show_relation=True)
     if value.missing_materials:
-        builder.section(text(copy, "列表", "缺材"), icon="notice")
+        builder.section(text(copy, "列表", "缺材"), icon="game.pin_doc")
         for index, missing in enumerate(value.missing_materials, start=1):
             builder.item(
                 index, f"{missing.category} · {missing.trait} × {missing.quantity}"
@@ -122,10 +122,10 @@ def completed(
         M.document()
 
         .inline_section("结果", M.status("完成", tone="positive"), icon="game.hammer")
-        .section(artisan.title, icon="weapon")
+        .section(artisan.title, icon="game.dagger")
         .field(text(copy, "完成", "工匠"), artisan.name)
         .line(text(copy, "完成", "过程", {"工匠": artisan.name}))
-        .section(text(copy, "完成", "所得"), icon="item")
+        .section(text(copy, "完成", "所得"), icon="game.box")
         .field(preview_value.law.name, f"器藏数量 {value.quantity_after}")
         .small(artisan.speech["完成"].format_map({"主持": artisan.name}))
     )
@@ -143,7 +143,7 @@ def error(
     command: str,
 ) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", text(copy, "错误", command), sentence(message), tone="danger",
+    return error_document(        text(copy, "错误", "标题"), "game.pin_doc", text(copy, "错误", command), sentence(message), tone="danger",
         actions=actions,
         hint=text(copy, "错误", "格式"),
     )

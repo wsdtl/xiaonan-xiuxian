@@ -25,9 +25,9 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
         .inline_section(
             "状态",
             M.status(status, tone=_status_tone(value.status)),
-            icon="combat",
+            icon="game.swords",
         )
-        .section("对阵", icon="player")
+        .section("对阵", icon="game.role")
         .field(
             feature.text("查看", "双方"),
             feature.text(
@@ -66,7 +66,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             duration(max(0, int((value.ends_at - datetime.now(UTC)).total_seconds()))),
         )
     if value.attacker_formation or value.defender_formation:
-        builder.section("阵法", icon="item").row(
+        builder.section("阵法", icon="game.box").row(
             ("攻方阵法", value.attacker_formation or "无"),
             ("守方阵法", value.defender_formation or "无"),
         )
@@ -85,7 +85,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
 
 def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessage:
     builder = M.document().section(
-        "战录", icon="combat"
+        "战录", icon="game.swords"
     )
     # 总数为 0 时下面那句「记录为空」已经把同一件事说过了，不必再说一遍。
     if value.total:
@@ -121,7 +121,7 @@ def recent_reports(feature: SectWarFeature, page: MyReportPage) -> DocumentMessa
     """
 
     builder = M.document().section(
-        feature.text("查看", "记录标题"), icon="combat"
+        feature.text("查看", "记录标题"), icon="game.swords"
     )
     if not page.entries:
         builder.line(
@@ -157,7 +157,7 @@ def error(
 
     return error_document(
         feature.text("错误", "标题"),
-        "notice",
+        "game.pin_doc",
         feature.text("错误", "失败"),
         message,
         tone="danger",

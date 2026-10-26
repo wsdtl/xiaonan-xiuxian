@@ -18,7 +18,7 @@ def overview(feature: TradeFeature, value: TradeOverview) -> DocumentMessage:
     builder = (
         M.document()
 
-        .section(feature.copy("总览", "货架"), icon="inventory")
+        .section(feature.copy("总览", "货架"), icon="game.bag")
         .field(
             feature.copy("总览", "货币"),
             M.text(value.spirit_stones, tone="cultivation"),
@@ -38,7 +38,7 @@ def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
 
         .section(
             feature.copy("列表", "页码", {"当前页": value.page, "总页数": value.total_pages}),
-            icon="inventory",
+            icon="game.bag",
         )
         .field("商品", M.text(value.total_products, tone="emphasis"))
     )
@@ -90,7 +90,7 @@ def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
 def purchased(feature: TradeFeature, value: TradePurchaseResult) -> DocumentMessage:
     return (
         M.document()
-        .section(feature.copy("购买", "标题"), icon="inventory")
+        .section(feature.copy("购买", "标题"), icon="game.bag")
         .line(M.status("购买完成", tone="positive"))
         .line(
             feature.copy(
@@ -114,7 +114,7 @@ def error(
     *,
     command: str,
 ) -> DocumentMessage:
-    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.copy("错误", "标题"), icon="game.pin_doc")
     builder.line(M.status(feature.copy("错误", command), tone="danger"))
     format_lines(builder, sentence(message))
     hint = feature.copy("错误", "格式")

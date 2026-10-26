@@ -116,7 +116,7 @@ def page(view: NajiePage) -> DocumentMessage:
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document().section("提示", icon="notice")
+    builder = M.document().section("提示", icon="game.pin_doc")
     builder.line(M.status("查询失败", tone="danger"))
     format_lines(builder, message)
     builder.action(_home_action())

@@ -29,11 +29,11 @@ def used(feature: MedicineFeature, result: MedicineUseResult) -> DocumentMessage
         key, {"人物": result.target_name, "道侣": result.target_name, "品级": result.grade_name, "丹药": result.medicine_name, "资源": result.resource, "实际恢复": _number(result.recovered)},
     )
     builder = (
-        M.document().section(feature.copy("服丹", "标题"), icon="status").line(line)
+        M.document().section(feature.copy("服丹", "标题"), icon="game.seed").line(line)
     )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -46,7 +46,7 @@ def setting(feature: MedicineFeature, result: AutoMedicineResult) -> DocumentMes
     )
     return (
         M.document()
-        .section(feature.copy("自动用药", "标题"), icon="status")
+        .section(feature.copy("自动用药", "标题"), icon="game.seed")
         .line(
             # 状态那行做成**分支按钮**：按这次设置的主体给分支（人药/侣药），点了回二选一菜单，只填入。
             M.command(
@@ -68,7 +68,7 @@ def error(
 
     return error_document(
         feature.copy("错误", "标题"),
-        "notice",
+        "game.pin_doc",
         feature.copy("错误", "失败"),
         message,
         tone="danger",

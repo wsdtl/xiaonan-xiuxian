@@ -2,7 +2,7 @@
   "大类": [
     {
       "名称": "基础物品",
-      "图标": "inventory",
+      "图标": "game.bag",
       "状态类型": "inventory",
       "小类": [
         {
@@ -41,7 +41,7 @@
     },
     {
       "名称": "道藏",
-      "图标": "skill",
+      "图标": "game.manual",
       "状态类型": "cultivation_library",
       "小类": [
         {
@@ -52,7 +52,7 @@
     },
     {
       "名称": "修行资粮",
-      "图标": "material",
+      "图标": "game.material",
       "状态类型": "cultivation_reserve",
       "小类": [
         {
@@ -67,7 +67,7 @@
     },
     {
       "名称": "器藏",
-      "图标": "weapon",
+      "图标": "game.dagger",
       "状态类型": "law_reserve",
       "小类": [
         {
@@ -90,7 +90,7 @@
     },
     {
       "名称": "阵藏",
-      "图标": "combat",
+      "图标": "game.swords",
       "状态类型": "formation_reserve",
       "小类": [
         {
@@ -117,7 +117,7 @@
     },
     {
       "名称": "所学",
-      "图标": "docs",
+      "图标": "game.scroll",
       "状态类型": "knowledge",
       "小类": [
         {

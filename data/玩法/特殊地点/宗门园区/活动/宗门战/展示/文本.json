@@ -1,7 +1,7 @@
 {
   "图标": {
-    "战书": "battle",
-    "结果": "success"
+    "战书": "game.swords",
+    "结果": "game.success"
   },
   "查看": {
     "标题": "宗门战",

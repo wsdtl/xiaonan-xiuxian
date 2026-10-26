@@ -1,5 +1,5 @@
 {
-  "生育": "companion",
-  "胎次": "success",
-  "错误": "notice"
+  "生育": "game.heart",
+  "胎次": "game.success",
+  "错误": "game.pin_doc"
 }

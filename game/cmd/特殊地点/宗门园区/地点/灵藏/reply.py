@@ -17,7 +17,7 @@ from .....presentation import sentence
 
 
 def page(copy: LingcangCopy, value: LingcangPage, actions: Sequence[CommandAction]) -> DocumentMessage:
-    builder = M.document().section(value.category, icon="inventory")
+    builder = M.document().section(value.category, icon="game.bag")
     # 两个数都是 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
     if value.spirit_stones or value.total_entries:
         builder.row(
@@ -47,7 +47,7 @@ def donated_material(copy: LingcangCopy, result: SectAssetTransfer) -> DocumentM
     builder = (
         M.document()
 
-        .section("捐入灵藏", icon="success")
+        .section("捐入灵藏", icon="game.success")
         .line(M.status("捐献完成", tone="positive"))
         .line(
             _text(
@@ -60,7 +60,7 @@ def donated_material(copy: LingcangCopy, result: SectAssetTransfer) -> DocumentM
         builder.field("宗门贡献", M.text(f"+{result.contribution}", tone="positive"))
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -70,7 +70,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer)
     builder = (
         M.document()
 
-        .section("捐入灵藏", icon="success")
+        .section("捐入灵藏", icon="game.success")
         .line(M.status("捐献完成", tone="positive"))
         .line(_text(copy, "捐入灵石", {"数量": quantity, "余额": result.spirit_stones}))
     )
@@ -78,7 +78,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer)
         builder.field("宗门贡献", M.text(f"+{result.contribution}", tone="positive"))
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -86,7 +86,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer)
 
 def error(copy: LingcangCopy, message: str) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        _text(copy, "错误"), "notice", "捐献失败", sentence(message), tone="danger"
+    return error_document(        _text(copy, "错误"), "game.pin_doc", "捐献失败", sentence(message), tone="danger"
     )
 
 

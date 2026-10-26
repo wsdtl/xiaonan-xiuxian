@@ -33,7 +33,7 @@ def error(
     copy: RetreatCopy, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", "闭关失败", message, tone="danger",
+    return error_document(        text(copy, "错误", "标题"), "game.pin_doc", "闭关失败", message, tone="danger",
         actions=actions,
     )
 
@@ -46,8 +46,8 @@ def started(
     builder = (
         M.document()
 
-        .inline_section("状态", M.status("进行中", tone="positive"), icon="status")
-        .section(value.location_name, icon="player")
+        .inline_section("状态", M.status("进行中", tone="positive"), icon="game.seed")
+        .section(value.location_name, icon="game.role")
         .row(
             (text(copy, "开始", "参与用户"), value.participant_count),
             # 人物与道侣分开数：正式角色数里含道侣，减掉才是人物。
@@ -92,7 +92,7 @@ def progress(
     builder = (
         M.document()
 
-        .section(value.location_name, icon="status")
+        .section(value.location_name, icon="game.seed")
         .row(
             (
                 text(copy, "进度", "轮次"),
@@ -109,7 +109,7 @@ def progress(
             (text(copy, "进度", "参与用户"), value.participant_count),
             (text(copy, "进度", "累计感悟"), value.group_insight_count),
         )
-        .section(text(copy, "进度", "本人感悟"), icon="skill")
+        .section(text(copy, "进度", "本人感悟"), icon="game.manual")
     )
     if value.own_insights:
         for index, insight in enumerate(value.own_insights, start=1):
@@ -154,9 +154,9 @@ def settlement_page(
             M.document()
 
             .inline_section(
-                "闭关", M.status("已出关", tone="positive"), icon="success"
+                "闭关", M.status("已出关", tone="positive"), icon="game.success"
             )
-            .section(value.location_name, icon="status")
+            .section(value.location_name, icon="game.seed")
             .row(
                 (
                     text(copy, "总结", "轮次"),
@@ -187,7 +187,7 @@ def _user_page(
     builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
     for character in value.characters:
@@ -197,7 +197,7 @@ def _user_page(
             if character.level_before == character.level_after
             else f"{character.level_before} → {character.level_after}"
         )
-        builder.section(f"{title} · {character.name}", icon="player").row(
+        builder.section(f"{title} · {character.name}", icon="game.role").row(
             (
                 text(copy, "用户", "经验"),
                 M.text(f"+{character.experience_gained}", tone="positive"),
@@ -229,7 +229,7 @@ def _user_page(
                 text(copy, "用户", "剩余伤势"),
                 "、".join(f"{name}×{stacks}" for name, stacks in character.injuries),
             )
-    builder.section(text(copy, "用户", "功法"), icon="skill")
+    builder.section(text(copy, "用户", "功法"), icon="game.manual")
     if value.insights:
         for index, insight in enumerate(value.insights, start=1):
             result = text(copy, "用户", insight.outcome or "复悟")

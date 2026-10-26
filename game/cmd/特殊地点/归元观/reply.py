@@ -8,8 +8,8 @@ def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:
     builder = (
         M.document()
 
-        .inline_section("状态", M.status("待确认", tone="warning"), icon="status")
-        .section(value.location_name, icon="location")
+        .inline_section("状态", M.status("待确认", tone="warning"), icon="game.seed")
+        .section(value.location_name, icon="game.pin")
         .field("同行道侣", M.text(value.companion_name, tone="companion"))
         .small(feature.copy("预览", "说明"))
     )
@@ -29,7 +29,7 @@ def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
     return (
         M.document()
 
-        .section(value.companion_name, icon="companion")
+        .section(value.companion_name, icon="game.heart")
         .line(
             M.status("归元完成", tone="positive"),
             " ",
@@ -41,7 +41,7 @@ def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
 
 def error(feature: GuiyuanFeature, message: str) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        feature.copy("错误", "标题"), "notice", "归元失败", message, tone="danger"
+    return error_document(        feature.copy("错误", "标题"), "game.pin_doc", "归元失败", message, tone="danger"
     )
 
 
@@ -49,7 +49,7 @@ def xigen_result(feature: XigenFeature, value: XigenResult) -> DocumentMessage:
     return (
         M.document()
 
-        .section(value.name, icon='character')
+        .section(value.name, icon='game.role')
         .line(M.status('洗根完成', tone='positive'))
         .row(
             ('原根性', value.before),
@@ -74,7 +74,7 @@ def xigen_result(feature: XigenFeature, value: XigenResult) -> DocumentMessage:
 def xigen_error(feature: XigenFeature, message: str) -> DocumentMessage:
     return (
         M.document()
-        .section(feature.copy('错误', '标题'), icon='notice')
+        .section(feature.copy('错误', '标题'), icon='game.pin_doc')
         .line(M.status('洗根失败', tone='danger'), ' ', message)
         .build()
     )

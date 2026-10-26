@@ -150,7 +150,7 @@ def error(
 
     return error_document(
         feature.copy("道侣培养", "标题"),
-        "notice",
+        "game.pin_doc",
         feature.copy("道侣培养", "失败"),
         message,
         tone="danger",

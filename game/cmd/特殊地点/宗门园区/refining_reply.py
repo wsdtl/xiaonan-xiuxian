@@ -19,11 +19,11 @@ def page(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessage:
     builder = (
         M.document()
 
-        .section(text["场景"], icon="location")
+        .section(text["场景"], icon="game.pin")
         .line(text["总览"])
         .row((common["职位"], value.role), (common["材料来源"], value.material_source))
         .field(common["宗门灵石"], M.text(value.spirit_stones, tone="cultivation"))
-        .section(value.section, icon="item")
+        .section(value.section, icon="game.box")
     )
     for index, entry in enumerate(value.entries, start=1):
         state = (
@@ -96,15 +96,15 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
     builder = (
         M.document()
 
-        .section(facility_text["审材"], icon="item")
+        .section(facility_text["审材"], icon="game.box")
         .row((common["职位"], value.role), (common["材料来源"], value.material_source))
-        .section(title, icon="item")
+        .section(title, icon="game.box")
     )
     for label, content in rows:
         builder.field(label, content)
     # 没有材料就整个栏目都不开：空栏目白占玩家的地方。
     if materials:
-        builder.section("材料", icon="material")
+        builder.section("材料", icon="game.material")
     for index, material in enumerate(materials, start=1):
         if material is None:
             continue
@@ -118,7 +118,7 @@ def preview(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMessag
             ),
             f" × {material.quantity}",
         )
-    builder.section("费用", icon="coin")
+    builder.section("费用", icon="game.coin")
     builder.field(
         common["灵石消耗"].split("{数量}")[0],
         M.text(value.spirit_stone_cost, tone="warning"),
@@ -137,7 +137,7 @@ def completed(copy: Mapping[str, Mapping[str, str]], value: Any) -> DocumentMess
     return (
         M.document()
 
-        .section(text["完成"], icon="item")
+        .section(text["完成"], icon="game.box")
         .line(M.status("炼制完成", tone="positive"))
         .row(("产出", value.product_name), ("品级或器阶", value.grade_or_stage))
         .field(common["材料来源"], value.material_source)
@@ -190,7 +190,7 @@ def error(
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
     return error_document(
         copy["错误"].get("标题", "宗门洞天"),
-        "notice",
+        "game.pin_doc",
         "炼制失败",
         message,
         tone="danger",

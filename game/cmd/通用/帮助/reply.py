@@ -50,7 +50,7 @@ def _home_message(*, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
 
-        .section("分类", icon="system")
+        .section("分类", icon="game.spark")
         .small("按分类查看当前已经开放的命令。")
     )
     categories = help_registry.categories()
@@ -85,7 +85,7 @@ def _usage_rows(
 
 
 def _category_message(category: str, *, id_converter=None, nav: str = "帮助") -> DocumentMessage:
-    builder = M.document().section(category, icon="system")
+    builder = M.document().section(category, icon="game.spark")
     entries = help_registry.in_category(category)
     _usage_rows(builder, entries, nav=nav, id_converter=id_converter)
     if not entries:
@@ -97,7 +97,7 @@ def _detail_message(entry: CommandHelpEntry, *, id_converter=None, nav: str = "�
     builder = (
         M.document()
 
-        .section("说明", icon="guide")
+        .section("说明", icon="game.scroll")
         .line(entry.spec.summary)
     )
     for usage in entry.spec.usage:
@@ -143,7 +143,7 @@ def _not_found_message(query: str, *, id_converter=None, nav: str = "帮助") ->
     builder = (
         M.document()
 
-        .section("结果", icon="notice")
+        .section("结果", icon="game.pin_doc")
         .line(M.status("未找到", tone="warning"), " ", query)
         .section("分类")
     )

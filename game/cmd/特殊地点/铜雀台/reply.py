@@ -16,8 +16,8 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
     builder = (
         M.document()
 
-        .inline_section("状态", M.status("待确认", tone="warning"), icon="notice")
-        .section(value.location_name, icon="location")
+        .inline_section("状态", M.status("待确认", tone="warning"), icon="game.pin_doc")
+        .section(value.location_name, icon="game.pin")
         .line(feature.copy("预览", "登台"))
         .line(feature.copy("预览", "启阵", {"名称": value.companion_name}))
         .row(
@@ -33,7 +33,7 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
                 M.text(value.cultivation, tone="cultivation"),
             ),
         )
-        .section("两条归流", icon="notice")
+        .section("两条归流", icon="game.pin_doc")
         .row(
             (feature.copy("预览", "护契所得"), value.protected.offered),
             (feature.copy("预览", "人物承接"), value.protected.accepted),
@@ -61,7 +61,7 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
     actions = tuple(
@@ -81,8 +81,8 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
     builder = (
         M.document()
 
-        .inline_section("结果", M.status("完成", tone="positive"), icon="success")
-        .section(value.location_name, icon="notice")
+        .inline_section("结果", M.status("完成", tone="positive"), icon="game.success")
+        .section(value.location_name, icon="game.pin_doc")
         .line(feature.copy("结算", "剥离", {"名称": value.companion_name}))
         .row(
             (feature.copy("结算", "人物"), value.character_name),
@@ -118,7 +118,7 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
         )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -127,7 +127,7 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
 def error(
     feature: TongquetaiFeature, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
-    builder = M.document().section(feature.copy("错误", "标题"), icon="notice")
+    builder = M.document().section(feature.copy("错误", "标题"), icon="game.pin_doc")
     builder.line(M.status("夺元失败", tone="danger"))
     format_lines(builder, message)
     hint = feature.copy("错误", "格式")

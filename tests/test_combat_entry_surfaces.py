@@ -1483,6 +1483,33 @@ def test_send_game_reply_uses_current_context(monkeypatch) -> None:
     assert rendered.blocks[1].__class__.__name__ == "CommandTitleBlock"
     assert rendered.blocks[1].icon == "game.cmd"
     assert rendered.blocks[1].command == "查看 人物"
+    assert rendered.blocks[-1].__class__.__name__ == "ClosingBlock"
+    assert "帮助 查看" in "".join(
+        span.value for span in rendered.blocks[-1].content
+    )
+
+
+def test_compose_player_reply_keeps_custom_closing() -> None:
+    """业务已给的 closing 不被默认提示覆盖，也不重复追加。"""
+
+    from game.cmd.reply_composer import compose_player_reply
+    from message import M
+
+    message = (
+        M.document()
+        .section("提示")
+        .line("内容")
+        .closing("这是业务自己的结尾。")
+        .build()
+    )
+    decorated = compose_player_reply(message, identity="张三", title="查看")
+    closings = [
+        block
+        for block in decorated.document.blocks
+        if block.__class__.__name__ == "ClosingBlock"
+    ]
+    assert len(closings) == 1
+    assert "".join(span.value for span in closings[0].content) == "这是业务自己的结尾。"
 
 
 def test_hosting_error_strips_composer_header() -> None:
@@ -1495,5 +1522,5 @@ def test_hosting_error_strips_composer_header() -> None:
         def __init__(self, content: str) -> None:
             self.message = RenderedMessage(kind="markdown", content=content)
 
-    content = "> 张三 灵动 Lv.1\n> cmd 结算探险\n> ✨ 错误\n> > 当前无法结算探险"
+    content = "> 张三 灵动 Lv.1\n> cmd 结算探险\n> ✨ 错误\n> > 当前无法结算探险\n> 发送「帮助 结算探险」查看完整写法与后续步骤。"
     assert _reply_error([Reply(content)], "结算探险") == "✨ 错误 当前无法结算探险"

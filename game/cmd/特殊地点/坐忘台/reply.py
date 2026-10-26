@@ -12,7 +12,7 @@ def refund_result(feature: YijingFeature, value: YijingRefundResult) -> Document
     """坐忘成功的回复：退点前练到几阶、道行从多少退回多少。"""
 
     builder = M.document()
-    builder.section(value.name, icon="status")
+    builder.section(value.name, icon="game.seed")
     builder.line(
         M.status("坐忘完成", tone="positive"),
         " ",
@@ -35,5 +35,5 @@ def refund_error(feature: YijingFeature, message: str) -> DocumentMessage:
     """被拒的回复（理由用特性给出的原文）。"""
 
     return error_document(
-        feature.copy("错误", "标题"), "notice", "坐忘失败", message, tone="danger"
+        feature.copy("错误", "标题"), "game.pin_doc", "坐忘失败", message, tone="danger"
     )

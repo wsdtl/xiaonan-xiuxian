@@ -18,8 +18,8 @@ def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> D
     return (
         M.document()
 
-        .inline_section("状态", M.status("待应战", tone="warning"), icon="combat")
-        .section("邀约内容", icon="player")
+        .inline_section("状态", M.status("待应战", tone="warning"), icon="game.swords")
+        .section("邀约内容", icon="game.role")
         .field("邀约对象", M.text(target_name, tone="emphasis"))
         .row(
             ("我方修士", len(value.user_participants)),
@@ -55,8 +55,8 @@ def result(
     return (
         M.document()
 
-        .inline_section("状态", M.status("已结束", tone="positive"), icon="combat")
-        .section("战果", icon="status")
+        .inline_section("状态", M.status("已结束", tone="positive"), icon="game.swords")
+        .section("战果", icon="game.seed")
         .field("胜方", M.text(winner, tone="positive"))
         .row(
             (challenger_name, len(value.user_participants)),
@@ -75,7 +75,7 @@ def rejected() -> DocumentMessage:
     return (
         M.document()
 
-        .inline_section("邀约", M.status("已拒绝", tone="muted"), icon="status")
+        .inline_section("邀约", M.status("已拒绝", tone="muted"), icon="game.seed")
         .build()
     )
 
@@ -84,7 +84,7 @@ def error(
     feature: DuelFeature, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        feature.text("错误", "标题"), "notice", "切磋失败", sentence(message), tone="danger",
+    return error_document(        feature.text("错误", "标题"), "game.pin_doc", "切磋失败", sentence(message), tone="danger",
         actions=actions,
     )
 

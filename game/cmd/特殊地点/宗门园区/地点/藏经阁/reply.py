@@ -18,7 +18,7 @@ def page(copy: CangjingCopy, value: CangjingPage, actions: Sequence[CommandActio
     builder = (
         M.document()
 
-        .section(_text(copy, "标题"), icon="cultivation")
+        .section(_text(copy, "标题"), icon="game.manual")
     )
     if value.page == 1:
         builder.line(_text(copy, "介绍"))
@@ -68,7 +68,7 @@ def borrow_prompt(
     )
     return (
         M.document()
-        .section(_text(copy, "选择槽位"), icon="cultivation")
+        .section(_text(copy, "选择槽位"), icon="game.manual")
         .line(_text(copy, "选择槽位说明", {"名称": identifier}))
         .actions(message_actions(actions))
         .build()
@@ -79,7 +79,7 @@ def borrowed(copy: CangjingCopy, value: CangjingPage) -> DocumentMessage:
     return (
         M.document()
 
-        .section("借阅", icon="success")
+        .section("借阅", icon="game.success")
         .line(M.status("借阅完成", tone="positive"))
         .line(
             _text(
@@ -93,7 +93,7 @@ def borrowed(copy: CangjingCopy, value: CangjingPage) -> DocumentMessage:
 
 def error(copy: CangjingCopy, message: str) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        _text(copy, "错误"), "notice", "借阅失败", sentence(message), tone="danger"
+    return error_document(        _text(copy, "错误"), "game.pin_doc", "借阅失败", sentence(message), tone="danger"
     )
 
 

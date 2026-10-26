@@ -1,8 +1,8 @@
 {
   "图标": {
-    "同行": "status",
-    "成员": "status",
-    "结果": "system"
+    "同行": "game.seed",
+    "成员": "game.seed",
+    "结果": "game.spark"
   },
   "格式": {
     "成员": "{姓名} · {身份}",

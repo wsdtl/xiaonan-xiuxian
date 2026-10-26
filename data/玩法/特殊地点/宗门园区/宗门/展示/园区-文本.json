@@ -1,10 +1,10 @@
 {
   "图标": {
-    "宗门": "status",
-    "邀请": "notice",
-    "入口": "location",
-    "成员": "status",
-    "结果": "system"
+    "宗门": "game.seed",
+    "邀请": "game.pin_doc",
+    "入口": "game.pin",
+    "成员": "game.seed",
+    "结果": "game.spark"
   },
   "格式": {
     "入口": "{地点} · ({x}, {y})",

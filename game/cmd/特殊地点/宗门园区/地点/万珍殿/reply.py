@@ -30,7 +30,7 @@ def page(copy: WanzhenCopy, value: WanzhenPage, actions: Sequence[CommandAction]
     builder = (
         M.document()
 
-        .section(value.category, icon="inventory")
+        .section(value.category, icon="game.bag")
     )
     # 计数为 0 时下面那句「空」已经把同一件事说过了，不必再说一遍。
     if value.total_entries:
@@ -63,7 +63,7 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMess
     return (
         M.document()
 
-        .section(value.action, icon="success")
+        .section(value.action, icon="game.success")
         .line(M.status("完成", tone="positive"), " ", _text(copy, key, values))
         .build()
     )
@@ -71,7 +71,7 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMess
 
 def error(copy: WanzhenCopy, message: str) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        _text(copy, "错误"), "notice", "操作失败", sentence(message), tone="danger"
+    return error_document(        _text(copy, "错误"), "game.pin_doc", "操作失败", sentence(message), tone="danger"
     )
 
 

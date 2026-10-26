@@ -66,7 +66,7 @@ def _open_map(url: str) -> Action:
 def entry(overview: WorldMapOverview, url: str) -> DocumentMessage:
     """一页列全部大区域：每个区域一个行内按钮，点了把「地图 <州名>」填进输入框。"""
 
-    builder = M.document().section("区域", icon="location")
+    builder = M.document().section("区域", icon="game.pin")
     if overview.description:
         builder.line(overview.description)
     _counts(builder, overview)
@@ -79,7 +79,7 @@ def region(overview: WorldMapOverview, name: str, url: str) -> DocumentMessage:
 
     for region in overview.regions:
         if region.name == name:
-            builder = M.document().section(f"州 · {name}", icon="location")
+            builder = M.document().section(f"州 · {name}", icon="game.pin")
             builder.line(f"地点 {len(region.locations)} 处")
             _button_rows(builder, list(region.locations), "去 {}")
             return (
@@ -101,7 +101,7 @@ def region(overview: WorldMapOverview, name: str, url: str) -> DocumentMessage:
 def unknown_region(overview: WorldMapOverview, name: str, url: str) -> DocumentMessage:
     """州名不认识时的提示卡：把现有大区域列出来，照样可点。"""
 
-    builder = M.document().section("未找到区域", icon="notice")
+    builder = M.document().section("未找到区域", icon="game.pin_doc")
     builder.line(M.status("未找到", tone="warning"), f" 没有登记过这个州：{name}")
     builder.line("现有大区域：")
     _button_rows(builder, [region.name for region in overview.regions], "地图 {}")

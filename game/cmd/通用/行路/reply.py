@@ -13,7 +13,7 @@ from ...actions import CommandAction, message_actions
 def missing_destination() -> DocumentMessage:
     return (
         M.document()
-        .section("行路", icon="navigation")
+        .section("行路", icon="game.compass")
         .line(M.status("缺少地点", tone="warning"), " 去 地点名，或：去 x y")
         .line(M.command("查看全境地图", "地图"))
         .build()
@@ -23,7 +23,7 @@ def missing_destination() -> DocumentMessage:
 def query_error(message: str) -> DocumentMessage:
     return (
         M.document()
-        .section("行路", icon="navigation")
+        .section("行路", icon="game.compass")
         .line(M.status("无法抵达", tone="danger"), " ", message)
         .build()
     )
@@ -32,7 +32,7 @@ def query_error(message: str) -> DocumentMessage:
 def conflict() -> DocumentMessage:
     return (
         M.document()
-        .section("行路", icon="notice")
+        .section("行路", icon="game.pin_doc")
         .line(M.status("位置变化", tone="warning"))
         .small("本次行路没有覆盖新的落脚处，请重新查看人物。")
         .build()
@@ -49,12 +49,12 @@ def success(
     reply = (
         M.document()
 
-        .inline_section("行路", M.status("已抵达", tone="positive"), icon="success")
-        .section(f"行路 · {plan.travel_method}", icon="navigation")
+        .inline_section("行路", M.status("已抵达", tone="positive"), icon="game.success")
+        .section(f"行路 · {plan.travel_method}", icon="game.compass")
     )
     for line in plan.narrative:
         reply.line(line)
-    reply.section("位置", icon="map")
+    reply.section("位置", icon="game.map")
     reply.field("地点", _location_name(destination))
     reply.row(("区域", destination.region), ("地形", destination.terrain))
     reply.row(

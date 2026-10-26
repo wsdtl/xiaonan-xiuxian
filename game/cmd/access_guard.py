@@ -95,14 +95,14 @@ def _blocked_message(reason: str) -> DocumentMessage:
     if reason == "尚未创建人物":
         return (
             M.document()
-            .section("状态", icon="notice")
+            .section("状态", icon="game.pin_doc")
             .line(M.status("未创建", tone="warning"), " 请先创建人物：")
             .line(M.command("创建人物 姓名 性别", "创建人物 ", submit=False))
             .build()
         )
     return (
         M.document()
-        .section("状态", icon="notice")
+        .section("状态", icon="game.pin_doc")
         .line(M.status("不可执行", tone="danger"), " ", sentence(reason))
         .build()
     )

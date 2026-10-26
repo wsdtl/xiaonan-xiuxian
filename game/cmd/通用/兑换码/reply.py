@@ -10,7 +10,7 @@ def result(feature: DuihuanFeature, value: DuihuanResult) -> DocumentMessage:
     return (
         M.document()
 
-        .section(value.name or value.code, icon='reward')
+        .section(value.name or value.code, icon='game.gift')
         .line(M.status('兑换成功', tone='positive'), ' ', M.text(value.code, tone='emphasis'))
         .small(
             feature.copy(

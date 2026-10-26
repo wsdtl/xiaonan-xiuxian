@@ -8,7 +8,7 @@ from message import DocumentMessage, Action, M
 def entry(url: str) -> DocumentMessage:
     return (
         M.document()
-        .section("天道后台", icon="system")
+        .section("天道后台", icon="game.spark")
         .line(M.status("已就绪", tone="positive"), " ", M.link("打开天道后台", url))
         .action(Action("heavenly_dao_console.open", "打开后台", url, behavior="link"))
         .build()

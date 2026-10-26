@@ -35,7 +35,7 @@ def error(
     copy: OreGatheringCopy, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", "采矿失败", message, tone="danger",
+    return error_document(        text(copy, "错误", "标题"), "game.pin_doc", "采矿失败", message, tone="danger",
         actions=actions,
     )
 
@@ -48,8 +48,8 @@ def started(
     builder = (
         M.document()
 
-        .inline_section("采集", M.status("进行中", tone="positive"), icon="status")
-        .section(value.place_name, icon="item")
+        .inline_section("采集", M.status("进行中", tone="positive"), icon="game.seed")
+        .section(value.place_name, icon="game.box")
         .field(text(copy, "开始", "地形"), value.terrain)
         .row(
             (text(copy, "开始", "参与用户"), value.participant_count),
@@ -85,7 +85,7 @@ def progress(
     builder = (
         M.document()
 
-        .section(value.place_name, icon="status")
+        .section(value.place_name, icon="game.seed")
         .field(text(copy, "进度", "地形"), value.terrain)
         .row(
             (
@@ -103,7 +103,7 @@ def progress(
             (text(copy, "进度", "参与用户"), value.participant_count),
             (text(copy, "进度", "累计数量"), value.group_quantity),
         )
-        .section(text(copy, "进度", "本人所得"), icon="item")
+        .section(text(copy, "进度", "本人所得"), icon="game.box")
     )
     if value.own_items:
         for index, item in enumerate(value.own_items, start=1):
@@ -146,9 +146,9 @@ def settlement_page(
             M.document()
 
             .inline_section(
-                "采集", M.status("已完成", tone="positive"), icon="success"
+                "采集", M.status("已完成", tone="positive"), icon="game.success"
             )
-            .section(value.place_name, icon="status")
+            .section(value.place_name, icon="game.seed")
             .field(text(copy, "总结", "地形"), value.terrain)
             .row(
                 (
@@ -183,15 +183,15 @@ def _user_page(
     builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
-    builder.section(text(copy, "用户", "道侣相助"), icon="player")
+    builder.section(text(copy, "用户", "道侣相助"), icon="game.role")
     if value.assisting_companion_name:
         builder.line(M.text(value.assisting_companion_name, tone="companion"))
     else:
         builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "没有道侣"))
-    builder.section(text(copy, "用户", "灵矿"), icon="item")
+    builder.section(text(copy, "用户", "灵矿"), icon="game.box")
     if value.items:
         for index, item in enumerate(value.items, start=1):
             builder.item(index, *_item_parts(feature, item))

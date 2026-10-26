@@ -34,7 +34,7 @@ def error(
     copy: ExplorationCopy, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "notice", "探险失败", message, tone="danger",
+    return error_document(        text(copy, "错误", "标题"), "game.pin_doc", "探险失败", message, tone="danger",
         actions=actions,
     )
 
@@ -47,8 +47,8 @@ def started(
     builder = (
         M.document()
 
-        .inline_section("状态", M.status("进行中", tone="positive"), icon="status")
-        .section(value.location_name, icon="navigation")
+        .inline_section("状态", M.status("进行中", tone="positive"), icon="game.seed")
+        .section(value.location_name, icon="game.compass")
         .row(
             (text(copy, "开始", "参与用户"), value.participant_count),
             # 人物与道侣分开数：单位数里含道侣，减掉才是人物。
@@ -79,7 +79,7 @@ def progress(
     builder = (
         M.document()
 
-        .section(value.location_name, icon="status")
+        .section(value.location_name, icon="game.seed")
         .row(
             (
                 text(copy, "进度", "进度"),
@@ -133,9 +133,9 @@ def early_page(copy: ExplorationCopy, value: ExplorationSettlement) -> DocumentM
         .inline_section(
             text(copy, "总结", "提前"),
             M.status(text(copy, "总结", "无战果"), tone="warning"),
-            icon="notice",
+            icon="game.pin_doc",
         )
-        .section(value.location_name, icon="status")
+        .section(value.location_name, icon="game.seed")
         .line(
             text(
                 copy,
@@ -173,9 +173,9 @@ def settlement_page(
                     "完成" if survived else "战败",
                     tone="positive" if survived else "danger",
                 ),
-                icon="success" if survived else "notice",
+                icon="game.success" if survived else "game.pin_doc",
             )
-            .section(value.location_name, icon="status")
+            .section(value.location_name, icon="game.seed")
             .row(
                 (text(copy, "总结", "战斗"), f"{value.battle_count}场"),
                 (text(copy, "总结", "战败敌人"), value.defeated_enemies),
@@ -226,7 +226,7 @@ def _user_page(
     builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.box").field(
             activation.name, activation.summary
         )
     for character in value.characters:
@@ -236,7 +236,7 @@ def _user_page(
         number = "" if character.companion else feature.enemy_number(character.name)
         if number:
             heading = M.command(heading, f"查看 {number}")
-        builder.section(heading, icon="player").row(
+        builder.section(heading, icon="game.role").row(
             (
                 "状态",
                 M.status(
@@ -268,13 +268,13 @@ def _user_page(
                 text(copy, "用户", "当前伤势"),
                 "、".join(f"{name}×{stacks}" for name, stacks in character.injuries),
             )
-    builder.section(text(copy, "用户", "消耗"), icon="item")
+    builder.section(text(copy, "用户", "消耗"), icon="game.box")
     if value.consumed:
         for index, (item_id, grade_id, quantity) in enumerate(value.consumed, start=1):
             builder.item(index, *_item_parts(feature, item_id, grade_id, quantity))
     else:
         builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "无"))
-    builder.section(text(copy, "用户", "所得"), icon="item").field(
+    builder.section(text(copy, "用户", "所得"), icon="game.box").field(
         text(copy, "用户", "灵石"), M.text(value.spirit_stones, tone="cultivation")
     )
     if value.drops:

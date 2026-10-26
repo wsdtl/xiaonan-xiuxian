@@ -21,7 +21,7 @@ def completed(
     builder = (
         M.document()
 
-        .section(f"{prepared.grade_name}{prepared.name}", icon="combat")
+        .section(f"{prepared.grade_name}{prepared.name}", icon="game.swords")
         .line(M.status("布阵完成", tone="positive"))
         .line(text["过程"])
         .field(text["结果"], "下一场正式战斗")
@@ -39,7 +39,7 @@ def completed(
 
 def error(copy: FormationArmCopy, message: str) -> DocumentMessage:
     # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        copy.text["错误"]["标题"], "notice", "布阵失败", message, tone="danger"
+    return error_document(        copy.text["错误"]["标题"], "game.pin_doc", "布阵失败", message, tone="danger"
     )
 
 

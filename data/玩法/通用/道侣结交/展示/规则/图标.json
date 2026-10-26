@@ -1,11 +1,11 @@
 {
-  "身份": "player",
-  "性情": "docs",
-  "喜好": "item",
-  "关系": "status",
-  "交谈": "guide",
-  "赠礼": "item",
-  "邀约": "navigation",
-  "暂别": "notice",
-  "错误": "notice"
+  "身份": "game.role",
+  "性情": "game.scroll",
+  "喜好": "game.box",
+  "关系": "game.seed",
+  "交谈": "game.scroll",
+  "赠礼": "game.box",
+  "邀约": "game.compass",
+  "暂别": "game.pin_doc",
+  "错误": "game.pin_doc"
 }

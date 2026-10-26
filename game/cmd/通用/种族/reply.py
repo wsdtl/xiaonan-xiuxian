@@ -21,7 +21,7 @@ def page(copy: ZhongzuCopy, overview: RaceOverview, index: int) -> DocumentMessa
         title += " · " + _text(copy, "总览", "页码").format_map(
             {"当前页": index, "总页数": total_pages}
         )
-    builder.section(title, icon="character")
+    builder.section(title, icon="game.role")
     if index == 1:
         builder.line(_text(copy, "总览", "引言").format_map(
             {"总数": overview.total, "族系数": len(overview.lineages)}
@@ -58,14 +58,14 @@ def detail(copy: ZhongzuCopy, race: RaceEntry, baike_url: str = "") -> DocumentM
 
     builder = M.document()
     # 卡面不印编号（编号只在 help 里出现）。
-    builder.section(_text(copy, "详情", "基础"), icon="character").field(
+    builder.section(_text(copy, "详情", "基础"), icon="game.role").field(
         _text(copy, "详情", "族系"), race.lineage
     ).field(
         _text(copy, "详情", "档次"), "/".join(race.tiers)
     ).field(
         _text(copy, "详情", "寿元"), M.text(f"×{race.lifespan:g}", tone="emphasis")
     )
-    builder.section(_text(copy, "详情", "天生规则"), icon="skill")
+    builder.section(_text(copy, "详情", "天生规则"), icon="game.manual")
     if race.cost:
         builder.line(_text(copy, "详情", "本相代价").format_map({
             "本相": _text(copy, "详情", "规则分隔").join(race.benefits),
@@ -92,7 +92,7 @@ def missing(copy: ZhongzuCopy, query: str) -> DocumentMessage:
 
     return (
         M.document()
-        .section(_text(copy, "详情", "基础"), icon="notice")
+        .section(_text(copy, "详情", "基础"), icon="game.pin_doc")
         .line(M.status("未找到", tone="danger"), " ", _text(copy, "错误", "未找到").format_map({"查询": query}))
         .build()
     )
@@ -103,7 +103,7 @@ def invalid_page(copy: ZhongzuCopy, overview: RaceOverview) -> DocumentMessage:
 
     return (
         M.document()
-        .section(_text(copy, "总览", "标题"), icon="notice")
+        .section(_text(copy, "总览", "标题"), icon="game.pin_doc")
         .line(M.status("页码有误", tone="warning"), " ", _text(copy, "错误", "页码有误").format_map(
             {"总页数": len(overview.lineages)}
         ))
