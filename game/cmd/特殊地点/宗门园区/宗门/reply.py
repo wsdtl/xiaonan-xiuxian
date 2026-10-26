@@ -78,7 +78,7 @@ def page(
             ),
         ).small(_text(copy, "格式", "邀请时限").format_map({"分钟": value.invitation_minutes}))
     else:
-        builder.section("宗门园区", icon=_text(copy, "图标", "宗门")).field(
+        builder.section("园区", icon=_text(copy, "图标", "宗门")).field(
             _text(copy, "查看", "入口"), value.entrance
         ).field(_text(copy, "查看", "园区"), _text(copy, "格式", "园区"))
         builder.section(_text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员"))

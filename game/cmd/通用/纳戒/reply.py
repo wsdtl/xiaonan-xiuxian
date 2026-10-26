@@ -43,7 +43,7 @@ def home(view: NajieHome) -> DocumentMessage:
 
 def category(view: NajieCategoryView) -> DocumentMessage:
     value = view.category
-    builder = M.document().section("分项", icon=value.icon)
+    builder = M.document().section("明细", icon=value.icon)
     filled = tuple(item for item in value.subcategories if _has_content(item))
     for subcategory in filled:
         builder.line(
@@ -116,7 +116,7 @@ def page(view: NajiePage) -> DocumentMessage:
 
 
 def error(message: str) -> DocumentMessage:
-    builder = M.document().section("纳戒", icon="notice")
+    builder = M.document().section("提示", icon="notice")
     builder.line(M.status("查询失败", tone="danger"))
     format_lines(builder, message)
     builder.action(_home_action())

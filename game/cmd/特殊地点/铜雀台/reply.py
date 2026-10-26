@@ -16,7 +16,7 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
     builder = (
         M.document()
 
-        .inline_section("夺元状态", M.status("待确认", tone="warning"), icon="notice")
+        .inline_section("状态", M.status("待确认", tone="warning"), icon="notice")
         .section(value.location_name, icon="location")
         .line(feature.copy("预览", "登台"))
         .line(feature.copy("预览", "启阵", {"名称": value.companion_name}))
@@ -61,7 +61,7 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     actions = tuple(
@@ -81,7 +81,7 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
     builder = (
         M.document()
 
-        .inline_section("夺元结果", M.status("完成", tone="positive"), icon="success")
+        .inline_section("结果", M.status("完成", tone="positive"), icon="success")
         .section(value.location_name, icon="notice")
         .line(feature.copy("结算", "剥离", {"名称": value.companion_name}))
         .row(
@@ -118,7 +118,7 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
         )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     return builder.build()

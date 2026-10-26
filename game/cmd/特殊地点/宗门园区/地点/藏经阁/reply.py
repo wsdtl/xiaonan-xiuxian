@@ -79,7 +79,7 @@ def borrowed(copy: CangjingCopy, value: CangjingPage) -> DocumentMessage:
     return (
         M.document()
 
-        .section("借阅完成", icon="success")
+        .section("借阅", icon="success")
         .line(M.status("借阅完成", tone="positive"))
         .line(
             _text(

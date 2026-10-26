@@ -23,11 +23,11 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
         M.document()
 
         .inline_section(
-            "宗门战状态",
+            "状态",
             M.status(status, tone=_status_tone(value.status)),
             icon="combat",
         )
-        .section("对阵双方", icon="player")
+        .section("对阵", icon="player")
         .field(
             feature.text("查看", "双方"),
             feature.text(
@@ -66,7 +66,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             duration(max(0, int((value.ends_at - datetime.now(UTC)).total_seconds()))),
         )
     if value.attacker_formation or value.defender_formation:
-        builder.section("双方阵法", icon="item").row(
+        builder.section("阵法", icon="item").row(
             ("攻方阵法", value.attacker_formation or "无"),
             ("守方阵法", value.defender_formation or "无"),
         )
@@ -85,7 +85,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
 
 def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessage:
     builder = M.document().section(
-        "历史战录", icon="combat"
+        "战录", icon="combat"
     )
     # 总数为 0 时下面那句「记录为空」已经把同一件事说过了，不必再说一遍。
     if value.total:

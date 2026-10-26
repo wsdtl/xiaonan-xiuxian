@@ -46,7 +46,7 @@ def started(
     builder = (
         M.document()
 
-        .inline_section("闭关状态", M.status("进行中", tone="positive"), icon="status")
+        .inline_section("状态", M.status("进行中", tone="positive"), icon="status")
         .section(value.location_name, icon="player")
         .row(
             (text(copy, "开始", "参与用户"), value.participant_count),
@@ -154,7 +154,7 @@ def settlement_page(
             M.document()
 
             .inline_section(
-                "闭关状态", M.status("已出关", tone="positive"), icon="success"
+                "闭关", M.status("已出关", tone="positive"), icon="success"
             )
             .section(value.location_name, icon="status")
             .row(
@@ -187,7 +187,7 @@ def _user_page(
     builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     for character in value.characters:

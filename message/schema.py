@@ -137,7 +137,7 @@ def _plain_header_text(value: RichText, label: str) -> str:
 
 @dataclass(frozen=True)
 class HeaderBlock:
-    """消息顶部的人物头；粗体、单行、不进入引用区。"""
+    """消息顶部的人物头；单行引用行，不单独加粗。"""
 
     content: RichText
 

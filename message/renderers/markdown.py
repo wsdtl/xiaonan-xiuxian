@@ -58,15 +58,16 @@ def render_markdown(
             lines.append("> ")
 
         if isinstance(block, HeaderBlock):
-            lines.append(f"**{_render_rich(block.content, command_renderer)}**")
+            lines.append(f"> {_render_rich(block.content, command_renderer)}")
         elif isinstance(block, CommandTitleBlock):
             icon = icon_for(block.icon)
-            title = _render_rich(block.content, command_renderer)
+            raw_title = _clip_title(block.command)
+            title = _escape(raw_title)
             display = f"{icon} {title}".strip()
             if block.button and command_renderer is not None:
                 label: RichText = (
                     (Text(f"{icon} "),) if icon else ()
-                ) + tuple(block.content)
+                ) + (Text(raw_title),)
                 display = command_renderer(
                     CommandLink(label=label, command=block.command),
                     "body",
@@ -179,6 +180,19 @@ def _progress_text(value: Progress) -> str:
     empty = PROGRESS_SEGMENTS - filled
     bar = PROGRESS_FILLED_GLYPH * filled + PROGRESS_EMPTY_GLYPH * empty
     return f"{bar} {value.label}".rstrip() if value.label else bar
+
+
+#: 命令标题只显示前 10 个字符；完整命令仍由 CommandLink.command 保留。
+COMMAND_TITLE_DISPLAY_LIMIT = 10
+
+
+def _clip_title(value: str) -> str:
+    """命令标题显示截断：字符数超过 10 时保留前 10 个并追加省略号。"""
+
+    text = str(value or "")
+    if len(text) <= COMMAND_TITLE_DISPLAY_LIMIT:
+        return text
+    return text[:COMMAND_TITLE_DISPLAY_LIMIT] + "..."
 
 
 def _escape(value: object) -> str:

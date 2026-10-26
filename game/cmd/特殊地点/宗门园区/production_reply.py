@@ -29,7 +29,7 @@ def viewed(
     builder = (
         M.document()
 
-        .section("生产状态", icon="location")
+        .section("生产", icon="location")
         .field(
             "周期",
             common["周期"].format_map({"时长": duration(value.facility.period_seconds)}),

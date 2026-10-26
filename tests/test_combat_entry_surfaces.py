@@ -1255,12 +1255,42 @@ def test_message_header_and_command_title_are_compact() -> None:
     )
     assert render_markdown(document.document) == "\n".join(
         [
-            "**张三 灵动 Lv.1**",
+            "> 张三 灵动 Lv.1",
             "> 🌱 查看 人物",
             "> 🌱 人物",
             "> > 姓名: 张三 | 境界: 灵动",
         ]
     )
+
+
+def test_command_title_display_is_clipped_but_command_is_full() -> None:
+    """命令标题只截断显示，完整命令仍交给行内按钮。"""
+
+    from message import M
+    from message.renderers.markdown import render_markdown
+    from message.schema import CommandLink
+
+    title = "宗门 邀请 某某某道友"
+    seen = []
+
+    def renderer(link: CommandLink, *_args) -> str:
+        seen.append((link.label[-1].value, link.command))
+        return "点击"
+
+    document = (
+        M.document()
+        .header("张三 灵动 Lv.1")
+        .command_title(title, icon="player")
+        .section("正文")
+        .line("内容")
+        .build()
+    )
+    plain = render_markdown(document.document)
+    assert "..." in plain
+    render_markdown(document.document, command_renderer=renderer)
+    assert seen and seen[0][1] == title
+    assert seen[0][0].endswith("...")
+    assert len(seen[0][0]) == 13
 
 
 def test_compose_player_reply_rejects_business_header() -> None:

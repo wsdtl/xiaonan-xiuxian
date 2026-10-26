@@ -4,7 +4,7 @@ from message import Action, DocumentMessage, M
 
 
 def entry(copy: dict, url: str) -> DocumentMessage:
-    return (M.document().section("公开工具").line(copy["说明"])
+    return (M.document().section("工具").line(copy["说明"])
             .line(copy["公开说明"]).line(copy["导入说明"])
             .line(M.link(copy["入口"], url))
             .action(Action("assembly.open", copy["入口"], url, behavior="link")).build())
@@ -21,7 +21,7 @@ def scheme(title: str, value: ZhuangpeiResult) -> DocumentMessage:
 
 
 def notice(text: str) -> DocumentMessage:
-    return M.document().section("清单公开").line(text).build()
+    return M.document().section("公开清单").line(text).build()
 
 
 def error(text: str, next_step: str = "") -> DocumentMessage:

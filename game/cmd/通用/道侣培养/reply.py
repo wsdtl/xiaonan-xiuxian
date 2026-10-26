@@ -116,7 +116,7 @@ def breakthrough(
     )
     return (
         M.document()
-        .section("道侣突破", icon="status")
+        .section("突破", icon="status")
         .line(M.status("突破完成", tone="positive"), " ", text)
         .build()
     )
@@ -128,7 +128,7 @@ def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> 
     )
     return (
         M.document()
-        .section("道侣覆炼", icon="weapon")
+        .section("覆炼", icon="weapon")
         .line(M.status("覆炼完成", tone="positive"), " ", text)
         .build()
     )

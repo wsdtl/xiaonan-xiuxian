@@ -8,7 +8,7 @@ def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:
     builder = (
         M.document()
 
-        .inline_section("归元状态", M.status("待确认", tone="warning"), icon="status")
+        .inline_section("状态", M.status("待确认", tone="warning"), icon="status")
         .section(value.location_name, icon="location")
         .field("同行道侣", M.text(value.companion_name, tone="companion"))
         .small(feature.copy("预览", "说明"))

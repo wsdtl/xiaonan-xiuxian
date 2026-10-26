@@ -48,7 +48,7 @@ def started(
     builder = (
         M.document()
 
-        .inline_section("采集状态", M.status("进行中", tone="positive"), icon="status")
+        .inline_section("采集", M.status("进行中", tone="positive"), icon="status")
         .section(value.place_name, icon="item")
         .field(text(copy, "开始", "地形"), value.terrain)
         .row(
@@ -146,7 +146,7 @@ def settlement_page(
             M.document()
 
             .inline_section(
-                "采集状态", M.status("已完成", tone="positive"), icon="success"
+                "采集", M.status("已完成", tone="positive"), icon="success"
             )
             .section(value.place_name, icon="status")
             .field(text(copy, "总结", "地形"), value.terrain)
@@ -183,7 +183,7 @@ def _user_page(
     builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     builder.section(text(copy, "用户", "道侣相助"), icon="player")

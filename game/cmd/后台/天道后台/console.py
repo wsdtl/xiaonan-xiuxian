@@ -183,7 +183,7 @@ class MessageConsoleService:
                     occurred_at=time.time(),
                     message=(
                         M.document()
-                        .section("命令状态", icon="notice")
+                        .section("命令", icon="notice")
                         .line(
                             M.status("未识别", tone="warning"),
                             " 检查输入，或从帮助中选择可用命令。",

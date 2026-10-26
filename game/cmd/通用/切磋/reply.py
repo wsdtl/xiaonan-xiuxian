@@ -18,7 +18,7 @@ def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> D
     return (
         M.document()
 
-        .inline_section("切磋状态", M.status("待应战", tone="warning"), icon="combat")
+        .inline_section("状态", M.status("待应战", tone="warning"), icon="combat")
         .section("邀约内容", icon="player")
         .field("邀约对象", M.text(target_name, tone="emphasis"))
         .row(
@@ -55,7 +55,7 @@ def result(
     return (
         M.document()
 
-        .inline_section("切磋状态", M.status("已结束", tone="positive"), icon="combat")
+        .inline_section("状态", M.status("已结束", tone="positive"), icon="combat")
         .section("战果", icon="status")
         .field("胜方", M.text(winner, tone="positive"))
         .row(
@@ -75,7 +75,7 @@ def rejected() -> DocumentMessage:
     return (
         M.document()
 
-        .inline_section("邀约状态", M.status("已拒绝", tone="muted"), icon="status")
+        .inline_section("邀约", M.status("已拒绝", tone="muted"), icon="status")
         .build()
     )
 

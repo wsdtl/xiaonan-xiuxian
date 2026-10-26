@@ -121,12 +121,12 @@ def equipped(feature: CharacterCultivationFeature, result: CharacterEquipResult)
     )
     builder = (
         M.document()
-        .section("人物装配", icon="skill")
+        .section("装配", icon="skill")
         .line(M.status("装配完成", tone="positive"), " ", text)
     )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -144,12 +144,12 @@ def breakthrough(
     )
     builder = (
         M.document()
-        .section("人物突破", icon="status")
+        .section("突破", icon="status")
         .line(M.status("突破完成", tone="positive"), " ", text)
     )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -161,7 +161,7 @@ def forged(feature: CharacterCultivationFeature, result: CharacterLawResult) -> 
     )
     return (
         M.document()
-        .section("人物覆炼", icon="weapon")
+        .section("覆炼", icon="weapon")
         .line(M.status("覆炼完成", tone="positive"), " ", text)
         .build()
     )

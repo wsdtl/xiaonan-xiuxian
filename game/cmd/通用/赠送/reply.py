@@ -57,8 +57,8 @@ def _result(feature: GiftFeature, target_name: str) -> DocumentBuilder:
     return (
         M.document()
 
-        .inline_section("赠礼结果", M.status("完成", tone="positive"), icon="success")
-        .section("赠礼去向", icon="player")
+        .inline_section("赠礼", M.status("完成", tone="positive"), icon="success")
+        .section("去向", icon="player")
         .field("接收者", M.text(target_name, tone="emphasis"))
     )
 

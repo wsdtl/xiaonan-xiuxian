@@ -22,7 +22,7 @@ from .items import (
 def missing_query() -> DocumentMessage:
     return (
         M.document()
-        .section("查看", icon="item")
+        .section("提示", icon="item")
         .line(M.status("缺少目标", tone="warning"), " 请提供编号或完整名称。")
         .small("例如：查看 清心散")
         .build()
@@ -63,7 +63,7 @@ def inspection(
     if result.detail is None:
         return (
             M.document()
-            .section("查看", icon="notice")
+            .section("结果", icon="notice")
             .line(
                 M.status("未找到", tone="danger"),
                 _normalize_brackets(f" “{result.query}”没有对应资料。"),

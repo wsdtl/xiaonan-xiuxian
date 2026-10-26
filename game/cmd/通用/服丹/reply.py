@@ -33,7 +33,7 @@ def used(feature: MedicineFeature, result: MedicineUseResult) -> DocumentMessage
     )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     return builder.build()

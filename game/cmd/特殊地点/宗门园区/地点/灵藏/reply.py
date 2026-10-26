@@ -60,7 +60,7 @@ def donated_material(copy: LingcangCopy, result: SectAssetTransfer) -> DocumentM
         builder.field("宗门贡献", M.text(f"+{result.contribution}", tone="positive"))
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -78,7 +78,7 @@ def donated_stones(copy: LingcangCopy, quantity: int, result: SectAssetTransfer)
         builder.field("宗门贡献", M.text(f"+{result.contribution}", tone="positive"))
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     return builder.build()

@@ -50,7 +50,7 @@ def _home_message(*, id_converter=None, nav: str = "帮助") -> DocumentMessage:
     builder = (
         M.document()
 
-        .section("帮助", icon="system")
+        .section("分类", icon="system")
         .small("按分类查看当前已经开放的命令。")
     )
     categories = help_registry.categories()
@@ -143,9 +143,9 @@ def _not_found_message(query: str, *, id_converter=None, nav: str = "帮助") ->
     builder = (
         M.document()
 
-        .section("没有找到帮助", icon="notice")
+        .section("结果", icon="notice")
         .line(M.status("未找到", tone="warning"), " ", query)
-        .section("可用分类")
+        .section("分类")
     )
     _category_rows(builder, help_registry.categories())
     return builder.actions((_home_action(),)).build()

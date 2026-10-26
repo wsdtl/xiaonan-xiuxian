@@ -189,7 +189,7 @@ def gift(
         )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("先天灵宝", icon="item").field(
+        builder.section("灵宝", icon="item").field(
             activation.name, activation.summary
         )
     builder.small("就近寻访道侣、投其所好赠礼；好感达到 100 才能邀约同行")

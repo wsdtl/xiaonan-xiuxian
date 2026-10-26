@@ -63,7 +63,7 @@ class DocumentBuilder:
     # 主标题与人物头由游戏层 composer 在发送边界前置，业务只造正文。
 
     def header(self, *parts: object) -> DocumentBuilder:
-        """添加消息顶部的人物头；粗体单行，不进入引用区。"""
+        """添加消息顶部的人物头；单行引用，不单独加粗。"""
 
         self._blocks.append(HeaderBlock(_rich(*parts)))
         self._section_index = None

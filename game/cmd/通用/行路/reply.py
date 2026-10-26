@@ -49,12 +49,12 @@ def success(
     reply = (
         M.document()
 
-        .inline_section("行路结果", M.status("已抵达", tone="positive"), icon="success")
+        .inline_section("行路", M.status("已抵达", tone="positive"), icon="success")
         .section(f"行路 · {plan.travel_method}", icon="navigation")
     )
     for line in plan.narrative:
         reply.line(line)
-    reply.section("落脚处", icon="map")
+    reply.section("位置", icon="map")
     reply.field("地点", _location_name(destination))
     reply.row(("区域", destination.region), ("地形", destination.terrain))
     reply.row(
