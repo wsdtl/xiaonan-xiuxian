@@ -212,7 +212,7 @@ class EnemyService:
             candidates = [
                 item
                 for item in candidates
-                if str(definitions[item].get("阶梯") or "").strip() == required_tier
+                if self._definition_hits_tier(definitions[item], required_tier)
             ]
             if not candidates:
                 raise JsonDataError(
@@ -326,9 +326,6 @@ class EnemyService:
                 raise JsonDataError(f"敌人 {name} 的等级区间与地点区间无交集")
         level = source.randint(low, high)
         tier = _tier(role, level, role_name)
-        declared_tier = str(raw.get("阶梯") or "").strip()
-        if declared_tier and declared_tier != str(tier.get("阶梯") or "").strip():
-            raise JsonDataError(f"{name}.阶梯与等级范围不一致")
         if required_tier is not None and str(tier.get("阶梯") or "").strip() != required_tier:
             raise JsonDataError(f"{name}实际等级未命中要求阶梯：{required_tier}")
         attributes = {
@@ -503,6 +500,24 @@ class EnemyService:
     def _content_multiplier(self, category: str, content_id: str) -> float:
         grade_id = str(self._data.entity(category, content_id).get("品级") or "01")
         return float(self._asset.grade(grade_id).ability_multiplier)
+
+    def _definition_hits_tier(
+        self, raw: Mapping[str, object], required_tier: str
+    ) -> bool:
+        """敌人等级区间是否与指定阶梯的等级范围相交。"""
+
+        role_name = _text(raw.get("角色规则"), "敌人.角色规则")
+        role = self._role_rules[role_name]
+        low, high = _range(raw.get("等级"), "敌人.等级")
+        for tier_raw in _sequence(role.get("阶梯"), f"{role_name}.阶梯"):
+            tier = _mapping(tier_raw, f"{role_name}.阶梯[]")
+            if str(tier.get("阶梯") or "").strip() != required_tier:
+                continue
+            tier_low, tier_high = _range(
+                tier.get("等级范围"), f"{role_name}.{required_tier}.等级范围"
+            )
+            return max(low, tier_low) <= min(high, tier_high)
+        raise JsonDataError(f"{role_name} 没有阶梯：{required_tier}")
 
     def _validate_definition(self, name: str, raw: Mapping[str, object]) -> None:
         role_name = _text(raw.get("角色规则"), f"{name}.角色规则")
