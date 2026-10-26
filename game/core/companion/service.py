@@ -147,6 +147,8 @@ class CompanionService:
                 self._data.dataset("基础定义").get("品级"), "基础/定义/品级.json"
             )
         )
+        races = load_races(self._data)
+        self._races = MappingProxyType({str(k): v for k, v in races.items()})
         definitions: dict[str, CompanionDefinition] = {}
         by_name: dict[str, str] = {}
         by_location: dict[str, list[LocalCultivator]] = {}
@@ -184,17 +186,15 @@ class CompanionService:
                 for location, values in by_location.items()
             }
         )
-        races = load_races(self._data)
         unknown = [
             f"{definition.companion_id}:{definition.race}"
             for definition in definitions.values()
-            if definition.race not in races
+            if definition.race not in self._races
         ]
         if unknown:
             raise JsonDataError(
                 f"道侣固定种族里有未登记的种族：{'、'.join(unknown)}"
             )
-        self._races = MappingProxyType({str(k): v for k, v in races.items()})
         self._initialized = True
         return self.status()
 

@@ -87,6 +87,7 @@ class EnemyService:
         gender = _mapping(self._data.dataset("角色定义").get("性别"), "性别")
         self._genders = _texts(gender.get("取值"), "性别.取值")
         self._builds = self._load_builds()
+        self._races = MappingProxyType(self._load_races())
         for section in ("敌人",):
             try:
                 entities = self._data.entities(section)
@@ -100,7 +101,6 @@ class EnemyService:
                 self._validate_definition(name, raw)
             self._definitions_by_section[section] = MappingProxyType(definitions)
         self._definitions = self._definitions_by_section["敌人"]
-        self._races = MappingProxyType(self._load_races())
         self._initialized = True
         return self.status()
 
