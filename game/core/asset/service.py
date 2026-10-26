@@ -1225,7 +1225,7 @@ class AssetService:
                 _positive_int(_mapping(raw, "品级[]").get("阶序"), "品级.阶序"),
                 _decimal(_mapping(raw, "品级[]").get("能力倍率"), "品级.能力倍率"),
                 _decimal(_mapping(raw, "品级[]").get("价格系数"), "品级.价格系数"),
-                _decimal(_mapping(raw, "品级[]").get("炼制倍率", 1), "品级.炼制倍率"),
+                _decimal(_mapping(raw, "品级[]").get("炼制倍率"), "品级.炼制倍率"),
             )
             for raw in rows
         }

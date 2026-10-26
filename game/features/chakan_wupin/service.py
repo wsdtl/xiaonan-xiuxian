@@ -161,7 +161,7 @@ class ItemInspectionFeature:
                 return None
             return BaikeDetail(
                 identifier,
-                str(race.get("种族") or ""),
+                str(race.get("名称") or ""),
                 "种族",
                 "",
                 race,
@@ -218,7 +218,7 @@ class ItemInspectionFeature:
             seen.add(text)
             name = None
             if isinstance(target, Mapping):
-                name = target.get("种族")
+                name = target.get("名称")
             if name is None:
                 inner = getattr(target, "value", None)
                 name = inner.get("名称") if isinstance(inner, Mapping) else None
@@ -228,7 +228,7 @@ class ItemInspectionFeature:
         return tuple(found)
 
     def _catalog_entries(self) -> tuple[BaikeEntry, ...]:
-        """全部带编号的条目：数据索引 + 角色核心的种族，按编号排序。"""
+        """全部带编号的条目：数据索引（种族已在内），按编号排序。"""
 
         rows = [
             BaikeEntry(
@@ -237,10 +237,6 @@ class ItemInspectionFeature:
                 str(entity.section),
             )
             for entity in self._data.numbered_entities()
-        ]
-        rows += [
-            BaikeEntry(str(race.get("编号") or ""), str(race.get("种族") or ""), "种族")
-            for race in self._character.races().values()
         ]
         return tuple(sorted((row for row in rows if row.entity_id), key=lambda row: row.entity_id))
 

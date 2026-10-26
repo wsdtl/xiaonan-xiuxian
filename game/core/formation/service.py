@@ -178,6 +178,11 @@ class FormationService:
                 )
             }
         )
+        for grade_name, grade_row in self._grade_rows.items():
+            _positive_int(
+                grade_row.get("阵法材料当量"),
+                f"品级.{grade_name}.阵法材料当量",
+            )
         self._fixed_grades = _texts(
             self._rules.get("固定品级"), "阵法规则.固定品级"
         )
@@ -197,6 +202,14 @@ class FormationService:
             contract.validate(raw, "阵法", f"阵法 {formation_id}")
             raw_formations[formation_id] = _mapping(raw, f"阵法 {formation_id}")
         self._raw_formations = MappingProxyType(raw_formations)
+        for formation_id, raw in raw_formations.items():
+            baseline = _number(
+                raw.get("基准当量"), f"阵法 {formation_id}.基准当量"
+            )
+            if float(baseline) <= 0:
+                raise JsonDataError(
+                    f"阵法 {formation_id}.基准当量必须大于 0"
+                )
         self._formations = MappingProxyType(
             {
                 formation_id: FormationDefinition(
@@ -611,6 +624,30 @@ class FormationService:
             raise FormationError(f"阵法缺少阵核或基础：{formation.formation_id}")
         return self._battle_profile_core(formation, raw, grade_name, materials, position)
 
+    def _material_multipliers(
+        self,
+        raw: Mapping[str, object],
+        grade_name: str,
+        totals: Mapping[str, int],
+    ) -> dict[str, float]:
+        """材料倍率：只按超出固定消耗的部分计，权重取自品级表。"""
+
+        grade_row = self._grade_rows[grade_name]
+        unit = float(
+            _number(
+                grade_row.get("阵法材料当量"),
+                f"品级.{grade_name}.阵法材料当量",
+            )
+        )
+        baseline = float(_number(raw.get("基准当量"), "阵法.基准当量"))
+        if baseline <= 0:
+            raise JsonDataError("阵法.基准当量必须大于 0")
+        fixed = self._fixed_costs[grade_name]
+        extra = {key: max(0, totals[key] - fixed[key]) for key in _CATEGORIES}
+        return {
+            key: 1.0 + extra[key] * unit / baseline for key in _CATEGORIES
+        }
+
     def _battle_profile_core(
         self,
         formation: FormationDefinition,
@@ -622,15 +659,11 @@ class FormationService:
         grade_row = self._grade_rows[grade_name]
         ability = float(_number(grade_row.get("能力倍率"), "品级.能力倍率"))
         base = _mapping(raw.get("基础"), "阵法.基础")
-        fixed = self._fixed_costs[grade_name]
         actual = {key: 0 for key in _CATEGORIES}
         if materials:
             for key in _CATEGORIES:
                 actual[key] = max(0, int(float(materials.get(key, 0))))
-        extra = {key: max(0, actual[key] - fixed[key]) for key in _CATEGORIES}
-        unit = float(_number(grade_row.get("灵石当量", 1), "品级.灵石当量"))
-        baseline = max(1.0, float(_number(raw.get("基准当量", 1000), "阵法.基准当量")))
-        multipliers = {key: 1.0 + extra[key] * unit / baseline for key in _CATEGORIES}
+        multipliers = self._material_multipliers(raw, grade_name, actual)
         capacity = float(_number(base.get("承载"), "阵法.基础.承载")) * ability * multipliers["灵矿"]
         impact = float(_number(base.get("冲击"), "阵法.基础.冲击")) * ability * multipliers["兽宝"]
         nodes = max(1, int(float(_number(base.get("节点"), "阵法.基础.节点")) * ability * multipliers["灵植"]))
@@ -775,12 +808,7 @@ class FormationService:
                 take(entry, need)
                 need -= selected[category] - before
 
-        baseline = max(1.0, float(_number(raw.get("基准当量", 1000), "阵法.基准当量")))
-        unit = float(_number(grade_row.get("灵石当量", 1), "品级.灵石当量"))
-        extra = {key: total[key] - fixed[key] for key in _CATEGORIES}
-        multipliers = {
-            key: 1.0 + extra[key] * unit / baseline for key in _CATEGORIES
-        }
+        multipliers = self._material_multipliers(raw, grade_name, total)
 
         capacity = float(_number(base.get("承载"), "阵法.基础.承载")) * ability * multipliers["灵矿"]
         impact = float(_number(base.get("冲击"), "阵法.基础.冲击")) * ability * multipliers["兽宝"]
@@ -938,32 +966,30 @@ class FormationService:
         return value
 
     def _load_fixed_costs(self) -> dict[str, Mapping[str, int]]:
-        """五品级固定消耗；圣品这一行是最低投入。"""
+        """黄品基准固定消耗；其余品级按 品级.炼制倍率 放大。"""
 
         raw = _mapping(self._rules.get("固定消耗"), "阵法规则.固定消耗")
+        unknown = set(raw) - set(_CATEGORIES)
+        if unknown:
+            raise JsonDataError(
+                f"阵法固定消耗 有未登记类别：{sorted(unknown)}"
+            )
+        base = {
+            key: nonnegative_int(raw.get(key), f"阵法规则.固定消耗.{key}")
+            for key in _CATEGORIES
+        }
         result: dict[str, Mapping[str, int]] = {}
         for grade_name in _GRADES:
-            row = _mapping(raw.get(grade_name), f"阵法规则.固定消耗.{grade_name}")
-            unknown = set(row) - set(_CATEGORIES)
-            if unknown:
-                raise JsonDataError(
-                    f"阵法固定消耗.{grade_name} 有未登记类别：{sorted(unknown)}"
-                )
-            counts = {
-                key: nonnegative_int(
-                    row.get(key), f"阵法规则.固定消耗.{grade_name}.{key}"
-                )
-                for key in _CATEGORIES
-            }
             craft = int(
                 _number(
                     self._grade_rows[grade_name].get("炼制倍率"),
                     "品级.炼制倍率",
                 )
             )
+            counts = {key: base[key] * craft for key in _CATEGORIES}
             if counts["灵矿"] < 2 * craft:
                 raise JsonDataError(
-                    f"阵法固定消耗.{grade_name}.灵矿 不得少于阵核 {2 * craft} 份"
+                    f"阵法固定消耗.灵矿 不得少于阵核 {2 * craft} 份"
                 )
             result[grade_name] = MappingProxyType(counts)
         return result

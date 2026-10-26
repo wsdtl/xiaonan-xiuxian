@@ -745,7 +745,7 @@ class Fighter(RuntimeExtensions):
     @property
     def alive(self) -> bool:
         #: 所有单位都有血气与神魂两条命线，任一条归零即死。
-        #: 流派可以只强化其中一条，但没人能忽略另一条。
+        #: 构筑可以只强化其中一条，但没人能忽略另一条。
         if not self.active or self.health <= 0:
             return False
         return self.soul > 0

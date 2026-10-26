@@ -371,7 +371,7 @@ def test_fixed_and_holy_formation_costs(services) -> None:
         "530001", "圣品", (), {"兽宝": 29, "灵矿": 56, "灵植": 42}
     )
     assert extra.impact > minimum.impact
-    assert dict(extra.supplement_multipliers)["兽宝"] > 1.0
+    assert dict(extra.supplement_multipliers)["兽宝"] == pytest.approx(1.625)
 
 
 def test_formation_activation_plan_reaches_battle(services) -> None:
@@ -1110,13 +1110,13 @@ def test_promotion_formation_plan(services) -> None:
     assert plan.craft_command == "炼阵 黄品一线天开阵"
 
 
-def test_school_enemy_uses_companion_build(services) -> None:
-    """流派卡表由道侣实体建立，不再依赖已删除的卡面标签。"""
+def test_enemy_uses_own_build_reference(services) -> None:
+    """敌人自己声明构筑编号，按同一模板生成三类卡。"""
 
     import random
 
     instance = services.enemy._instance(
-        "300001", random.Random(1), instance_id="school-build"
+        "300001", random.Random(1), instance_id="own-build"
     )
     by_section: dict[str, list[str]] = {}
     for ref in instance.combatant.build:
@@ -1124,7 +1124,7 @@ def test_school_enemy_uses_companion_build(services) -> None:
     assert by_section["功法"] == [f"40000{index}" for index in range(1, 7)]
     assert by_section["真意"] == [f"41000{index}" for index in range(1, 7)]
     assert by_section["气机"] == [f"42000{index}" for index in range(1, 7)]
-    assert len(services.enemy._school_builds) == 68
+    assert len(services.enemy._builds) == 68
 
 
 def test_exploration_starts_from_tier_location(services) -> None:

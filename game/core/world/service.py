@@ -499,7 +499,7 @@ class WorldService:
         matches = [
             entity_id
             for entity_id in values
-            if self._data.entity_record(section, entity_id).source_file == file_id
+            if self._data.entity_record(section, entity_id).directory_owner == location_name
         ]
         if not matches:
             raise JsonDataError(f"地点缺少同目录内容：{file_id}.json")

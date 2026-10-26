@@ -151,6 +151,20 @@ def test_builds_carry_their_own_combat_text() -> None:
         assert '"词条"' not in text, path
 
 
+def test_formation_material_fields_are_explicit() -> None:
+    """阵法的基准当量和品级的材料当量都必须写进数据，不靠代码默认。"""
+
+    formations = sorted((DATA_ROOT / "物品/内容/阵法").glob("*.json"))
+    assert len(formations) == 54
+    for path in formations:
+        body = json.loads(path.read_text(encoding="utf-8"))
+        assert body.get("基准当量") == 1000, path
+
+    grades = json.loads((DATA_ROOT / "基础/定义/品级.json").read_text(encoding="utf-8"))
+    assert [row["阵法材料当量"] for row in grades] == [1, 5, 25, 125, 625]
+    assert all("灵石当量" not in row for row in grades)
+
+
 def test_four_build_contracts_are_satisfied() -> None:
     """功法、真意、气机、器律各按自己的形状通过启动契约。"""
 

@@ -49,7 +49,7 @@ class EnemyService:
         )
         self._genders: tuple[str, ...] = ()
         self._five_element_rules: Mapping[str, object] = {}
-        self._school_builds: dict[str, dict[str, tuple[str, ...]]] = {}
+        self._builds: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._races: Mapping[str, Mapping[str, object]] = MappingProxyType({})
 
     def initialize(self) -> EnemyStatus:
@@ -86,6 +86,7 @@ class EnemyService:
             raise RuntimeError("炼器核心必须先于敌人核心启动")
         gender = _mapping(self._data.dataset("角色定义").get("性别"), "性别")
         self._genders = _texts(gender.get("取值"), "性别.取值")
+        self._builds = self._load_builds()
         for section in ("敌人",):
             try:
                 entities = self._data.entities(section)
@@ -100,11 +101,6 @@ class EnemyService:
             self._definitions_by_section[section] = MappingProxyType(definitions)
         self._definitions = self._definitions_by_section["敌人"]
         self._races = MappingProxyType(self._load_races())
-        self._school_builds = self._load_school_builds()
-        for name, raw in self._definitions.items():
-            school = str(raw.get("流派") or "").strip()
-            if school and school not in self._school_builds:
-                raise JsonDataError(f"敌人 {name} 使用未知流派：{school}")
         self._initialized = True
         return self.status()
 
@@ -116,14 +112,12 @@ class EnemyService:
         只保证形状，免得把一份结构都读不通的表带进战斗。
         """
 
-        entries = _sequence(
-            self._data.dataset("种族").get("种族"), "种族/规则/种族/种族.json"
-        )
+        entries = self._data.entities("种族")
         result: dict[str, Mapping[str, object]] = {}
-        for index, raw in enumerate(entries):
-            where = f"种族[{index}]"
+        for race_id, raw in entries.items():
+            where = f"种族[{race_id}]"
             entry = _mapping(raw, where)
-            name = _text(entry.get("种族"), f"{where}.种族")
+            name = _text(entry.get("名称"), f"{where}.名称")
             if name in result:
                 raise JsonDataError(f"{where}.种族重名：{name}")
             for rule_index, rule in enumerate(
@@ -134,37 +128,20 @@ class EnemyService:
             result[name] = entry
         return result
 
-    def _load_school_builds(self) -> dict[str, dict[str, tuple[str, ...]]]:
-        """按「种族 → 流派 → 道侣实体构筑」建立流派卡表。
+    def _load_builds(self) -> Mapping[str, Mapping[str, object]]:
+        """构筑模板：只校验三类编号，不假定六槽；槽位由实体声明。"""
 
-        卡面的 `标签` 字段已在构筑重构中删除；流派与卡片的对应关系由
-        68 名道侣实体承载：道侣的种族给出流派，道侣的 `构筑` 给出三类六卡。
-        """
-
-        builds: dict[str, dict[str, tuple[str, ...]]] = {}
-        for name, raw in self._data.entities("道侣").items():
-            race = _text(raw.get("种族"), f"道侣 {name}.种族")
-            race_entry = self._races.get(race)
-            if race_entry is None:
-                raise JsonDataError(f"道侣 {name} 使用未登记种族：{race}")
-            school = _text(race_entry.get("流派"), f"种族 {race}.流派")
-            if school in builds:
-                raise JsonDataError(f"流派构筑重复：{school}")
-            build = _mapping(raw.get("构筑"), f"道侣 {name}.构筑")
-            groups: dict[str, tuple[str, ...]] = {}
+        builds: dict[str, Mapping[str, object]] = {}
+        for build_id, raw in self._data.entities("构筑").items():
+            template = _mapping(raw, f"构筑.{build_id}")
             for category in ("功法", "真意", "气机"):
-                ids = _texts(
-                    build.get(category), f"道侣 {name}.构筑.{category}"
-                )
-                if len(ids) != 6:
-                    raise JsonDataError(
-                        f"道侣 {name}.构筑.{category} 必须恰好六条"
-                    )
-                groups[category] = ids
-            builds[school] = groups
+                ids = _texts(template.get(category), f"构筑.{build_id}.{category}")
+                if len(ids) != len(set(ids)):
+                    raise JsonDataError(f"构筑.{build_id}.{category} 存在重复编号")
+            builds[str(build_id)] = template
         if not builds:
-            raise JsonDataError("道侣构筑为空，无法建立流派卡表")
-        return builds
+            raise JsonDataError("构筑模板不能为空")
+        return MappingProxyType(builds)
 
     def races(self) -> Mapping[str, Mapping[str, object]]:
         """种族登记表（只读）。"""
@@ -394,19 +371,31 @@ class EnemyService:
             key: _clamp_attribute(key, value, self._attribute_definitions)
             for key, value in attributes.items()
         }
-        fixed = _mapping(tier.get("构筑"), f"{role_name}.构筑")
-        school = str(raw.get("流派") or "").strip()
-        if school:
-            school_build = self._school_builds.get(school)
-            if school_build is None:
-                raise JsonDataError(f"敌人 {name} 使用未知流派：{school}")
-            fixed = {
-                category: tuple(
-                    school_build[category][index % len(school_build[category])]
-                    for index in range(len(_sequence(fixed.get(category) or (), f"{role_name}.构筑.{category}")))
+        build_id = str(raw.get("构筑") or "").strip()
+        if build_id:
+            template = _mapping(self._builds.get(build_id), f"{name}.构筑")
+            slot_value = raw.get("修行槽位")
+            slots = _mapping(
+                slot_value if slot_value is not None else tier.get("修行槽位"),
+                f"{name}.修行槽位",
+            )
+            fixed: dict[str, tuple[str, ...]] = {}
+            for category in ("功法", "真意", "气机"):
+                ids = _texts(template.get(category), f"{name}.构筑.{category}")
+                expected = _positive_int(
+                    slots.get(category),
+                    f"{role_name}.修行槽位.{category}",
                 )
-                for category in ("功法", "真意", "气机")
-            }
+                if len(ids) != expected:
+                    raise JsonDataError(
+                        f"{name}.构筑.{category} 有 {len(ids)} 条，"
+                        f"但 {role_name}.修行槽位.{category} 是 {expected}"
+                    )
+                if len(ids) != len(set(ids)):
+                    raise JsonDataError(f"{name}.构筑.{category} 存在重复编号")
+                fixed[category] = ids
+        else:
+            fixed = {}
         build_refs = [
             CombatBuildRef(
                 section=category,
@@ -524,6 +513,12 @@ class EnemyService:
         _mapping(raw.get("属性覆盖"), f"{name}.属性覆盖")
         _mapping(raw.get("掉落"), f"{name}.掉落")
         _mapping(raw.get("交锋所得"), f"{name}.交锋所得")
+        if role_name == "敌方修士":
+            build_id = _text(raw.get("构筑"), f"{name}.构筑")
+            if build_id not in self._builds:
+                raise JsonDataError(f"敌人 {name} 使用未知构筑：{build_id}")
+        elif "构筑" in raw:
+            raise JsonDataError(f"敌人 {name} 不是修士，不能声明构筑")
 
     def _require_initialized(self) -> None:
         if not self._initialized:

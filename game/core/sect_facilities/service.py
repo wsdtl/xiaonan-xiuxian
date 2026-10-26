@@ -138,7 +138,18 @@ class SectFacilityService:
         costs = self._data.dataset("灵石消耗").get("灵石消耗")
         base = _mapping(costs.get("基础"), "炼制.灵石消耗.基础")
         self._base_cost = {kind: _positive_int(base.get(kind), f"炼制.灵石消耗.基础.{kind}") for kind in _FACILITY_TYPES}
-        self._grade_multiplier = _positive_map(costs.get("品级倍率"), "炼制.灵石消耗.品级倍率")
+        grade_rows = self._data.dataset("基础定义").get("品级")
+        if not isinstance(grade_rows, Sequence) or isinstance(grade_rows, (str, bytes)):
+            raise JsonDataError("品级.json 必须是数组")
+        self._grade_multiplier = {}
+        for index, raw in enumerate(grade_rows):
+            row = _mapping(raw, f"品级[{index}]")
+            name = _text(row.get("名称"), f"品级[{index}].名称")
+            if name in self._grade_multiplier:
+                raise JsonDataError(f"品级名称重复：{name}")
+            self._grade_multiplier[name] = _positive_int(
+                row.get("宗门炼制倍率"), f"品级[{index}].宗门炼制倍率"
+            )
         self._stage_multiplier = _positive_map(costs.get("器阶倍率"), "炼制.灵石消耗.器阶倍率")
         settlement = _mapping(self._data.dataset("结算").get("结算"), "炼制.结算")
         if settlement.get("失败") != "不扣灵石、不扣材料、不产出":

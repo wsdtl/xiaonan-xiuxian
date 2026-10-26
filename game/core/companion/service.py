@@ -1564,15 +1564,44 @@ class CompanionService:
                 f"道侣 {companion_id}.属性覆盖只能覆盖成长属性："
                 + "、".join(sorted(unknown))
             )
-        build_value = _mapping(value.get("构筑"), f"道侣 {companion_id}.构筑")
-        fixed_build = MappingProxyType(
-            {
-                category: tuple(
-                    str(item) for item in (build_value.get(category) or ())
+        build_id = _text(value.get("构筑"), f"道侣 {companion_id}.构筑")
+        template = _mapping(
+            self._data.entity("构筑", build_id),
+            f"道侣 {companion_id}.构筑",
+        )
+        slot_value = value.get("修行槽位")
+        if slot_value is None:
+            slots = self._rules.cultivation_slots
+        else:
+            slot_map = _mapping(slot_value, f"道侣 {companion_id}.修行槽位")
+            slots = {
+                category: _positive_int(
+                    slot_map.get(category),
+                    f"道侣 {companion_id}.修行槽位.{category}",
                 )
                 for category in ("功法", "真意", "气机")
             }
-        )
+        fixed_build: dict[str, tuple[str, ...]] = {}
+        for category in ("功法", "真意", "气机"):
+            ids = tuple(
+                _text(item, f"构筑 {build_id}.{category}[]")
+                for item in _sequence(
+                    template.get(category),
+                    f"构筑 {build_id}.{category}",
+                )
+            )
+            expected = slots[category]
+            if len(ids) != expected:
+                raise JsonDataError(
+                    f"道侣 {companion_id} 的构筑 {build_id}.{category} 有 {len(ids)} 条，"
+                    f"但修行槽位是 {expected}"
+                )
+            if len(ids) != len(set(ids)):
+                raise JsonDataError(
+                    f"道侣 {companion_id} 的构筑 {build_id}.{category} 存在重复编号"
+                )
+            fixed_build[category] = ids
+        fixed_build = MappingProxyType(fixed_build)
         weapon = _mapping(value.get("本命武器"), f"道侣 {companion_id}.本命武器")
         weapon_laws = tuple(
             _text(raw, f"道侣 {companion_id}.本命武器.器律[]")

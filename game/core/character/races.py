@@ -19,15 +19,13 @@ def load_races(data: JsonDataService) -> dict[str, Mapping[str, object]]:
     语义（登记过 / 正负配对 / 名额）由判据查，这里只保证结构可解释。
     """
 
-    entries = sequence(
-        data.dataset("种族").get("种族"), "角色/规则/种族/种族.json"
-    )
+    entries = data.entities("种族")
     result: dict[str, Mapping[str, object]] = {}
     numbers: dict[str, str] = {}
-    for index, raw in enumerate(entries):
-        where = f"种族[{index}]"
+    for race_id, raw in entries.items():
+        where = f"种族[{race_id}]"
         entry = mapping(raw, where)
-        name = strict_text(entry.get("种族"), f"{where}.种族")
+        name = strict_text(entry.get("名称"), f"{where}.名称")
         if name in result:
             raise JsonDataError(f"{where}.种族重名：{name}")
         for rule_index, rule in enumerate(

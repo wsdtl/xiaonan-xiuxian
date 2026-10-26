@@ -77,6 +77,8 @@ class LoadedGameData:
         for file_id in file_ids:
             result.extend(self._resolve_pool_file(str(file_id), section_name, ()))
         if not result:
+            # 7 个高阶梯敌人池是有意留的占位：内容还没写，但池名先登记。
+            # 只放行这组名字，未登记的空池仍然报错。
             if section_name == "敌人" and all(
                 str(value) in {
                     "入微修士", "入微灵兽", "圆融修士", "圆融灵兽",
@@ -383,7 +385,6 @@ def _numbered_entries(
         # 敌人等高阶段先留空文件，等 boss 设计时再填内容；空段不产生实体。
         if document.relative_path in {
             "世界/内容/敌人/入微/入微修士.json",
-            "世界/内容/敌人/入微/入微灵兽.json",
             "世界/内容/敌人/圆融/圆融修士.json",
             "世界/内容/敌人/圆融/圆融灵兽.json",
             "世界/内容/敌人/镇域/镇域修士.json",
