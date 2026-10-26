@@ -12,6 +12,7 @@ from game.features.xiantian_lingbao import (
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -34,14 +35,14 @@ async def show_innate_treasures(user_id: str, message: str, manager: Any) -> Non
     feature = current_game_services().features.xiantian_lingbao
     raw = message.strip()
     if raw and not raw.isdecimal():
-        await manager.send(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
+        await send_game_reply(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
         return
     try:
-        await manager.send(
+        await send_game_reply(
             reply.view(feature, await feature.inspect(user_id, int(raw or 1)))
         )
     except InnateTreasureFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -62,14 +63,14 @@ async def show_innate_treasure_catalog(user_id: str, message: str, manager: Any)
     feature = current_game_services().features.xiantian_lingbao
     raw = message.strip()
     if raw and not raw.isdecimal():
-        await manager.send(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
+        await send_game_reply(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
         return
     try:
-        await manager.send(
+        await send_game_reply(
             reply.catalog(feature, await feature.catalog(int(raw or 1)))
         )
     except InnateTreasureFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -94,9 +95,9 @@ async def equip_innate_treasure(user_id: str, message: str, message_context: Mes
                 user_id, message_context.request_id, message.strip()
             )
         )
-        await manager.send(reply.equipped(feature, result))
+        await send_game_reply(reply.equipped(feature, result))
     except (InnateTreasureFeatureError, InnateTreasureFeatureConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = ["router"]

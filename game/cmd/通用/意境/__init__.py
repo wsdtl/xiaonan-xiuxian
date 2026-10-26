@@ -11,6 +11,7 @@ from launch.adapter import MessageContext
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 
 
 @GameCommand.command(
@@ -48,14 +49,14 @@ async def yijing(user_id: str, message: str, message_context: MessageContext, ma
                 "",
             )
             if not content_id:
-                await manager.send(reply.yijing_refused(f"没有叫「{wanted}」的意境"))
+                await send_game_reply(reply.yijing_refused(f"没有叫「{wanted}」的意境"))
                 return
             view = await feature.point(user_id, message_context.request_id, content_id)
-            await manager.send(reply.yijing_pointed(view, content_id))
+            await send_game_reply(reply.yijing_pointed(view, content_id))
         else:
-            await manager.send(reply.yijing_view(await feature.inspect(user_id)))
+            await send_game_reply(reply.yijing_view(await feature.inspect(user_id)))
     except YijingError as exc:
-        await manager.send(reply.yijing_refused(str(exc)))
+        await send_game_reply(reply.yijing_refused(str(exc)))
 
 
 __all__ = ["router"]

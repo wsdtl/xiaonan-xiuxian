@@ -5,6 +5,7 @@ from game.features.duihuan import DuihuanConflictError, DuihuanError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -29,13 +30,13 @@ async def redeem_code(
     feature = current_game_services().features.duihuan
     raw = ' '.join(str(message or '').split())
     try:
-        await manager.send(
+        await send_game_reply(
             reply.result(
                 feature, await feature.redeem(user_id, message_context.request_id, raw)
             )
         )
     except (DuihuanError, DuihuanConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = []

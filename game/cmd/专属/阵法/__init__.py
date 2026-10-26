@@ -8,6 +8,7 @@ from game.features.presentation import ItemRefError, parse_item_ref
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -115,7 +116,7 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
         if not query or query.isdecimal():
             page = int(query) if query else 1
             value = await feature.overview(user_id, page)
-            await manager.send(
+            await send_game_reply(
                 reply.overview(feature.copy(), value, feature.overview_actions(value))
             )
             return
@@ -123,13 +124,13 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
         query, reply.text(feature.copy(), "错误", "阵法审查格式")
     )
         value = await feature.preview(user_id, identifier, grade, investments)
-        await manager.send(
+        await send_game_reply(
             reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
     except FormationChoiceError as exc:
-        await manager.send(reply.choose(feature.copy(), exc, command="阵法审查"))
+        await send_game_reply(reply.choose(feature.copy(), exc, command="阵法审查"))
     except (FormationCraftFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="阵法审查"))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="阵法审查"))
 
 
 @GameCommand.command(
@@ -155,13 +156,13 @@ async def commit_formation(user_id: str, message: str, message_context: MessageC
         value = await feature.form(
             user_id, message_context.request_id, identifier, grade, investments
         )
-        await manager.send(
+        await send_game_reply(
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except FormationChoiceError as exc:
-        await manager.send(reply.choose(feature.copy(), exc, command="炼阵"))
+        await send_game_reply(reply.choose(feature.copy(), exc, command="炼阵"))
     except (FormationCraftFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼阵"))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼阵"))
 
 
 __all__ = []

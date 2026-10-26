@@ -7,6 +7,7 @@ from game.features.caiyao import HerbGatheringFeatureError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -30,11 +31,11 @@ async def start_herb_gathering(user_id: str, message_context: MessageContext, ma
     feature = current_game_services().features.caiyao
     try:
         result = await feature.start(user_id, message_context.request_id)
-        await manager.send(
+        await send_game_reply(
             reply.started(feature.copy(), result, feature.started_actions())
         )
     except HerbGatheringFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -55,7 +56,7 @@ async def herb_gathering_progress(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.caiyao
     try:
         result = await feature.progress(user_id)
-        await manager.send(
+        await send_game_reply(
             reply.progress(
                 feature.copy(),
                 feature,
@@ -64,7 +65,7 @@ async def herb_gathering_progress(user_id: str, manager: Any) -> None:
             )
         )
     except HerbGatheringFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -88,7 +89,7 @@ async def finish_herb_gathering(user_id: str, message: str, message_context: Mes
     try:
         page = 1 if not page_text else int(page_text)
     except ValueError:
-        await manager.send(
+        await send_game_reply(
             reply.error(
                 feature.copy(),
                 reply.text(feature.copy(), "错误", "写法"),
@@ -101,7 +102,7 @@ async def finish_herb_gathering(user_id: str, message: str, message_context: Mes
         total_pages = 1 + len(result.users)
         if page < 1 or page > total_pages:
             raise HerbGatheringFeatureError(f"页码必须在1至{total_pages}之间")
-        await manager.send(
+        await send_game_reply(
             reply.settlement_page(
                 feature.copy(),
                 feature,
@@ -111,7 +112,7 @@ async def finish_herb_gathering(user_id: str, message: str, message_context: Mes
             )
         )
     except HerbGatheringFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
 

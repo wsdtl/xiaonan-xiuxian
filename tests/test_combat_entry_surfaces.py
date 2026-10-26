@@ -1237,3 +1237,173 @@ def test_inventory_row_renders_grade_with_command_link() -> None:
     rendered = render_markdown(document.document)
     assert "CommandLink" not in rendered
     assert "圣品灵石" in rendered
+
+
+def test_message_header_and_command_title_are_compact() -> None:
+    """人物头与命令标题是块：头部后不补裸空行，标题后直接接正文。"""
+
+    from message import M
+    from message.renderers.markdown import render_markdown
+
+    document = (
+        M.document()
+        .header("张三 灵动 Lv.1")
+        .command_title("查看 人物", icon="player")
+        .section("人物", icon="player")
+        .row(("姓名", "张三"), ("境界", "灵动"))
+        .build()
+    )
+    assert render_markdown(document.document) == "\n".join(
+        [
+            "**张三 灵动 Lv.1**",
+            "> 🌱 查看 人物",
+            "> 🌱 人物",
+            "> > 姓名: 张三 | 境界: 灵动",
+        ]
+    )
+
+
+def test_compose_player_reply_rejects_business_header() -> None:
+    """业务正文不能自己带人物头/命令标题，避免双头。"""
+
+    import pytest
+
+    from game.cmd.reply_composer import compose_player_reply
+    from message import M
+
+    document = M.document().header("业务头").section("正文").line("内容").build()
+    with pytest.raises(ValueError, match="人物头或命令标题"):
+        compose_player_reply(document, identity="张三 灵动 Lv.1", title="查看")
+
+
+def test_compose_player_reply_disables_title_button_on_duplicate() -> None:
+    """标题与底部按钮提交同一条命令时退回纯文本，不重复可点。"""
+
+    from game.cmd.reply_composer import compose_player_reply
+    from message import Action, CommandTitleBlock, M
+    from message.renderers.markdown import render_markdown
+
+    document = (
+        M.document()
+        .section("正文")
+        .line("内容")
+        .action(Action("view", "查看", "查看 人物"))
+        .build()
+    )
+    decorated = compose_player_reply(
+        document, identity="张三 灵动 Lv.1", title="查看 人物", icon="player"
+    )
+    title = next(
+        block
+        for block in decorated.document.blocks
+        if isinstance(block, CommandTitleBlock)
+    )
+    assert title.button is False
+    assert "[🌱 查看 人物]" not in render_markdown(
+        decorated.document, command_renderer=lambda *_: "点击"
+    )
+
+
+def test_send_system_message_does_not_decorate(monkeypatch) -> None:
+    """系统推送不读当前上下文、不加人物头/命令标题，目标显式。"""
+
+    import asyncio
+
+    from game.cmd import reply_composer
+    from game.cmd.reply_composer import send_system_message
+    from launch.adapter import MENTION_NONE, ReplyTarget
+    from message import M
+
+    class FakeManager:
+        def __init__(self) -> None:
+            self.request = None
+
+        async def send(self, request, **_kwargs):
+            self.request = request
+            return True
+
+    fake = FakeManager()
+    monkeypatch.setattr(reply_composer, "manager", fake)
+    message = M.document().section("公告").line("维护完成").build()
+    target = ReplyTarget(
+        adapter="local",
+        user_id="u",
+        target_id="t",
+        conversation_type="private",
+    )
+    assert asyncio.run(send_system_message(message, target)) is True
+    assert fake.request is not None
+    assert fake.request.message is message
+    assert fake.request.target == target
+    assert fake.request.options.mention == MENTION_NONE
+
+
+def test_send_game_reply_uses_current_context(monkeypatch) -> None:
+    """玩家回包在发送边界前置人物头与命令标题，且不碰底部按钮。"""
+
+    import asyncio
+
+    from game.cmd import reply_composer
+    from game.cmd.reply_composer import send_game_reply
+    from launch.adapter import ReplyTarget
+    from launch.adapter.context import (
+        MessageContext,
+        reset_current_message_context,
+        set_current_message_context,
+    )
+    from message import M
+
+    class FakeManager:
+        def __init__(self) -> None:
+            self.message = None
+
+        async def send(self, message, **_kwargs):
+            self.message = message
+            return True
+
+    async def identity(_user_id: str) -> str:
+        return "张三 灵动 Lv.1"
+
+    fake = FakeManager()
+    monkeypatch.setattr(reply_composer, "manager", fake)
+    monkeypatch.setattr(reply_composer, "_identity_text", identity)
+    target = ReplyTarget(
+        adapter="local",
+        user_id="u",
+        target_id="u",
+        conversation_type="private",
+    )
+    context = MessageContext(
+        adapter="local",
+        user_id="u",
+        request_id="r",
+        command="查看",
+        message="查看 人物",
+        raw_message="查看 人物",
+        conversation_type="private",
+        reply_target=target,
+    )
+    token = set_current_message_context(context)
+    try:
+        message = M.document().section("人物").line("内容").build()
+        assert asyncio.run(send_game_reply(message)) is True
+    finally:
+        reset_current_message_context(token)
+    assert fake.message is not None
+    rendered = fake.message.document
+    assert rendered.blocks[0].__class__.__name__ == "HeaderBlock"
+    assert rendered.blocks[1].__class__.__name__ == "CommandTitleBlock"
+
+
+def test_hosting_error_strips_composer_header() -> None:
+    """托管错误提取跳过 composer 前置的人物头与命令标题。"""
+
+    from game.cmd.通用.托管.runtime import _reply_error
+    from message import RenderedMessage
+
+    class Reply:
+        def __init__(self, content: str) -> None:
+            self.message = RenderedMessage(kind="markdown", content=content)
+
+    content = "**张三 灵动 Lv.1**\n> 🥾 结算探险\n> ✨ 错误\n> > 当前无法结算探险"
+    assert _reply_error([Reply(content)], "结算探险") == "✨ 错误 当前无法结算探险"

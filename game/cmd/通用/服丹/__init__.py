@@ -13,6 +13,7 @@ from game.features.fudan import (
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -23,7 +24,7 @@ async def _use(
     feature = current_game_services().features.fudan
     parts = message.rsplit(maxsplit=1)
     if not parts or len(parts) > 2:
-        await manager.send(reply.error(feature, feature.copy("错误", "写法"), feature.format_actions()))
+        await send_game_reply(reply.error(feature, feature.copy("错误", "写法"), feature.format_actions()))
         return
     medicine = parts[0]
     grade = parts[1] if len(parts) == 2 else ""
@@ -44,9 +45,9 @@ async def _use(
                 grade,
             )
         )
-        await manager.send(reply.used(feature, result))
+        await send_game_reply(reply.used(feature, result))
     except (MedicineFeatureError, MedicineFeatureConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -103,7 +104,7 @@ async def _setting(
     feature = current_game_services().features.fudan
     value = message.strip()
     if value not in {"开", "关"}:
-        await manager.send(reply.error(feature, feature.copy("错误", "自动用药"), feature.format_actions()))
+        await send_game_reply(reply.error(feature, feature.copy("错误", "自动用药"), feature.format_actions()))
         return
     try:
         result = await feature.set_automatic(
@@ -114,9 +115,9 @@ async def _setting(
                 value == "开",
             )
         )
-        await manager.send(reply.setting(feature, result))
+        await send_game_reply(reply.setting(feature, result))
     except (MedicineFeatureError, MedicineFeatureConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(

@@ -21,6 +21,7 @@ from message import M
 
 from ...command import GameCommand
 from ...help_registry import help_registry
+from ...reply_composer import send_game_reply
 
 
 # 只要整条消息里出现 | 就交给这里；命令词的合法性由注册表判，不靠正则。
@@ -87,14 +88,14 @@ async def choose_branch(raw_message: str, manager: Any) -> None:
     )
     if len(options) < 2:
         builder.line(M.status("认不出", tone="warning"), " 分支词必须是已注册的命令。")
-        await manager.send(builder.build())
+        await send_game_reply(builder.build())
         return
     # 带序号：2~5 条都一眼数得清（与列表卡同款）。
     for index, (_word, command) in enumerate(options, start=1):
         builder.item(index, M.command(command, command))
     if len(options) > 2:
         builder.small(f"共 {len(options)} 条分支 · 点一条执行")
-    await manager.send(builder.build())
+    await send_game_reply(builder.build())
 
 
 __all__ = ["BRANCH_PATTERN", "branches_of", "is_complete"]

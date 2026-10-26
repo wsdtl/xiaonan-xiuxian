@@ -10,6 +10,7 @@ from launch.adapter import MessageContext
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 
 
 @GameCommand.command(
@@ -29,13 +30,13 @@ from . import reply
 async def zuowang(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.yijing
     try:
-        await manager.send(
+        await send_game_reply(
             reply.refund_result(
                 feature, await feature.refund(user_id, message_context.request_id)
             )
         )
     except (YijingError, YijingConflictError) as exc:
-        await manager.send(reply.refund_error(feature, str(exc)))
+        await send_game_reply(reply.refund_error(feature, str(exc)))
 
 
 __all__ = []

@@ -7,6 +7,7 @@ from game.features.qiecuo import DuelError, DuelStartCommand
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -33,9 +34,9 @@ async def start(user_id: str, message: str, message_context: MessageContext, man
         value = await feature.start(
             DuelStartCommand(user_id, target, message_context.request_id)
         )
-        await manager.send(reply.challenge(feature, value, target_name))
+        await send_game_reply(reply.challenge(feature, value, target_name))
     except (DuelError, ValueError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -58,9 +59,9 @@ async def accept(user_id: str, message_context: MessageContext, manager: Any) ->
         value = await feature.accept(user_id, message_context.request_id)
         challenger_name = await feature.target_name(value.user_participants[0])
         target_name = await feature.target_name(value.target_participants[0])
-        await manager.send(reply.result(feature, value, challenger_name, target_name))
+        await send_game_reply(reply.result(feature, value, challenger_name, target_name))
     except (DuelError, ValueError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -81,6 +82,6 @@ async def reject(user_id: str, message_context: MessageContext, manager: Any) ->
     feature = current_game_services().features.qiecuo
     try:
         await feature.reject(user_id, message_context.request_id)
-        await manager.send(reply.rejected())
+        await send_game_reply(reply.rejected())
     except (DuelError, ValueError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))

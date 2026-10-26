@@ -6,7 +6,7 @@ from game.app import current_game_services
 from game.features.zongmen_sheshi import FormationChoiceError, SectFacilityFeatureError
 
 from . import refining_reply as reply
-from launch.adapter import MessageContext
+from ...reply_composer import send_game_reply
 from typing import Any
 
 _SOURCES = {"个人", "自备", "纳戒", "个人纳戒", "宗门", "灵藏", "宗门灵藏"}
@@ -40,7 +40,7 @@ async def dispatch(
         if facility == "炼器":
             if not parts:
                 value = await feature.page(facility, user_id, source)
-                await manager.send(reply.page(feature.copy(), value))
+                await send_game_reply(reply.page(feature.copy(), value))
                 return
             if parts[0] == "开炉":
                 identifier = " ".join(parts[1:]).strip()
@@ -49,20 +49,20 @@ async def dispatch(
                 value = await feature.craft(
                     facility, user_id, request_id, source, identifier
                 )
-                await manager.send(reply.completed(feature.copy(), value))
+                await send_game_reply(reply.completed(feature.copy(), value))
                 return
             if parts[0] in _FORGING_STAGES:
                 page = int(parts[1]) if len(parts) == 2 else 1
                 value = await feature.page(facility, user_id, source, parts[0], page)
-                await manager.send(reply.page(feature.copy(), value))
+                await send_game_reply(reply.page(feature.copy(), value))
                 return
             value = await feature.preview(facility, user_id, source, " ".join(parts))
-            await manager.send(reply.preview(feature.copy(), value))
+            await send_game_reply(reply.preview(feature.copy(), value))
             return
         if facility == "炼丹":
             if not parts:
                 value = await feature.page(facility, user_id, source)
-                await manager.send(reply.page(feature.copy(), value))
+                await send_game_reply(reply.page(feature.copy(), value))
                 return
             if parts[0] == "开炉":
                 identifier = " ".join(parts[1:]).strip()
@@ -72,27 +72,27 @@ async def dispatch(
                 value = await feature.craft(
                     facility, user_id, request_id, source, identifier, grade
                 )
-                await manager.send(reply.completed(feature.copy(), value))
+                await send_game_reply(reply.completed(feature.copy(), value))
                 return
             if parts[0] in _ALCHEMY_CATEGORIES:
                 page = int(parts[1]) if len(parts) == 2 else 1
                 value = await feature.page(facility, user_id, source, parts[0], page)
-                await manager.send(reply.page(feature.copy(), value))
+                await send_game_reply(reply.page(feature.copy(), value))
                 return
             grade, identifier = _parse_grade(" ".join(parts))
             value = await feature.preview(
                 facility, user_id, source, identifier, grade
             )
-            await manager.send(reply.preview(feature.copy(), value))
+            await send_game_reply(reply.preview(feature.copy(), value))
             return
         if not parts:
             value = await feature.page(facility, user_id, source)
-            await manager.send(reply.page(feature.copy(), value))
+            await send_game_reply(reply.page(feature.copy(), value))
             return
         action = parts[0]
         if action.isdigit() and len(parts) == 1:
             value = await feature.page(facility, user_id, source, page=int(action))
-            await manager.send(reply.page(feature.copy(), value))
+            await send_game_reply(reply.page(feature.copy(), value))
             return
         if action == "炼阵":
             parts = parts[1:]
@@ -108,7 +108,7 @@ async def dispatch(
             value = await feature.craft(
                 facility, user_id, request_id, source, identifier, grade, investments
             )
-            await manager.send(reply.completed(feature.copy(), value))
+            await send_game_reply(reply.completed(feature.copy(), value))
             return
         if not parts:
             raise ValueError(feature.copy()["错误"]["审材需要阵法"])
@@ -122,11 +122,11 @@ async def dispatch(
         value = await feature.preview(
             facility, user_id, source, identifier, grade, investments
         )
-        await manager.send(reply.preview(feature.copy(), value))
+        await send_game_reply(reply.preview(feature.copy(), value))
     except FormationChoiceError as exc:
-        await manager.send(reply.choose(feature.copy(), exc))
+        await send_game_reply(reply.choose(feature.copy(), exc))
     except (SectFacilityFeatureError, ValueError) as exc:
-        await manager.send(
+        await send_game_reply(
             reply.error(
                 feature.copy(),
                 str(exc),

@@ -73,7 +73,7 @@ async def run_hosting_plan(session_id: str) -> None:
             if not result.matched:
                 error = f"托管无法执行“{execution.command}”，该命令当前不可用。"
             elif not success:
-                error = _reply_error(result.replies) or (
+                error = _reply_error(result.replies, execution.command) or (
                     f"“{execution.command}”没有完成，请查看人物当前状态。"
                 )
             current_session = await hosting.complete_execution(
@@ -93,7 +93,7 @@ async def run_hosting_plan(session_id: str) -> None:
         return
 
 
-def _reply_error(replies: Sequence[LocalReply]) -> str:
+def _reply_error(replies: Sequence[LocalReply], command: str = "") -> str:
     if not replies:
         return ""
     message = replies[-1].message
@@ -106,6 +106,9 @@ def _reply_error(replies: Sequence[LocalReply]) -> str:
         line = line.strip("*").strip()
         if line:
             parts.append(line)
+    # 回包由 composer 加了人物头与命令标题；错误正文从第三行开始。
+    if command and len(parts) >= 2 and command in parts[1]:
+        parts = parts[2:]
     return " ".join(parts)[:240]
 
 

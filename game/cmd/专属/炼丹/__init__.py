@@ -7,6 +7,7 @@ from game.features.liandan import AlchemyFeatureError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -57,7 +58,7 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
     try:
         if not query:
             value = await feature.overview(user_id)
-            await manager.send(
+            await send_game_reply(
                 reply.overview(feature.copy(), value, feature.overview_actions())
             )
             return
@@ -65,17 +66,17 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
         if parts[0] in _CATEGORIES and len(parts) <= 2:
             page = 1 if len(parts) == 1 else int(parts[1])
             value = await feature.recipes(user_id, parts[0], page)
-            await manager.send(
+            await send_game_reply(
                 reply.recipe_list(feature.copy(), value, feature.list_actions(value))
             )
             return
         grade, identifier, _quantity = _parse_recipe(query)
         value = await feature.preview(user_id, identifier, grade)
-        await manager.send(
+        await send_game_reply(
             reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
     except (AlchemyFeatureError, ValueError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼丹"))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼丹"))
 
 
 @GameCommand.command(
@@ -96,7 +97,7 @@ async def commit_alchemy(user_id: str, message: str, message_context: MessageCon
     feature = current_game_services().features.liandan
     query = str(message or "").strip()
     if not query:
-        await manager.send(
+        await send_game_reply(
             reply.error(
       feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions(), command="开丹炉"
   )
@@ -107,11 +108,11 @@ async def commit_alchemy(user_id: str, message: str, message_context: MessageCon
         value = await feature.refine(
             user_id, message_context.request_id, identifier, grade, quantity
         )
-        await manager.send(
+        await send_game_reply(
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except AlchemyFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开丹炉"))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开丹炉"))
 
 
 __all__ = []

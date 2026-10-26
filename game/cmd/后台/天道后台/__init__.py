@@ -7,6 +7,7 @@ from launch.paths import public_url
 from ...command import GameCommand
 from . import reply, runtime as runtime
 from .site import router
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -15,7 +16,7 @@ from typing import Any
     metadata={"scope": "后台", "guard_rule": "始终可用", "hidden": True},
 )
 async def heavenly_dao_console(manager: Any) -> None:
-    await manager.send(reply.entry(public_url("game-console")))
+    await send_game_reply(reply.entry(public_url("game-console")))
 
 
 __all__ = ["router"]

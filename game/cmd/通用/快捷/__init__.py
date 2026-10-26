@@ -6,6 +6,7 @@ from game.app import current_game_services
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -26,7 +27,7 @@ from typing import Any
 async def show_spirit_stone(user_id: str, message_context: Any, manager: Any) -> None:
     feature = current_game_services().features.najie
     view = await feature.spirit_stone(user_id)
-    await manager.send(reply.spirit_stone(feature.copy_spirit_stone(), view))
+    await send_game_reply(reply.spirit_stone(feature.copy_spirit_stone(), view))
 
 
 @GameCommand.fullmatch(
@@ -46,4 +47,4 @@ async def show_spirit_stone(user_id: str, message_context: Any, manager: Any) ->
 async def show_status(user_id: str, message_context: Any, manager: Any) -> None:
     feature = current_game_services().features.weizhi
     view = await feature.status_summary(user_id)
-    await manager.send(reply.status(feature.status_copy(), view))
+    await send_game_reply(reply.status(feature.status_copy(), view))

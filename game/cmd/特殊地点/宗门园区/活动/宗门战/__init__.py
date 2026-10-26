@@ -10,6 +10,7 @@ from game.app import current_game_services
 
 from .....command import GameCommand
 from . import reply
+from .....reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -40,11 +41,11 @@ async def challenge(user_id: str, message: str, message_context: MessageContext,
         value = await _feature().challenge(
             user_id, parts[0], int(parts[1]), message_context.request_id
         )
-        await manager.send(reply.view(_feature(), value))
+        await send_game_reply(reply.view(_feature(), value))
     except ValueError:
-        await manager.send(reply.error(_feature(), _feature().text("错误", "约战写法"), _feature().format_actions("约战格式")))
+        await send_game_reply(reply.error(_feature(), _feature().text("错误", "约战写法"), _feature().format_actions("约战格式")))
     except SectWarError as exc:
-        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
+        await send_game_reply(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 @GameCommand.command(
@@ -148,7 +149,7 @@ async def lock(user_id: str, message: str, message_context: MessageContext, mana
     try:
         key = await _formation_key(user_id, raw) if raw else ""
     except SectWarError as exc:
-        await manager.send(
+        await send_game_reply(
             reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式"))
         )
         return
@@ -234,9 +235,9 @@ async def current(user_id: str, message: str, message_context: MessageContext, m
             if war_id
             else await _feature().current(user_id, message_context.request_id)
         )
-        await manager.send(reply.view(_feature(), value))
+        await send_game_reply(reply.view(_feature(), value))
     except SectWarError as exc:
-        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
+        await send_game_reply(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 @GameCommand.command(
@@ -258,13 +259,13 @@ async def history(user_id: str, message: str, manager: Any) -> None:
         raw = str(message or "").strip()
         if raw and (not raw.isdecimal() or int(raw) < 1):
             raise ValueError
-        await manager.send(
+        await send_game_reply(
             reply.history(_feature(), await _feature().history(user_id, int(raw or 1)))
         )
     except ValueError:
-        await manager.send(reply.error(_feature(), _feature().text("错误", "战况写法"), _feature().format_actions("战录格式")))
+        await send_game_reply(reply.error(_feature(), _feature().text("错误", "战况写法"), _feature().format_actions("战录格式")))
     except SectWarError as exc:
-        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
+        await send_game_reply(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 @GameCommand.command(
@@ -287,14 +288,14 @@ async def recent_reports(user_id: str, message: str, manager: Any) -> None:
         if raw and (not raw.isdecimal() or int(raw) < 1):
             raise ValueError
         report_feature = current_game_services().features.zhanbao
-        await manager.send(
+        await send_game_reply(
             reply.recent_reports(
                 _feature(),
                 await report_feature.my_reports(user_id, kind="宗门战", page=int(raw or 1)),
             )
         )
     except ValueError:
-        await manager.send(
+        await send_game_reply(
             reply.error(
                 _feature(),
                 _feature().text("错误", "战况写法"),
@@ -305,9 +306,9 @@ async def recent_reports(user_id: str, message: str, manager: Any) -> None:
 
 async def _run(manager: Any, operation: Awaitable[SectWarView]) -> None:
     try:
-        await manager.send(reply.view(_feature(), await operation))
+        await send_game_reply(reply.view(_feature(), await operation))
     except SectWarError as exc:
-        await manager.send(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
+        await send_game_reply(reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式")))
 
 
 __all__ = []

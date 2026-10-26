@@ -10,6 +10,7 @@ from game.features.presentation import ItemRefError, parse_item_and_grade
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -34,7 +35,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
     try:
         if not parts:
             value = await feature.overview(user_id)
-            await manager.send(reply.overview(feature, value))
+            await send_game_reply(reply.overview(feature, value))
             return
         if len(parts) > 2 or parts[0] not in {"真意", "气机"}:
             raise TradeFeatureError(feature.copy("错误", "交易格式"))
@@ -44,9 +45,9 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
                 raise TradeFeatureError("交易页码必须是正整数")
             page_number = int(parts[1])
         value = await feature.page(user_id, parts[0], page_number)
-        await manager.send(reply.page(feature, value))
+        await send_game_reply(reply.page(feature, value))
     except TradeFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions(), command="交易"))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions(), command="交易"))
 
 
 @GameCommand.command(
@@ -69,7 +70,7 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
         # 统一语法：<品级><物品> [数量]；旧的「物品 品级」仍受理（见 game/cmd/item_ref.py）。
         item, grade, quantity = parse_item_and_grade(str(message or "").split())
     except ItemRefError:
-        await manager.send(
+        await send_game_reply(
             reply.error(
                 feature,
                 feature.copy("错误", "购买写法"),
@@ -88,9 +89,9 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
                 quantity,
             )
         )
-        await manager.send(reply.purchased(feature, value))
+        await send_game_reply(reply.purchased(feature, value))
     except TradeFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions(), command="购买"))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions(), command="购买"))
 
 
 __all__ = ["router"]

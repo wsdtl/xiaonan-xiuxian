@@ -6,6 +6,7 @@ from game.features.zongmen_cangjing import CangjingFeatureError
 
 from .....command import GameCommand
 from . import reply
+from .....reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -49,12 +50,12 @@ async def cangjing(
             return
         raise CangjingFeatureError(copy.text["分支"])
     except CangjingFeatureError as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await send_game_reply(reply.error(copy, str(exc)))
 
 
 async def _page(feature: Any, user_id: str, page: int, manager: Any) -> None:
     value = await feature.page(user_id, page)
-    await manager.send(reply.page(feature.copy(), value, feature.page_actions(value)))
+    await send_game_reply(reply.page(feature.copy(), value, feature.page_actions(value)))
 
 
 async def _borrow(
@@ -73,7 +74,7 @@ async def _borrow(
         slots = await feature.borrow_slots(user_id)
         if slots < 1:
             raise CangjingFeatureError("没有可用的功法槽")
-        await manager.send(reply.borrow_prompt(copy, identifier, range(1, slots + 1)))
+        await send_game_reply(reply.borrow_prompt(copy, identifier, range(1, slots + 1)))
         return
     if len(words) != 2:
         raise CangjingFeatureError(copy.text["借阅写法"])
@@ -81,7 +82,7 @@ async def _borrow(
     value = await feature.borrow(
         user_id, message_context.request_id, identifier, slot
     )
-    await manager.send(reply.borrowed(copy, value))
+    await send_game_reply(reply.borrowed(copy, value))
 
 
 def _positive(value: str, label: str) -> int:

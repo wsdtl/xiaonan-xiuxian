@@ -6,6 +6,7 @@ from game.features.butian import ButianConflictError, ButianError
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -30,7 +31,7 @@ async def correct_breakthrough(user_id: str, message: str, message_context: Mess
     try:
         if len(parts) != 3:
             raise ButianError("格式：补天 人物或道侣 同境界 单属性突破丹编号")
-        await manager.send(
+        await send_game_reply(
             reply.result(
                 feature,
                 await feature.apply(
@@ -39,7 +40,7 @@ async def correct_breakthrough(user_id: str, message: str, message_context: Mess
             )
         )
     except (ButianError, ButianConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)))
 
 
 __all__ = ["router"]

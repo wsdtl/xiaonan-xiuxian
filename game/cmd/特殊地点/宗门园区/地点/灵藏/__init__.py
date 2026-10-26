@@ -7,6 +7,7 @@ from game.features.zongmen_lingcang import LingcangFeatureError
 
 from .....command import GameCommand
 from . import reply
+from .....reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -47,11 +48,11 @@ async def lingcang(
         category = parts[0] if parts else "全部"
         page_number = _positive(parts[1], "灵藏页码") if len(parts) == 2 else 1
         value = await feature.page(user_id, category, page_number)
-        await manager.send(
+        await send_game_reply(
             reply.page(feature.copy(), value, feature.page_actions(value))
         )
     except (LingcangFeatureError, ItemRefError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await send_game_reply(reply.error(feature.copy(), str(exc)))
 
 
 async def _donate(
@@ -67,7 +68,7 @@ async def _donate(
             result = await feature.donate_stones(
                 user_id, message_context.request_id, quantity
             )
-            await manager.send(reply.donated_stones(feature.copy(), quantity, result))
+            await send_game_reply(reply.donated_stones(feature.copy(), quantity, result))
             return
         if len(parts) not in {3, 4} or parts[0] not in _CATEGORIES:
             raise LingcangFeatureError("格式：灵藏 捐入 类别 <品级><物品> 数量")
@@ -84,9 +85,9 @@ async def _donate(
             grade,
             _positive(parts[-1], "捐献数量"),
         )
-        await manager.send(reply.donated_material(feature.copy(), result))
+        await send_game_reply(reply.donated_material(feature.copy(), result))
     except (LingcangFeatureError, ItemRefError) as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await send_game_reply(reply.error(feature.copy(), str(exc)))
 
 
 def _positive(value: str, label: str) -> int:

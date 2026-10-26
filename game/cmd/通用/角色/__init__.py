@@ -12,6 +12,7 @@ from game.features.chuangjian_renwu import (
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -33,7 +34,7 @@ from typing import Any
 async def create_character(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     parts = message.split()
     if len(parts) not in (2, 3):
-        await manager.send(reply.invalid_create_format())
+        await send_game_reply(reply.invalid_create_format())
         return
     name, gender = parts[0], parts[1]
     race = parts[2] if len(parts) == 3 else ""
@@ -48,12 +49,12 @@ async def create_character(user_id: str, message: str, message_context: MessageC
             )
         )
     except InvalidCreateCharacterError as exc:
-        await manager.send(reply.create_error(str(exc)))
+        await send_game_reply(reply.create_error(str(exc)))
         return
     except CharacterExistsError:
-        await manager.send(reply.character_exists())
+        await send_game_reply(reply.character_exists())
         return
-    await manager.send(reply.created(result, result.altitude_unit))
+    await send_game_reply(reply.created(result, result.altitude_unit))
 
 
 @GameCommand.fullmatch(
@@ -74,11 +75,11 @@ async def show_character(user_id: str, manager: Any) -> None:
     try:
         result = await current_game_services().features.chakan_juese.inspect(user_id)
     except CharacterOverviewError:
-        await manager.send(reply.overview_error())
+        await send_game_reply(reply.overview_error())
         return
     xuemai = current_game_services().features.xuemai
     dna = await xuemai.dna(user_id)
-    await manager.send(
+    await send_game_reply(
         reply.overview(
             result,
             result.altitude_unit,

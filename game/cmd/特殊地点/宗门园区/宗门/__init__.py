@@ -7,6 +7,7 @@ from game.features.zongmen import SectFeatureError
 
 from ....command import GameCommand
 from . import reply
+from ....reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -40,13 +41,13 @@ from typing import Any
 async def sect_command(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen
     if not await feature.can_manage(user_id):
-        await manager.send(reply.error(feature.copy(), "not_in_cave"))
+        await send_game_reply(reply.error(feature.copy(), "not_in_cave"))
         return
     parts = str(message or "").strip().split(maxsplit=2)
     try:
         if not parts:
             value = await feature.page(user_id)
-            await manager.send(
+            await send_game_reply(
                 reply.page(feature.copy(), value, feature.page_actions(value.page))
             )
             return
@@ -75,15 +76,15 @@ async def sect_command(user_id: str, message: str, message_context: MessageConte
         elif action == "解散" and not target:
             result = await feature.disband(user_id, request_id)
         else:
-            await manager.send(reply.format_error(feature.copy(), feature.page_actions("格式")))
+            await send_game_reply(reply.format_error(feature.copy(), feature.page_actions("格式")))
             return
-        await manager.send(
+        await send_game_reply(
             reply.operation(
                 feature.copy(), result, feature.page_actions(result.page.page)
             )
         )
     except SectFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code))
+        await send_game_reply(reply.error(feature.copy(), exc.code))
 
 
 __all__ = []

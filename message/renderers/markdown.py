@@ -16,9 +16,11 @@ from collections.abc import Callable
 from ..icons import icon_for
 from ..schema import (
     CommandLink,
+    CommandTitleBlock,
     ContentLine,
     Document,
     FieldSeparator,
+    HeaderBlock,
     ImageBlock,
     InlineBlock,
     Link,
@@ -45,39 +47,6 @@ def render_markdown(
     """按统一标题、正文和附加区边界渲染 Markdown。"""
 
     lines: list[str] = []
-    # 人物头（昵称 境界 等级）：统一回复层印在第一行，业务不写。
-    if document.identity:
-        # 人物头可能多行（第一行是 @昵称，第二行以昵称开头：昵称 境界 Lv.等级）。
-        # 必须先按换行拆、再逐段转义——先转义会被 _escape 把换行折掉，就永远是一行了。
-        raw = "".join(
-            str(getattr(span, "value", ""))
-            for span in document.identity
-            if isinstance(span, Text)
-        )
-        for segment in raw.split("\n"):
-            if segment.strip():
-                lines.append(f"**{_escape(segment)}**")
-        lines.append("")
-
-    # 主标题＝触发这条回复的命令原文（含参数）：一层引用 ＋ 图标，由命令层统一注入，业务不写。
-    if document.command_title:
-        icon = icon_for(document.command_icon)
-        title = _render_rich(document.command_title, command_renderer)
-        display = f"{icon} {title}".strip()
-        if document.command_button and command_renderer is not None:
-            command = "".join(
-                str(getattr(span, "value", "")) for span in document.command_title
-            )
-            # 回调取的是 RichText（不是字符串，传字符串会渲成空标签）：图标单独一个 Text 段。
-            label: RichText = (
-                (Text(f"{icon} "),) if icon else ()
-            ) + tuple(document.command_title)
-            display = command_renderer(
-                CommandLink(label=label, command=command), "body", "", False
-            )
-        lines.append(f"> {display}")
-        lines.append("")
-
     previous_block = None
     for block in document.blocks:
         should_separate = isinstance(
@@ -88,7 +57,24 @@ def render_markdown(
         if should_separate and lines and lines[-1] != "> ":
             lines.append("> ")
 
-        if isinstance(block, InlineBlock):
+        if isinstance(block, HeaderBlock):
+            lines.append(f"**{_render_rich(block.content, command_renderer)}**")
+        elif isinstance(block, CommandTitleBlock):
+            icon = icon_for(block.icon)
+            title = _render_rich(block.content, command_renderer)
+            display = f"{icon} {title}".strip()
+            if block.button and command_renderer is not None:
+                label: RichText = (
+                    (Text(f"{icon} "),) if icon else ()
+                ) + tuple(block.content)
+                display = command_renderer(
+                    CommandLink(label=label, command=block.command),
+                    "body",
+                    "",
+                    False,
+                )
+            lines.append(f"> {display}")
+        elif isinstance(block, InlineBlock):
             title = _title(block.title, block.icon, command_renderer)
             content = _render_rich(block.content, command_renderer)
             lines.append(f"> {title}: {content}".rstrip())

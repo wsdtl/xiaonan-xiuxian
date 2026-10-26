@@ -9,6 +9,7 @@ from game.features.xuemai import GenealogyQueryError, XuemaiError
 
 from ...command import GameCommand
 from . import input as command_input, reply
+from ...reply_composer import send_game_reply
 
 _SUBCOMMANDS = ("族谱",)
 
@@ -33,13 +34,13 @@ async def xuemai(user_id: str, message: str, manager: Any) -> None:
     copy = feature.copy()
     param = command_input.parse(message)
     if param.subcommand not in _SUBCOMMANDS:
-        await manager.send(reply.error(copy, "血脉的用法：血脉 族谱"))
+        await send_game_reply(reply.error(copy, "血脉的用法：血脉 族谱"))
         return
     try:
         view = await feature.genealogy(user_id, param.query)
-        await manager.send(reply.genealogy(copy, view))
+        await send_game_reply(reply.genealogy(copy, view))
     except (GenealogyQueryError, XuemaiError) as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await send_game_reply(reply.error(copy, str(exc)))
 
 @GameCommand.command(
     cmd=("传位",),
@@ -61,10 +62,10 @@ async def succession(user_id: str, message: str, manager: Any) -> None:
     copy = feature.copy()
     child = str(message or "").strip()
     if not child:
-        await manager.send(reply.succession_usage(copy))
+        await send_game_reply(reply.succession_usage(copy))
         return
     try:
         result = await feature.succession(user_id, child)
-        await manager.send(reply.succession(copy, result))
+        await send_game_reply(reply.succession(copy, result))
     except (GenealogyQueryError, XuemaiError) as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await send_game_reply(reply.error(copy, str(exc)))

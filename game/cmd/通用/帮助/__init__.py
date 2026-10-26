@@ -9,6 +9,7 @@ from game.app import current_game_services
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -27,7 +28,7 @@ from typing import Any
     },
 )
 async def help_command(message: str, manager: Any) -> None:
-    await manager.send(reply.help_message(message))
+    await send_game_reply(reply.help_message(message))
 
 
 def _id_converter():
@@ -63,7 +64,7 @@ async def id_help_command(message: str, manager: Any) -> None:
     """
 
     query = " ".join(str(message or "").split())
-    await manager.send(
+    await send_game_reply(
         reply.help_message(query, id_converter=_id_converter(), nav="help")
     )
 

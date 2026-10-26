@@ -7,6 +7,7 @@ from game.features.xigen import XigenConflictError, XigenError
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -30,16 +31,16 @@ async def reset_build(user_id: str, message: str, message_context: MessageContex
     query = str(message or "").strip()
     try:
         if not query:
-            await manager.send(reply.preview(feature, await feature.preview(user_id)))
+            await send_game_reply(reply.preview(feature, await feature.preview(user_id)))
         else:
-            await manager.send(
+            await send_game_reply(
                 reply.result(
                     feature,
                     await feature.reset(user_id, message_context.request_id, query),
                 )
             )
     except (GuiyuanError, GuiyuanConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)))
 
 
 @GameCommand.command(
@@ -59,13 +60,13 @@ async def reset_build(user_id: str, message: str, message_context: MessageContex
 async def reroll_elements(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.xigen
     try:
-        await manager.send(
+        await send_game_reply(
             reply.xigen_result(
                 feature, await feature.change(user_id, message_context.request_id)
             )
         )
     except (XigenError, XigenConflictError) as exc:
-        await manager.send(reply.xigen_error(feature, str(exc)))
+        await send_game_reply(reply.xigen_error(feature, str(exc)))
 
 
 __all__ = ["router"]

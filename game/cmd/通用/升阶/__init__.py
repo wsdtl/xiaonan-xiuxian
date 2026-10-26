@@ -9,6 +9,7 @@ from game.features.shengjie import ShengjieError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 
 
@@ -48,7 +49,7 @@ async def upgrade(
     feature = current_game_services().features.shengjie
     parts = str(message or "").split()
     if len(parts) not in (2, 3):
-        await manager.send(
+        await send_game_reply(
             reply.error(
                 feature.copy(),
                 "写法：升阶 <来源品级><物品> <目标品级> [数量]",
@@ -65,9 +66,9 @@ async def upgrade(
             parts[1],
             quantity,
         )
-        await manager.send(reply.upgraded(feature.copy(), value))
+        await send_game_reply(reply.upgraded(feature.copy(), value))
     except ShengjieError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), "升阶 <来源品级><物品> <目标品级> [数量]"))
+        await send_game_reply(reply.error(feature.copy(), str(exc), "升阶 <来源品级><物品> <目标品级> [数量]"))
 
 
 @GameCommand.command(
@@ -99,7 +100,7 @@ async def plan(
     feature = current_game_services().features.shengjie
     parts = str(message or "").split()
     if not parts:
-        await manager.send(
+        await send_game_reply(
             reply.error(
                 feature.copy(),
                 "写法：升阶方案 炼丹|炼器 <名称> [数量]，或 升阶方案 灵植|灵矿|兽宝 [编号] <目标品级> [数量]",
@@ -128,9 +129,9 @@ async def plan(
             )
         else:
             raise ShengjieError("升阶方案目前支持炼丹、炼器、炼阵、灵植、灵矿、兽宝")
-        await manager.send(reply.plan(feature.copy(), value))
+        await send_game_reply(reply.plan(feature.copy(), value))
     except ShengjieError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), "升阶方案 <类别> ..."))
+        await send_game_reply(reply.error(feature.copy(), str(exc), "升阶方案 <类别> ..."))
 
 
 __all__ = []

@@ -121,6 +121,48 @@ class ContentLine:
         object.__setattr__(self, "size", normalize_line_size(self.size))
 
 
+def _plain_header_text(value: RichText, label: str) -> str:
+    """头部块只接受单行普通文本，避免渲染器再为富文本特判。"""
+
+    spans = tuple(value)
+    if not spans or any(not isinstance(span, Text) for span in spans):
+        raise ValueError(f"{label}只允许普通文本")
+    text = "".join(span.value for span in spans)
+    if not text.strip():
+        raise ValueError(f"{label}不能为空")
+    if any(character in text for character in "\r\n"):
+        raise ValueError(f"{label}必须保持单行")
+    return text
+
+
+@dataclass(frozen=True)
+class HeaderBlock:
+    """消息顶部的人物头；粗体、单行、不进入引用区。"""
+
+    content: RichText
+
+    def __post_init__(self) -> None:
+        _plain_header_text(self.content, "消息主标题")
+
+
+@dataclass(frozen=True)
+class CommandTitleBlock:
+    """触发本次回复的命令原文；一层引用，可做成行内按钮。"""
+
+    content: RichText
+    icon: str = ""
+    button: bool = True
+
+    def __post_init__(self) -> None:
+        _plain_header_text(self.content, "消息命令标题")
+        object.__setattr__(self, "icon", str(self.icon or "").strip())
+        object.__setattr__(self, "button", bool(self.button))
+
+    @property
+    def command(self) -> str:
+        return "".join(span.value for span in self.content if isinstance(span, Text))
+
+
 @dataclass(frozen=True)
 class InlineBlock:
     """标题与内容位于同一行的短信息，例如通知和状态。"""
@@ -169,7 +211,7 @@ class NoteBlock:
 
 
 DocumentBlock: TypeAlias = (
-    InlineBlock | SectionBlock | ImageBlock | NoteBlock
+    HeaderBlock | CommandTitleBlock | InlineBlock | SectionBlock | ImageBlock | NoteBlock
 )
 
 
@@ -213,14 +255,6 @@ class Document:
 
     blocks: tuple[DocumentBlock, ...] = ()
     actions: tuple[Action, ...] = ()
-    #: 人物头（昵称 境界 等级）。由命令层统一注入，业务不得手写。
-    identity: RichText = ()
-    #: 主标题＝触发这条回复的命令原文（含参数）。由命令层统一注入，业务不得手写。
-    command_title: RichText = ()
-    #: 主标题的图标分类（取自命令 help.category 的映射表）。
-    command_icon: str = ""
-    #: 主标题是否做成无边框按钮；与底部按钮提交同一条命令时为 False（退回纯文本）。
-    command_button: bool = True
 
 
 @dataclass(frozen=True)

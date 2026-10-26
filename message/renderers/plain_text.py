@@ -5,9 +5,11 @@ from __future__ import annotations
 from ..icons import icon_for
 from ..schema import (
     CommandLink,
+    CommandTitleBlock,
     ContentLine,
     Document,
     FieldSeparator,
+    HeaderBlock,
     ImageBlock,
     InlineBlock,
     Link,
@@ -22,20 +24,17 @@ from ..schema import (
 
 def render_plain_text(document: Document) -> str:
     lines: list[str] = []
-    if document.identity:
-        lines.append(_render_rich(document.identity))
-        lines.append("")
-    # 主标题＝触发这条回复的命令原文：纯文本出口没有按钮，把原文印出来才抄得走（见协议说明）。
-    if document.command_title:
-        title = _render_rich(document.command_title)
-        icon = document.command_icon
-        lines.append(_title(title, icon) if icon else title)
-        lines.append("")
     previous_block = None
     for block in document.blocks:
         if lines and _needs_block_separator(previous_block, block):
             lines.append("")
-        if isinstance(block, InlineBlock):
+        if isinstance(block, HeaderBlock):
+            lines.append(_render_rich(block.content))
+        elif isinstance(block, CommandTitleBlock):
+            title = _render_rich(block.content)
+            icon = block.icon
+            lines.append(_title(title, icon) if icon else title)
+        elif isinstance(block, InlineBlock):
             title = _title(block.title, block.icon)
             lines.append(f"{title}: {_render_rich(block.content)}".rstrip(": "))
         elif isinstance(block, SectionBlock):
@@ -50,6 +49,8 @@ def render_plain_text(document: Document) -> str:
 
 
 def _needs_block_separator(previous: object, current: object) -> bool:
+    if isinstance(previous, (HeaderBlock, CommandTitleBlock)):
+        return False
     return not (
         isinstance(previous, InlineBlock) and isinstance(current, InlineBlock)
     )
@@ -59,8 +60,9 @@ def render_rich_text(value: RichText) -> str:
     return _render_rich(value)
 
 
-def _title(value: RichText, icon: str) -> str:
-    return f"{icon_for(icon)} {_render_rich(value)}".strip()
+def _title(value: RichText | str, icon: str) -> str:
+    text = value if isinstance(value, str) else _render_rich(value)
+    return f"{icon_for(icon)} {text}".strip()
 
 
 def _render_line(value: ContentLine) -> str:

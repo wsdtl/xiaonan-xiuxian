@@ -7,6 +7,7 @@ from game.features.tuoguan import HostingFeatureError
 
 from ...command import GameCommand
 from . import reply, runtime as runtime
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -36,9 +37,9 @@ async def hosting_command(user_id: str, message: str, message_context: MessageCo
         )
         if value.action == "开启" and value.session is not None:
             runtime.schedule_plan(value.session)
-        await manager.send(reply.result(feature.copy(), value))
+        await send_game_reply(reply.result(feature.copy(), value))
     except HostingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code, feature.format_actions()))
+        await send_game_reply(reply.error(feature.copy(), exc.code, feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -61,9 +62,9 @@ async def resume_hosting(user_id: str, message_context: MessageContext, manager:
         value = await feature.resume(user_id, message_context.request_id)
         if value.session is not None:
             runtime.schedule_plan(value.session)
-        await manager.send(reply.result(feature.copy(), value))
+        await send_game_reply(reply.result(feature.copy(), value))
     except HostingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code, feature.format_actions()))
+        await send_game_reply(reply.error(feature.copy(), exc.code, feature.format_actions()))
 
 
 @GameCommand.fullmatch(
@@ -86,9 +87,9 @@ async def cancel_hosting(user_id: str, message_context: MessageContext, manager:
         value = await feature.cancel(user_id, message_context.request_id)
         if value.session is not None:
             runtime.cancel_plan(value.session.session_id)
-        await manager.send(reply.result(feature.copy(), value))
+        await send_game_reply(reply.result(feature.copy(), value))
     except HostingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), exc.code, feature.format_actions()))
+        await send_game_reply(reply.error(feature.copy(), exc.code, feature.format_actions()))
 
 
 __all__ = []

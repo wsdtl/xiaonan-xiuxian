@@ -7,6 +7,7 @@ from game.features.najie import NajieQueryError, NajieStateError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -41,7 +42,7 @@ async def show_najie(user_id: str, message: str, manager: Any) -> None:
             raise NajieQueryError("纳戒命令最多接收大类、小类和页码")
     except (NajieQueryError, NajieStateError) as exc:
         message_value = reply.error(str(exc))
-    await manager.send(message_value)
+    await send_game_reply(message_value)
 
 
 def _page_number(value: str) -> int:

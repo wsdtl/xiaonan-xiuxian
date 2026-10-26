@@ -7,6 +7,7 @@ from launch.paths import public_url
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -29,21 +30,21 @@ async def browse_races(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.zhongzu
     copy = feature.copy()
     if not query:
-        await manager.send(reply.page(copy, feature.overview(), 1))
+        await send_game_reply(reply.page(copy, feature.overview(), 1))
         return
     if query.isdigit() and len(query) <= 2:
         overview = feature.overview()
         index = int(query)
         if not 1 <= index <= len(overview.lineages):
-            await manager.send(reply.invalid_page(copy, overview))
+            await send_game_reply(reply.invalid_page(copy, overview))
             return
-        await manager.send(reply.page(copy, overview, index))
+        await send_game_reply(reply.page(copy, overview, index))
         return
     race = feature.find(query)
     if race is None:
-        await manager.send(reply.missing(copy, query))
+        await send_game_reply(reply.missing(copy, query))
         return
-    await manager.send(reply.detail(copy, race, public_url("baike")))
+    await send_game_reply(reply.detail(copy, race, public_url("baike")))
 
 
 __all__ = []

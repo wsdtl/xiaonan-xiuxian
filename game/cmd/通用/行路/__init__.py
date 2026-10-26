@@ -11,6 +11,7 @@ from game.features.xinglu import (
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -32,7 +33,7 @@ from typing import Any
 async def travel(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     destination = str(message or "").strip()
     if not destination:
-        await manager.send(reply.missing_destination())
+        await send_game_reply(reply.missing_destination())
         return
     services = current_game_services()
     try:
@@ -44,16 +45,16 @@ async def travel(user_id: str, message: str, message_context: MessageContext, ma
             )
         )
     except TravelQueryError as exc:
-        await manager.send(reply.query_error(str(exc)))
+        await send_game_reply(reply.query_error(str(exc)))
         return
     except TravelConflictError:
-        await manager.send(reply.conflict())
+        await send_game_reply(reply.conflict())
         return
     position = services.features.weizhi
     functions = position.open_location_functions(
         result.plan.destination.available_functions
     )
-    await manager.send(
+    await send_game_reply(
         reply.success(
             result,
             position.position_actions(

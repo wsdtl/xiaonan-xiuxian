@@ -12,6 +12,7 @@ from game.features.daolv_peiyang import (
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -34,9 +35,9 @@ async def show_companion_cultivation(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.daolv_peiyang
     try:
         result = await feature.inspect(user_id)
-        await manager.send(reply.view(feature, result))
+        await send_game_reply(reply.view(feature, result))
     except CompanionCultivationFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -61,14 +62,14 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
                 user_id, message_context.request_id, message.strip()
             )
         )
-        await manager.send(reply.breakthrough(feature, result))
+        await send_game_reply(reply.breakthrough(feature, result))
     except (CompanionCultivationFeatureError, CompanionCultivationConflictError) as exc:
         # 与人物突破同款：名字写错时把本境界的候选丹一并端出来。
         try:
             offer = await feature.breakthrough_offer(user_id)
         except (CompanionCultivationFeatureError, CompanionCultivationConflictError):
             offer = None
-        await manager.send(
+        await send_game_reply(
             reply.error(feature, str(exc), feature.format_actions(), offer)
         )
 
@@ -91,7 +92,7 @@ async def forge_companion_law(user_id: str, message: str, message_context: Messa
     feature = current_game_services().features.daolv_peiyang
     parts = message.rsplit(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdecimal():
-        await manager.send(reply.error(feature, feature.copy("道侣培养", "写法"), feature.format_actions()))
+        await send_game_reply(reply.error(feature, feature.copy("道侣培养", "写法"), feature.format_actions()))
         return
     try:
         result = await feature.forge_law(
@@ -102,9 +103,9 @@ async def forge_companion_law(user_id: str, message: str, message_context: Messa
                 int(parts[1]),
             )
         )
-        await manager.send(reply.forged(feature, result))
+        await send_game_reply(reply.forged(feature, result))
     except (CompanionCultivationFeatureError, CompanionCultivationConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = []

@@ -7,6 +7,7 @@ from game.features.lianqi import ForgingFeatureError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -42,19 +43,19 @@ async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
     try:
         if not query:
             value = await feature.overview(user_id)
-            await manager.send(
+            await send_game_reply(
                 reply.overview(feature.copy(), value, feature.overview_actions())
             )
         elif query in _STAGES:
             value = await feature.laws(user_id, query)
-            await manager.send(reply.law_list(feature.copy(), value))
+            await send_game_reply(reply.law_list(feature.copy(), value))
         else:
             value = await feature.preview(user_id, query)
-            await manager.send(
+            await send_game_reply(
                 reply.preview(feature.copy(), value, feature.preview_actions(value))
             )
     except ForgingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼器"))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼器"))
 
 
 @GameCommand.command(
@@ -75,7 +76,7 @@ async def commit_forging(user_id: str, message: str, message_context: MessageCon
     feature = current_game_services().features.lianqi
     query = str(message or "").strip()
     if not query:
-        await manager.send(
+        await send_game_reply(
             reply.error(
       feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions(), command="开炉"
   )
@@ -86,11 +87,11 @@ async def commit_forging(user_id: str, message: str, message_context: MessageCon
         value = await feature.forge(
             user_id, message_context.request_id, identifier, quantity
         )
-        await manager.send(
+        await send_game_reply(
             reply.completed(feature.copy(), value, feature.completed_actions())
         )
     except ForgingFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开炉"))
+        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开炉"))
 
 
 __all__ = []

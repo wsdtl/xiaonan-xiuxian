@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-
 import re
-import functools
 from collections.abc import Callable, Mapping, Sequence
 from itertools import count
 from typing import Any
@@ -15,16 +13,6 @@ from launch.adapter.command_cooldown import (
     COOLDOWN_KEY_FIELD,
     COOLDOWN_NAME_FIELD,
 )
-from launch.adapter.depends import current_message_context
-
-from message import (
-    reset_command_title,
-    reset_identity,
-    set_command_title,
-    set_identity,
-)
-
-from .help_icons import icon_for_command
 
 from .help_registry import HelpSpec, help_registry
 
@@ -93,45 +81,6 @@ class GameCommand:
         )
 
 
-async def _identity_text(user_id: str) -> str:
-    """人物头的文案：昵称 境界 等级；没建档就写「未建档」。"""
-    from game.app import current_game_services
-
-    try:
-        return await current_game_services().features.chakan_juese.identity_text(user_id)
-    except Exception:  # noqa: BLE001 - 玩法没起也不该挡住回复
-        return "未建档"
-
-
-def _with_identity(func: Callable) -> Callable:
-    """统一回复层给每条回执加人物头与主标题；业务函数不得手写。"""
-
-    @functools.wraps(func)
-    async def wrapped(*args: Any, **kwargs: Any) -> Any:
-        context = current_message_context()
-        user_id = str(kwargs.get("user_id") or "")
-        if not user_id:
-            # 有些命令的签名里没有 user_id，框架就不会注入；从消息上下文兜底。
-            user_id = str(getattr(context, "user_id", "") or "")
-        token = set_identity(await _identity_text(user_id)) if user_id else None
-        # 主标题＝玩家触发时那句命令原文（含参数），图标按命令的帮助分类取；非命令消息不设。
-        raw = str(getattr(context, "raw_message", "") or "").strip()
-        title_token = (
-            set_command_title(raw, icon=icon_for_command(getattr(context, "command", "")))
-            if raw
-            else None
-        )
-        try:
-            return await func(*args, **kwargs)
-        finally:
-            if token is not None:
-                reset_identity(token)
-            if title_token is not None:
-                reset_command_title(title_token)
-
-    return wrapped
-
-
 def _register(
     registrar: Callable[..., Callable],
     cmd: object,
@@ -189,11 +138,10 @@ def _register(
             ]
         if help_spec is not None:
             help_registry.register(route_names, help_spec, source_module=source_module)
-        wrapped = _with_identity(func)
         for route in routes:
             registrar(
                 cmd=route, priority=priority, block=block, metadata=command_metadata
-            )(wrapped)
+            )(func)
         _registered_commands.append((command_key, scope, source_module, guard_rule))
         _registered_command_routes.extend(
             (route, scope, source_module, guard_rule, command_key) for route in route_names

@@ -14,6 +14,7 @@ from game.features.renwu_peiyang import (
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -36,9 +37,9 @@ async def show_character_cultivation(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.renwu_peiyang
     try:
         result = await feature.inspect(user_id)
-        await manager.send(reply.view(feature, result))
+        await send_game_reply(reply.view(feature, result))
     except CharacterCultivationFeatureError as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -61,7 +62,7 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
     # 新写法：<类别> <品级><物品> <孔位>（3 段）；旧写法：<类别> <物品> <品级> <孔位>（4 段）仍受理。
     if len(parts) not in {3, 4} or not parts[-1].isdecimal():
         # 参数不对时直接把这条子命令的格式印出来，别只让人去翻帮助。
-        await manager.send(
+        await send_game_reply(
             reply.error(feature, feature.copy("错误", "装配写法"), feature.format_actions())
         )
         return
@@ -72,7 +73,7 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
         try:
             ref = parse_item_ref(parts[1])
         except ItemRefError:
-            await manager.send(
+            await send_game_reply(
                 reply.error(feature, feature.copy("错误", "装配写法"), feature.format_actions())
             )
             return
@@ -88,9 +89,9 @@ async def equip_character(user_id: str, message: str, message_context: MessageCo
                 slot,
             )
         )
-        await manager.send(reply.equipped(feature, result))
+        await send_game_reply(reply.equipped(feature, result))
     except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -115,14 +116,14 @@ async def breakthrough_character(user_id: str, message: str, message_context: Me
                 user_id, message_context.request_id, message.strip()
             )
         )
-        await manager.send(reply.breakthrough(feature, result))
+        await send_game_reply(reply.breakthrough(feature, result))
     except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
         # 名字写错时别让人猜：把本境界的候选丹一并端出来（算不出来就照旧只报错）。
         try:
             offer = await feature.breakthrough_offer(user_id)
         except (CharacterCultivationFeatureError, CharacterCultivationConflictError):
             offer = None
-        await manager.send(
+        await send_game_reply(
             reply.error(feature, str(exc), feature.format_actions(), offer)
         )
 
@@ -145,7 +146,7 @@ async def forge_character_law(user_id: str, message: str, message_context: Messa
     feature = current_game_services().features.renwu_peiyang
     parts = message.rsplit(maxsplit=1)
     if len(parts) != 2 or not parts[1].isdecimal():
-        await manager.send(
+        await send_game_reply(
             reply.error(feature, feature.copy("错误", "覆炼写法"), feature.format_actions())
         )
         return
@@ -158,9 +159,9 @@ async def forge_character_law(user_id: str, message: str, message_context: Messa
                 int(parts[1]),
             )
         )
-        await manager.send(reply.forged(feature, result))
+        await send_game_reply(reply.forged(feature, result))
     except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = []

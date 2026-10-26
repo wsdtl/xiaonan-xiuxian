@@ -5,6 +5,7 @@ from game.features.wangye import WangyeConflictError, WangyeError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -27,9 +28,9 @@ async def web_public_on(user_id: str, message_context: MessageContext, manager: 
     feature = current_game_services().features.wangye
     try:
         await feature.set_public(user_id, message_context.request_id, True)
-        await manager.send(reply.notice(feature, True))
+        await send_game_reply(reply.notice(feature, True))
     except (WangyeError, WangyeConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)))
 
 
 @GameCommand.fullmatch(
@@ -50,9 +51,9 @@ async def web_public_off(user_id: str, message_context: MessageContext, manager:
     feature = current_game_services().features.wangye
     try:
         await feature.set_public(user_id, message_context.request_id, False)
-        await manager.send(reply.notice(feature, False))
+        await send_game_reply(reply.notice(feature, False))
     except (WangyeError, WangyeConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)))
 
 
 __all__ = []

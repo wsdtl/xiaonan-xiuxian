@@ -10,6 +10,7 @@ from launch.paths import public_url
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -30,7 +31,7 @@ from typing import Any
 async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
     query = " ".join(str(message or "").split())
     if not query:
-        await manager.send(reply.missing_query())
+        await send_game_reply(reply.missing_query())
         return
 
     #: 敌人走 30 段专属分派：它们是命名实体池，不在 item_catalog 的编号索引里。
@@ -42,14 +43,14 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
             if detail
             else ItemInspectionResult(query)
         )
-        await manager.send(reply.inspection(result, public_url("baike")))
+        await send_game_reply(reply.inspection(result, public_url("baike")))
         return
     #: 6 位、50 开头 = 我自己名下的道侣（实例化道侣），不要求在附近——就是原位置组件那条按编号看名下道侣的路子。
     weizhi = current_game_services().features.weizhi
     if len(query) == 6 and query.isdigit() and query[:2] == "50":
         companion_view = await weizhi.inspect_companion(user_id, query)
         if companion_view is not None:
-            await manager.send(
+            await send_game_reply(
                 reply.companion(
                     weizhi.copy(),
                     companion_view,
@@ -76,13 +77,13 @@ async def inspect_entity(user_id: str, message: str, manager: Any) -> None:
     if result.detail is None:
         person = await weizhi.inspect_cultivator(user_id, query)
         if person is not None:
-            await manager.send(
+            await send_game_reply(
                 reply.cultivator(
                     weizhi.copy(), person, weizhi.nearby_cultivator_actions(1, False)
                 )
             )
             return
-    await manager.send(reply.inspection(result, public_url("baike"), actions))
+    await send_game_reply(reply.inspection(result, public_url("baike"), actions))
 
 
 __all__ = ["router"]

@@ -14,6 +14,7 @@ from game.features.zongmen_wanzhen import WanzhenFeatureError
 from .....command import GameCommand
 from . import reply
 from .site import router
+from .....reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -87,11 +88,11 @@ async def show_wanzhen(
         category = parts[0] if parts else "全部"
         page_number = _positive(parts[1], "万珍殿页码") if len(parts) == 2 else 1
         value = await feature.page(user_id, category, page_number)
-        await manager.send(
+        await send_game_reply(
             reply.page(feature.copy(), value, feature.page_actions(value))
         )
     except WanzhenFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await send_game_reply(reply.error(feature.copy(), str(exc)))
 
 
 async def donate_wanzhen(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
@@ -142,9 +143,9 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
             grade_or_key,
             quantity,
         )
-        await manager.send(reply.transferred(feature.copy(), value))
+        await send_game_reply(reply.transferred(feature.copy(), value))
     except WanzhenFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await send_game_reply(reply.error(feature.copy(), str(exc)))
 
 
 async def grant_wanzhen(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
@@ -164,9 +165,9 @@ async def grant_wanzhen(user_id: str, message: str, message_context: MessageCont
             entry_key,
             quantity,
         )
-        await manager.send(reply.transferred(feature.copy(), value))
+        await send_game_reply(reply.transferred(feature.copy(), value))
     except WanzhenFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await send_game_reply(reply.error(feature.copy(), str(exc)))
 
 
 def _positive(value: str, label: str) -> int:

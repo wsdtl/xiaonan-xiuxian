@@ -8,6 +8,7 @@ from game.features.hunpei import HunpeiError
 
 from ...command import GameCommand
 from . import input as command_input, reply
+from ...reply_composer import send_game_reply
 
 
 @GameCommand.command(
@@ -32,12 +33,12 @@ async def birth(user_id: str, message: str, manager: Any) -> None:
     try:
         state = await feature.view(user_id)
         if not state.can_birth:
-            await manager.send(reply.birth(copy, state))
+            await send_game_reply(reply.birth(copy, state))
             return
         result = await feature.birth(user_id)
-        await manager.send(reply.born(copy, result))
+        await send_game_reply(reply.born(copy, result))
     except HunpeiError as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await send_game_reply(reply.error(copy, str(exc)))
 
 
 @GameCommand.command(
@@ -62,17 +63,17 @@ async def ask_child(user_id: str, message: str, manager: Any) -> None:
     try:
         if command.action == "ask":
             asked = await feature.ask(user_id, command.argument)
-            await manager.send(reply.asked(copy, asked))
+            await send_game_reply(reply.asked(copy, asked))
             return
         if command.action == "agree":
             result = await feature.respond(user_id, command.argument, True)
-            await manager.send(reply.responded(copy, result))
+            await send_game_reply(reply.responded(copy, result))
             return
         if command.action == "refuse":
             result = await feature.respond(user_id, command.argument, False)
-            await manager.send(reply.responded(copy, result))
+            await send_game_reply(reply.responded(copy, result))
             return
         pending = await feature.pending(user_id)
-        await manager.send(reply.pending(copy, pending))
+        await send_game_reply(reply.pending(copy, pending))
     except HunpeiError as exc:
-        await manager.send(reply.error(copy, str(exc)))
+        await send_game_reply(reply.error(copy, str(exc)))

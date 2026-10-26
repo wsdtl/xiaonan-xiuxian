@@ -8,6 +8,7 @@ from game.features.zengsong import GiftError, GiftSendCommand
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -41,7 +42,7 @@ async def send(user_id: str, message: str, message_context: MessageContext, mana
                     spirit_stones=int(parts[2]),
                 )
             )
-            await manager.send(reply.stones(feature, target_name, value))
+            await send_game_reply(reply.stones(feature, target_name, value))
             return
         # 新写法：<玩家> <品级><物品> <数量>（3 段）；旧写法 4 段仍受理。
         if len(parts) not in {3, 4}:
@@ -64,7 +65,7 @@ async def send(user_id: str, message: str, message_context: MessageContext, mana
                 quantity=quantity,
             )
         )
-        await manager.send(
+        await send_game_reply(
             reply.item(
                 feature,
                 target_name,
@@ -74,4 +75,4 @@ async def send(user_id: str, message: str, message_context: MessageContext, mana
             )
         )
     except (GiftError, ValueError, ItemRefError) as exc:
-        await manager.send(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))

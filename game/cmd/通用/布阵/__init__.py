@@ -7,6 +7,7 @@ from game.features.buzhen import FormationArmFeatureError, FormationChoiceError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -29,19 +30,19 @@ async def arm_formation(user_id: str, message: str, message_context: MessageCont
     feature = current_game_services().features.buzhen
     query = str(message or "").strip()
     if not query:
-        await manager.send(
+        await send_game_reply(
             reply.error(feature.copy(), "格式：布阵 <品级><阵法名>[灵宝]")
         )
         return
     try:
         value = await feature.arm(user_id, message_context.request_id, query)
-        await manager.send(
+        await send_game_reply(
             reply.completed(feature.copy(), value, value.prepared.treasure_line)
         )
     except FormationChoiceError as exc:
-        await manager.send(reply.choose(feature.copy(), exc))
+        await send_game_reply(reply.choose(feature.copy(), exc))
     except FormationArmFeatureError as exc:
-        await manager.send(reply.error(feature.copy(), str(exc)))
+        await send_game_reply(reply.error(feature.copy(), str(exc)))
 
 
 __all__ = []

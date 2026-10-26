@@ -6,6 +6,7 @@ from game.features.yixing import YixingConflictError, YixingError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
 
@@ -27,13 +28,13 @@ from typing import Any
 async def change_gender(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.yixing
     try:
-        await manager.send(
+        await send_game_reply(
             reply.result(
                 feature, await feature.change(user_id, message_context.request_id)
             )
         )
     except (YixingError, YixingConflictError) as exc:
-        await manager.send(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)))
 
 
 @GameCommand.command(
@@ -57,14 +58,14 @@ async def reshape_race(
     # 族名不含空格，整段去掉命令词后的文本就是目标种族。
     wanted = " ".join(str(message or "").split())
     try:
-        await manager.send(
+        await send_game_reply(
             reply.fanben_result(
                 feature,
                 await feature.change(user_id, message_context.request_id, wanted),
             )
         )
     except (FanbenError, FanbenConflictError) as exc:
-        await manager.send(reply.fanben_error(feature, str(exc)))
+        await send_game_reply(reply.fanben_error(feature, str(exc)))
 
 
 __all__ = []

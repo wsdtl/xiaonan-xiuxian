@@ -8,6 +8,7 @@ from launch.paths import public_url
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -31,9 +32,9 @@ async def show_world_map(user_id: str, message: str, manager: Any) -> None:
     query = " ".join(str(message or "").split())
     if query:
         # 参数是**州名**（不再是页码）：州名不认识时 reply 会给提示卡。
-        await manager.send(reply.region(overview, query, url))
+        await send_game_reply(reply.region(overview, query, url))
         return
-    await manager.send(reply.entry(overview, url))
+    await send_game_reply(reply.entry(overview, url))
 
 
 __all__ = ["router"]

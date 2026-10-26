@@ -7,6 +7,7 @@ from game.features.weizhi import NearbyPageError
 
 from ...command import GameCommand
 from . import reply
+from ...reply_composer import send_game_reply
 from typing import Any
 
 
@@ -33,7 +34,7 @@ async def show_position(user_id: str, manager: Any) -> None:
         plant_pool=result.location.plant_pool,
         mineral_pool=result.location.mineral_pool,
     )
-    await manager.send(
+    await send_game_reply(
         reply.current(
             feature.copy(),
             result,
@@ -62,7 +63,7 @@ async def show_nearby(user_id: str, message: str, manager: Any) -> None:
     parts = str(message or "").split()
     if not parts:
         result = await feature.nearby_overview(user_id)
-        await manager.send(
+        await send_game_reply(
             reply.nearby_overview(
                 copy,
                 result,
@@ -75,7 +76,7 @@ async def show_nearby(user_id: str, message: str, manager: Any) -> None:
         return
     if parts == ["地点"]:
         result = await feature.nearby_locations(user_id)
-        await manager.send(
+        await send_game_reply(
             reply.nearby_locations(
                 copy,
                 result,
@@ -87,7 +88,7 @@ async def show_nearby(user_id: str, message: str, manager: Any) -> None:
         try:
             page = _page_number(parts[1], copy.invalid_page) if len(parts) == 2 else 1
             result = await feature.nearby_cultivators(user_id, page)
-            await manager.send(
+            await send_game_reply(
                 reply.nearby_cultivators(
                     copy,
                     result,
@@ -99,7 +100,7 @@ async def show_nearby(user_id: str, message: str, manager: Any) -> None:
                 )
             )
         except NearbyPageError as exc:
-            await manager.send(
+            await send_game_reply(
                 reply.error(
                     copy,
                     copy.cultivators_title,
@@ -108,7 +109,7 @@ async def show_nearby(user_id: str, message: str, manager: Any) -> None:
                 )
             )
         return
-    await manager.send(
+    await send_game_reply(
         reply.error(
             copy,
             copy.overview_title.format_map({"地点": "附近"}),

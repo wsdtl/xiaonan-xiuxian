@@ -9,6 +9,7 @@ from game.app import current_game_services
 from ...command import GameCommand
 from . import reply
 from .site import router
+from ...reply_composer import send_game_reply
 
 
 @GameCommand.command(
@@ -29,7 +30,7 @@ async def show_my_reports_page(user_id: str, message: str, manager: Any) -> None
     feature = current_game_services().features.zhanbao
     raw = str(message or "").strip()
     page = int(raw) if raw.isdecimal() and int(raw) > 0 else 1
-    await manager.send(reply.view(feature, await feature.my_reports(user_id, page=page)))
+    await send_game_reply(reply.view(feature, await feature.my_reports(user_id, page=page)))
 
 
 __all__ = ["router"]
