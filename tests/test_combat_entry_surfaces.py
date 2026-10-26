@@ -1302,6 +1302,17 @@ def test_closing_line_is_quoted_and_must_be_last() -> None:
         M.document().closing("甲").closing("乙").build()
 
 
+def test_every_help_business_has_custom_closing() -> None:
+    """所有登记帮助的业务模块都必须有专属 closing，不能靠通用兜底。"""
+
+    from game.cmd.closings import CLOSING_BY_MODULE
+    from game.cmd.help_registry import help_registry
+
+    modules = {entry.source_module for entry in help_registry.entries()}
+    missing = modules - set(CLOSING_BY_MODULE)
+    assert not missing, sorted(missing)
+
+
 def test_game_icon_registry_uses_supported_glyphs() -> None:
     """游戏图标词表只收客户端能渲染的图形，cmd 标题图标固定为 cmd。"""
 
@@ -1484,7 +1495,7 @@ def test_send_game_reply_uses_current_context(monkeypatch) -> None:
     assert rendered.blocks[1].icon == "game.cmd"
     assert rendered.blocks[1].command == "查看 人物"
     assert rendered.blocks[-1].__class__.__name__ == "ClosingBlock"
-    assert "帮助 查看" in "".join(
+    assert "查看 编号" in "".join(
         span.value for span in rendered.blocks[-1].content
     )
 
@@ -1522,5 +1533,5 @@ def test_hosting_error_strips_composer_header() -> None:
         def __init__(self, content: str) -> None:
             self.message = RenderedMessage(kind="markdown", content=content)
 
-    content = "> 张三 灵动 Lv.1\n> cmd 结算探险\n> ✨ 错误\n> > 当前无法结算探险\n> 发送「帮助 结算探险」查看完整写法与后续步骤。"
+    content = "> 张三 灵动 Lv.1\n> cmd 结算探险\n> ✨ 错误\n> > 当前无法结算探险\n> 发送「探险进度」看剩余场次；跑满后发送「探险结果」。"
     assert _reply_error([Reply(content)], "结算探险") == "✨ 错误 当前无法结算探险"

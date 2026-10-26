@@ -26,6 +26,9 @@ from message import (
     coerce_message,
 )
 
+from .closings import closing_for
+
+
 async def _identity_text(user_id: str) -> str:
     """人物头：昵称 境界 等级；没建档就写「未建档」。"""
 
@@ -35,18 +38,6 @@ async def _identity_text(user_id: str) -> str:
         return await current_game_services().features.chakan_juese.identity_text(user_id)
     except Exception:  # noqa: BLE001 - 玩法没起也不该挡住回复
         return "未建档"
-
-
-def _closing_hint(command: str) -> str:
-    """每条玩家回包的默认后续建议；具体卡片可自带 closing 覆盖。"""
-
-    parts = str(command or "").strip().split(maxsplit=1)
-    head = parts[0] if parts else ""
-    if head in {"帮助", "help"}:
-        return "发送「帮助 <分类>」查看该分类下的全部命令。"
-    if head:
-        return f"发送「帮助 {head}」查看完整写法与后续步骤。"
-    return "发送「帮助」查看可用命令与后续步骤。"
 
 
 def compose_player_reply(
@@ -77,7 +68,7 @@ def compose_player_reply(
         )
     blocks.extend(document.blocks)
     if not any(isinstance(block, ClosingBlock) for block in document.blocks):
-        blocks.append(ClosingBlock(M.text(_closing_hint(title))))
+        blocks.append(ClosingBlock(M.text(closing_for(title))))
     return DocumentMessage(Document(tuple(blocks), document.actions))
 
 

@@ -106,8 +106,9 @@ def _reply_error(replies: Sequence[LocalReply], command: str = "") -> str:
         line = line.strip("*").strip()
         if line:
             parts.append(line)
-    # composer 的默认 closing 是后续建议，不属于托管错误正文。
-    parts = [part for part in parts if not part.startswith("发送「帮助")]
+    # composer 的业务 closing 是后续建议，不属于托管错误正文。
+    if parts and parts[-1].startswith("发送「"):
+        parts.pop()
     # 回包由 composer 加了人物头与命令标题；错误正文从第三行开始。
     if command and len(parts) >= 2 and command in parts[1]:
         parts = parts[2:]
