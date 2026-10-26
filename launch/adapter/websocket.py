@@ -23,6 +23,7 @@ import os
 import ssl
 import struct
 from asyncio import StreamReader, StreamWriter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -186,6 +187,7 @@ class WebSocketConnection:
         cls,
         url: str,
         *,
+        headers: Mapping[str, str] | None = None,
         connect_timeout: float = HANDSHAKE_TIMEOUT_SECONDS,
     ) -> "WebSocketConnection":
         """建立 TCP/TLS 连接并完成 WebSocket 握手。"""
@@ -210,16 +212,24 @@ class WebSocketConnection:
 
         connection = cls(reader, writer)
         try:
-            await connection._handshake(address)
+            await connection._handshake(address, headers or {})
         except BaseException:
             await connection.close()
             raise
         return connection
 
-    async def _handshake(self, address: WebSocketAddress) -> None:
+    async def _handshake(
+        self, address: WebSocketAddress, headers: Mapping[str, str]
+    ) -> None:
         """发送 Upgrade 请求并校验服务端响应。"""
 
         key = base64.b64encode(os.urandom(16)).decode("ascii")
+        extra = "".join(
+            f"{name}: {value}\r\n"
+            for name, value in headers.items()
+            if "\r" not in name and "\n" not in name
+            and "\r" not in value and "\n" not in value
+        )
         request = (
             f"GET {address.resource} HTTP/1.1\r\n"
             f"Host: {address.host_header}\r\n"
@@ -227,6 +237,7 @@ class WebSocketConnection:
             "Connection: Upgrade\r\n"
             f"Sec-WebSocket-Key: {key}\r\n"
             "Sec-WebSocket-Version: 13\r\n"
+            f"{extra}"
             "\r\n"
         )
         self._writer.write(request.encode("ascii"))

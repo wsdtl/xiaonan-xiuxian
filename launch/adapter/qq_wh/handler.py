@@ -8,6 +8,7 @@ WebSocket 传输共用一份。本文件只保留 webhook 传输自己的东西�
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 from launch.config import config
@@ -94,6 +95,9 @@ class QqEventHandler(MessageDispatchMixin, BaseMessageHandler):
 
         event = parse_message_event(payload, bot_name=processor.bot_name())
         if event is not None:
+            event = replace(
+                event, transport=TRANSPORT, bot_key=client.app_id or "qq_wh"
+            )
             logger.opt(colors=True).debug(
                 C.join(
                     C.ok("QQ webhook 已接收"),
@@ -101,7 +105,9 @@ class QqEventHandler(MessageDispatchMixin, BaseMessageHandler):
                 )
             )
             processor.driver_runtime.enqueue_interaction_ack(event)
-            await processor.submit_event(event)
+            await processor.submit_event(
+                event, transport=TRANSPORT, bot_key=client.app_id or "qq_wh"
+            )
         else:
             event_type = str(payload.get("t") or "").strip()
             is_unparsed_interaction = event_type == "INTERACTION_CREATE"

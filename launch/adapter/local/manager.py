@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 
@@ -97,8 +98,13 @@ class LocalReplyManager:
         emit_message_event(
             event_from_outgoing(
                 adapter="local",
+                bot_key="local",
+                transport="local",
                 user_id=reply.user_id,
                 request_id=reply_request_id,
+                group_id="",
+                message_id=reply_request_id,
+                occurred_at=time.time(),
                 message=request.message,
             )
         )

@@ -174,8 +174,13 @@ class MessageConsoleService:
             emit_message_event(
                 event_from_outgoing(
                     adapter="local",
+                    bot_key="console",
+                    transport="local",
                     user_id=CONSOLE_USER_ID,
                     request_id=result.event.event_id,
+                    group_id="",
+                    message_id=result.event.event_id,
+                    occurred_at=time.time(),
                     message=(
                         M.document()
                         .section("命令状态", icon="notice")
@@ -258,8 +263,13 @@ class MessageConsoleService:
         normalized = MessageEvent(
             direction=event.direction,
             adapter=event.adapter,
+            bot_key=event.bot_key,
+            transport=event.transport,
             request_id=event.request_id,
             user_id=event.user_id,
+            group_id=event.group_id,
+            message_id=event.message_id,
+            occurred_at=event.occurred_at,
             message_type=event.message_type,
             content=content,
             sender_name=sender_name,

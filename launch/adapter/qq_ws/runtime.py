@@ -12,7 +12,7 @@ https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/interface-framework/event-e
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from launch.log import C, logger
 
@@ -20,6 +20,8 @@ from ..qq_protocol import processor
 from ..qq_protocol.event import QqMessageEvent
 from ..websocket import WebSocketClosed, WebSocketConnection, WebSocketProtocolError
 from . import gateway
+
+TRANSPORT = "websocket"
 
 
 @dataclass(frozen=True)
@@ -414,7 +416,7 @@ class QqGatewayRuntime:
                 return True
 
             # 鉴权期间极少出现业务事件；出现就正常派发，不丢事件。
-            self._submit(message, event_type)
+            self._submit(message, event_type, session.self_id or "qq_ws")
 
     async def _receive_loop(
         self,
@@ -476,7 +478,7 @@ class QqGatewayRuntime:
             if event_type == "RESUMED":
                 session.can_resume = True
                 continue
-            self._submit(message, event_type)
+            self._submit(message, event_type, session.self_id or "qq_ws")
 
     async def _heartbeat_loop(
         self,
@@ -499,7 +501,7 @@ class QqGatewayRuntime:
                 return
             await asyncio.sleep(interval)
 
-    def _submit(self, payload: dict, event_type: str) -> None:
+    def _submit(self, payload: dict, event_type: str, bot_key: str) -> None:
         """把 op 0 事件解析成规整事件并送入共享队列。"""
 
         event = processor.parse_gateway_event(payload, event_type)
@@ -513,6 +515,7 @@ class QqGatewayRuntime:
             )
             return
 
+        event = replace(event, transport=TRANSPORT, bot_key=bot_key)
         self.stats.events += 1
         logger.opt(colors=True).debug(
             C.join(
@@ -521,13 +524,15 @@ class QqGatewayRuntime:
             )
         )
         processor.driver_runtime.enqueue_interaction_ack(event)
-        asyncio.create_task(self._enqueue(event), name="qq-ws-enqueue")
+        asyncio.create_task(self._enqueue(event, bot_key), name="qq-ws-enqueue")
 
-    async def _enqueue(self, event: QqMessageEvent) -> None:
+    async def _enqueue(self, event: QqMessageEvent, bot_key: str) -> None:
         """把事件送入共享队列，并兜住入队异常。"""
 
         try:
-            await processor.submit_event(event)
+            await processor.submit_event(
+                event, transport=TRANSPORT, bot_key=bot_key
+            )
         except Exception as exc:  # noqa: BLE001 - 单条事件不能打断接收循环
             self._record_failure("QQ WebSocket 事件入队失败", exc)
 

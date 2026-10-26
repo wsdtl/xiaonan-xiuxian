@@ -7,6 +7,7 @@
 
 import asyncio
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -52,6 +53,8 @@ class QqQueuedReply:
     options: SendOptions
     is_log: bool = True
     request_id: object | None = None
+    game_user_id: str = ""
+    game_group_id: str = ""
 
 
 class QqReplyManager:
@@ -179,6 +182,7 @@ class QqReplyManager:
                 logger.opt(colors=True).warning(f"{C.warn('QQ 发送失败，缺少 QQ 发送目标')}")
             return False
 
+        context = current_message_context()
         item = QqQueuedReply(
             message=request.message,
             target=target,
@@ -186,6 +190,8 @@ class QqReplyManager:
             options=request.options,
             is_log=request.options.log,
             request_id=request.request_id,
+            game_user_id=context.route_user_id if context is not None else "",
+            game_group_id=context.route_group_id if context is not None else "",
         )
 
         queue = self._send_queue
@@ -332,8 +338,13 @@ class QqReplyManager:
         emit_message_event(
             event_from_outgoing(
                 adapter="qq",
+                bot_key="qq",
+                transport="qq",
                 user_id=item.user_id,
                 request_id=item.request_id or item.target.event_id or item.target.message_id,
+                group_id=item.target.group_id,
+                message_id=item.target.message_id,
+                occurred_at=time.time(),
                 message=item.message,
             )
         )
@@ -398,10 +409,11 @@ class QqReplyManager:
 
         return [
             C.kv("type", "群聊" if item.target.is_group else "私聊"),
-            C.kv("user", item.user_id or "-"),
+            C.kv("user", item.game_user_id or item.user_id or "-"),
             C.kv(
                 "target",
-                item.target.group_id or item.target.user_id or "-",
+                item.game_group_id
+                or ("群聊" if item.target.is_group else "私聊"),
             ),
             C.kv("request_id", item.request_id or "-"),
         ]

@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from launch.config import config
 from launch.log import C, logger
 
@@ -20,9 +22,10 @@ from ..context import (
     MessageContext,
     ReplyTarget,
 )
+from ..identity import resolve_group_id, resolve_user_id, route_fields
 from ..request_scope import request_scope
 from ..shared_dispatch import MessageDispatchMixin
-from .event import QqMessageEvent, parse_message_event
+from .event import QqMessageEvent, parse_message_event, rewrite_mentions_to_qq
 from .manager import current_event, manager
 from .rules import QqCommandMatch, QqCommandRegistry
 from .runtime import QqDriverRuntime
@@ -90,14 +93,24 @@ async def stop_dispatch_runtime(transport: str) -> None:
     await manager.shutdown()
 
 
-async def submit_event(event: QqMessageEvent) -> None:
+async def submit_event(event: QqMessageEvent, *, transport: str, bot_key: str) -> None:
     """把一条已经解析的 QQ 事件送入共享队列。
 
-    后台队列负责单用户串行、全局并发上限和 event_id 去重。去重是共享队列
-    自带能力：网关 Resume 补发和重复投递都只结算一次。
+    传输方式由驱动器显式传入，事件总线据此区分 webhook 与 websocket；
+    后台队列仍负责单用户串行、全局并发上限和 event_id 去重。
     """
 
-    await driver_runtime.enqueue_event(event)
+    event = replace(
+        event,
+        content=rewrite_mentions_to_qq(
+            event.content,
+            event.mention_ids,
+            lambda openid: resolve_user_id(bot_key, openid),
+        ),
+        transport=transport,
+        bot_key=bot_key,
+    )
+    await driver_runtime.enqueue_event(event, transport=transport, bot_key=bot_key)
 
 
 def parse_gateway_event(
@@ -153,6 +166,16 @@ async def process_message_event(event: QqMessageEvent) -> bool:
                 )
                 return False
 
+            if not resolve_user_id(event.bot_key, event.user_id):
+                logger.opt(colors=True).warning(
+                    C.join(
+                        C.warn("QQ 身份路由尚未建立"),
+                        *event_log_parts(event, include_message=False),
+                    )
+                )
+                await manager.send("身份同步中，请稍后再发一次")
+                return True
+
             logger.opt(colors=True).success(
                 C.join(
                     C.ok("QQ 命令命中"),
@@ -187,6 +210,11 @@ def message_context(item: QqCommandMatch, event: QqMessageEvent) -> MessageConte
     """构造 QQ 驱动器自己的公共消息上下文。"""
 
     conversation_type = CONVERSATION_GROUP if event.is_group else CONVERSATION_PRIVATE
+    route = route_fields(
+        bot_key=event.bot_key,
+        user_id=event.user_id,
+        group_id=event.group_id,
+    )
     reply_target = ReplyTarget(
         adapter="qq",
         user_id=event.user_id,
@@ -196,7 +224,7 @@ def message_context(item: QqCommandMatch, event: QqMessageEvent) -> MessageConte
     )
     return MessageContext(
         adapter="qq",
-        user_id=event.user_id,
+        user_id=route["route_user_id"] or event.user_id,
         request_id=event.event_id or event.interaction_id or event.message_id,
         command=item.command,
         message=item.message,
@@ -204,22 +232,25 @@ def message_context(item: QqCommandMatch, event: QqMessageEvent) -> MessageConte
         conversation_type=conversation_type,
         reply_target=reply_target,
         sender_name=event.sender_name,
+        route_user_id=route["route_user_id"],
+        route_group_id=route["route_group_id"],
     )
 
 
 def event_log_parts(event: QqMessageEvent, include_message: bool = True) -> list[str]:
     """生成统一的事件日志摘要。"""
 
+    display_user = resolve_user_id(event.bot_key, event.user_id) or "未绑定"
+    display_group = (
+        resolve_group_id(event.bot_key, event.group_id) or "未绑定"
+        if event.group_id
+        else "-"
+    )
     parts = [
         C.kv("type", event_type_label(event.event_type)),
-        C.kv("user", event.user_id or "-"),
-        C.kv("group", event.group_id or "-"),
-        C.kv("msg", event.message_id or "-"),
+        C.kv("user", display_user),
+        C.kv("group", display_group),
     ]
-    if event.interaction_id:
-        parts.append(C.kv("interaction", event.interaction_id))
-    if event.event_id:
-        parts.append(C.kv("event", event.event_id))
     if include_message:
         parts.append(C.kv("message", event.content))
     return parts

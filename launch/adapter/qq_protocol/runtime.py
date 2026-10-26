@@ -107,7 +107,9 @@ class QqDriverRuntime:
         self._process_event = None
         self._event_log_parts = None
 
-    async def enqueue_event(self, event: QqMessageEvent) -> None:
+    async def enqueue_event(
+        self, event: QqMessageEvent, *, transport: str, bot_key: str
+    ) -> None:
         """非阻塞地把已经解析的 QQ 事件送入后台队列。"""
 
         queue = self._event_queue
@@ -168,8 +170,13 @@ class QqDriverRuntime:
         emit_message_event(
             event_from_incoming(
                 adapter="qq",
+                bot_key=bot_key,
+                transport=transport,
                 user_id=event.user_id,
                 request_id=event.event_id or event.message_id,
+                group_id=event.group_id,
+                message_id=event.message_id,
+                occurred_at=event.occurred_at,
                 message_type="text",
                 content=event.content,
                 sender_name=event.sender_name,

@@ -30,13 +30,14 @@ QQ 文字修仙游戏：Python 3.12 + FastAPI + SQLite。规则与内容住在 `
 
 ```text
 data/          定义、规则、内容与展示 JSON
-database/      玩家存档与运行日志库（不进版本库）
+database/      玩家存档、运行日志与辅助路由库（不进版本库）
 game/core/     跨玩法公共微服务
 game/features/ 具体玩法微服务
 game/cmd/      命令、按钮与 HTTP 触发
 game/startup/  启动契约
 game/app.py    唯一组合根
-launch/        Local、QQ、HTTP 与生命周期适配
+launch/        Local、QQ、HTTP、生命周期与统一身份端口
+assist_router/ QQ openid / group_openid 与真实 QQ 号/群号对齐
 message/       通用消息协议
 static/        展示页面
 tools/         游戏外校核脚本
@@ -59,6 +60,8 @@ Windows 用 `start.bat`，Linux/Docker 用 `bash start.sh`；脚本会先建并�
 证书目录 `certs/` 启动时自建；**HTTP 还是 HTTPS 由证书实际在不在决定**：没配或文件不在就走 HTTP，两个文件都在才走 HTTPS。
 
 地址取自 `.env` 的 `SERVER_HOST` 与 `SERVER_PORT`（本机 `0.0.0.0:8443`）。页面：`/baike`、`/game-console`、`/battle/<战报编号>`、`/world-map`、`/assembly`、`/yijing`。天道后台命令隐藏，密码由 `WEB_CONSOLE_PASSWORD` 提供。游戏进程不加载 `tools`。
+
+QQ 统一身份由 `assist_router` 维护：官方 openid 对齐到 QQ 号，游戏账号主键使用 QQ 号，openid 只作平台回复目标。未建立路由的 QQ 命令会回复“身份同步中，请稍后再发一次”；本地/后台命令不受影响。
 
 ## 打包发布
 

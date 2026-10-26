@@ -5,6 +5,8 @@ QQ 原始 payload 保留在 raw 中，但驱动器内部只把命令系统需要
 """
 
 import re
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,15 +35,30 @@ class QqMessageEvent:
     content: str
     user_id: str
     group_id: str
+    occurred_at: float
     raw: dict[str, Any]
     interaction_id: str = ""
     sender_name: str = ""
+    bot_key: str = ""
+    transport: str = ""
+    mention_ids: tuple[str, ...] = ()
 
     @property
     def is_group(self) -> bool:
         """当前事件是否来自群聊。"""
 
         return bool(self.group_id)
+
+
+def _occurred_at(data: dict) -> float:
+    """读取 QQ 事件时间；没有可解析时间时退回接收时间。"""
+
+    raw = data.get("timestamp")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return time.time()
+    return value if value > 0 else time.time()
 
 
 def parse_message_event(payload: dict, *, bot_name: str = "") -> QqMessageEvent | None:
@@ -89,8 +106,10 @@ def parse_message_event(payload: dict, *, bot_name: str = "") -> QqMessageEvent 
         content=content,
         user_id=user_id,
         group_id=group_id,
+        occurred_at=_occurred_at(data),
         raw=payload,
         sender_name=extract_sender_name(data),
+        mention_ids=_mention_ids(data.get("mentions")),
     )
 
 
@@ -121,9 +140,11 @@ def parse_interaction_event(payload: dict, data: dict) -> QqMessageEvent | None:
         content=content,
         user_id=user_id,
         group_id=group_id,
+        occurred_at=_occurred_at(data),
         raw=payload,
         interaction_id=interaction_id,
         sender_name=extract_sender_name(data),
+        mention_ids=_mention_ids(resolved.get("mentions") or data.get("mentions")),
     )
 
 
@@ -182,8 +203,8 @@ def normalize_content(
     """清理 QQ 消息正文，并把 QQ at 段转成业务层可识别的入口 ID。
 
     群聊里用户通常用“@机器人 命令”触发；开头的机器人 at 只表示触发，
-    不应该作为业务参数。正文中其它用户 at 会被替换成入口 ID，供业务
-    后续通过用户组映射到角色。
+    不应该作为业务参数。正文中其它用户 at 先替换成入口 ID；驱动器拿到
+    bot_key 后，再由 submit_event 统一转成 QQ 号，供业务直接使用。
     """
 
     text = "" if value is None else str(value)
@@ -297,8 +318,9 @@ def _mention_item(mentions: Any, token: str) -> dict | None:
 def _replace_mentions_with_ids(text: str, mentions: Any) -> str:
     """把正文里的 <@...> 替换成前后带空格的入口 ID。
 
-    业务层约定：需要指定用户的命令接收普通文本参数，平台 at
-    需要先在驱动器层转换成原始入口 ID，再由用户组解析成主角色 ID。
+    业务层约定：需要指定用户的命令接收普通文本参数。平台 at 先在这里
+    转成原始入口 ID；等 submit_event 拿到 bot_key 后，再通过身份端口
+    转成 QQ 号。解析不到 QQ 号时保留入口 ID，不丢参数。
     机器人自己的 at 只表示“叫机器人处理这条消息”，不属于业务参数。
     """
 
@@ -349,6 +371,41 @@ def _preferred_mention_id(item: dict) -> str:
         if value:
             return value
     return ""
+
+
+def _mention_ids(mentions: Any) -> tuple[str, ...]:
+    """提取正文里可能出现的入口 ID，供后续统一转 QQ 号。"""
+
+    if not isinstance(mentions, list):
+        return ()
+    result: list[str] = []
+    for item in mentions:
+        if not isinstance(item, dict):
+            continue
+        value = _preferred_mention_id(item)
+        if value and value not in result:
+            result.append(value)
+    return tuple(result)
+
+
+def rewrite_mentions_to_qq(
+    content: str,
+    mention_ids: tuple[str, ...],
+    resolve: Callable[[str], str],
+) -> str:
+    """把正文中的入口 ID 替换成统一 QQ 号；解析不到时保留原 ID。"""
+
+    text = str(content or "")
+    for mention_id in mention_ids:
+        value = str(resolve(mention_id) or "").strip()
+        if not value or value == mention_id:
+            continue
+        text = re.sub(
+            rf"(?<![0-9A-Za-z]){re.escape(mention_id)}(?![0-9A-Za-z])",
+            value,
+            text,
+        )
+    return text
 
 
 def _is_you_mention(value: Any) -> bool:

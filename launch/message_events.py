@@ -57,12 +57,21 @@ class MessageEvent:
 
     事件总线只观察收发结果，不参与命令匹配、业务结算或消息发送；订阅者
     出错也不能反向影响主链路。
+
+    transport/group_id/message_id/occurred_at 是身份路由必须的字段：
+    传输方式决定来源，群号决定会话，平台消息号与事件时间用于双源关联。
+    request_id 仍是命令幂等键，不再兼任平台消息号。
     """
 
     direction: str
     adapter: str
+    bot_key: str
+    transport: str
     request_id: str
     user_id: str
+    group_id: str
+    message_id: str
+    occurred_at: float
     message_type: str
     content: str
     sender_name: str = ""
@@ -131,8 +140,13 @@ def emit_message_event(event: MessageEvent) -> None:
 def event_from_incoming(
     *,
     adapter: str,
+    bot_key: str,
+    transport: str,
     user_id: object,
-    request_id: object = "",
+    request_id: object,
+    group_id: object,
+    message_id: object,
+    occurred_at: float,
     message_type: object = "text",
     content: object = "",
     sender_name: object = "",
@@ -142,8 +156,13 @@ def event_from_incoming(
     return MessageEvent(
         direction="incoming",
         adapter=_clean_token(adapter, "unknown"),
+        bot_key=_clean_token(bot_key, "unknown"),
+        transport=_clean_token(transport, "unknown"),
         request_id=_clean_token(request_id),
         user_id=_clean_token(user_id),
+        group_id=_clean_token(group_id),
+        message_id=_clean_token(message_id),
+        occurred_at=float(occurred_at),
         message_type=_normalize_message_type(message_type),
         content=_clean_content(content),
         sender_name=_clean_token(sender_name),
@@ -153,8 +172,13 @@ def event_from_incoming(
 def event_from_outgoing(
     *,
     adapter: str,
+    bot_key: str,
+    transport: str,
     user_id: object,
-    request_id: object = "",
+    request_id: object,
+    group_id: object,
+    message_id: object,
+    occurred_at: float,
     message: object = "",
 ) -> MessageEvent:
     """整理驱动器发出的业务回复事件。"""
@@ -163,8 +187,13 @@ def event_from_outgoing(
     return MessageEvent(
         direction="outgoing",
         adapter=_clean_token(adapter, "unknown"),
+        bot_key=_clean_token(bot_key, "unknown"),
+        transport=_clean_token(transport, "unknown"),
         request_id=_clean_token(request_id),
         user_id=_clean_token(user_id),
+        group_id=_clean_token(group_id),
+        message_id=_clean_token(message_id),
+        occurred_at=float(occurred_at),
         message_type=snapshot.message_type,
         content=snapshot.content,
         image=snapshot.image,

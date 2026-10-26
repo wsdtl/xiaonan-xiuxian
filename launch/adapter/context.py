@@ -20,11 +20,12 @@ MENTION_SENDER = "sender"
 
 @dataclass(frozen=True)
 class ReplyTarget:
-    """一次回复的用户归属与实际发送目标。
+    """一次回复的平台用户归属与实际发送目标。
 
-    `user_id` 是游戏账号身份，`target_id` 是平台投递目标：私聊时通常相同，
-    群聊时 `target_id` 是群号。`driver_target` 只给对应适配器保存协议对象，
-    游戏层不读取它。
+    `user_id` 是平台用户目标（QQ 为 openid），`target_id` 是实际投递目标：
+    私聊时通常相同，群聊时 `target_id` 是群号。游戏账号身份在
+    `MessageContext.user_id`，不在这个对象里。`driver_target` 只给对应
+    适配器保存协议对象，游戏层不读取它。
     """
 
     adapter: str
@@ -56,6 +57,9 @@ class MessageContext:
 
     QQ payload、Local 事件等协议细节在进入这里前已经被适配器解释；命令
     回调只依赖这些稳定字段，因此同一组件可以由不同驱动器触发。
+
+    user_id 是游戏账号主键；QQ 命令在路由建立后为 QQ 号。平台回复目标
+    仍在 reply_target.user_id，通常是 openid，不随账号主键变化。
     """
 
     adapter: str
@@ -67,12 +71,16 @@ class MessageContext:
     conversation_type: str
     reply_target: ReplyTarget
     sender_name: str = ""
+    route_user_id: str = ""
+    route_group_id: str = ""
 
     def __post_init__(self) -> None:
         adapter = str(self.adapter or "").strip().lower()
         user_id = str(self.user_id or "").strip()
         request_id = str(self.request_id or "").strip()
         conversation_type = str(self.conversation_type or "").strip().lower()
+        route_user_id = str(self.route_user_id or "").strip()
+        route_group_id = str(self.route_group_id or "").strip()
         if not user_id:
             raise ValueError("MessageContext 缺少 user_id")
         if not request_id:
@@ -81,13 +89,19 @@ class MessageContext:
             raise ValueError("MessageContext 与 ReplyTarget 的 adapter 不一致")
         if self.reply_target.conversation_type != conversation_type:
             raise ValueError("MessageContext 与 ReplyTarget 的会话类型不一致")
-        if self.reply_target.user_id and self.reply_target.user_id != user_id:
+        if (
+            self.reply_target.user_id
+            and self.reply_target.user_id != user_id
+            and not (user_id == route_user_id and route_user_id)
+        ):
             raise ValueError("MessageContext 与 ReplyTarget 的 user_id 不一致")
         object.__setattr__(self, "adapter", adapter)
         object.__setattr__(self, "user_id", user_id)
         object.__setattr__(self, "request_id", request_id)
         object.__setattr__(self, "conversation_type", conversation_type)
         object.__setattr__(self, "sender_name", " ".join(str(self.sender_name or "").split()))
+        object.__setattr__(self, "route_user_id", route_user_id)
+        object.__setattr__(self, "route_group_id", route_group_id)
 
 
 @dataclass(frozen=True)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from re import Pattern
@@ -17,6 +18,7 @@ from ..context import (
     MessageContext,
     ReplyTarget,
 )
+from ..identity import route_fields
 from ..request_scope import request_scope
 from ..shared_dispatch import MessageDispatchMixin
 from .event import LocalCommandEvent, local_command_event
@@ -99,8 +101,13 @@ class LocalEventHandler(MessageDispatchMixin, BaseMessageHandler):
                 emit_message_event(
                     event_from_incoming(
                         adapter="local",
+                        bot_key="local",
+                        transport="local",
                         user_id=event.user_id,
                         request_id=event.event_id,
+                        group_id="",
+                        message_id=event.event_id,
+                        occurred_at=time.time(),
                         message_type="text",
                         content=event.raw_message,
                         sender_name=event.sender_name,
@@ -230,6 +237,7 @@ class LocalEventHandler(MessageDispatchMixin, BaseMessageHandler):
     ) -> MessageContext:
         """生成本地驱动器的显式消息上下文。"""
 
+        route = route_fields(bot_key="local", user_id=event.user_id)
         reply_target = ReplyTarget(
             adapter="local",
             user_id=event.user_id,
@@ -247,6 +255,8 @@ class LocalEventHandler(MessageDispatchMixin, BaseMessageHandler):
             conversation_type=event.conversation_type,
             reply_target=reply_target,
             sender_name=event.sender_name,
+            route_user_id=route["route_user_id"],
+            route_group_id=route["route_group_id"],
         )
 
     @staticmethod

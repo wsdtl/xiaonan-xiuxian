@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 from launch.log import C, logger
@@ -118,9 +119,14 @@ class QqWsEventHandler(MessageDispatchMixin, BaseMessageHandler):
         event = processor.parse_gateway_event(payload, event_type)
         if event is None:
             return False
+        event = replace(
+            event, transport=TRANSPORT, bot_key=client.app_id or "qq_ws"
+        )
 
         processor.driver_runtime.enqueue_interaction_ack(event)
-        await processor.submit_event(event)
+        await processor.submit_event(
+            event, transport="websocket", bot_key=client.app_id or "qq_ws"
+        )
         return True
 
     @staticmethod
