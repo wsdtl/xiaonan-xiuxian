@@ -23,7 +23,7 @@ from typing import Any
         "scope": "专属",
         "guard_rule": "空闲或活动中",
         "help": {
-            "category": "道侣",
+            "category": "特殊地点",
             "summary": "在铜雀台预览或执行同行道侣修为归流",
             "usage": ("夺元", "夺元 护契", "夺元 离契"),
             "side_effect": "护契消耗守真定契丹；离契使好感归零并解除同行",

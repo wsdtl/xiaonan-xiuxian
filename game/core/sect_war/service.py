@@ -415,7 +415,7 @@ class SectWarService:
                 action_limit=self._actions,
                 medicine_definitions=_medicine_definitions(medicine_stacks),
                 medicine_selection_strategy=self._medicine.selection_strategy,
-                # 只存战报，不存展示包：展示包由战报页面按需重建（`game/cmd/通用/战报`）。
+                # 只存战报，不存展示包：展示包由战报页面按需重建（`game/cmd/战斗/战报`）。
                 # 展示包比战报还大（一次 15 人对 15 人实测几十兆字符），而它每一步都能从
                 # 战报现算——存两份等于把同一件事存两遍。
                 report=CombatReportSpec(

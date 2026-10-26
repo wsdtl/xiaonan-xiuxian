@@ -265,7 +265,7 @@ def _report(services) -> dict:
 
 
 def test_the_page_has_one_data_interface() -> None:
-    from game.cmd.通用.战报.site import router
+    from game.cmd.战斗.战报.site import router
 
     paths = {route.path for route in router.routes}
     assert paths == {"/battle/{report_id:path}", "/battle/{report_id:path}/data"}, (

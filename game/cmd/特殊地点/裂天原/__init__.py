@@ -17,7 +17,7 @@ from typing import Any
         "scope": "专属",
         "guard_rule": "空闲或活动中",
         "help": {
-            "category": "炼制",
+            "category": "特殊地点",
             "summary": "在裂天原为纯突破节点补入一项永久属性",
             "usage": ("补天 人物 炼气 赤元聚气丹", "补天 道侣 炼气 赤元聚气丹"),
             "side_effect": "消耗九霄补天丹并记录补正来源",

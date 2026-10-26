@@ -787,7 +787,7 @@ def test_formation_preview_shows_core_and_detection() -> None:
 
     from types import SimpleNamespace
 
-    from game.cmd.特殊地点.宗门园区.地点.演阵台.site import _formation_view
+    from game.cmd.宗门.演阵台.site import _formation_view
     from game.core.formation import FormationDetection
 
     assessment = SimpleNamespace(
@@ -1213,7 +1213,7 @@ def test_battle_delta_merges_current_resources(services) -> None:
 def test_inventory_row_renders_grade_with_command_link() -> None:
     """纳戒清单：品级与名字同属一个可点控件，不能打出 CommandLink 的 repr。"""
 
-    from game.cmd.通用.纳戒.reply import _entry_parts
+    from game.cmd.查看与工具.纳戒.reply import _entry_parts
     from game.features.najie import NajieEntry
     from message import M
     from message.renderers.markdown import render_markdown
@@ -1526,7 +1526,7 @@ def test_compose_player_reply_keeps_custom_closing() -> None:
 def test_hosting_error_strips_composer_header() -> None:
     """托管错误提取跳过 composer 前置的人物头与命令标题。"""
 
-    from game.cmd.通用.托管.runtime import _reply_error
+    from game.cmd.行动.托管.runtime import _reply_error
     from message import RenderedMessage
 
     class Reply:

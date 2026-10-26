@@ -508,7 +508,7 @@ DIRECTORY_TRAVERSAL_CALLS = frozenset({
 #: 不是游戏数据，属于 `game/cmd/说明.md` 里那条后台例外。
 DIRECTORY_TRAVERSAL_ALLOWLIST = {
     Path("game/core/data/files.py"),
-    Path("game/cmd/后台/天道后台/media.py"),
+    Path("game/cmd/后台入口/天道后台/media.py"),
 }
 
 
@@ -870,7 +870,7 @@ def _resolve_from(node: ast.ImportFrom, package: str) -> str:
     """把 `from …` 解析成被导入模块的全名。
 
     `from .utils import X` 里 `node.module` 只有 `utils`，不按包解析成全名，
-    就没法和 `game.cmd.通用.查看.utils` 对上，那样每个模块都会看着像孤儿。
+    就没法和 `game.cmd.查看与工具.查看.utils` 对上，那样每个模块都会看着像孤儿。
     """
 
     base = node.module or ""
@@ -886,7 +886,7 @@ def _docstring_nodes(tree: ast.AST) -> set[int]:
     """找出文档字符串节点。
 
     只是说明，不算引用。这条很要紧：本检查自己的 docstring 就举了
-    `game/cmd/通用/查看/combat.py` 当例子，若不排除，它会用自己的说明把那个
+    `game/cmd/查看与工具/查看/combat.py` 当例子，若不排除，它会用自己的说明把那个
     孤儿模块「引用」掉，于是永远抓不到——第一版就是这样漏报的。
     """
 
@@ -1056,7 +1056,7 @@ def check_unreferenced_modules() -> list[Finding]:
     """不得留下无人引用的模块。
 
     典型来历：重构把调用方接到新实现上，旧实现留在原处。它不再被读到，却仍然长得
-    像一套基础设施——`game/cmd/通用/查看/combat.py` 就这样冒充了二十多个提交的
+    像一套基础设施——`game/cmd/查看与工具/查看/combat.py` 就这样冒充了二十多个提交的
     「第二套战斗渲染器」，让人对着两套实现判断该统一到哪一套，而正确处置是直接删。
     死代码不会报错，只能靠查引用发现。
 

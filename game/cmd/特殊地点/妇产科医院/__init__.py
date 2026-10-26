@@ -17,7 +17,7 @@ from ...reply_composer import send_game_reply
         "scope": "专属",
         "guard_rule": "空闲或活动中",
         "help": {
-            "category": "道侣",
+            "category": "特殊地点",
             "summary": "在妇产科医院与当前同行道侣生育，消耗生育丹生成下一代",
             "usage": ("生育",),
             "side_effect": "消耗生育丹并记本代胎次；新生儿入族谱，血脉按新生儿 DNA 匹配",
@@ -47,7 +47,7 @@ async def birth(user_id: str, message: str, manager: Any) -> None:
         "scope": "专属",
         "guard_rule": "已创建",
         "help": {
-            "category": "道侣",
+            "category": "特殊地点",
             "summary": "在妇产科医院向附近的异性玩家求子：一男一女、求方需生育丹、双方都必须在医院，孩子归求方",
             "usage": ("求子 玩家名", "求子 待办", "求子 同意 [编号]", "求子 拒绝 [编号]"),
             "side_effect": "同意时消耗求方的生育丹并按求方胎次计；双方都必须在妇产科医院；孩子只进求方族谱，被求者不留记录",
