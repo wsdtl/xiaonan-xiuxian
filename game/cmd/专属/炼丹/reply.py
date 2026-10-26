@@ -135,7 +135,7 @@ def completed(
     builder = (
         M.document()
 
-        .inline_section("结果", M.status("完成", tone="positive"), icon="success")
+        .inline_section("结果", M.status("完成", tone="positive"), icon="game.pill")
         .section(alchemist.title, icon="item")
         .field(text(copy, "完成", "丹师"), alchemist.name)
         .line(text(copy, "完成", "过程", {"丹师": alchemist.name}))
@@ -148,7 +148,7 @@ def completed(
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.amulet").field(
             activation.name, activation.summary
         )
     return builder.actions(message_actions(actions)).build()

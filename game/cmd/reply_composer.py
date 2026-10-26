@@ -25,9 +25,6 @@ from message import (
     coerce_message,
 )
 
-from .help_icons import icon_for_command
-
-
 async def _identity_text(user_id: str) -> str:
     """人物头：昵称 境界 等级；没建档就写「未建档」。"""
 
@@ -89,7 +86,7 @@ async def send_game_reply(
         payload,
         identity=await _identity_text(context.user_id),
         title=context.raw_message.strip(),
-        icon=icon_for_command(context.command),
+        icon="game.cmd",
     )
     return await manager.send(decorated, is_log=is_log, request_id=request_id)
 

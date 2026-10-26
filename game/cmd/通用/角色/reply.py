@@ -46,17 +46,17 @@ def created(
         M.document()
 
         .inline_section("创建", M.status("成功", tone="positive"), icon="success")
-        .section("身份")
+        .section("身份", icon="game.role")
         .row(("姓名", M.text(result.name, tone="emphasis")), ("性别", result.gender))
         .row(("种族", result.race or "人族"), ("境界", result.realm_name), ("等级", 1))
-        .section("出生地")
+        .section("出生地", icon="game.pin")
         .field("地点", M.command(result.location_name, "位置"))
         .row(("区域", result.region), ("地形", result.terrain))
         .row(
             ("坐标", f"{result.xy[0]}, {result.xy[1]}"),
             ("海拔", f"{result.altitude}{unit}"),
         )
-        .section("初始物资")
+        .section("初始物资", icon="game.bag")
     )
     for index, (item_name, grade, quantity) in enumerate(result.initial_items, start=1):
         builder.item(
@@ -90,7 +90,7 @@ def overview(
     builder = (
         M.document()
 
-        .section("身份", icon="status")
+        .section("身份", icon="game.role")
         .row(
             ("性别", character.gender),
             ("种族", character.race or "人族"),
@@ -109,28 +109,28 @@ def overview(
             ("灵石", M.text(character.spirit_stones, tone="emphasis")),
             ("宗门贡献", character.sect_contribution),
         )
-        .section("根性", icon="status")
+        .section("根性", icon="game.leaf")
         .row(
             *(
                 (element, M.text(_display_number(value), tone=_element_tone(element)))
                 for element, value in character.five_elements.items()
             )
         )
-        .section("状态", icon="status")
+        .section("状态", icon="game.seed")
         .row(
             *(
                 (label, M.status(value, tone=_state_tone(value)))
                 for label, value in result.states
             )
         )
-        .section("位置", icon="map")
+        .section("位置", icon="game.pin")
         .field("地点", result.location_name or "野外")
         .row(("区域", result.region), ("地形", result.terrain))
         .row(
             ("坐标", f"{result.xy[0]}, {result.xy[1]}"),
             ("海拔", f"{result.altitude}{unit}"),
         )
-        .section("资源", icon="status")
+        .section("资源", icon="game.gem")
         .field(
             "血气",
             M.progress(
@@ -154,14 +154,14 @@ def overview(
         builder.field("护盾", _display_number(shield))
     # 血脉：DNA 与命中的血脉。没取到就不显示这一段（不许出现空栏目）。
     if dna:
-        builder.section("血脉", icon="status")
+        builder.section("血脉", icon="game.dna")
         builder.row(("DNA", dna))
         if bool(getattr(unit, "lifespan_full", False)):
             # 寿元将尽：血脉失效，加成不再生效（补救的路是传位）。
             builder.row(("血脉", "寿元将尽·血脉失效"))
     # 意境：六条路各自记阶、道行共享；一条都没点过就整段不显示（不许出现空栏目）。
     if character.yijing:
-        builder.section("意境", icon="status")
+        builder.section("意境", icon="game.swirl")
         builder.row(("意境", "、".join(item.display for item in character.yijing)))
         builder.row(("道行", character.yijing[0].daoxing))
         behind = [item for item in character.yijing if item.missing]
@@ -189,7 +189,7 @@ def overview(
         if name in attributes and attributes[name] != baselines.get(name, 0)
     )
     if primary_pairs:
-        builder.section("属性", icon="skill")
+        builder.section("属性", icon="game.swords")
         _append_pairs(builder, primary_pairs)
     secondary = tuple(
         item
@@ -200,15 +200,15 @@ def overview(
         and not (item[0] == "连击伤害" and attributes.get("连击率", 0) == 0)
     )
     if secondary:
-        builder.section("加成", icon="status")
+        builder.section("加成", icon="game.spark")
         _append_pairs(builder, secondary)
     if result.injuries:
-        builder.section("伤势", icon="status")
+        builder.section("伤势", icon="game.blood_drop")
         for index, (name, stacks) in enumerate(result.injuries, start=1):
             builder.item(index, f"{name} × {stacks}")
     else:
-        builder.inline_section("伤势", M.status("无", tone="positive"), icon="status")
-    builder.section("槽位", icon="skill").row(
+        builder.inline_section("伤势", M.status("无", tone="positive"), icon="game.blood_drop")
+    builder.section("槽位", icon="game.hex").row(
         *(
             (category, f"{equipped}/{total}")
             for category, equipped, total in result.cultivation_usage
@@ -222,10 +222,10 @@ def overview(
         )
     if result.innate_treasure is None:
         builder.inline_section(
-            "灵宝", M.status("未执掌", tone="muted"), icon="item"
+            "灵宝", M.status("未执掌", tone="muted"), icon="game.amulet"
         )
     else:
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.amulet").field(
             "槽位",
             f"{result.innate_treasure_usage[0]}/{result.innate_treasure_usage[1]}",
         )
@@ -238,14 +238,14 @@ def overview(
             result.innate_treasure.authority,
         )
     weapon = character.weapon
-    builder.section("本命武器", icon="weapon")
+    builder.section("本命武器", icon="game.dagger")
     builder.field("名称", weapon.name)
     builder.row(("器阶", weapon.stage), ("等级", weapon.level))
     builder.row(("攻击", _display_number(weapon.attack)), ("经验", weapon.experience))
     builder.field("器律", f"{len(weapon.equipped_laws)}/{weapon.open_law_slots}")
     for law in weapon.equipped_laws:
         builder.item(law.slot, M.command(law.name, f"查看 {law.name}"))
-    builder.section("物资", icon="inventory").row(
+    builder.section("物资", icon="game.bag").row(
         ("种类", character.inventory.stack_count),
         ("总数", character.inventory.total_quantity),
         (

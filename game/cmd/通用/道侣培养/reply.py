@@ -37,7 +37,7 @@ def _render_candidates(
             feature.copy("突破", "缺丹").format_map(
                 {"来源": offer.preview.realm_name, "目标": offer.preview.next_realm_name}
             ),
-            icon="status",
+            icon="game.pill",
         )
         return True
     preview = offer.preview
@@ -69,7 +69,7 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
     builder = (
         M.document()
 
-        .section("修为", icon="status")
+        .section("修为", icon="game.seed")
         .row(
             (feature.copy("道侣", "境界"), result.realm_name),
             (feature.copy("道侣", "等级"), instance.level),
@@ -80,10 +80,10 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
         )
     )
     _render_candidates(feature, builder, result.breakthrough, title_key="可突破标题")
-    builder.section(feature.copy("道侣", "修行构筑"), icon="skill")
+    builder.section(feature.copy("道侣", "修行构筑"), icon="game.gear")
     for category, names in result.cultivation_names:
         builder.field(category, "、".join(names))
-    builder.section(feature.copy("道侣", "本命武器"), icon="weapon")
+    builder.section(feature.copy("道侣", "本命武器"), icon="game.dagger")
     builder.field("名称", instance.weapon_name)
     builder.row(("器阶", result.weapon_stage), ("等级", instance.weapon_level))
     builder.field(
@@ -116,7 +116,7 @@ def breakthrough(
     )
     return (
         M.document()
-        .section("突破", icon="status")
+        .section("突破", icon="game.spark")
         .line(M.status("突破完成", tone="positive"), " ", text)
         .build()
     )
@@ -128,7 +128,7 @@ def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> 
     )
     return (
         M.document()
-        .section("覆炼", icon="weapon")
+        .section("覆炼", icon="game.hammer")
         .line(M.status("覆炼完成", tone="positive"), " ", text)
         .build()
     )

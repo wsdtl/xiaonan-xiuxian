@@ -1263,6 +1263,25 @@ def test_message_header_and_command_title_are_compact() -> None:
     )
 
 
+def test_game_icon_registry_uses_supported_glyphs() -> None:
+    """游戏图标词表只收客户端能渲染的图形，cmd 标题图标固定为 cmd。"""
+
+    from game.cmd import icons
+    from message import SECTION_ICONS
+
+    assert SECTION_ICONS["game.cmd"] == "cmd"
+    assert SECTION_ICONS["game.role"] == "🧑"
+    assert SECTION_ICONS["game.hex"] == "🔷"
+    assert SECTION_ICONS["game.four_diamond"] == "🔶"
+    assert SECTION_ICONS["game.four_star"] == "🌟"
+    unsupported = {"🪷", "🫀", "🪙", "🪵", "🪨", "🫧", "🪭", "🛖", "🪶"}
+    assert unsupported.isdisjoint(icons.GAME_ICONS.values())
+    assert not any(
+        key.startswith(("game.mark.", "game.glyph.")) for key in icons.GAME_ICONS
+    )
+    assert len(set(icons.GAME_ICONS.values())) > 70
+
+
 def test_command_title_display_is_clipped_but_command_is_full() -> None:
     """命令标题只截断显示，完整命令仍交给行内按钮。"""
 
@@ -1423,6 +1442,8 @@ def test_send_game_reply_uses_current_context(monkeypatch) -> None:
     rendered = fake.message.document
     assert rendered.blocks[0].__class__.__name__ == "HeaderBlock"
     assert rendered.blocks[1].__class__.__name__ == "CommandTitleBlock"
+    assert rendered.blocks[1].icon == "game.cmd"
+    assert rendered.blocks[1].command == "查看 人物"
 
 
 def test_hosting_error_strips_composer_header() -> None:
@@ -1435,5 +1456,5 @@ def test_hosting_error_strips_composer_header() -> None:
         def __init__(self, content: str) -> None:
             self.message = RenderedMessage(kind="markdown", content=content)
 
-    content = "**张三 灵动 Lv.1**\n> 🥾 结算探险\n> ✨ 错误\n> > 当前无法结算探险"
+    content = "> 张三 灵动 Lv.1\n> cmd 结算探险\n> ✨ 错误\n> > 当前无法结算探险"
     assert _reply_error([Reply(content)], "结算探险") == "✨ 错误 当前无法结算探险"

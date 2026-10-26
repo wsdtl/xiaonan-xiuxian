@@ -8,6 +8,9 @@ from pkgutil import walk_packages
 
 from fastapi import APIRouter
 
+from .icons import register as _register_icons
+
+_register_icons()
 
 
 def _load_component_routers() -> APIRouter:

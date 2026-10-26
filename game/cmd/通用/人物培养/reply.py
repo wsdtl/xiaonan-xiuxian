@@ -76,11 +76,11 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
             "修为",
             M.text(f"{profile.realm_name}{profile.level}级 · 经验")
             + (_progress(profile.experience, result.next_experience),),
-            icon="status",
+            icon="game.seed",
         )
     )
     _render_candidates(feature, builder, result.breakthrough, title_key="可突破标题")
-    builder.section(feature.copy("人物", "修行构筑"), icon="skill")
+    builder.section(feature.copy("人物", "修行构筑"), icon="game.gear")
     equipped = {
         (entry.category, entry.slot): entry for entry in profile.equipped_content
     }
@@ -100,7 +100,7 @@ def view(feature: CharacterCultivationFeature, result: CharacterCultivationView)
                 + (M.command(value.name, f"查看 {value.name}"),),
             )
     weapon = profile.weapon
-    builder.section(feature.copy("人物", "本命武器"), icon="weapon")
+    builder.section(feature.copy("人物", "本命武器"), icon="game.dagger")
     builder.row(("名称", weapon.name), ("器阶", weapon.stage))
     builder.row(
         ("等级", weapon.level),
@@ -121,12 +121,12 @@ def equipped(feature: CharacterCultivationFeature, result: CharacterEquipResult)
     )
     builder = (
         M.document()
-        .section("装配", icon="skill")
+        .section("装配", icon="game.gear")
         .line(M.status("装配完成", tone="positive"), " ", text)
     )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.amulet").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -144,12 +144,12 @@ def breakthrough(
     )
     builder = (
         M.document()
-        .section("突破", icon="status")
+        .section("突破", icon="game.spark")
         .line(M.status("突破完成", tone="positive"), " ", text)
     )
     if result.treasure_activation is not None:
         activation = result.treasure_activation
-        builder.section("灵宝", icon="item").field(
+        builder.section("灵宝", icon="game.amulet").field(
             activation.name, activation.summary
         )
     return builder.build()
@@ -161,7 +161,7 @@ def forged(feature: CharacterCultivationFeature, result: CharacterLawResult) -> 
     )
     return (
         M.document()
-        .section("覆炼", icon="weapon")
+        .section("覆炼", icon="game.hammer")
         .line(M.status("覆炼完成", tone="positive"), " ", text)
         .build()
     )
