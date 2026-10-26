@@ -15,6 +15,7 @@ from collections.abc import Callable
 
 from ..icons import icon_for
 from ..schema import (
+    ClosingBlock,
     CommandLink,
     CommandTitleBlock,
     ContentLine,
@@ -49,8 +50,12 @@ def render_markdown(
     lines: list[str] = []
     previous_block = None
     for block in document.blocks:
-        should_separate = isinstance(
-            previous_block, (InlineBlock, SectionBlock, ImageBlock, NoteBlock)
+        should_separate = (
+            isinstance(
+                previous_block,
+                (InlineBlock, SectionBlock, ImageBlock, NoteBlock, ClosingBlock),
+            )
+            or isinstance(block, ClosingBlock)
         ) and not (
             isinstance(previous_block, InlineBlock) and isinstance(block, InlineBlock)
         )
@@ -97,6 +102,8 @@ def render_markdown(
             for line in block.lines:
                 value = _render_line(line, command_renderer)
                 lines.append(">" if not value else f"> {value}")
+        elif isinstance(block, ClosingBlock):
+            lines.append(f"> {_render_rich(block.content, command_renderer)}")
         previous_block = block
 
     return "\n".join(lines).strip()

@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from .schema import (
     Action,
+    ClosingBlock,
     CommandLink,
     CommandTitleBlock,
     ContentLine,
@@ -156,6 +157,15 @@ class DocumentBuilder:
             self._section_index = None
         return self
 
+    def closing(self, *parts: object) -> DocumentBuilder:
+        """添加整条消息最后的引用行；只能出现一次且必须在所有内容块之后。"""
+
+        content = _rich(*parts)
+        if content:
+            self._blocks.append(ClosingBlock(content))
+            self._section_index = None
+        return self
+
     def image(
         self,
         url: object,
@@ -188,6 +198,15 @@ class DocumentBuilder:
         ids = [action.action_id for action in self._actions]
         if len(ids) != len(set(ids)):
             raise ValueError("消息动作 action_id 不能重复")
+        closing_indexes = [
+            index
+            for index, block in enumerate(self._blocks)
+            if isinstance(block, ClosingBlock)
+        ]
+        if len(closing_indexes) > 1:
+            raise ValueError("消息结尾只能有一个 closing 块")
+        if closing_indexes and closing_indexes[0] != len(self._blocks) - 1:
+            raise ValueError("消息结尾必须是最后一个内容块")
         inline_commands = _inline_commands(self._blocks)
         bottom_commands = {action.data for action in self._actions}
         overlap = inline_commands & bottom_commands

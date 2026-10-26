@@ -1263,6 +1263,45 @@ def test_message_header_and_command_title_are_compact() -> None:
     )
 
 
+def test_closing_line_is_quoted_and_must_be_last() -> None:
+    """消息结尾是一条独立引用行，位于所有栏目之后且只能有一个。"""
+
+    import pytest
+
+    from message import Action, M
+    from message.renderers.markdown import render_markdown
+    from message.renderers.plain_text import render_plain_text
+
+    document = (
+        M.document()
+        .section("基础物品", icon="item")
+        .line("恢复丹 5种/166份")
+        .closing("另有 15 个分项暂无内容，拿到后会出现在这里。")
+        .action(Action("najie.home", "返回", "纳戒"))
+        .build()
+    )
+    assert render_markdown(document.document) == "\n".join(
+        [
+            "> 📦 基础物品",
+            "> > 恢复丹 5种/166份",
+            "> ",
+            "> 另有 15 个分项暂无内容，拿到后会出现在这里。",
+        ]
+    )
+    assert render_plain_text(document.document) == "\n".join(
+        [
+            "📦 基础物品",
+            "恢复丹 5种/166份",
+            "",
+            "另有 15 个分项暂无内容，拿到后会出现在这里。",
+        ]
+    )
+    with pytest.raises(ValueError, match="最后一个内容块"):
+        M.document().closing("结尾").section("正文").build()
+    with pytest.raises(ValueError, match="只能有一个"):
+        M.document().closing("甲").closing("乙").build()
+
+
 def test_game_icon_registry_uses_supported_glyphs() -> None:
     """游戏图标词表只收客户端能渲染的图形，cmd 标题图标固定为 cmd。"""
 

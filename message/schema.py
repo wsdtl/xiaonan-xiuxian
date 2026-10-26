@@ -210,8 +210,24 @@ class NoteBlock:
     lines: tuple[ContentLine, ...]
 
 
+@dataclass(frozen=True)
+class ClosingBlock:
+    """整条消息最后的引用行；用于提示或总结，必须位于所有内容块之后。"""
+
+    content: RichText
+
+    def __post_init__(self) -> None:
+        _plain_header_text(self.content, "消息结尾")
+
+
 DocumentBlock: TypeAlias = (
-    HeaderBlock | CommandTitleBlock | InlineBlock | SectionBlock | ImageBlock | NoteBlock
+    HeaderBlock
+    | CommandTitleBlock
+    | InlineBlock
+    | SectionBlock
+    | ImageBlock
+    | NoteBlock
+    | ClosingBlock
 )
 
 

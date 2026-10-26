@@ -5,6 +5,7 @@ from .icons import SECTION_ICONS, icon_for, register_icons
 from .render import coerce_message, render_local_message
 from .schema import (
     Action,
+    ClosingBlock,
     CommandLink,
     CommandTitleBlock,
     ContentLine,
@@ -24,6 +25,7 @@ __all__ = (
     "SECTION_ICONS",
     "TONES",
     "Action",
+    "ClosingBlock",
     "CommandLink",
     "CommandTitleBlock",
     "ContentLine",

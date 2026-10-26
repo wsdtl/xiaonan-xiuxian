@@ -37,7 +37,7 @@ def home(view: NajieHome) -> DocumentMessage:
                 )
             builder.line(*parts)
     if empty:
-        builder.small(f"另有 {empty} 个分项暂无内容，拿到后会出现在这里。")
+        builder.closing(f"另有 {empty} 个分项暂无内容，拿到后会出现在这里。")
     return builder.build()
 
 
@@ -51,7 +51,7 @@ def category(view: NajieCategoryView) -> DocumentMessage:
             _subcategory_total(subcategory.entry_count, subcategory.total_quantity),
         )
     if len(filled) != len(value.subcategories):
-        builder.small("其余分项暂无内容。")
+        builder.closing("其余分项暂无内容。")
     return builder.action(_home_action()).build()
 
 

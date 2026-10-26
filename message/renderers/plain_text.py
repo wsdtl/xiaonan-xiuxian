@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..icons import icon_for
 from ..schema import (
+    ClosingBlock,
     CommandLink,
     CommandTitleBlock,
     ContentLine,
@@ -44,11 +45,15 @@ def render_plain_text(document: Document) -> str:
             lines.append(f"[{block.alt}]")
         elif isinstance(block, NoteBlock):
             lines.extend(_render_line(line) for line in block.lines)
+        elif isinstance(block, ClosingBlock):
+            lines.append(_render_rich(block.content))
         previous_block = block
     return "\n".join(lines).strip()
 
 
 def _needs_block_separator(previous: object, current: object) -> bool:
+    if isinstance(current, ClosingBlock):
+        return True
     if isinstance(previous, (HeaderBlock, CommandTitleBlock)):
         return False
     return not (
