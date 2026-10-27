@@ -12,7 +12,7 @@ from typing import Any
 
 
 @GameCommand.command(
-    cmd=("补天", "裂天原补天"),
+    cmd="补天",
     metadata={
         "scope": "专属",
         "guard_rule": "空闲或活动中",

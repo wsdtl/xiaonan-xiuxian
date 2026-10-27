@@ -11,14 +11,14 @@ from typing import Any
 
 
 @GameCommand.fullmatch(
-    cmd=('网页公开', '网页资源公开'),
+    cmd='网页资源公开',
     metadata={
         'scope': '通用',
         'guard_rule': '已创建',
         'help': {
             'category': '查看与工具',
             'summary': '打开网页读取开关：网页可以直接读你的数据，你也能在这些网页里挑自己',
-            'usage': ('网页资源公开', '网页公开'),
+            'usage': ('网页资源公开',),
             'side_effect': '只改一个开关，不动任何资产',
             'order': 82,
         },
@@ -34,14 +34,14 @@ async def web_public_on(user_id: str, message_context: MessageContext, manager: 
 
 
 @GameCommand.fullmatch(
-    cmd=('网页关闭', '网页资源关闭'),
+    cmd='网页资源关闭',
     metadata={
         'scope': '通用',
         'guard_rule': '已创建',
         'help': {
             'category': '查看与工具',
             'summary': '关闭网页读取开关：网页不再读你的数据，这些页面里也不会有你',
-            'usage': ('网页资源关闭', '网页关闭'),
+            'usage': ('网页资源关闭',),
             'side_effect': '只改一个开关，不动任何资产',
             'order': 83,
         },

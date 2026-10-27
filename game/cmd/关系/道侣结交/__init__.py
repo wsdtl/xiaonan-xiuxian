@@ -18,7 +18,7 @@ from typing import Any
 
 
 @GameCommand.command(
-    cmd=("交谈", "道侣交谈"),
+    cmd="交谈",
     metadata={
         "scope": "通用",
         "guard_rule": "空闲或活动中",
@@ -86,7 +86,7 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
 
 
 @GameCommand.command(
-    cmd=("邀约", "邀约道侣"),
+    cmd="邀约",
     metadata={
         "scope": "通用",
         "guard_rule": "空闲或活动中",
@@ -118,7 +118,7 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
 
 
 @GameCommand.command(
-    cmd=("暂别", "暂别道侣"),
+    cmd="暂别",
     metadata={
         "scope": "通用",
         "guard_rule": "空闲或活动中",

@@ -18,7 +18,7 @@ from typing import Any
 
 
 @GameCommand.command(
-    cmd=("夺元", "铜雀台夺元"),
+    cmd="夺元",
     metadata={
         "scope": "专属",
         "guard_rule": "空闲或活动中",

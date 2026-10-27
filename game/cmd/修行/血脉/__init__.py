@@ -15,7 +15,7 @@ _SUBCOMMANDS = ("族谱",)
 
 
 @GameCommand.command(
-    cmd=("血脉", "血脉族谱"),
+    cmd="血脉",
     metadata={
         "scope": "通用",
         "guard_rule": "空闲或活动中",

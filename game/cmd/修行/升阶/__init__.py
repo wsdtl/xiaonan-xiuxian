@@ -24,7 +24,7 @@ def _quantity(text: str) -> int:
 
 
 @GameCommand.command(
-    cmd=("升阶", "提升品级"),
+    cmd="升阶",
     metadata={
         "scope": "通用",
         "guard_rule": "空闲或活动中",

@@ -12,14 +12,14 @@ from typing import Any
 
 
 @GameCommand.command(
-    cmd=("易形", "太素坊易形"),
+    cmd="易形",
     metadata={
         "scope": "专属",
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "特殊地点",
             "summary": "在太素坊改变玩家自身性别",
-            "usage": ("易形", "太素坊易形"),
+            "usage": ("易形",),
             "side_effect": "消耗一枚两仪易形丹；已有道侣关系保持不变",
             "order": 72,
         },
@@ -38,14 +38,14 @@ async def change_gender(user_id: str, message_context: MessageContext, manager: 
 
 
 @GameCommand.command(
-    cmd=("化形", "太素坊化形"),
+    cmd="化形",
     metadata={
         "scope": "专属",
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "特殊地点",
             "summary": "在太素坊择一族重塑种族",
-            "usage": ("化形 人族", "化形 <族名>", "太素坊化形 <族名>"),
+            "usage": ("化形 人族", "化形 <族名>"),
             "side_effect": "消耗一枚万化易形丹；修行、构筑与道侣关系保持不变",
             "order": 73,
         },

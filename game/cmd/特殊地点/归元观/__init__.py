@@ -13,14 +13,14 @@ from typing import Any
 
 
 @GameCommand.command(
-    cmd=("归元", "归元观归元"),
+    cmd="归元",
     metadata={
         "scope": "专属",
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "特殊地点",
             "summary": "在归元观重做同行道侣的一类构筑",
-            "usage": ("归元", "归元 功法", "归元 真意", "归元 气机", "归元观归元 功法"),
+            "usage": ("归元", "归元 功法", "归元 真意", "归元 气机"),
             "side_effect": "消耗一枚万法归元丹并重抽所选类别",
             "order": 70,
         },
@@ -44,14 +44,14 @@ async def reset_build(user_id: str, message: str, message_context: MessageContex
 
 
 @GameCommand.command(
-    cmd=('洗根', '归元观洗根'),
+    cmd="洗根",
     metadata={
         'scope': '专属',
         'guard_rule': '空闲或活动中',
         'help': {
             'category': '特殊地点',
             'summary': '在归元观重掷自己的五行根性',
-            'usage': ('洗根', '归元观洗根'),
+            'usage': ('洗根',),
             'side_effect': '消耗一枚灵根重铸丹；修行、构筑、种族与道侣关系保持不变',
             'order': 74,
         },

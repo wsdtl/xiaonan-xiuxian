@@ -42,6 +42,7 @@ class GameCommand:
             block=block,
             cooldown=cooldown,
             metadata=metadata,
+            allow_long=True,
         )
 
     @staticmethod
@@ -89,6 +90,7 @@ def _register(
     block: bool,
     cooldown: float = 0,
     metadata: dict[str, Any] | None,
+    allow_long: bool = False,
 ) -> Callable:
     is_regex = registrar is MessageHandler.regex
     if is_regex:
@@ -101,7 +103,7 @@ def _register(
             raise TypeError("正则命令 cmd 必须是正则表达式或正则表达式序列")
         route_names = tuple(route.pattern for route in routes)
     else:
-        routes = route_names = _command_routes(cmd)
+        routes = route_names = _command_routes(cmd, allow_long=allow_long)
     command_key = route_names[0]
     command_metadata = dict(metadata or {})
     # 命令冷却：只在这一处写保留键。同一份 metadata 会交给这条命令的**每个别名**与**每个适配器**，
@@ -151,7 +153,7 @@ def _register(
     return decorate
 
 
-def _command_routes(cmd: object) -> tuple[str, ...]:
+def _command_routes(cmd: object, *, allow_long: bool = False) -> tuple[str, ...]:
     values: Sequence[object] = (
         (cmd,) if isinstance(cmd, str) else cmd if isinstance(cmd, Sequence) else ()
     )
@@ -160,7 +162,7 @@ def _command_routes(cmd: object) -> tuple[str, ...]:
     routes = tuple(str(value or "").strip() for value in values)
     if any(not route or any(char.isspace() for char in route) for route in routes):
         raise ValueError("游戏命令必须是不含空白的非空字符串")
-    if len(routes[0]) > 4:
+    if not allow_long and len(routes[0]) > 4:
         raise ValueError("游戏主命令最多四个字；长写法可放在 cmd 后续项")
     if len({route.casefold() for route in routes}) != len(routes):
         raise ValueError("同一 cmd 中不能重复声明命令")
