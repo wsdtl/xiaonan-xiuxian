@@ -52,7 +52,7 @@ def _battle_pills() -> list[dict]:
 
 def _injuries() -> list[dict]:
     entries: list[dict] = []
-    for path in sorted((DATA / "角色" / "内容" / "伤势").glob("*.json")):
+    for path in sorted((DATA / "角色" / "内容" / "伤势").rglob("*.json")):
         document = json.loads(path.read_text(encoding="utf-8"))
         entries.extend(document if isinstance(document, list) else [document])
     return entries
