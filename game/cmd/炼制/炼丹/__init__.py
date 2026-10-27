@@ -1,41 +1,34 @@
-"""地点专属炼丹命令。"""
-
+"""炼丹：总览、只读目录与直接炼制。"""
 from __future__ import annotations
+
+from typing import Any
 
 from game.app import current_game_services
 from game.features.liandan import AlchemyFeatureError
+from game.features.presentation import ItemRefError, parse_item_ref
 
 from ...command import GameCommand
-from . import reply
 from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
-from typing import Any
-
-_CATEGORIES = frozenset({"恢复丹", "战丹", "突破丹", "特殊丹"})
-_GRADES = ("黄品", "玄品", "地品", "天品", "圣品")
+from . import reply
 
 
-def _parse_recipe(query: str) -> tuple[str, str, int]:
-    parts = query.split()
-    grade = "黄品"
-    if parts:
-        token = parts[0]
-        for name in _GRADES:
-            short = name.removesuffix("品")
-            for prefix in (name, short):
-                if token.startswith(prefix):
-                    grade = name
-                    rest = token[len(prefix):]
-                    parts = ([rest] if rest else []) + parts[1:]
-                    break
-            else:
-                continue
-            break
+def _direct(message: str) -> tuple[object, int]:
+    parts = str(message or "").strip().split()
     quantity = 1
-    if len(parts) > 1 and parts[-1].isdigit():
+    if len(parts) > 1 and parts[-1].isdecimal():
         quantity = int(parts[-1])
         parts = parts[:-1]
-    return grade, " ".join(parts).strip(), quantity
+    if not parts:
+        raise ValueError("缺少丹药名")
+    ref = parse_item_ref(" ".join(parts))
+    if not ref.grade:
+        raise ValueError("请写品级，例：炼丹 黄品聚气丹")
+    return ref, quantity
+
+
+def _error(feature: Any, message: str) -> object:
+    return reply.error(feature.copy(), message, feature.format_actions(), command="炼丹")
 
 
 @GameCommand.command(
@@ -45,14 +38,61 @@ def _parse_recipe(query: str) -> tuple[str, str, int]:
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
-            "summary": "查看当地丹师可炼丹药，或请丹师验看一颗丹药",
-            "usage": ("炼丹", "炼丹 恢复丹", "炼丹 战丹 2", "炼丹 圣品聚气丹"),
-            "side_effect": "只验药，不消耗材料",
+            "summary": "查看丹方总览，或直接炼一枚丹药",
+            "usage": ("炼丹", "炼丹 黄品聚气丹", "炼丹 黄品聚气丹 3"),
+            "side_effect": "写成品级和丹名且唯一、材料足时消耗材料并成丹；缺材料或多解只回预览",
             "order": 63,
         },
     },
 )
-async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
+async def alchemy_root(
+    user_id: str, message: str, message_context: MessageContext, manager: Any
+) -> None:
+    feature = current_game_services().features.liandan
+    query = str(message or "").strip()
+    try:
+        if not query:
+            value = await feature.overview(user_id)
+            await send_game_reply(
+                reply.overview(feature.copy(), value, feature.overview_actions())
+            )
+            return
+        ref, quantity = _direct(query)
+        value = await feature.preview(user_id, ref.item, ref.grade, quantity)
+        if value.can_refine:
+            result = await feature.refine(
+                user_id, message_context.request_id, ref.item, ref.grade, quantity
+            )
+            await send_game_reply(
+                reply.completed(feature.copy(), result, feature.completed_actions())
+            )
+        else:
+            await send_game_reply(
+                reply.preview(feature.copy(), value, feature.preview_actions(value))
+            )
+    except ValueError as exc:
+        await send_game_reply(_error(feature, str(exc)))
+    except ItemRefError as exc:
+        await send_game_reply(_error(feature, str(exc)))
+    except AlchemyFeatureError as exc:
+        await send_game_reply(_error(feature, str(exc)))
+
+
+@GameCommand.command(
+    cmd="炼丹目录",
+    metadata={
+        "scope": "专属",
+        "guard_rule": "空闲或活动中",
+        "help": {
+            "category": "炼制",
+            "summary": "只读查看丹方目录；不查库存、不炼药、不消耗",
+            "usage": ("炼丹目录", "炼丹目录 恢复丹", "炼丹目录 恢复丹 2"),
+            "side_effect": "只读；目录计数是丹方数量，不表示当前材料是否齐备",
+            "order": 64,
+        },
+    },
+)
+async def alchemy_catalog(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.liandan
     query = str(message or "").strip()
     try:
@@ -63,56 +103,18 @@ async def inspect_alchemy(user_id: str, message: str, manager: Any) -> None:
             )
             return
         parts = query.split()
-        if parts[0] in _CATEGORIES and len(parts) <= 2:
-            page = 1 if len(parts) == 1 else int(parts[1])
-            value = await feature.recipes(user_id, parts[0], page)
-            await send_game_reply(
-                reply.recipe_list(feature.copy(), value, feature.list_actions(value))
-            )
-            return
-        grade, identifier, _quantity = _parse_recipe(query)
-        value = await feature.preview(user_id, identifier, grade)
+        category = parts[0]
+        page = int(parts[1]) if len(parts) == 2 and parts[1].isdecimal() else 1
+        if len(parts) > 2 or (len(parts) == 2 and not parts[1].isdecimal()):
+            raise ValueError("写法：炼丹目录 [类别] [页码]")
+        value = await feature.recipes(user_id, category, page)
         await send_game_reply(
-            reply.preview(feature.copy(), value, feature.preview_actions(value))
+            reply.recipe_list(feature.copy(), value, feature.list_actions(value))
         )
-    except (AlchemyFeatureError, ValueError) as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼丹"))
-
-
-@GameCommand.command(
-    cmd="开丹炉",
-    metadata={
-        "scope": "专属",
-        "guard_rule": "空闲或活动中",
-        "help": {
-            "category": "炼制",
-            "summary": "请当地丹师按验药结果炼成一枚丹药",
-            "usage": ("开丹炉 聚气丹", "开丹炉 圣品聚气丹",),
-            "side_effect": "消耗一件兽宝和所需灵植，把丹药收入纳戒",
-            "order": 64,
-        },
-    },
-)
-async def commit_alchemy(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.liandan
-    query = str(message or "").strip()
-    if not query:
-        await send_game_reply(
-            reply.error(
-      feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions(), command="开丹炉"
-  )
-        )
-        return
-    try:
-        grade, identifier, quantity = _parse_recipe(query)
-        value = await feature.refine(
-            user_id, message_context.request_id, identifier, grade, quantity
-        )
-        await send_game_reply(
-            reply.completed(feature.copy(), value, feature.completed_actions())
-        )
+    except ValueError as exc:
+        await send_game_reply(_error(feature, str(exc)))
     except AlchemyFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开丹炉"))
+        await send_game_reply(_error(feature, str(exc)))
 
 
 __all__ = []

@@ -1102,7 +1102,7 @@ def test_promotion_crafting_plan(services) -> None:
     assert len(plan.plan.lines) == 3
     assert plan.plan.total_cost == 40000
     assert plan.plan.satisfiable
-    assert plan.craft_command == "开丹炉 一息续命丹"
+    assert plan.craft_command == "炼丹 黄品一息续命丹"
 
 
 def test_promotion_formation_plan(services) -> None:

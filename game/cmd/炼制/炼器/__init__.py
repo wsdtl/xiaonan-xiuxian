@@ -1,26 +1,32 @@
-"""地点专属炼器命令。"""
-
+"""炼器：总览、只读目录与直接开炉。"""
 from __future__ import annotations
+
+from typing import Any
 
 from game.app import current_game_services
 from game.features.lianqi import ForgingFeatureError
 
 from ...command import GameCommand
-from . import reply
 from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
-from typing import Any
+from . import reply
 
 _STAGES = frozenset({"灵器", "法器", "法宝", "后天灵宝"})
 
 
-def _parse_forge(query: str) -> tuple[str, int]:
-    parts = query.split()
+def _direct(message: str) -> tuple[str, int]:
+    parts = str(message or "").strip().split()
     quantity = 1
-    if len(parts) > 1 and parts[-1].isdigit():
+    if len(parts) > 1 and parts[-1].isdecimal():
         quantity = int(parts[-1])
         parts = parts[:-1]
-    return " ".join(parts).strip(), quantity
+    if not parts:
+        raise ValueError("缺少器律名")
+    return " ".join(parts), quantity
+
+
+def _error(feature: Any, message: str) -> object:
+    return reply.error(feature.copy(), message, feature.format_actions(), command="炼器")
 
 
 @GameCommand.command(
@@ -30,68 +36,64 @@ def _parse_forge(query: str) -> tuple[str, int]:
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
-            "summary": "查看可炼器律，或请当地工匠审看一条器律的材料",
-            "usage": ("炼器", "炼器 灵器", "炼器 太白惊鸿"),
-            "side_effect": "只审材，不消耗材料",
+            "summary": "查看炼器总览，或直接炼一份器律",
+            "usage": ("炼器", "炼器 玄品无归劫锋", "炼器 玄品无归劫锋 2"),
+            "side_effect": "写完整器律且唯一、材料足时消耗材料并开炉；缺材料或多解只回预览",
             "order": 61,
         },
     },
 )
-async def inspect_forging(user_id: str, message: str, manager: Any) -> None:
+async def forging_root(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.lianqi
     query = str(message or "").strip()
     try:
         if not query:
             value = await feature.overview(user_id)
-            await send_game_reply(
-                reply.overview(feature.copy(), value, feature.overview_actions())
-            )
-        elif query in _STAGES:
-            value = await feature.laws(user_id, query)
-            await send_game_reply(reply.law_list(feature.copy(), value))
+            await send_game_reply(reply.overview(feature.copy(), value, feature.overview_actions()))
+            return
+        identifier, quantity = _direct(query)
+        value = await feature.preview(user_id, identifier, quantity)
+        if value.can_forge:
+            result = await feature.forge(user_id, message_context.request_id, identifier, quantity)
+            await send_game_reply(reply.completed(feature.copy(), result, feature.completed_actions()))
         else:
-            value = await feature.preview(user_id, query)
-            await send_game_reply(
-                reply.preview(feature.copy(), value, feature.preview_actions(value))
-            )
+            await send_game_reply(reply.preview(feature.copy(), value, feature.preview_actions(value)))
+    except ValueError as exc:
+        await send_game_reply(_error(feature, str(exc)))
     except ForgingFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="炼器"))
+        await send_game_reply(_error(feature, str(exc)))
 
 
 @GameCommand.command(
-    cmd="开炉",
+    cmd="炼器目录",
     metadata={
         "scope": "专属",
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
-            "summary": "请当地工匠按审材结果炼成一份器律",
-            "usage": ("开炉 太白惊鸿", "开炉 器律编号或名称",),
-            "side_effect": "消耗兽宝和灵矿，把一份器律收入器藏",
+            "summary": "只读查看器律目录；不查库存、不开炉、不消耗",
+            "usage": ("炼器目录", "炼器目录 法器"),
+            "side_effect": "只读；目录计数是器律数量，不表示当前材料是否齐备",
             "order": 62,
         },
     },
 )
-async def commit_forging(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+async def forging_catalog(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.lianqi
     query = str(message or "").strip()
-    if not query:
-        await send_game_reply(
-            reply.error(
-      feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions(), command="开炉"
-  )
-        )
-        return
     try:
-        identifier, quantity = _parse_forge(query)
-        value = await feature.forge(
-            user_id, message_context.request_id, identifier, quantity
-        )
-        await send_game_reply(
-            reply.completed(feature.copy(), value, feature.completed_actions())
-        )
+        if not query:
+            value = await feature.overview(user_id)
+            await send_game_reply(reply.overview(feature.copy(), value, feature.overview_actions()))
+            return
+        if query not in _STAGES:
+            raise ValueError("写法：炼器目录 [器阶]")
+        value = await feature.laws(user_id, query)
+        await send_game_reply(reply.law_list(feature.copy(), value))
+    except ValueError as exc:
+        await send_game_reply(_error(feature, str(exc)))
     except ForgingFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions(), command="开炉"))
+        await send_game_reply(_error(feature, str(exc)))
 
 
 __all__ = []

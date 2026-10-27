@@ -39,7 +39,7 @@ def overview(
     name = _facility(value)
     builder = (
         M.document()
-        .section(name, icon="game.box")
+        .section(f"{name} · 炼丹", icon="game.box")
         .field(text(copy, "总览", "设施"), name)
         .line(text(copy, "总览", "引言", {"设施": name}))
         .section(text(copy, "总览", "分类"), icon="game.bag")
@@ -62,13 +62,11 @@ def recipe_list(
         .section(value.category, icon="game.bag")
     )
     for index, entry in enumerate(value.entries, start=1):
-        state = text(copy, "列表", "可炼" if entry.can_refine else "缺材")
         builder.item(
             index,
             M.command(M.text(entry.recipe.medicine_name), f"查看 {entry.recipe.medicine_name}"),
-            " · ",
-            M.status(state, tone="positive" if entry.can_refine else "warning"),
-        ).small(f"材料：{len(entry.recipe.materials)} 项")
+            f" · 材料 {len(entry.recipe.materials)} 项",
+        )
     builder.small(
         text(copy, "列表", "页码", {"当前页": value.page, "总页数": value.page_count})
     )

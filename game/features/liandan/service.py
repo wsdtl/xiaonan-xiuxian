@@ -52,9 +52,11 @@ class AlchemyFeature:
         return await self._call(self._alchemy.list_recipes(user_id, category, page))
 
     async def preview(
-        self, user_id: str, identifier: str, grade_name: str = "黄品"
+        self, user_id: str, identifier: str, grade_name: str = "黄品", quantity: int = 1
     ) -> AlchemyPreview:
-        return await self._call(self._alchemy.preview(user_id, identifier, grade_name))
+        return await self._call(
+            self._alchemy.preview(user_id, identifier, grade_name, quantity)
+        )
 
     async def refine(
         self,
@@ -99,8 +101,8 @@ class AlchemyFeature:
         return actions(
             self._buttons,
             "预览",
-            {"可以开炉"} if value.can_refine else set(),
-            {"丹药": value.recipe.recipe_id},
+            {"可以炼丹"} if value.can_refine else set(),
+            {"丹药": value.recipe.medicine_name, "品级": value.medicine_grade_name},
         )
 
     def completed_actions(self) -> tuple[AlchemyAction, ...]:

@@ -144,3 +144,27 @@ def test_crafting_npc_mode_is_gone(services) -> None:
     assert categories.count("炼器") == 2
     assert categories.count("炼丹") == 2
     assert categories.count("炼阵") == 2
+
+
+def test_catalogs_do_not_scan_inventory(services, monkeypatch) -> None:
+    """目录页只读静态配方；不得为了列目录去读纳戒材料。"""
+
+    user = "catalog-user"
+    asyncio.run(
+        services.core.character.create(
+            CharacterCreateCommand(user, "create-catalog", "目录", "男", (15, 17), "")
+        )
+    )
+
+    async def fail(_user_id):
+        raise AssertionError("目录不应读取纳戒材料")
+
+    monkeypatch.setattr(services.core.alchemy, "_material_entries", fail)
+    monkeypatch.setattr(services.core.forging, "_material_entries", fail)
+
+    alchemy = asyncio.run(services.core.alchemy.list_recipes(user, "恢复丹"))
+    assert alchemy.entries
+    forging = asyncio.run(services.core.forging.list_laws(user, "灵器"))
+    assert forging.entries
+    formation = asyncio.run(services.core.formation.overview(user))
+    assert formation.entries

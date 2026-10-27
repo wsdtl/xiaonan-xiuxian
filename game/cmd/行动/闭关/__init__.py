@@ -1,58 +1,37 @@
-"""闭关命令。"""
-
+"""闭关：一个根命令 + 紧凑子命令。"""
 from __future__ import annotations
+
+import re
+from typing import Any
 
 from game.app import current_game_services
 from game.features.biguan import RetreatFeatureError
 
 from ...command import GameCommand
-from . import reply
 from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
-from typing import Any
+from . import reply
+
+_COMPACT = re.compile(r"^闭关(?P<action>进度|结束|结果)(?:\s+(?P<args>.*))?$")
 
 
-@GameCommand.fullmatch(
-    cmd=("开始闭关", "闭关"),
-    metadata={
-        "hosting": {"activity": "闭关", "phase": "start"},
-        "scope": "专属",
-        "guard_rule": "自主空闲",
-        "help": {
-            "category": "行动",
-            "summary": "在当前地点与同行修士共同闭关",
-            "usage": ("开始闭关", "闭关"),
-            "side_effect": "锁定当前参与者并预先确定六轮闭关结果",
-            "order": 33,
-        },
-    },
-)
-async def start_retreat(user_id: str, message_context: MessageContext, manager: Any) -> None:
+def _split(message: str) -> tuple[str, str]:
+    parts = str(message or "").strip().split(maxsplit=1)
+    if not parts:
+        return "", ""
+    return parts[0], parts[1] if len(parts) > 1 else ""
+
+
+async def _start(user_id: str, request_id: str) -> None:
     feature = current_game_services().features.biguan
     try:
-        result = await feature.start(user_id, message_context.request_id)
-        await send_game_reply(
-            reply.started(feature.copy(), result, feature.started_actions())
-        )
+        result = await feature.start(user_id, request_id)
+        await send_game_reply(reply.started(feature.copy(), result, feature.started_actions()))
     except RetreatFeatureError as exc:
         await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
-@GameCommand.fullmatch(
-    cmd=("闭关进度", "查看闭关进度", "闭况"),
-    metadata={
-        "scope": "专属",
-        "guard_rule": "已创建",
-        "help": {
-            "category": "行动",
-            "summary": "查看当前或最近一次闭关已经完成的整轮结果",
-            "usage": ("查看闭关进度", "闭关进度"),
-            "side_effect": "只读查询，不提前写入经验、恢复或功法",
-            "order": 34,
-        },
-    },
-)
-async def retreat_progress(user_id: str, manager: Any) -> None:
+async def _progress(user_id: str) -> None:
     feature = current_game_services().features.biguan
     try:
         result = await feature.progress(user_id)
@@ -68,73 +47,102 @@ async def retreat_progress(user_id: str, manager: Any) -> None:
         await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
-@GameCommand.command(
-    cmd=("闭关结束", "结束闭关", "出关"),
-    metadata={
-        "hosting": {"activity": "闭关", "phase": "end"},
-        "scope": "专属",
-        "guard_rule": "已创建",
-        "help": {
-            "category": "行动",
-            "summary": "按已经完成的整轮结果带领全体出关",
-            "usage": ("结束闭关", "结束闭关 页码", "出关 页码", "闭关结束 页码"),
-            "side_effect": "首次调用统一发放结果并结束全体闭关状态",
-            "order": 35,
-        },
-    },
-)
-async def end_retreat(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+async def _settle(user_id: str, page_text: str, request_id: str) -> None:
     feature = current_game_services().features.biguan
-    page_text = str(message or "").strip()
     try:
         page = 1 if not page_text else int(page_text)
     except ValueError:
-        await send_game_reply(
-            reply.error(
-                feature.copy(),
-                reply.text(feature.copy(), "错误", "写法"),
-                feature.format_actions(),
-            )
-        )
+        await send_game_reply(reply.error(feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions()))
         return
     try:
-        result = await feature.settle(user_id, message_context.request_id)
+        result = await feature.settle(user_id, request_id)
         total_pages = 1 + len(result.users)
         if page < 1 or page > total_pages:
             raise RetreatFeatureError(f"页码必须在1至{total_pages}之间")
         await send_game_reply(
-            reply.settlement_page(
-                feature.copy(),
-                feature,
-                result,
-                page,
-                feature.settlement_actions(page, total_pages),
-            )
+            reply.settlement_page(feature.copy(), feature, result, page, feature.settlement_actions(page, total_pages))
         )
     except RetreatFeatureError as exc:
         await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
 
 
+async def _dispatch(user_id: str, action: str, args: str, message_context: MessageContext) -> None:
+    feature = current_game_services().features.biguan
+    if not action:
+        try:
+            result = await feature.progress(user_id)
+            if result.settled and not result.can_end:
+                await _start(user_id, message_context.request_id)
+            else:
+                await send_game_reply(
+                    reply.progress(feature.copy(), feature, result, feature.progress_actions(result.can_end))
+                )
+        except RetreatFeatureError:
+            await _start(user_id, message_context.request_id)
+        return
+    if action == "开始":
+        await _start(user_id, message_context.request_id)
+    elif action == "进度":
+        await _progress(user_id)
+    elif action in {"结束", "结果"}:
+        await _settle(user_id, args, message_context.request_id)
+    else:
+        await send_game_reply(reply.error(feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions()))
+
 
 @GameCommand.command(
-    cmd=("闭关结果",),
+    cmd="闭关",
     metadata={
-        # 只读翻页：**故意不带 hosting 元数据**。托管中的玩法命令会被守卫拦下，手点的请求号
-        # 与托管记录对不上就没反应（2026-10-14 全局排查后照探险同款修）。
         "scope": "专属",
         "guard_rule": "已创建",
         "help": {
             "category": "行动",
-            "summary": "查看闭关结算结果的指定页（只读，不重复发奖）",
-            "usage": ("闭关结果", "闭关结果 页码"),
-            "side_effect": "只读查询；结算仍由结算命令在首次调用时完成",
+            "summary": "开始或查看一次闭关；写子命令看进度、出关或翻结果",
+            "usage": ("闭关", "闭关进度", "闭关结束 [页码]", "闭关结果 [页码]"),
+            "side_effect": "裸命令空闲时开始闭关；进行中显示进度；已结算后再次开始新闭关",
             "order": 33,
         },
     },
 )
-async def show_retreat_settlement(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    # 复用结算处理体（核心幂等：已结算只会回放，不重复发奖）。
-    await end_retreat(user_id, message, message_context, manager)
+async def retreat_root(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+    action, args = _split(message)
+    await _dispatch(user_id, action, args, message_context)
+
+
+@GameCommand.regex(
+    cmd=_COMPACT,
+    metadata={"scope": "专属", "guard_rule": "已创建", "hidden": True},
+)
+async def retreat_compact(
+    user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match
+) -> None:
+    await _dispatch(user_id, match.group("action"), match.group("args") or "", message_context)
+
+
+@GameCommand.command(
+    cmd="闭始",
+    metadata={
+        "hosting": {"activity": "闭关", "phase": "start"},
+        "scope": "专属",
+        "guard_rule": "自主空闲",
+        "hidden": True,
+    },
+)
+async def retreat_hosted_start(user_id: str, message_context: MessageContext, manager: Any) -> None:
+    await _start(user_id, message_context.request_id)
+
+
+@GameCommand.command(
+    cmd="闭终",
+    metadata={
+        "hosting": {"activity": "闭关", "phase": "end"},
+        "scope": "专属",
+        "guard_rule": "已创建",
+        "hidden": True,
+    },
+)
+async def retreat_hosted_end(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+    await _settle(user_id, message, message_context.request_id)
 
 
 __all__ = []

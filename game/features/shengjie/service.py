@@ -167,11 +167,11 @@ class ShengjieFeature:
             if kind == "炼丹":
                 name = self._alchemy.recipe_name(identifier)
                 requirements = self._alchemy.requirements(identifier, quantity)
-                command = "开丹炉 " + name + ("" if quantity == 1 else f" {quantity}")
+                command = "炼丹 黄品" + name + ("" if quantity == 1 else f" {quantity}")
             elif kind == "炼器":
                 name = self._forging.law_name(identifier)
                 requirements = self._forging.requirements(identifier, quantity)
-                command = "开炉 " + name + ("" if quantity == 1 else f" {quantity}")
+                command = "炼器 " + name + ("" if quantity == 1 else f" {quantity}")
             elif kind == "炼阵":
                 grade, formation_name = self._formation_grade_and_name(identifier)
                 name = self._formation.formation_name(formation_name)

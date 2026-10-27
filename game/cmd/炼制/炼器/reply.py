@@ -58,12 +58,9 @@ def law_list(copy: ForgingCopy, value: ForgingLawList) -> DocumentMessage:
         .section(value.stage, icon="game.box")
     )
     for index, entry in enumerate(value.entries, start=1):
-        state = text(copy, "列表", "可炼" if entry.can_forge else "缺材")
         builder.item(
             index,
             M.command(M.text(entry.law.name), f"查看 {entry.law.name}"),
-            " · ",
-            M.status(state, tone="positive" if entry.can_forge else "warning"),
         )
     builder.small(text(copy, "列表", "页码", {"当前页": 1, "总页数": 1}))
     return builder.build()

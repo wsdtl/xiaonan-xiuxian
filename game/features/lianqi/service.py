@@ -50,8 +50,8 @@ class ForgingFeature:
     async def laws(self, user_id: str, stage: str) -> ForgingLawList:
         return await self._call(self._forging.list_laws(user_id, stage))
 
-    async def preview(self, user_id: str, identifier: str) -> ForgingPreview:
-        return await self._call(self._forging.preview(user_id, identifier))
+    async def preview(self, user_id: str, identifier: str, quantity: int = 1) -> ForgingPreview:
+        return await self._call(self._forging.preview(user_id, identifier, quantity))
 
     async def forge(
         self, user_id: str, request_id: str, identifier: str, quantity: int = 1
@@ -72,8 +72,8 @@ class ForgingFeature:
         return actions(
             self._buttons,
             "预览",
-            {"可以开炉"} if preview.can_forge else set(),
-            {"器律": preview.law.law_id},
+            {"可以炼器"} if preview.can_forge else set(),
+            {"器律": preview.law.name},
         )
 
     def completed_actions(self) -> tuple[ForgingAction, ...]:

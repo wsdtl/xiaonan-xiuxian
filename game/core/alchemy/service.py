@@ -234,8 +234,6 @@ class AlchemyService:
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
             raise AlchemyError("页码必须是正整数")
         environment = await self._environment(normalized)
-        entries = await self._material_entries(normalized)
-        stones = await self._asset.spirit_stone_balance(normalized)
         recipes = tuple(
             sorted(
                 (
@@ -256,15 +254,7 @@ class AlchemyService:
             environment.facility,
             normalized_category,
             tuple(
-                AlchemyRecipeEntry(
-                    recipe,
-                    (
-                        preview := self._build_preview(
-                            normalized, environment, recipe, entries, stones=stones
-                        )
-                    ).can_refine,
-                    sum(item.quantity for item in preview.missing_materials),
-                )
+                AlchemyRecipeEntry(recipe, False, 0)
                 for recipe in selected
             ),
             page,

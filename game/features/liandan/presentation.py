@@ -18,7 +18,7 @@ _REQUIRED_TEXT = {
         {"标题", "设施", "丹药", "成丹", "药引", "辅材", "灵石消耗", "材料节省"}
     ),
     "完成": frozenset({"标题", "设施", "过程", "所得"}),
-    "错误": frozenset({"标题", "格式", "写法", "炼丹", "开丹炉"}),
+    "错误": frozenset({"标题", "格式", "写法", "炼丹"}),
 }
 
 
@@ -88,7 +88,7 @@ def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:
     if len(identities) != len(set(identities)):
         raise JsonDataError("炼丹同一页面的按钮编号不能重复")
     conditions = {button["条件"] for button in buttons if button["条件"]}
-    if conditions - {"可以开炉", "有上一页", "有下一页"}:
+    if conditions - {"可以炼丹", "有上一页", "有下一页"}:
         raise JsonDataError("炼丹按钮使用了未知条件")
 
 

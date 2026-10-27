@@ -21,9 +21,7 @@ _REQUIRED = {
         {
             "标题",
             "格式",
-            "阵法审查",
             "炼阵",
-            "阵法审查格式",
             "炼阵格式",
             "选择标题",
             "选择尾注",
@@ -80,7 +78,7 @@ def actions(buttons: tuple[Mapping[str, str], ...], page: str, conditions: set[s
 
 
 def _validate_buttons(buttons: tuple[Mapping[str, str], ...]) -> None:
-    if any(button["页面"] not in _PAGES | {"布阵"} for button in buttons):
+    if any(button["页面"] not in _PAGES | {"炼阵"} for button in buttons):
         raise JsonDataError("阵法按钮使用了未知页面")
     identities = tuple((button["页面"], button["编号"]) for button in buttons)
     if len(identities) != len(set(identities)):

@@ -327,8 +327,6 @@ class ForgingService:
         if normalized_stage not in self._law_stages:
             raise ForgingError(f"未知器律器阶：{normalized_stage or '<空>'}")
         environment = await self._environment(normalized)
-        entries = await self._material_entries(normalized)
-        stones = await self._asset.spirit_stone_balance(normalized)
         laws = sorted(
             (law for law in self._laws.values() if law.stage == normalized_stage),
             key=lambda law: law.law_id,
@@ -339,15 +337,7 @@ class ForgingService:
             environment.facility,
             normalized_stage,
             tuple(
-                ForgingLawEntry(
-                    law,
-                    (
-                        preview := self._build_preview(
-                            normalized, environment, law, entries, stones=stones
-                        )
-                    ).can_forge,
-                    sum(missing.quantity for missing in preview.missing_materials),
-                )
+                ForgingLawEntry(law, False, 0)
                 for law in laws
             ),
         )
