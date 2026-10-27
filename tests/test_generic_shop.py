@@ -1,4 +1,4 @@
-"""通用商店：池货架、类别动态与灵石交付。"""
+"""通用商店：池货架、类别动态与灵石存入。"""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def test_individual_shelf_can_deliver_to_inventory(services) -> None:
             "类别": "基础物品",
             "编号": "200001",
             "品级": ["01"],
-            "交付": "纳戒",
+            "存入位置": "纳戒",
         },
         set(),
     )

@@ -59,7 +59,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
             "category": "行动",
             "summary": "从当前位置货架购买商品",
             "usage": ("购买 黄品抢刻", "购买 黄品抢刻 3", "购买 <品级><物品> [数量]"),
-            "side_effect": "扣除灵石，把商品交付到对应资产；单次最多买 50 个",
+            "side_effect": "扣除灵石，把商品存入对应资产；单次最多买 50 个",
             "order": 56,
         },
     },
