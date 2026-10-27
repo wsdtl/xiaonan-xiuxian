@@ -122,6 +122,36 @@ def rule_validator(value: Mapping[str, Any]) -> RuleSchemaValidator:
     )
 
 
+def _validate_event_tags(value: Mapping[str, Any]) -> None:
+    """战斗标签只有事件标签一种：词表存在，实际值必须登记，旧 `标签` 字段不许出现。"""
+
+    registry = _mapping(value.get("事件标签"), "事件标签")
+    if not registry:
+        raise ValueError("事件标签词表不能为空")
+    for tag, description in registry.items():
+        if not str(tag).strip() or not str(description).strip():
+            raise ValueError("事件标签词表必须是非空键值")
+
+    def visit(node: object, path: str) -> None:
+        if isinstance(node, Mapping):
+            for key, child in node.items():
+                child_path = f"{path}.{key}" if path else str(key)
+                if key == "标签":
+                    raise ValueError(f"{child_path}：战斗标签只允许事件标签，禁止旧标签字段")
+                if key == "事件标签" and not isinstance(child, Mapping):
+                    if not isinstance(child, (list, tuple)):
+                        raise ValueError(f"{child_path}：事件标签必须是数组")
+                    for item in child:
+                        if str(item) not in registry:
+                            raise ValueError(f"{child_path}：未登记的事件标签 {item}")
+                visit(child, child_path)
+        elif isinstance(node, (list, tuple)):
+            for index, child in enumerate(node):
+                visit(child, f"{path}[{index}]")
+
+    visit(value, "")
+
+
 def validate_battle_foundation(
     value: Mapping[str, Any],
 ) -> None:
@@ -150,12 +180,13 @@ def validate_battle_foundation(
             raise ValueError(f"事件.{name}存在未知字段：{'、'.join(sorted(unknown))}")
         facts = _strings(definition.get("携带事实"), f"事件.{name}.携带事实")
         mutable = _strings(definition.get("可修改"), f"事件.{name}.可修改")
-        if not set(mutable) <= {"当前数值", "目标", "标签", "取消", "类型"}:
+        if not set(mutable) <= {"当前数值", "目标", "事件标签", "取消", "类型"}:
             raise ValueError(f"事件.{name}.可修改包含核心不认识的操作")
         if len(facts) != len(set(facts)) or len(mutable) != len(set(mutable)):
             raise ValueError(f"事件.{name}的事实或修改项不能重复")
         if "类型" in mutable and name not in {"恢复前", "获得护盾前", "资源恢复前"}:
             raise ValueError(f"事件.{name}没有可转化的共同结算语义")
+    _validate_event_tags(value)
     validator = rule_validator(value)
     validator.validate_definitions("战斗定义.原子能力")
     validate_rule_layer(value.get("规则层") or {}, abilities, validator)

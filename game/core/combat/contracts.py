@@ -90,7 +90,6 @@ class CombatStatusSpec:
     remaining_actions: int
     duration_unit: str
     modifiers: tuple[tuple[str, float], ...] = ()
-    tags: tuple[str, ...] = ()
     listeners: tuple[Mapping[str, Any], ...] = ()
     source: str = ""
     source_name: str = ""
@@ -237,7 +236,6 @@ class StatusResult:
     modifiers: Mapping[str, float]
     stacks: int
     max_stacks: int
-    tags: tuple[str, ...]
     duration_unit: str
     action_limits: tuple[str, ...]
     listeners: tuple[Mapping[str, Any], ...]
@@ -256,7 +254,6 @@ class StatusResult:
             "属性": dict(self.modifiers),
             "层数": self.stacks,
             "层数上限": self.max_stacks,
-            "标签": list(self.tags),
             "持续单位": self.duration_unit,
             "行动限制": list(self.action_limits),
             "监听": [dict(value) for value in self.listeners],

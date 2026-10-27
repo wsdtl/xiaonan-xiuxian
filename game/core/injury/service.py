@@ -235,7 +235,6 @@ class InjuryService:
                             raw.get("属性", {}), f"伤势 {entry.injury_id}.战斗状态.属性"
                         ).items()
                     ),
-                    tags=tuple(_texts(raw.get("标签", ()), "战斗状态.标签")),
                     listeners=tuple(
                         _mappings(raw.get("监听", ()), "战斗状态.监听")
                     ),
@@ -319,11 +318,9 @@ class InjuryService:
         limits = set(
             _texts(matcher.get("行动限制任一", ()), "外来伤势.匹配.行动限制任一")
         )
-        tags = set(_texts(matcher.get("标签任一", ()), "外来伤势.匹配.标签任一"))
         return bool(
             attributes.intersection(status.modifiers)
             or limits.intersection(status.action_limits)
-            or tags.intersection(status.tags)
         )
 
     async def plan_treatment(
@@ -523,14 +520,14 @@ class InjuryService:
         unknown_matchers = set(matcher) - {
             "属性任一",
             "行动限制任一",
-            "标签任一",
             "兜底",
         }
         if unknown_matchers:
             raise JsonDataError(
                 f"伤势 {injury_id} 使用未知匹配条件：{'、'.join(sorted(unknown_matchers))}"
             )
-        if category == "外来伤势" and not matcher:
+        match_status = str(raw.get("匹配状态") or "").strip()
+        if category == "外来伤势" and not matcher and not match_status:
             raise JsonDataError(f"外来伤势 {injury_id} 必须定义实际负面状态匹配条件")
         if category == "境界自生" and matcher:
             raise JsonDataError(f"境界自生伤势 {injury_id} 不能定义外来状态匹配条件")

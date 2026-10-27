@@ -1311,9 +1311,6 @@ class CardText:
         category = node.get("分类")
         if category:
             parts.append(f"{category}状态")
-        labels = node.get("标签")
-        if isinstance(labels, Sequence) and not isinstance(labels, (str, bytes)) and labels:
-            parts.append("、".join(f"[{item}]" for item in labels))
         sort = {
             "获得顺序": "",
             "层数从高到低": "层数最多",
@@ -1362,19 +1359,12 @@ class CardText:
             "为空": "为空",
             "数量至少": "至少",
         }.get(str(node.get("关系") or ""), str(node.get("关系") or ""))
-        # 引擎的缺省：`对象` 省略按「事件」（`mechanics._condition_tags`）。
-        raw = str(node.get("对象") or "")
-        subject = {
-            "事件": "本次事件", "来源": "来源", "目标": "目标", "状态": "状态", "技能": "技能",
-        }.get(raw)
-        if subject is None:
-            subject = "本次事件" if not raw else self._fallback("标签条件对象不认识", "本次事件")
-        labels = node.get("标签")
+        labels = node.get("事件标签")
         rendered = _join([f"[{item}]" for item in labels]) if isinstance(labels, Sequence) else ""
         if relation in ("为空", "数量至少"):
             count = f"{_number(node.get('数量'))}个" if relation == "数量至少" else ""
-            return f"{subject}的标签{relation}{count}"
-        return f"{subject}的标签{relation}：{rendered}"
+            return f"本次事件的事件标签{relation}{count}"
+        return f"本次事件的事件标签{relation}：{rendered}"
 
     def _condition_group(self, node: Mapping) -> str:
         raw = str(node.get("关系") or "")
@@ -1736,9 +1726,9 @@ class CardText:
         way = {"添加": "添加", "移除": "移除", "设置": "设为"}.get(
             str(node.get("方式") or ""), str(node.get("方式") or "")
         )
-        labels = node.get("标签")
+        labels = node.get("事件标签")
         rendered = _join([f"[{item}]" for item in labels]) if isinstance(labels, Sequence) else ""
-        return f"为本次事件{way}标签：{rendered}"
+        return f"为本次事件{way}事件标签：{rendered}"
 
     def _ability_cancel_event(self, _node: Mapping) -> str:
         return "无效本次事件"

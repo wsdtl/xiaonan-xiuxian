@@ -1313,7 +1313,6 @@ class BattleEngine(AbilityRuntime):
             modifiers=dict(status.modifiers),
             stacks=status.stacks,
             max_stacks=status.max_stacks,
-            tags=tuple(status.tags),
             duration_unit=status.duration_unit,
             action_limits=tuple(status.action_limits),
             listeners=tuple(copy.deepcopy(status.listeners)),
@@ -2347,7 +2346,6 @@ class BattleEngine(AbilityRuntime):
                 actor,
                 f"{status.name}消散",
                 values={"状态": status.name, "原因": "到期"},
-                tags=status.tags,
             )
         if dropped_with_listeners:
             context.mark_listener_index_dirty()

@@ -506,7 +506,6 @@ class StatusState(SnapshotState):
     modifiers: dict[str, float] = dataclass_field(default_factory=dict)
     stacks: int = 1
     max_stacks: int = 1
-    tags: tuple[str, ...] = ()
     duration_unit: str = "状态承受者行动"
     action_limits: tuple[str, ...] = ()
     listeners: tuple[Mapping[str, Any], ...] = ()
@@ -523,7 +522,7 @@ class StatusState(SnapshotState):
     def from_dict(cls, value: Mapping[str, Any]) -> StatusState:
         allowed = {
             "名称", "类别", "剩余行动", "来源", "来源名称", "来源能力", "构筑实例", "属性", "层数",
-            "层数上限", "标签", "持续单位", "行动限制", "监听", "规则", "记录",
+            "层数上限", "持续单位", "行动限制", "监听", "规则", "记录",
             "来源退场时移除", "叠加范围", "重复方式", "允许跨构筑", "是否控制", "控制基础命中率",
         }
         unknown = set(value) - allowed
@@ -540,7 +539,6 @@ class StatusState(SnapshotState):
             modifiers={str(k): float(v) for k, v in dict(value.get("属性") or {}).items()},
             stacks=max(1, int(value.get("层数") or 1)),
             max_stacks=max(1, int(value.get("层数上限") or 1)),
-            tags=tuple(str(item) for item in value.get("标签") or ()),
             duration_unit=str(value.get("持续单位") or "状态承受者行动"),
             action_limits=tuple(str(item) for item in value.get("行动限制") or ()),
             listeners=tuple(copy_value(item) for item in value.get("监听") or ()),
@@ -568,7 +566,6 @@ class StatusState(SnapshotState):
             "属性": dict(self.modifiers),
             "层数": self.stacks,
             "层数上限": self.max_stacks,
-            "标签": list(self.tags),
             "持续单位": self.duration_unit,
             "行动限制": list(self.action_limits),
             "监听": copy_value(list(self.listeners)),

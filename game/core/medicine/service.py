@@ -319,14 +319,12 @@ class MedicineService:
         if isinstance(remaining, bool) or not isinstance(remaining, int) or remaining < 1:
             raise JsonDataError("战丹.战前状态.剩余行动必须是正整数")
         duration = _text(raw.get("持续单位"), "战丹.战前状态.持续单位")
-        tags = _strings(raw.get("标签", []), "战丹.战前状态.标签", allow_empty=True)
         return CombatStatusSpec(
             name=name,
             category=category,
             remaining_actions=remaining,
             duration_unit=duration,
             modifiers=modifiers,
-            tags=tags,
             listeners=tuple(
                 dict(_mapping(node, "战丹.监听[]")) for node in medicine.listeners
             ),

@@ -414,7 +414,6 @@ class CombatService:
             "层数": value.stacks,
             "层数上限": value.maximum_stacks,
             "行动限制": list(value.action_limits),
-            "标签": list(value.tags),
             "监听": listeners,
             "来源": value.source,
             "来源名称": value.source_name,

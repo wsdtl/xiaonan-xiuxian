@@ -1920,18 +1920,8 @@ class AbilityRuntime(ChainRuntime):
         raise ValueError(f"未知组合条件关系：{relation}")
 
     def _condition_tags(self, context: BattleContext | None, source: Fighter | None, target: Fighter | None, condition: Mapping[str, Any], _amount: float, event_values: Mapping[str, Any], event_tags: Iterable[str]) -> bool:
-        obj = str(condition.get("对象") or "事件")
         actual = set(event_tags)
-        if obj == "来源":
-            actual = source.tags
-        elif obj == "目标":
-            actual = target.tags
-        elif obj == "状态":
-            actual = {tag for status in target.statuses for tag in status.tags}
-        elif obj == "技能":
-            skill = self._skill_by_key(source, str(event_values.get("技能键") or source.current_skill))
-            actual = set(skill.tags if skill else ())
-        expected = {str(value) for value in condition.get("标签") or ()}
+        expected = {str(value) for value in condition.get("事件标签") or ()}
         relation = str(condition.get("关系") or "包含任一")
         if relation == "包含任一":
             return bool(actual & expected)
@@ -1984,7 +1974,7 @@ class AbilityRuntime(ChainRuntime):
                 can_miss=bool(effect.get("能否闪避", False)),
                 can_critical=bool(effect.get("能否暴击", True)),
                 can_block=bool(effect.get("能否格挡", True)),
-                tags=tuple(str(value) for value in effect.get("标签") or ()),
+                tags=tuple(str(value) for value in effect.get("事件标签") or ()),
                 element_facts=(
                     {"五行关系": relation, "五行倍率": multiplier} if relation else None
                 ),
@@ -2041,7 +2031,7 @@ class AbilityRuntime(ChainRuntime):
                 amount *= max(0.0, self._percent(source, builtin_bonus))
             before, maximum = self._resource_values(destination, requested_resource)
             kind = str(definition.get("恢复前事件") or "资源恢复前")
-            frame = self._dispatch_event(context, kind=kind, source=source, target=destination, amount=amount, values={"资源": requested_resource, "变化前数值": before, "上限": maximum}, tags=(*effect.get("标签", ()), "恢复", requested_resource))
+            frame = self._dispatch_event(context, kind=kind, source=source, target=destination, amount=amount, values={"资源": requested_resource, "变化前数值": before, "上限": maximum}, tags=(*effect.get("事件标签", ()), "恢复", requested_resource))
             if frame.cancelled:
                 continue
             # 事件可以被监听者改写，资源身份**不跟着事件名走**：`资源变化` 类监听可能
@@ -2271,9 +2261,8 @@ class AbilityRuntime(ChainRuntime):
                 cached = (original, compile_definition_copy(dict(original or {})))
                 context.definition_copy_cache[id(original)] = cached
             definition = cached[1]()
-            frame = self._dispatch_event(context, kind="添加状态前", source=source, target=destination, values={"状态": definition.get("名称", ""), "状态定义": definition}, tags=tuple(definition.get("标签") or ()))
+            frame = self._dispatch_event(context, kind="添加状态前", source=source, target=destination, values={"状态": definition.get("名称", ""), "状态定义": definition})
             destination = frame.target
-            definition["标签"] = sorted(frame.tags)
             failure = ""
             is_control = bool(definition.get("是否控制", False)) or "控制" in frame.tags
             # 锁定技：`状态被添加` 拦截点——问**被打上的那个单位**。请求摊成四类标签
@@ -2310,7 +2299,7 @@ class AbilityRuntime(ChainRuntime):
                     active_controls = sum(
                         1
                         for status in destination.statuses
-                        if "控制" in status.tags or bool(status.action_limits)
+                        if bool(status.action_limits)
                     )
                     if active_controls >= control_limit:
                         failure = "控制承载已满"
@@ -2401,7 +2390,6 @@ class AbilityRuntime(ChainRuntime):
                     "持续单位": applied_status.duration_unit,
                     "来源名称": applied_status.source_name,
                 },
-                tags=applied_status.tags,
                 capture=(context.event_capture_filter is None or previous_status != (applied_status.stacks, applied_status.remaining_turns)),
             )
             self._resolve_status_reactions(context, source, destination, fields['name'], multiplier)
@@ -2459,7 +2447,6 @@ class AbilityRuntime(ChainRuntime):
     def _matching_statuses(self, context: BattleContext, fighter: Fighter, selector: Mapping[str, Any]) -> list[StatusState]:
         name = str(selector.get("名称") or "")
         category = str(selector.get("分类") or "")
-        tags = {str(value) for value in selector.get("标签") or ()}
         allow_cross_build = bool(selector.get("允许跨构筑", False))
         current_instance = self._build_instance(context, selector)
         # 名称索引已就绪时只检查同名状态；索引失效时沿用扫描，
@@ -2474,7 +2461,6 @@ class AbilityRuntime(ChainRuntime):
             for status in candidates
             if (not name or status.name == name)
             and (not category or status.category == category)
-            and (not tags or tags <= set(status.tags))
             and (
                 allow_cross_build
                 or not current_instance
@@ -2529,7 +2515,7 @@ class AbilityRuntime(ChainRuntime):
         pairs = self._select_statuses(context, source, target, effect.get("状态"))
         removed = False
         for owner, status in pairs:
-            frame = self._dispatch_event(context, kind="移除状态前", source=source, target=owner, values={"状态": status.name, "状态层数": status.stacks}, tags=status.tags)
+            frame = self._dispatch_event(context, kind="移除状态前", source=source, target=owner, values={"状态": status.name, "状态层数": status.stacks})
             if frame.cancelled:
                 continue
             # 锁定技：状态被移除——拒绝时这一次清除不发生（状态还在）。
@@ -2538,7 +2524,7 @@ class AbilityRuntime(ChainRuntime):
             if status in owner.statuses:
                 owner.statuses.remove(status)
                 self._mark_listeners_dirty_for_status(context, status)
-                self._dispatch_event(context, kind="移除状态后", source=source, target=owner, values={"状态": status.name, "状态层数": status.stacks}, tags=status.tags)
+                self._dispatch_event(context, kind="移除状态后", source=source, target=owner, values={"状态": status.name, "状态层数": status.stacks})
                 removed = True
         return removed
 
@@ -2970,14 +2956,14 @@ class AbilityRuntime(ChainRuntime):
     def _ability_modify_event_tags(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
         del source, target, multiplier
         frame = self._current_event(context)
-        if not self._event_mutation_allowed(frame, "标签"):
+        if not self._event_mutation_allowed(frame, "事件标签"):
             return False
-        if self._event_rewrite_denied(context, frame, "标签"):
+        if self._event_rewrite_denied(context, frame, "事件标签"):
             return False
-        values = {str(value) for value in effect.get("标签") or ()}
+        values = {str(value) for value in effect.get("事件标签") or ()}
         mode = str(effect.get("方式") or "添加")
         frame.tags = values if mode == "设置" else frame.tags - values if mode == "移除" else frame.tags | values
-        frame.facts["标签"] = sorted(frame.tags)
+        frame.facts["事件标签"] = sorted(frame.tags)
         return True
 
     def _ability_cancel_event(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
@@ -3048,7 +3034,7 @@ class AbilityRuntime(ChainRuntime):
         if mode == "解除":
             context.relations[:] = [item for item in context.relations if not (item["名称"] == name and {item["一方"], item["另一方"]} == {left[0].id, right[0].id})]
         else:
-            context.relations.append({"名称": name, "一方": left[0].id, "另一方": right[0].id, "标签": list(effect.get("标签") or ()), "记录": copy.deepcopy(dict(effect.get("记录") or {}))})
+            context.relations.append({"名称": name, "一方": left[0].id, "另一方": right[0].id, "记录": copy.deepcopy(dict(effect.get("记录") or {}))})
         self._dispatch_event(context, kind="关联变化后", source=source, target=right[0], values={"关联": name, "方式": mode})
         return before != len(context.relations)
 
@@ -3369,7 +3355,6 @@ class AbilityRuntime(ChainRuntime):
                     source=source,
                     target=fighter,
                     values={"状态": status.name, "状态层数": status.stacks, "原因": "来源退场"},
-                    tags=status.tags,
                 )
         removed_rules = [
             rule for rule in context.battle_rules

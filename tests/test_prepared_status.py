@@ -112,7 +112,6 @@ def _prepared_statuses(services) -> list[CombatStatusSpec]:
                 modifiers=tuple(
                     (str(key), float(value)) for key, value in (raw.get("属性") or {}).items()
                 ),
-                tags=tuple(raw.get("标签") or ()),
                 listeners=tuple(dict(node) for node in raw["监听"]),
                 source=entry["编号"],
                 source_name=entry["名称"],

@@ -581,7 +581,6 @@ class CharacterService:
                     remaining_actions=999,
                     duration_unit="状态承受者行动",
                     modifiers=modifiers,
-                    tags=("意境",),
                     listeners=listeners,
                     action_limits=limits,
                     source=yijing.content_id,

@@ -386,7 +386,7 @@ def validate_rule_layer(
             }
             fixed_labels = [
                 str(label)
-                for label in dict(node).get("标签") or ()
+                for label in dict(node).get("事件标签") or ()
                 if PLACEHOLDER not in str(label)
             ]
             if empty_able and fixed_labels:
@@ -474,7 +474,7 @@ def probe_tags(rule: Mapping[str, Any]) -> set[str]:
             tags.add(value)
 
     for condition in rule.get("条件") or ():
-        for label in dict(condition).get("标签") or ():
+        for label in dict(condition).get("事件标签") or ():
             collect(label)
     return tags
 

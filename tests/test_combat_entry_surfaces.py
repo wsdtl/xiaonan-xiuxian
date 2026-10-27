@@ -872,7 +872,6 @@ def test_groups_report_and_snapshots(services) -> None:
                         "属性": {"防御": -5},
                         "层数": 1,
                         "层数上限": 1,
-                        "标签": ["测试"],
                     },
                 ),
             ),

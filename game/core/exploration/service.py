@@ -1385,7 +1385,7 @@ def _battle_value(
                 "文本": event.text,
                 "数值": event.amount,
                 "记录": materialize(event.values),
-                "标签": list(event.tags),
+                "事件标签": list(event.tags),
                 "能力": event.ability,
                 "来源编号": event.source_id,
                 "目标编号": event.target_id,
