@@ -1,6 +1,6 @@
 {
-  "族谱": "game.scroll",
-  "本人": "game.role",
+  "错误": "game.pin_doc",
   "已传位": "game.success",
-  "错误": "game.pin_doc"
+  "族谱": "game.scroll",
+  "本人": "game.role"
 }

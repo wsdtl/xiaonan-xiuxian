@@ -1,110 +1,110 @@
 [
   {
-    "页面": "概览",
     "编号": "nearby.overview.cultivators",
     "名称": "附近的修士",
     "命令": "附近 修士",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "概览",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "概览",
-    "条件": "地表",
     "编号": "nearby.overview.locations",
     "名称": "查看地点",
+    "条件": "地表",
     "命令": "附近 地点",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "概览",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "概览",
     "编号": "nearby.overview.position",
     "名称": "返回位置",
     "命令": "位置",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "概览",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "修士",
-    "条件": "有上一页",
     "编号": "nearby.previous",
     "名称": "上一页",
+    "条件": "有上一页",
     "命令": "附近 修士 {页码}",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "修士",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "修士",
-    "条件": "有下一页",
     "编号": "nearby.next",
     "名称": "下一页",
+    "条件": "有下一页",
     "命令": "附近 修士 {页码}",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "修士",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "修士",
     "编号": "nearby.cultivators.overview",
     "名称": "附近概览",
     "命令": "附近",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "修士",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "修士",
-    "条件": "地表",
     "编号": "nearby.cultivators.locations",
     "名称": "查看地点",
+    "条件": "地表",
     "命令": "附近 地点",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "修士",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "修士",
     "编号": "nearby.cultivators.position",
     "名称": "返回位置",
     "命令": "位置",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "修士",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "地点条目",
     "编号": "nearby.travel",
     "名称": "前往{地点}",
     "命令": "去 {地点}",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "地点条目",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "地点",
     "编号": "nearby.locations.overview",
     "名称": "附近概览",
     "命令": "附近",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "地点",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "地点",
     "编号": "nearby.locations.cultivators",
     "名称": "附近的修士",
     "命令": "附近 修士",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "地点",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "地点",
     "编号": "nearby.locations.position",
     "名称": "返回位置",
     "命令": "位置",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "地点",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "格式",
     "编号": "nearby.help",
     "名称": "查看帮助",
     "命令": "帮助 附近",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式",
+    "样式": "primary",
+    "行为": "callback"
   }
 ]

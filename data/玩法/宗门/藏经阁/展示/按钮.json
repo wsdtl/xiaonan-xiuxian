@@ -1,26 +1,26 @@
 [
   {
-    "条件": "有上一页",
     "编号": "cangjing.previous",
     "名称": "上一页",
+    "条件": "有上一页",
     "命令": "藏经阁 {上一页}",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "条件": "有下一页",
     "编号": "cangjing.next",
     "名称": "下一页",
+    "条件": "有下一页",
     "命令": "藏经阁 {下一页}",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "条件": "",
     "编号": "cangjing.cave",
     "名称": "返回宗门园区",
+    "条件": "",
     "命令": "位置",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   }
 ]

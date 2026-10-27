@@ -1,43 +1,43 @@
 [
   {
-    "页面": "宗主未召集",
     "编号": "sect-follow.assemble",
     "名称": "召集",
     "命令": "宗门同行 召集",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "宗主未召集",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "可加入",
     "编号": "sect-follow.join",
     "名称": "加入",
     "命令": "宗门同行 加入",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "可加入",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "同行中",
     "编号": "sect-follow.leave",
     "名称": "离开",
     "命令": "宗门同行 离开",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "同行中",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "宗主",
     "编号": "sect-follow.disband",
     "名称": "解散同行",
     "命令": "宗门同行 解散",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "宗主",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "格式",
-    "条件": "",
     "编号": "sect_follow.format_help",
     "名称": "查看帮助",
+    "条件": "",
     "命令": "帮助 宗门同行",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式",
+    "样式": "primary",
+    "行为": "callback"
   }
 ]

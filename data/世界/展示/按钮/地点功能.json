@@ -1,186 +1,186 @@
 [
   {
-    "功能": "修士",
     "编号": "location.cultivators",
     "名称": "附近修士",
+    "功能": "修士",
     "命令": "附近 修士",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "探险",
     "编号": "location.exploration",
     "名称": "探险",
+    "功能": "探险",
     "命令": "开始探险",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "闭关",
     "编号": "location.retreat",
     "名称": "闭关",
+    "功能": "闭关",
     "命令": "开始闭关",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "交易",
     "编号": "location.trade",
     "名称": "交易",
+    "功能": "交易",
     "命令": "交易",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "夺元",
     "编号": "location.cultivation-transfer",
     "名称": "铜雀夺元",
+    "功能": "夺元",
     "命令": "夺元",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "归元",
     "编号": "location.cultivation-reset",
     "名称": "万法归元",
+    "功能": "归元",
     "命令": "归元",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "补天",
     "编号": "location.breakthrough-correction",
     "名称": "九霄补天",
+    "功能": "补天",
     "命令": "补天",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "易形",
     "编号": "location.gender-change",
     "名称": "两仪易形",
+    "功能": "易形",
     "命令": "易形",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "化形",
     "编号": "location.race-change",
     "名称": "万化易形",
+    "功能": "化形",
     "命令": "化形",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "洗根",
     "编号": "location.linggen-reforge",
     "名称": "灵根重铸",
+    "功能": "洗根",
     "命令": "洗根",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "坐忘",
     "编号": "location.zuowang",
     "名称": "坐忘忘境",
+    "功能": "坐忘",
     "命令": "坐忘",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "生育",
     "编号": "location.birth",
     "名称": "生育",
+    "功能": "生育",
     "命令": "生育",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "求子",
     "编号": "location.ask-child",
     "名称": "求子",
+    "功能": "求子",
     "命令": "求子",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "藏经阁",
     "编号": "location.cangjing",
     "名称": "藏经阁",
+    "功能": "藏经阁",
     "命令": "藏经阁",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "万珍殿",
     "编号": "location.wanzhen",
     "名称": "万珍殿",
+    "功能": "万珍殿",
     "命令": "万珍殿",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "灵藏",
     "编号": "location.lingcang",
     "名称": "灵藏",
+    "功能": "灵藏",
     "命令": "灵藏",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "百炼堂",
     "编号": "location.bailiantang",
     "名称": "百炼堂",
+    "功能": "百炼堂",
     "命令": "百炼堂",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "丹鼎阁",
     "编号": "location.dandingge",
     "名称": "丹鼎阁",
+    "功能": "丹鼎阁",
     "命令": "丹鼎阁",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "功能": "演阵台",
     "编号": "location.yanzhantai",
     "名称": "演阵台",
+    "功能": "演阵台",
     "命令": "演阵台",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "灵脉",
     "编号": "location.lingmai",
     "名称": "灵脉",
+    "功能": "灵脉",
     "命令": "灵脉",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "灵田",
     "编号": "location.lingtian",
     "名称": "灵田",
+    "功能": "灵田",
     "命令": "灵田",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "宗门同行",
     "编号": "location.sect-follow",
     "名称": "宗门同行",
+    "功能": "宗门同行",
     "命令": "宗门同行",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "功能": "宗门事务",
     "编号": "location.sect-affairs",
     "名称": "宗门事务",
+    "功能": "宗门事务",
     "命令": "宗门",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   }
 ]

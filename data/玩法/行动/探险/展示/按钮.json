@@ -1,55 +1,55 @@
 [
   {
-    "页面": "开始",
     "编号": "exploration.progress",
     "名称": "查看进度",
     "命令": "探险进度",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "开始",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "进度",
-    "条件": "可以结算",
     "编号": "exploration.settle",
     "名称": "探险结束",
+    "条件": "可以结算",
     "命令": "探险结束",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "进度",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "总结",
-    "条件": "存在上一页",
     "编号": "exploration.previous",
     "名称": "上一页",
+    "条件": "存在上一页",
     "命令": "探险结果 {上一页}",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "总结",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "总结",
-    "条件": "存在下一页",
     "编号": "exploration.next",
     "名称": "下一页",
+    "条件": "存在下一页",
     "命令": "探险结果 {下一页}",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "总结",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "总结",
-    "条件": "",
     "编号": "explore.summary.position",
     "名称": "返回位置",
+    "条件": "",
     "命令": "位置",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "总结",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "格式",
-    "条件": "",
     "编号": "gather.explore.format_help",
     "名称": "查看帮助",
+    "条件": "",
     "命令": "帮助 探险",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式",
+    "样式": "primary",
+    "行为": "callback"
   }
 ]

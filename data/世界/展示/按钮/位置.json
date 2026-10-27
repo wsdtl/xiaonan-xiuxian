@@ -3,14 +3,14 @@
     "编号": "position.nearby",
     "名称": "查看附近",
     "命令": "附近",
-    "行为": "callback",
-    "样式": "primary"
+    "样式": "primary",
+    "行为": "callback"
   },
   {
     "编号": "position.map",
     "名称": "查看地图",
     "命令": "地图",
-    "行为": "callback",
-    "样式": "secondary"
+    "样式": "secondary",
+    "行为": "callback"
   }
 ]

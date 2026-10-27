@@ -1,108 +1,108 @@
 [
   {
-    "页面": "查看",
     "编号": "companion.talk",
     "名称": "交谈",
     "命令": "交谈 {道侣}",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "查看",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "查看",
     "编号": "companion.view.gift",
     "名称": "赠予灵植",
     "命令": "赠予 {道侣} ",
-    "行为": "fill",
-    "样式": "primary"
+    "页面": "查看",
+    "样式": "primary",
+    "行为": "fill"
   },
   {
-    "页面": "查看",
-    "条件": "可邀约",
     "编号": "companion.invite",
     "名称": "邀约",
+    "条件": "可邀约",
     "命令": "邀约 {道侣}",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "查看",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "查看",
-    "条件": "同行中",
     "编号": "companion.farewell",
     "名称": "暂别",
+    "条件": "同行中",
     "命令": "暂别 {道侣}",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "查看",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "交谈",
     "编号": "companion.talk.inspect",
     "名称": "查看",
     "命令": "查看 {道侣}",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "交谈",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "交谈",
     "编号": "companion.talk.gift",
     "名称": "赠予灵植",
     "命令": "赠予 {道侣} ",
-    "行为": "fill",
-    "样式": "primary"
+    "页面": "交谈",
+    "样式": "primary",
+    "行为": "fill"
   },
   {
-    "页面": "赠礼",
     "编号": "companion.gift.inspect",
     "名称": "查看关系",
     "命令": "查看 {道侣}",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "赠礼",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "邀约",
     "编号": "companion.invite.inspect",
     "名称": "查看",
     "命令": "查看 {道侣}",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "邀约",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "格式查看",
     "编号": "companion.help_inspect",
     "名称": "查看帮助",
     "命令": "帮助 查看",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式查看",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "格式交谈",
     "编号": "companion.help_talk",
     "名称": "查看帮助",
     "命令": "帮助 交谈",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式交谈",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "格式邀约",
     "编号": "companion.help_invite",
     "名称": "查看帮助",
     "命令": "帮助 邀约",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式邀约",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "格式暂别",
     "编号": "companion.help_farewell",
     "名称": "查看帮助",
     "命令": "帮助 暂别",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式暂别",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "格式赠予",
     "编号": "companion.help_gift",
     "名称": "查看帮助",
     "命令": "帮助 赠予",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式赠予",
+    "样式": "primary",
+    "行为": "callback"
   }
 ]

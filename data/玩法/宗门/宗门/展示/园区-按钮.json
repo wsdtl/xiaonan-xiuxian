@@ -1,99 +1,99 @@
 [
   {
-    "页面": "未加入",
     "编号": "sect.create",
     "名称": "创建宗门",
     "命令": "宗门 创建 ",
-    "行为": "fill",
-    "样式": "primary"
+    "页面": "未加入",
+    "样式": "primary",
+    "行为": "fill"
   },
   {
-    "页面": "待处理邀请",
     "编号": "sect.accept",
     "名称": "接受",
     "命令": "宗门 接受",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "待处理邀请",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "待处理邀请",
     "编号": "sect.reject",
     "名称": "拒绝",
     "命令": "宗门 拒绝",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "待处理邀请",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "宗主",
     "编号": "sect.follow",
     "名称": "宗门同行",
     "命令": "宗门同行",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "宗主",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "宗主",
     "编号": "sect.invite",
     "名称": "邀请修士",
     "命令": "宗门 邀请 ",
-    "行为": "fill",
-    "样式": "primary"
+    "页面": "宗主",
+    "样式": "primary",
+    "行为": "fill"
   },
   {
-    "页面": "宗主",
     "编号": "sect.disband",
     "名称": "解散宗门",
     "命令": "宗门 解散",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "宗主",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "长老",
     "编号": "sect.follow.elder",
     "名称": "宗门同行",
     "命令": "宗门同行",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "长老",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "长老",
     "编号": "sect.invite.elder",
     "名称": "邀请修士",
     "命令": "宗门 邀请 ",
-    "行为": "fill",
-    "样式": "primary"
+    "页面": "长老",
+    "样式": "primary",
+    "行为": "fill"
   },
   {
-    "页面": "长老",
     "编号": "sect.leave.elder",
     "名称": "退出宗门",
     "命令": "宗门 退出",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "长老",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "弟子",
     "编号": "sect.follow.member",
     "名称": "宗门同行",
     "命令": "宗门同行",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "弟子",
+    "样式": "primary",
+    "行为": "callback"
   },
   {
-    "页面": "弟子",
     "编号": "sect.leave",
     "名称": "退出宗门",
     "命令": "宗门 退出",
-    "行为": "callback",
-    "样式": "secondary"
+    "页面": "弟子",
+    "样式": "secondary",
+    "行为": "callback"
   },
   {
-    "页面": "格式",
-    "条件": "",
     "编号": "sect.format_help",
     "名称": "查看帮助",
+    "条件": "",
     "命令": "帮助 宗门",
-    "行为": "callback",
-    "样式": "primary"
+    "页面": "格式",
+    "样式": "primary",
+    "行为": "callback"
   }
 ]

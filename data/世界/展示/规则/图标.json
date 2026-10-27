@@ -1,7 +1,7 @@
 {
   "错误": "game.pin_doc",
-  "地点": "game.map",
   "修士": "game.seed",
+  "地点": "game.map",
   "行止": "game.compass",
   "页次": "game.scroll"
 }
