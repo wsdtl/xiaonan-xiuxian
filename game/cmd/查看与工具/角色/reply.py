@@ -141,6 +141,15 @@ def overview(
             ),
         )
         .field(
+            "神魂",
+            M.progress(
+                resources.get("神魂", attributes.get("神魂上限", 0)),
+                attributes.get("神魂上限", 1),
+                tone="spirit",
+                display="value",
+            ),
+        )
+        .field(
             "精神",
             M.progress(
                 resources.get("精神", 0),
@@ -195,7 +204,7 @@ def overview(
         item
         for item in character.attributes
         if item[0] not in primary
-        and item[0] not in {"血气上限", "精神上限"}
+        and item[0] not in {"血气上限", "神魂上限", "精神上限"}
         and item[1] != baselines.get(item[0], 0)
         and not (item[0] == "连击伤害" and attributes.get("连击率", 0) == 0)
     )
@@ -248,18 +257,11 @@ def overview(
     builder.section("物资", icon="game.bag").row(
         ("种类", character.inventory.stack_count),
         ("总数", character.inventory.total_quantity),
-        (
-            "自动用药",
-            M.status(
-                "开启" if character.automatic_medicine else "关闭",
-                tone="positive" if character.automatic_medicine else "muted",
-            ),
-        ),
     )
-    # 用药联动：一枚分支按钮，四个支线（人药 开/关、侣药 开/关）；标签显示当前态，只填入。
+    # 用药联动：物资下面只留一枚无边框分支按钮，标签显示当前态，只填入。
     builder.line(
         M.command(
-            "自动用药: 开启" if character.automatic_medicine else "自动用药:关闭",
+            "自动用药：开启" if character.automatic_medicine else "自动用药：关闭",
             "人药 开|人药 关|侣药 开|侣药 关",
         )
     )
