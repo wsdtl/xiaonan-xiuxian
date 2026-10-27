@@ -94,7 +94,7 @@ def test_target_branch_data_is_well_formed() -> None:
             assert isinstance(branches, list) and branches, path
             for branch in branches:
                 assert isinstance(branch, dict), path
-                assert float(branch.get("强度", 100)) > 0, path
+                assert "强度" not in branch, path
                 target = branch.get("目标")
                 assert isinstance(target, dict), path
                 assert target.get("选择全部") is not True, path
@@ -113,8 +113,8 @@ class _FakeRuntime(AbilityRuntime):
         return [] if value.get("范围") == "empty" else [SimpleNamespace(id="target")]
 
 
-def _branch(target: dict, *, condition: bool | None = None, strength: int = 100, weight: int = 1):
-    value = {"目标": target, "强度": strength, "权重": weight}
+def _branch(target: dict, *, condition: bool | None = None, weight: int = 1):
+    value = {"目标": target, "权重": weight}
     if condition is not None:
         value["条件"] = [condition]
     return value
@@ -128,17 +128,17 @@ def test_branch_order_and_fallback() -> None:
             "方式": "顺序",
             "分支": [
                 _branch({"范围": "empty"}, condition=True),
-                _branch({"范围": "其他己方"}, condition=True, strength=120),
+                _branch({"范围": "其他己方"}, condition=True),
             ],
         }
     }
     chosen = runtime._choose_target_branch(context, None, None, effect, 0.0, {}, ())
     assert chosen is not None
-    assert chosen[0]["强度"] == 120
+    assert chosen[0]["目标"]["范围"] == "其他己方"
     assert chosen[1]["排除召唤物"] is True
 
 
-def test_branch_strength_reaches_effect_and_preselects_target() -> None:
+def test_branch_preselects_target_without_strength() -> None:
     runtime = _FakeRuntime()
     seen = []
 
@@ -172,7 +172,6 @@ def test_branch_strength_reaches_effect_and_preselects_target() -> None:
             "分支": [
                 {
                     "目标": {"范围": "其他己方", "数量": 1},
-                    "强度": 120,
                 }
             ],
         },
@@ -182,7 +181,7 @@ def test_branch_strength_reaches_effect_and_preselects_target() -> None:
     assert runtime._execute_mechanism(context, source, target, effect) is True
     assert seen
     multiplier, override, selected = seen[0]
-    assert multiplier == 1.2
+    assert multiplier == 1.0
     assert override is not None and override[1][0].id == "target"
     assert selected is override[0]
 

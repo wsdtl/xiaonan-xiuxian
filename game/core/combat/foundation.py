@@ -75,8 +75,82 @@ def load_battle_foundation(
             "阵法规则": formation_rules,
         }
     )
+    _validate_target_branches(data, result)
     validate_battle_foundation(result)
     return result
+
+
+def _is_aoe_target(value: object) -> bool:
+    if isinstance(value, str):
+        return value in {"全体", "任意", "友方全体"}
+    if not isinstance(value, Mapping):
+        return False
+    return value.get("选择全部") is True or value.get("范围") in {
+        "全体",
+        "任意",
+        "友方全体",
+    }
+
+
+def _walk_nodes(value: object, path: str):
+    if isinstance(value, Mapping):
+        yield value, path
+        for key, child in value.items():
+            if isinstance(child, (Mapping, list)):
+                yield from _walk_nodes(child, f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            if isinstance(child, (Mapping, list)):
+                yield from _walk_nodes(child, f"{path}[{index}]")
+
+
+def _validate_target_branches(
+    data: JsonDataService, result: Mapping[str, Any]
+) -> None:
+    """启动期硬校验：方向性效果必须有目标分支，只有 AOE 可直接写目标。"""
+
+    abilities = result.get("原子能力")
+    if not isinstance(abilities, Mapping):
+        raise ValueError("战斗字段定义缺少原子能力")
+    effect_abilities = {
+        str(name)
+        for name, definition in abilities.items()
+        if isinstance(definition, Mapping) and definition.get("类别") == "效果"
+    }
+    values = [record.value for record in data.numbered_entities()]
+    values.extend(data.entities("战场环境").values())
+    for root_index, root in enumerate(values):
+        for node, path in _walk_nodes(root, f"战斗内容[{root_index}]"):
+            ability = node.get("能力")
+            if not isinstance(ability, str) or ability not in effect_abilities:
+                continue
+            target = node.get("目标")
+            branch = node.get("目标分支")
+            if branch is not None:
+                if target is not None:
+                    raise ValueError(f"{path}：目标与目标分支不能同时存在")
+                if not isinstance(branch, Mapping):
+                    raise ValueError(f"{path}.目标分支必须是对象")
+                mode = str(branch.get("方式") or "顺序")
+                if mode not in {"顺序", "权重"}:
+                    raise ValueError(f"{path}.目标分支.方式不合法：{mode}")
+                branches = branch.get("分支")
+                if not isinstance(branches, list) or not branches:
+                    raise ValueError(f"{path}.目标分支.分支必须是非空列表")
+                for index, item in enumerate(branches):
+                    if not isinstance(item, Mapping):
+                        raise ValueError(f"{path}.目标分支.分支[{index}]必须是对象")
+                    if "强度" in item:
+                        raise ValueError(f"{path}.目标分支.分支[{index}]不能再写强度")
+                    if _is_aoe_target(item.get("目标")):
+                        raise ValueError(f"{path}.目标分支.分支[{index}]不能是 AOE")
+                    if not isinstance(item.get("目标"), Mapping):
+                        raise ValueError(f"{path}.目标分支.分支[{index}].目标必须是对象")
+                continue
+            if _is_aoe_target(target):
+                continue
+            raise ValueError(f"{path}：方向性效果必须显式写目标分支，AOE 才允许直接写目标")
+
 
 
 def _validate_event_bound_abilities(

@@ -382,13 +382,6 @@ class AbilityRuntime(ChainRuntime):
             raise ValueError(f"未知目标分支方式：{mode}")
         return eligible[0]
 
-    @staticmethod
-    def _branch_strength(branch: Mapping[str, Any]) -> float:
-        strength = float(branch.get("强度", 100) or 100)
-        if strength <= 0:
-            raise ValueError("目标分支.强度必须大于 0")
-        return strength
-
     def _execute_mechanism(
         self,
         context: BattleContext,
@@ -459,8 +452,6 @@ class AbilityRuntime(ChainRuntime):
             effective = dict(effective)
             effective["目标"] = target_selector
             effective.pop("目标分支", None)
-            strength = self._branch_strength(branch[0])
-            multiplier *= strength / 100.0
             context.target_override = (target_selector, tuple(selected))
         before_events = context.event_count
         previous_result = context.last_result
