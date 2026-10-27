@@ -21,10 +21,7 @@ def _direct(message: str) -> tuple[object, int]:
         parts = parts[:-1]
     if not parts:
         raise ValueError("缺少丹药名")
-    ref = parse_item_ref(" ".join(parts))
-    if not ref.grade:
-        raise ValueError("请写品级，例：炼丹 黄品聚气丹")
-    return ref, quantity
+    return parse_item_ref(" ".join(parts)), quantity
 
 
 def _error(feature: Any, message: str) -> object:
@@ -58,6 +55,9 @@ async def alchemy_root(
             )
             return
         ref, quantity = _direct(query)
+        if not ref.grade:
+            await send_game_reply(reply.choose_grade(feature.copy(), ref.item))
+            return
         value = await feature.preview(user_id, ref.item, ref.grade, quantity)
         if value.can_refine:
             result = await feature.refine(

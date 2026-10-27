@@ -45,8 +45,24 @@ def overview(
         .section(text(copy, "总览", "分类"), icon="game.bag")
     )
     for index, (category, count) in enumerate(value.category_counts, start=1):
-        builder.item(index, f"{category} · {count}种丹药")
+        builder.item(
+            index,
+            M.command(f"{category} · {count}种", f"炼丹目录 {category}"),
+        )
     return builder.actions(message_actions(actions)).build()
+
+
+def choose_grade(copy: AlchemyCopy, item: str) -> DocumentMessage:
+    """未写品级时只出品级候选，不执行、不查库存。"""
+
+    builder = (
+        M.document()
+        .section(f"{item} · 选择品级", icon="game.pill")
+        .line("补一个品级再炼；这一步只填命令，不消耗材料。")
+    )
+    for index, grade in enumerate(("黄品", "玄品", "地品", "天品", "圣品"), start=1):
+        builder.item(index, M.command(grade, f"炼丹 {grade}{item}"))
+    return builder.build()
 
 
 def recipe_list(
@@ -164,4 +180,4 @@ def _material(builder: DocumentBuilder, index: int, material: AlchemyMaterial) -
     )
 
 
-__all__ = ["completed", "error", "overview", "preview", "recipe_list", "text"]
+__all__ = ["choose_grade", "completed", "error", "overview", "preview", "recipe_list", "text"]
