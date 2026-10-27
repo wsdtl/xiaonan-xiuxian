@@ -97,10 +97,10 @@ def test_recipes_and_laws_use_explicit_materials(data_service: JsonDataService) 
         assert "铸法" not in value and "兽引" not in value, law_id
 
 
-def test_breakthrough_pills_cover_base_growth_and_speed(data_service: JsonDataService) -> None:
-    """突破丹共 108 颗：每境五基础成长属性齐全，并且每境都有速度丹。"""
+def test_breakthrough_pills_cover_six_growth_axes(data_service: JsonDataService) -> None:
+    """突破丹共 114 颗：每境六条成长属性各一颗，地位相同、发展可选。"""
 
-    base = {"血气上限", "神魂上限", "精神上限", "攻击", "防御"}
+    base = {"血气上限", "神魂上限", "精神上限", "攻击", "防御", "速度"}
     by_realm: dict[str, list[set[str]]] = {}
     for value in data_service.entities("丹药").values():
         effect = value.get("使用效果") or {}
@@ -110,20 +110,18 @@ def test_breakthrough_pills_cover_base_growth_and_speed(data_service: JsonDataSe
             set(effect.get("永久属性") or {})
         )
     assert by_realm
-    assert sum(len(entries) for entries in by_realm.values()) == 108
-    assert sum(1 for entries in by_realm.values() if len(entries) == 6) == 13
-    assert sum(1 for entries in by_realm.values() if len(entries) == 5) == 6
+    assert sum(len(entries) for entries in by_realm.values()) == 114
+    assert sum(1 for entries in by_realm.values() if len(entries) == 6) == 19
     for realm, entries in by_realm.items():
-        assert len(entries) in (5, 6), (realm, len(entries))
+        assert len(entries) == 6, (realm, len(entries))
         covered = set().union(*entries)
-        assert base <= covered, (realm, base - covered)
-        assert "速度" in covered, realm
+        assert covered == base, (realm, base - covered, covered - base)
 
 
 def test_pills_are_flat_one_entity_per_file() -> None:
     """四类丹药都像战丹一样铺开：一个文件一颗，文件根是单个对象。"""
 
-    expected = {"恢复丹": 6, "战丹": 125, "突破丹": 108, "特殊丹": 8}
+    expected = {"恢复丹": 6, "战丹": 125, "突破丹": 114, "特殊丹": 8}
     for kind, count in expected.items():
         files = sorted((DATA_ROOT / "物品/内容/丹药" / kind).rglob("*.json"))
         assert len(files) == count, (kind, len(files))
