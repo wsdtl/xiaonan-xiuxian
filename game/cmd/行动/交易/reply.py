@@ -102,7 +102,10 @@ def purchased(feature: TradeFeature, value: TradePurchaseResult) -> DocumentMess
             (feature.copy("购买", "花费"), M.text(value.total_price, tone="warning")),
             ("剩余灵石", M.text(value.spirit_stones_after, tone="cultivation")),
         )
-        .field(feature.copy("购买", "余量"), value.reserve_after)
+        .field(
+            feature.copy("购买", "余量", {"交付": value.product.delivery}),
+            value.delivery_after,
+        )
         .build()
     )
 

@@ -22,8 +22,8 @@ from typing import Any
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "行动",
-            "summary": "查看当前位置固定出售的真意和气机",
-            "usage": ("交易", "交易 真意", "交易 气机", "交易 真意 页码"),
+            "summary": "查看当前位置货架",
+            "usage": ("交易", "交易 类别", "交易 类别 页码"),
             "side_effect": "只读查询，不消耗灵石",
             "order": 55,
         },
@@ -37,7 +37,7 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
             value = await feature.overview(user_id)
             await send_game_reply(reply.overview(feature, value))
             return
-        if len(parts) > 2 or parts[0] not in {"真意", "气机"}:
+        if len(parts) > 2:
             raise TradeFeatureError(feature.copy("错误", "交易格式"))
         page_number = 1
         if len(parts) == 2:
@@ -57,9 +57,9 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "行动",
-            "summary": "从当前位置货架购买真意或气机",
+            "summary": "从当前位置货架购买商品",
             "usage": ("购买 黄品抢刻", "购买 黄品抢刻 3", "购买 <品级><物品> [数量]"),
-            "side_effect": "扣除灵石，把对应数量收入修行资粮；单次最多买 50 个",
+            "side_effect": "扣除灵石，把商品交付到对应资产；单次最多买 50 个",
             "order": 56,
         },
     },

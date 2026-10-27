@@ -1,4 +1,4 @@
-"""固定地点货架与修行资粮购买事务。"""
+"""地点通用货架与购买事务。"""
 
 from __future__ import annotations
 
@@ -6,14 +6,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import ceil
 
-from game.core.asset import AssetService, AssetStateError
+from game.core.asset import AssetService, AssetStateError, InventoryAdjustment
 from game.core.character import CharacterCultivationError, CharacterService
 from game.core.data import (
     JsonDataError,
     JsonDataService,
     mapping as _mapping,
-    nonempty_text,
-    nonnegative_int as _nonnegative_int,
+    nonnegative_int,
     positive_int as _positive_int,
 )
 from game.core.database import (
@@ -39,15 +38,23 @@ from .contracts import (
 
 
 @dataclass(frozen=True)
+class _Listing:
+    category: str
+    content_id: str
+    name: str
+    grade_ids: tuple[str, ...]
+    prices: Mapping[str, int]
+    delivery: str
+
+
+@dataclass(frozen=True)
 class _Store:
     location_name: str
-    grade_ids: tuple[str, ...]
-    catalogs: Mapping[str, tuple[str, ...]]
+    listings: tuple[_Listing, ...]
 
 
 class TradeService:
-    """解释地点货架，并原子交换人物灵石与修行资粮。"""
-
+    """解释地点通用货架，并原子交换人物灵石与商品。"""
 
     def __init__(
         self,
@@ -66,7 +73,6 @@ class TradeService:
         self._asset = asset
         self._initialized = False
         self._stores: dict[str, _Store] = {}
-        self._base_prices: dict[str, int] = {}
         self._maximum_quantity = 0
         self._page_size = 0
 
@@ -83,42 +89,45 @@ class TradeService:
         ):
             if not ready:
                 raise RuntimeError(f"{label}必须先于地点交易核心启动")
-        raw = self._data.dataset("交易规则").get("修行资粮")
-        rules = _mapping(raw, "玩法/交易/规则/修行资粮.json")
-        if rules.get("货币") != "灵石" or rules.get("固定货架") is not True:
-            raise JsonDataError("修行资粮交易必须使用灵石固定货架")
-        if rules.get("公共库存") != "无限":
-            raise JsonDataError("当前地点商店只支持无限公共库存")
-        allowed = _strings(rules.get("允许类别"), "交易.允许类别")
-        if allowed != ("真意", "气机"):
-            raise JsonDataError("修行资粮交易类别必须依次为真意、气机")
-        base_prices = _mapping(rules.get("类别基础价格"), "交易.类别基础价格")
-        self._base_prices = {
-            category: _positive_int(base_prices.get(category), f"{category}基础价格")
-            for category in allowed
-        }
+        rules = _mapping(
+            self._data.dataset("交易规则").get("商店"),
+            "玩法/行动/交易/规则/商店.json",
+        )
+        if rules.get("货币") != "灵石":
+            raise JsonDataError("商店交易必须使用灵石")
         self._maximum_quantity = _positive_int(
             rules.get("购买数量上限"), "交易.购买数量上限"
         )
         self._page_size = _positive_int(rules.get("每页上限"), "交易.每页上限")
         if self._page_size > 50:
             raise JsonDataError("交易每页上限不能超过50")
+
         shops = self._data.entities("地点商店")
         for file_id, value in shops.items():
             if not file_id.endswith("商店"):
                 raise JsonDataError(f"地点商店文件名必须以商店结尾：{file_id}")
             location_name = file_id.removesuffix("商店")
             row = _mapping(value, f"地点商店.{file_id}")
-            unknown = set(row) - {"品级", "真意目录", "气机目录"}
+            unknown = set(row) - {"货架"}
             if unknown:
                 raise JsonDataError(
                     f"地点商店 {location_name} 存在未知字段：{'、'.join(sorted(unknown))}"
                 )
-            grade_ids = _strings(row.get("品级"), f"{location_name}.品级")
-            for grade_id in grade_ids:
-                self._asset.grade(grade_id)
-            catalogs = _catalogs(row, self._data, f"地点商店.{location_name}")
-            self._stores[location_name] = _Store(location_name, grade_ids, catalogs)
+            raw_shelves = row.get("货架")
+            if not isinstance(raw_shelves, Sequence) or isinstance(raw_shelves, (str, bytes)):
+                raise JsonDataError(f"地点商店 {location_name}.货架必须是数组")
+            listings: list[_Listing] = []
+            seen: set[tuple[str, str]] = set()
+            for index, raw in enumerate(raw_shelves):
+                listings.extend(
+                    self._load_shelf(
+                        location_name, index, _mapping(raw, f"地点商店.{location_name}.货架[{index}]"), seen
+                    )
+                )
+            if not listings:
+                raise JsonDataError(f"地点商店 {location_name}.货架不能为空")
+            self._stores[location_name] = _Store(location_name, tuple(listings))
+
         trading_locations = {
             value.name
             for value in self._world.map_view().locations
@@ -143,23 +152,27 @@ class TradeService:
     async def overview(self, user_id: str) -> TradeOverview:
         store = await self._current_store(user_id)
         profile = await self._character.profile(user_id)
+        counts: dict[str, int] = {}
+        for listing in store.listings:
+            counts[listing.category] = counts.get(listing.category, 0) + len(
+                listing.grade_ids
+            )
         return TradeOverview(
             store.location_name,
             profile.spirit_stones,
-            tuple(
-                TradeCategorySummary(category, len(self._products(store, category)))
-                for category in ("真意", "气机")
-            ),
+            tuple(TradeCategorySummary(category, count) for category, count in counts.items()),
         )
 
     async def page(self, user_id: str, category: str, page: int = 1) -> TradePage:
         normalized_category = str(category or "").strip()
-        if normalized_category not in {"真意", "气机"}:
-            raise TradeError("交易类别只能是真意或气机")
+        if not normalized_category:
+            raise TradeError("交易类别不能为空")
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
             raise TradeError("交易页码必须是正整数")
         store = await self._current_store(user_id)
         products = self._products(store, normalized_category)
+        if not products:
+            raise TradeError(f"当前货架没有这一类商品：{normalized_category}")
         total_pages = max(1, ceil(len(products) / self._page_size))
         current_page = min(page, total_pages)
         start = (current_page - 1) * self._page_size
@@ -188,19 +201,15 @@ class TradeService:
             raise TradeError(str(exc)) from exc
         committed = await self._database.committed_transaction(user_id, request_id)
         if committed is not None:
-            if committed.receipt.business_type != "购买修行资粮":
+            if committed.receipt.business_type != "购买商品":
                 raise TradeConflictError("请求编号已经用于其他操作")
-            return self._replayed_result(
-                identifier,
-                grade_id,
-                command.quantity,
-                committed.payload,
-            )
+            return self._replayed_result(identifier, grade_id, command.quantity, committed.payload)
+
         store = await self._current_store(user_id)
         matches = tuple(
             product
-            for category in ("真意", "气机")
-            for product in self._products(store, category)
+            for listing in store.listings
+            for product in self._products_for_listing(listing)
             if product.grade_id == grade_id
             and (product.content_id == identifier or product.name == identifier)
         )
@@ -212,19 +221,15 @@ class TradeService:
             currency = await self._character.plan_spirit_stone_change(
                 user_id, delta=-total_price
             )
-            reserve = await self._asset.plan_cultivation_reserve_change(
-                user_id,
-                category=product.category,
-                content_id=product.content_id,
-                grade_id=product.grade_id,
-                quantity_delta=command.quantity,
+            delivery_plan = await self._delivery_plan(
+                user_id, product, command.quantity
             )
             receipt = await self._database.commit(
                 TransactionCommand(
                     user_id,
                     request_id,
-                    "购买修行资粮",
-                    (currency.operation, reserve.operation),
+                    "购买商品",
+                    currency.operations + (delivery_plan.operation,),
                     {
                         "地点": store.location_name,
                         "请求标识": identifier,
@@ -236,15 +241,16 @@ class TradeService:
                         "单价": product.unit_price,
                         "总价": total_price,
                         "剩余灵石": currency.after,
-                        "现有储备": reserve.quantity_after,
+                        "交付": product.delivery,
+                        "交付后数量": delivery_plan.after,
                     },
                 )
             )
         except StateConflictError as exc:
-            raise TradeConflictError("人物灵石或修行资粮已经变化，请重试") from exc
+            raise TradeConflictError("人物灵石或交付目标已经变化，请重试") from exc
         except IdempotencyConflictError as exc:
             raise TradeConflictError("请求编号已经用于其他操作") from exc
-        except (AssetStateError, CharacterCultivationError) as exc:
+        except (AssetStateError, CharacterCultivationError, JsonDataError) as exc:
             raise TradeError(str(exc)) from exc
         return TradePurchaseResult(
             store.location_name,
@@ -252,9 +258,138 @@ class TradeService:
             command.quantity,
             total_price,
             currency.after,
-            reserve.quantity_after,
+            delivery_plan.after,
             receipt.replayed,
         )
+
+    def _load_shelf(
+        self,
+        location_name: str,
+        index: int,
+        row: Mapping[str, object],
+        seen: set[tuple[str, str]],
+    ) -> tuple[_Listing, ...]:
+        label = f"地点商店.{location_name}.货架[{index}]"
+        unknown = set(row) - {"池名", "类别", "编号", "品级", "价格", "交付"}
+        if unknown:
+            raise JsonDataError(f"{label} 存在未知字段：{'、'.join(sorted(unknown))}")
+        grade_ids = _positive_grade_ids(self._asset, row.get("品级"), f"{label}.品级")
+        prices = _prices(row.get("价格"), grade_ids, f"{label}.价格")
+        delivery = _text(row.get("交付"), f"{label}.交付")
+        if delivery not in {"纳戒", "修行资粮", "器藏", "阵藏"}:
+            raise JsonDataError(f"{label}.交付不合法：{delivery}")
+        pool = row.get("池名")
+        category_value = row.get("类别")
+        content_value = row.get("编号")
+        if (pool is None) == (category_value is None):
+            raise JsonDataError(f"{label} 必须且只能写 池 或 类别")
+        if pool is not None:
+            if content_value is not None:
+                raise JsonDataError(f"{label}.池名 不能同时写 编号")
+            category, members = self._pool_members(str(pool))
+            if not members:
+                raise JsonDataError(f"{label}.池名 为空：{pool}")
+            _check_delivery(category, delivery, label)
+            return tuple(
+                self._listing(category, content_id, grade_ids, prices, delivery, seen, label)
+                for content_id in members
+            )
+        category = _text(category_value, f"{label}.类别")
+        content_id = _text(content_value, f"{label}.编号")
+        _check_delivery(category, delivery, label)
+        return (
+            self._listing(category, content_id, grade_ids, prices, delivery, seen, label),
+        )
+
+    def _listing(
+        self,
+        category: str,
+        content_id: str,
+        grade_ids: tuple[str, ...],
+        prices: Mapping[str, int],
+        delivery: str,
+        seen: set[tuple[str, str]],
+        label: str,
+    ) -> _Listing:
+        try:
+            raw = self._data.entity(category, content_id)
+        except JsonDataError as exc:
+            raise JsonDataError(f"{label} 引用不存在的商品：{category}/{content_id}") from exc
+        name = _text(raw.get("名称"), f"{label}.商品名称")
+        for grade_id in grade_ids:
+            key = (category, content_id + ":" + grade_id)
+            if key in seen:
+                raise JsonDataError(f"{label} 重复上架：{category}/{content_id}/{grade_id}")
+            seen.add(key)
+        return _Listing(category, content_id, name, grade_ids, prices, delivery)
+
+    def _pool_members(self, pool: str) -> tuple[str, tuple[str, ...]]:
+        name = str(pool or "").strip()
+        if not name:
+            raise JsonDataError("货架池不能为空")
+        if name in self._data.pools():
+            section = self._data.pool_section(name)
+            return section, tuple(sorted(self._data.pool_members((name,), section)))
+        return name, tuple(sorted(self._data.all_members(name)))
+
+    def _products(self, store: _Store, category: str) -> tuple[TradeProduct, ...]:
+        result: list[TradeProduct] = []
+        for listing in store.listings:
+            if listing.category == category:
+                result.extend(self._products_for_listing(listing))
+        return tuple(sorted(result, key=lambda value: (value.content_id, value.grade_id)))
+
+    def _products_for_listing(self, listing: _Listing) -> tuple[TradeProduct, ...]:
+        return tuple(
+            TradeProduct(
+                listing.category,
+                listing.content_id,
+                listing.name,
+                grade_id,
+                self._asset.grade(grade_id).name,
+                listing.prices[grade_id],
+                listing.delivery,
+            )
+            for grade_id in listing.grade_ids
+        )
+
+    async def _delivery_plan(
+        self, user_id: str, product: TradeProduct, quantity: int
+    ) -> "_DeliveryPlan":
+        if product.delivery == "修行资粮":
+            plan = await self._asset.plan_cultivation_reserve_change(
+                user_id,
+                category=product.category,
+                content_id=product.content_id,
+                grade_id=product.grade_id,
+                quantity_delta=quantity,
+            )
+            return _DeliveryPlan(plan.operation, plan.quantity_after)
+        if product.delivery == "纳戒":
+            plan = await self._asset.plan_inventory_changes(
+                user_id,
+                (
+                    InventoryAdjustment(
+                        product.content_id, product.grade_id, quantity
+                    ),
+                ),
+            )
+            change = next(
+                item
+                for item in plan.changes
+                if item.item_id == product.content_id
+                and item.grade.grade_id == product.grade_id
+            )
+            return _DeliveryPlan(plan.operations[0], change.after_quantity)
+        if product.delivery == "器藏":
+            plan = await self._asset.plan_law_reserve_acquisition(
+                user_id, product.content_id, quantity
+            )
+            return _DeliveryPlan(plan.operation, plan.quantity_after)
+        plan = await self._asset.plan_formation_reserve_acquisition(
+            user_id, product.content_id, product.grade_id
+        )
+        return _DeliveryPlan(plan.operation, plan.quantity_after)
 
     def _replayed_result(
         self,
@@ -266,20 +401,15 @@ class TradeService:
         try:
             if (
                 _text(payload.get("请求标识"), "交易事务.请求标识") != identifier
-                or _text(payload.get("请求品级"), "交易事务.请求品级")
-                != grade_id
+                or _text(payload.get("请求品级"), "交易事务.请求品级") != grade_id
                 or _positive_int(payload.get("数量"), "交易事务.数量") != quantity
             ):
                 raise ValueError("交易请求与已提交事务不一致")
             location_name = _text(payload.get("地点"), "交易事务.地点")
             category = _text(payload.get("类别"), "交易事务.类别")
-            if category not in {"真意", "气机"}:
-                raise ValueError("交易事务类别无效")
             content_id = _text(payload.get("编号"), "交易事务.编号")
-            stored_grade = self._asset.grade(
-                _text(payload.get("品级"), "交易事务.品级")
-            )
-            if stored_grade.grade_id != grade_id:
+            grade = self._asset.grade(_text(payload.get("品级"), "交易事务.品级"))
+            if grade.grade_id != grade_id:
                 raise ValueError("交易事务品级不一致")
             name = _text(
                 self._data.entity(category, content_id).get("名称"),
@@ -289,28 +419,22 @@ class TradeService:
             total_price = _positive_int(payload.get("总价"), "交易事务.总价")
             if total_price != unit_price * quantity:
                 raise ValueError("交易事务总价不一致")
-            spirit_stones_after = _nonnegative_int(
+            spirit_stones_after = nonnegative_int(
                 payload.get("剩余灵石"), "交易事务.剩余灵石"
             )
-            reserve_after = _positive_int(
-                payload.get("现有储备"), "交易事务.现有储备"
+            delivery = _text(payload.get("交付"), "交易事务.交付")
+            delivery_after = nonnegative_int(
+                payload.get("交付后数量"), "交易事务.交付后数量"
             )
-        except (AssetStateError, JsonDataError, TradeError, TypeError, ValueError) as exc:
+        except (AssetStateError, JsonDataError, TypeError, ValueError) as exc:
             raise TradeConflictError("已提交交易事务无法还原") from exc
         return TradePurchaseResult(
             location_name,
-            TradeProduct(
-                category,
-                content_id,
-                name,
-                stored_grade.grade_id,
-                stored_grade.name,
-                unit_price,
-            ),
+            TradeProduct(category, content_id, name, grade.grade_id, grade.name, unit_price, delivery),
             quantity,
             total_price,
             spirit_stones_after,
-            reserve_after,
+            delivery_after,
             True,
         )
 
@@ -325,73 +449,51 @@ class TradeService:
         except KeyError as exc:
             raise TradeError("当前位置缺少正式商店货架") from exc
 
-    def _products(self, store: _Store, category: str) -> tuple[TradeProduct, ...]:
-        result: list[TradeProduct] = []
-        seen: set[tuple[str, str]] = set()
-        for content_id in store.catalogs[category]:
-            raw = self._data.entity(category, content_id)
-            name = _text(raw.get("名称"), f"{category}.{content_id}.名称")
-            for grade_id in store.grade_ids:
-                key = (content_id, grade_id)
-                if key in seen:
-                    continue
-                seen.add(key)
-                grade = self._asset.grade(grade_id)
-                price = int(self._base_prices[category] * grade.price_multiplier)
-                result.append(
-                    TradeProduct(
-                        category,
-                        content_id,
-                        name,
-                        grade.grade_id,
-                        grade.name,
-                        price,
-                    )
-                )
-        return tuple(
-            sorted(result, key=lambda value: (value.content_id, value.grade_id))
-        )
-
     def _require_initialized(self) -> None:
         if not self._initialized:
             raise RuntimeError("地点交易核心尚未初始化")
 
 
-def _catalogs(
-    value: object, data: JsonDataService, label: str
-) -> Mapping[str, tuple[str, ...]]:
-    row = _mapping(value, label)
-    result: dict[str, tuple[str, ...]] = {}
-    for category in ("真意", "气机"):
-        # 目录可以整段缺席：某类卡片被整体撤掉时，商店就不卖这一类。
-        raw = row.get(f"{category}目录")
-        if raw is None:
-            # 不写目录 = 这一类**全能买**（委托方口径：商店不再逐条列举卖什么）。
-            result[category] = tuple(sorted(str(item) for item in data.all_members(category)))
-            continue
-        catalogs = _strings(raw, f"{label}.{category}目录")
-        for content_id in catalogs:
-            if not content_id.isdigit():
-                raise JsonDataError(f"{label}.{category}目录必须是编号：{content_id}")
-            try:
-                data.entity(category, content_id)
-            except JsonDataError as exc:
-                raise JsonDataError(f"{label}引用不存在的{category}：{content_id}") from exc
-        result[category] = catalogs
-    return result
+@dataclass(frozen=True)
+class _DeliveryPlan:
+    operation: object
+    after: int
 
 
-def _strings(value: object, label: str) -> tuple[str, ...]:
+def _check_delivery(category: str, delivery: str, label: str) -> None:
+    if delivery == "修行资粮" and category not in {"真意", "气机"}:
+        raise JsonDataError(f"{label}：{category} 不能交付到修行资粮")
+    if delivery == "器藏" and category != "器律":
+        raise JsonDataError(f"{label}：器藏只能交付器律")
+    if delivery == "阵藏" and category != "阵法":
+        raise JsonDataError(f"{label}：阵藏只能交付阵法")
+    if delivery == "纳戒" and category in {"真意", "气机", "器律", "阵法"}:
+        raise JsonDataError(f"{label}：{category} 不能交付到纳戒")
+
+
+def _prices(value: object, grade_ids: tuple[str, ...], label: str) -> Mapping[str, int]:
+    raw = _mapping(value, label)
+    if set(raw) != set(grade_ids):
+        raise JsonDataError(f"{label} 必须为每个品级写价格，且不能多写")
+    return {grade_id: _positive_int(raw.get(grade_id), f"{label}.{grade_id}") for grade_id in grade_ids}
+
+
+def _positive_grade_ids(asset: AssetService, value: object, label: str) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
         raise JsonDataError(f"{label}必须是字符串数组")
     result = tuple(str(item).strip() for item in value)
     if not result or any(not item for item in result) or len(result) != len(set(result)):
         raise JsonDataError(f"{label}不能为空、重复或包含空值")
+    for grade_id in result:
+        asset.grade(grade_id)
     return result
 
 
 def _text(value: object, label: str) -> str:
-    return nonempty_text(value, label, error=TradeError)
+    text = str(value or "").strip()
+    if not text:
+        raise JsonDataError(f"{label}不能为空")
+    return text
 
 
 __all__ = ["TradeService"]

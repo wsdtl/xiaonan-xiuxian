@@ -41,6 +41,7 @@ class TradeProduct:
     grade_id: str
     grade_name: str
     unit_price: int
+    delivery: str
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ class TradePurchaseResult:
     quantity: int
     total_price: int
     spirit_stones_after: int
-    reserve_after: int
+    delivery_after: int
     replayed: bool
 
 
