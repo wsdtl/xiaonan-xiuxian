@@ -1,4 +1,4 @@
-'''网页公开：命令与展示；开关事实在 core/visibility。
+'''网页资源开关：命令与展示；开关事实在 core/visibility。
 
 **语义**：一条全局开关，管住所有「网页直接读你的数据」的页面，页面不各造一个。
 本包只做文案、参数与命令编排；「谁开了、开关怎么写」由核心服务解释。
@@ -26,25 +26,25 @@ class WangyeFeature:
 
     def initialize(self) -> None:
         if self._copy is not None:
-            raise RuntimeError('网页公开玩法已经初始化')
+            raise RuntimeError('网页资源开关玩法已经初始化')
         if not self._visibility.status():
-            raise RuntimeError('网页可见性核心必须先于网页公开玩法启动')
+            raise RuntimeError('网页可见性核心必须先于网页资源开关玩法启动')
         # 数据集返回的是「文件名到正文」的视图，正文那一层要按文件名取（文本.json → '文本'）。
-        copy = self._data.dataset('网页公开展示').get('文本')
+        copy = self._data.dataset('网页资源开关展示').get('文本')
         if not isinstance(copy, Mapping):
-            raise JsonDataError('网页公开展示缺少文本.json')
+            raise JsonDataError('网页资源开关展示缺少文本.json')
         for group in ('公开', '错误'):
             if not isinstance(copy.get(group), Mapping):
-                raise JsonDataError(f'网页公开展示缺少一组文案：{group}')
+                raise JsonDataError(f'网页资源开关展示缺少一组文案：{group}')
         self._copy = copy
 
     def copy(self, section: str, key: str) -> str:
         if self._copy is None:
-            raise RuntimeError('网页公开玩法尚未初始化')
+            raise RuntimeError('网页资源开关玩法尚未初始化')
         group = self._copy.get(section)
         value = group.get(key) if isinstance(group, Mapping) else None
         if not isinstance(value, str):
-            raise JsonDataError(f'网页公开展示缺少文案：{section}.{key}')
+            raise JsonDataError(f'网页资源开关展示缺少文案：{section}.{key}')
         return value
 
     async def is_public(self, user_id: str) -> bool:

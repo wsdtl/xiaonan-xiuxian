@@ -72,8 +72,8 @@ async def forging_root(user_id: str, message: str, message_context: MessageConte
         "help": {
             "category": "炼制",
             "summary": "只读查看器律目录；不查库存、不开炉、不消耗",
-            "usage": ("炼器目录", "炼器目录 法器"),
-            "side_effect": "只读；目录计数是器律数量，不表示当前材料是否齐备",
+            "usage": ("炼器目录", "炼器目录 法器", "炼器目录 玄品无归劫锋"),
+            "side_effect": "目录列表只读；单条详情才查这一条的材料，不直接消耗",
             "order": 62,
         },
     },
@@ -86,10 +86,12 @@ async def forging_catalog(user_id: str, message: str, manager: Any) -> None:
             value = await feature.overview(user_id)
             await send_game_reply(reply.overview(feature.copy(), value, feature.overview_actions()))
             return
-        if query not in _STAGES:
-            raise ValueError("写法：炼器目录 [器阶]")
-        value = await feature.laws(user_id, query)
-        await send_game_reply(reply.law_list(feature.copy(), value))
+        if query in _STAGES:
+            value = await feature.laws(user_id, query)
+            await send_game_reply(reply.law_list(feature.copy(), value))
+            return
+        value = await feature.preview(user_id, query)
+        await send_game_reply(reply.preview(feature.copy(), value, feature.preview_actions(value)))
     except ValueError as exc:
         await send_game_reply(_error(feature, str(exc)))
     except ForgingFeatureError as exc:

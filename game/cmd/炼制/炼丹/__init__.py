@@ -12,6 +12,8 @@ from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from . import reply
 
+_CATEGORIES = {"恢复丹", "战丹", "突破丹", "特殊丹"}
+
 
 def _direct(message: str) -> tuple[object, int]:
     parts = str(message or "").strip().split()
@@ -86,8 +88,8 @@ async def alchemy_root(
         "help": {
             "category": "炼制",
             "summary": "只读查看丹方目录；不查库存、不炼药、不消耗",
-            "usage": ("炼丹目录", "炼丹目录 恢复丹", "炼丹目录 恢复丹 2"),
-            "side_effect": "只读；目录计数是丹方数量，不表示当前材料是否齐备",
+            "usage": ("炼丹目录", "炼丹目录 恢复丹", "炼丹目录 恢复丹 2", "炼丹目录 黄品聚气丹"),
+            "side_effect": "目录列表只读；单条详情才查这一条的材料，不直接消耗",
             "order": 64,
         },
     },
@@ -103,14 +105,26 @@ async def alchemy_catalog(user_id: str, message: str, manager: Any) -> None:
             )
             return
         parts = query.split()
-        category = parts[0]
-        page = int(parts[1]) if len(parts) == 2 and parts[1].isdecimal() else 1
-        if len(parts) > 2 or (len(parts) == 2 and not parts[1].isdecimal()):
-            raise ValueError("写法：炼丹目录 [类别] [页码]")
-        value = await feature.recipes(user_id, category, page)
+        if parts[0] in _CATEGORIES and len(parts) <= 2:
+            category = parts[0]
+            page = int(parts[1]) if len(parts) == 2 and parts[1].isdecimal() else 1
+            if len(parts) == 2 and not parts[1].isdecimal():
+                raise ValueError("写法：炼丹目录 [类别] [页码]")
+            value = await feature.recipes(user_id, category, page)
+            await send_game_reply(
+                reply.recipe_list(feature.copy(), value, feature.list_actions(value))
+            )
+            return
+        ref = parse_item_ref(query)
+        if not ref.grade:
+            await send_game_reply(reply.choose_grade(feature.copy(), ref.item))
+            return
+        value = await feature.preview(user_id, ref.item, ref.grade, 1)
         await send_game_reply(
-            reply.recipe_list(feature.copy(), value, feature.list_actions(value))
+            reply.preview(feature.copy(), value, feature.preview_actions(value))
         )
+    except ItemRefError as exc:
+        await send_game_reply(_error(feature, str(exc)))
     except ValueError as exc:
         await send_game_reply(_error(feature, str(exc)))
     except AlchemyFeatureError as exc:

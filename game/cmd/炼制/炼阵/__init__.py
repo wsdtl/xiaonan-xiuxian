@@ -29,7 +29,7 @@ def _split_prefix(feature: Any, head: str) -> tuple[str, str]:
     return "", head
 
 
-def _request(message: str, usage: str) -> tuple[str, str, dict[str, int] | None]:
+def _request(message: str, usage: str) -> tuple[str, str, dict[str, int] | None, bool]:
     parts = str(message or "").strip().split()
     feature = current_game_services().features.lianzhen
     if len(parts) == 1 and parts[0]:
@@ -46,13 +46,16 @@ def _request(message: str, usage: str) -> tuple[str, str, dict[str, int] | None]
                 investments = None
                 if ref.extra:
                     investments = {str(name): int(str(amount)) for name, amount in ref.extra}
-                return ref.item, grade, investments
+                return ref.item, grade, investments, bool(ref.grade)
     try:
+        explicit = False
         if len(parts) in {2, 5}:
             identifier, grade_word, tail = parts[0], parts[1], parts[2:]
+            explicit = True
         elif len(parts) in {1, 4}:
             prefix, identifier = _split_prefix(feature, parts[0])
             grade_word, tail = prefix or "黄品", parts[1:]
+            explicit = bool(prefix)
         else:
             raise ValueError(usage)
         grade = _grade_prefix(feature, grade_word)
@@ -65,7 +68,7 @@ def _request(message: str, usage: str) -> tuple[str, str, dict[str, int] | None]
         investments = dict(zip(("兽宝", "灵矿", "灵植"), (int(value) for value in tail), strict=True))
         if any(value < 1 for value in investments.values()):
             raise ValueError("圣品三相投入必须是正整数")
-    return identifier, grade, investments
+    return identifier, grade, investments, explicit
 
 
 def _error(feature: Any, message: str, command: str) -> object:
@@ -99,7 +102,12 @@ async def formation_root(user_id: str, message: str, message_context: MessageCon
         if not query:
             await _overview(user_id)
             return
-        identifier, grade, investments = _request(query, reply.text(feature.copy(), "错误", "炼阵格式"))
+        identifier, grade, investments, explicit = _request(
+            query, reply.text(feature.copy(), "错误", "炼阵格式")
+        )
+        if not explicit:
+            await send_game_reply(reply.choose_grade(feature.copy(), identifier))
+            return
         preview = await feature.preview(user_id, identifier, grade, investments)
         if preview.can_form:
             value = await feature.form(user_id, message_context.request_id, identifier, grade, investments)
@@ -120,8 +128,8 @@ async def formation_root(user_id: str, message: str, message_context: MessageCon
         "help": {
             "category": "炼制",
             "summary": "只读查看可炼阵法目录；不查库存、不炼阵、不消耗",
-            "usage": ("炼阵目录", "炼阵目录 2"),
-            "side_effect": "只读；目录只列阵法，不表示当前材料是否齐备",
+            "usage": ("炼阵目录", "炼阵目录 2", "炼阵目录 黄品叠翠盘根阵"),
+            "side_effect": "目录列表只读；单条详情才查这一条的三相材料，不直接消耗",
             "order": 66,
         },
     },
@@ -133,9 +141,21 @@ async def formation_catalog(user_id: str, message: str, manager: Any) -> None:
         if not query:
             await _overview(user_id)
             return
-        if not query.isdecimal() or int(query) < 1:
-            raise ValueError("写法：炼阵目录 [页码]")
-        await _overview(user_id, int(query))
+        if query.isdecimal():
+            if int(query) < 1:
+                raise ValueError("写法：炼阵目录 [页码]")
+            await _overview(user_id, int(query))
+            return
+        identifier, grade, investments, explicit = _request(
+            query, reply.text(feature.copy(), "错误", "炼阵格式")
+        )
+        if not explicit:
+            await send_game_reply(reply.choose_grade(feature.copy(), identifier))
+            return
+        value = await feature.preview(user_id, identifier, grade, investments)
+        await send_game_reply(reply.preview(feature.copy(), value, feature.preview_actions(value)))
+    except FormationChoiceError as exc:
+        await send_game_reply(reply.choose(feature.copy(), exc, command="炼阵目录"))
     except (FormationCraftFeatureError, ValueError) as exc:
         await send_game_reply(_error(feature, str(exc), "炼阵目录"))
 

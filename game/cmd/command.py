@@ -34,6 +34,7 @@ class GameCommand:
         block: bool = True,
         cooldown: float = 0,
         metadata: dict[str, Any] | None = None,
+        allow_long: bool = False,
     ) -> Callable:
         return _register(
             MessageHandler.fullmatch,
@@ -42,7 +43,7 @@ class GameCommand:
             block=block,
             cooldown=cooldown,
             metadata=metadata,
-            allow_long=True,
+            allow_long=allow_long,
         )
 
     @staticmethod

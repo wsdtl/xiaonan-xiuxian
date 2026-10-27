@@ -25,6 +25,7 @@ from typing import Any
             'order': 82,
         },
     },
+    allow_long=True,
 )
 async def web_public_on(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.wangye
@@ -48,6 +49,7 @@ async def web_public_on(user_id: str, message_context: MessageContext, manager: 
             'order': 83,
         },
     },
+    allow_long=True,
 )
 async def web_public_off(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.wangye

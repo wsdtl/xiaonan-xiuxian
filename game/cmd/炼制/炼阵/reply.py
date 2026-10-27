@@ -113,6 +113,19 @@ def completed(copy: FormationCopy, value: FormationResult, actions: tuple[Format
     return builder.actions(message_actions(actions)).build()
 
 
+def choose_grade(copy: FormationCopy, identifier: str) -> DocumentMessage:
+    """未写品级时只出品级候选，不执行、不查库存。"""
+
+    builder = (
+        M.document()
+        .section(f"{identifier} · 选择品级", icon="game.blue_diamond")
+        .line("补一个品级再炼；这一步只填命令，不消耗材料。")
+    )
+    for index, grade in enumerate(("黄品", "玄品", "地品", "天品", "圣品"), start=1):
+        builder.item(index, M.command(grade, f"炼阵 {grade}{identifier}"))
+    return builder.build()
+
+
 def choose(copy: FormationCopy, exc: FormationChoiceError, *, command: str = "炼阵") -> DocumentMessage:
     builder = M.document()
     candidate_lines(
@@ -144,4 +157,4 @@ def error(
     )
 
 
-__all__ = ["choose", "completed", "error", "overview", "preview", "text"]
+__all__ = ["choose", "choose_grade", "completed", "error", "overview", "preview", "text"]
