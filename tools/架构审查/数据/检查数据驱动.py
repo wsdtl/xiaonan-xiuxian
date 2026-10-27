@@ -976,6 +976,67 @@ def check_craft_facilities() -> list[str]:
     return issues
 
 
+def check_economy_fields() -> list[str]:
+    """可交易实体必须有正数参考价；随机实体必须有正整数权重；成品价不得低于材料价。"""
+
+    issues: list[str] = []
+    entities: dict[str, tuple[str, dict[str, object]]] = {}
+    base_refs: dict[str, int] = {}
+    category_min: dict[str, int] = {}
+    for path in sorted(DATA.rglob("*.json")):
+        if path.name == "组件.json":
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(raw, dict) or not raw.get("编号") or not raw.get("名称"):
+            continue
+        parts = path.relative_to(DATA).parts
+        section = parts[2] if len(parts) >= 3 and parts[1] == "内容" else ""
+        if not section:
+            continue
+        eid = str(raw["编号"])
+        entities[eid] = (section, raw)
+        if section == "基础物品" and len(parts) >= 4:
+            category = parts[3]
+            ref = raw.get("参考价")
+            if isinstance(ref, int) and not isinstance(ref, bool):
+                base_refs[eid] = ref
+                category_min[category] = min(category_min.get(category, ref), ref)
+    tradable = {"基础物品", "丹药", "真意", "气机", "器律", "阵法"}
+    weighted = {"基础物品", "丹药", "功法", "真意", "气机", "敌人"}
+    for eid, (section, raw) in entities.items():
+        if section in tradable:
+            ref = raw.get("参考价")
+            if isinstance(ref, bool) or not isinstance(ref, int) or ref <= 0:
+                issues.append(f"{section}[{eid}] 缺少正数参考价")
+        if section in weighted:
+            weight = raw.get("权重")
+            if isinstance(weight, bool) or not isinstance(weight, int) or weight <= 0:
+                issues.append(f"{section}[{eid}] 缺少正整数权重")
+        if section in {"丹药", "器律", "阵法"} and isinstance(raw.get("材料"), list):
+            price = raw.get("参考价")
+            if not isinstance(price, int) or isinstance(price, bool):
+                continue
+            cost = 0
+            for material in raw["材料"]:
+                if not isinstance(material, dict):
+                    continue
+                quantity = material.get("数量")
+                if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+                    continue
+                item_id = str(material.get("编号") or "")
+                category = str(material.get("类别") or "")
+                ref = base_refs.get(item_id, category_min.get(category, 0))
+                cost += ref * quantity
+            if price < cost:
+                issues.append(
+                    f"{section}[{eid}] 参考价 {price} 低于材料参考价合计 {cost}"
+                )
+    return issues
+
+
 def check_number_sequences() -> list[str]:
     """每个两位前缀下的六位编号必须从 0001 连续排。"""
 
@@ -1327,6 +1388,7 @@ def main() -> int:
     引文 = check_duplicate_quotes()
     命线属性 = check_life_attribute_pairs()
     设施 = check_craft_facilities()
+    经济 = check_economy_fields()
     编号连续 = check_number_sequences()
     伤势神魂 = check_injury_soul_damage()
     按钮编号 = check_button_ids_unique()
@@ -1364,6 +1426,16 @@ def main() -> int:
         print("六座主城各一个设施，三类各两座；普通地点没有设施，可用功能不再含锻造/炼丹/炼阵。")
         return 1
     print("城池炼制设施：六城各一，三类各两座")
+    if 经济:
+        print(f"价格/权重字段不合法 {len(经济)} 处：")
+        for item in 经济[:20]:
+            print(f"  {item}")
+        if len(经济) > 20:
+            print(f"  …… 另 {len(经济) - 20} 条")
+        print()
+        print("可交易实体必须有正数参考价；随机实体必须有正整数权重；成品价不得低于材料价。")
+        return 1
+    print("价格/权重：覆盖完整，成品价不低于材料价")
     if 编号连续:
         print(f"编号段不连续 {len(编号连续)} 处：")
         for item in 编号连续[:20]:

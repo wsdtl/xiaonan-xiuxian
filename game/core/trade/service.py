@@ -274,7 +274,9 @@ class TradeService:
         if unknown:
             raise JsonDataError(f"{label} 存在未知字段：{'、'.join(sorted(unknown))}")
         grade_ids = _positive_grade_ids(self._asset, row.get("品级"), f"{label}.品级")
-        prices = _prices(row.get("价格"), grade_ids, f"{label}.价格")
+        raw_price = row.get("价格")
+        by_reference = raw_price is None or raw_price == "参考价"
+        prices = {} if by_reference else _prices(raw_price, grade_ids, f"{label}.价格")
         delivery = _text(row.get("交付"), f"{label}.交付")
         if delivery not in {"纳戒", "修行资粮", "器藏", "阵藏"}:
             raise JsonDataError(f"{label}.交付不合法：{delivery}")
@@ -291,14 +293,34 @@ class TradeService:
                 raise JsonDataError(f"{label}.池名 为空：{pool}")
             _check_delivery(category, delivery, label)
             return tuple(
-                self._listing(category, content_id, grade_ids, prices, delivery, seen, label)
+                self._listing(
+                    category,
+                    content_id,
+                    grade_ids,
+                    self._reference_prices(category, content_id, grade_ids, label)
+                    if by_reference
+                    else prices,
+                    delivery,
+                    seen,
+                    label,
+                )
                 for content_id in members
             )
         category = _text(category_value, f"{label}.类别")
         content_id = _text(content_value, f"{label}.编号")
         _check_delivery(category, delivery, label)
         return (
-            self._listing(category, content_id, grade_ids, prices, delivery, seen, label),
+            self._listing(
+                category,
+                content_id,
+                grade_ids,
+                self._reference_prices(category, content_id, grade_ids, label)
+                if by_reference
+                else prices,
+                delivery,
+                seen,
+                label,
+            ),
         )
 
     def _listing(
@@ -322,6 +344,25 @@ class TradeService:
                 raise JsonDataError(f"{label} 重复上架：{category}/{content_id}/{grade_id}")
             seen.add(key)
         return _Listing(category, content_id, name, grade_ids, prices, delivery)
+
+    def _reference_prices(
+        self,
+        category: str,
+        content_id: str,
+        grade_ids: tuple[str, ...],
+        label: str,
+    ) -> Mapping[str, int]:
+        try:
+            raw = self._data.entity(category, content_id)
+        except JsonDataError as exc:
+            raise JsonDataError(f"{label} 引用不存在的商品：{category}/{content_id}") from exc
+        reference = raw.get("参考价")
+        if isinstance(reference, bool) or not isinstance(reference, int) or reference <= 0:
+            raise JsonDataError(f"{label} 商品没有正数参考价：{category}/{content_id}")
+        return {
+            grade_id: max(1, int(reference * self._asset.grade(grade_id).price_multiplier))
+            for grade_id in grade_ids
+        }
 
     def _pool_members(self, pool: str) -> tuple[str, tuple[str, ...]]:
         name = str(pool or "").strip()

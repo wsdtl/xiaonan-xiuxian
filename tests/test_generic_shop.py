@@ -23,7 +23,7 @@ def test_pool_shelves_are_dynamic_and_deliver_to_cultivation(services) -> None:
     assert page.total_products > 0
     product = page.products[0]
     assert product.delivery == "修行资粮"
-    assert product.unit_price > 0
+    assert product.unit_price == 3000
 
     before = asyncio.run(services.core.asset.spirit_stone_balance(user_id))
     result = asyncio.run(
@@ -55,7 +55,6 @@ def test_individual_shelf_can_deliver_to_inventory(services) -> None:
             "类别": "基础物品",
             "编号": "200001",
             "品级": ["01"],
-            "价格": {"01": 100},
             "交付": "纳戒",
         },
         set(),
@@ -63,5 +62,6 @@ def test_individual_shelf_can_deliver_to_inventory(services) -> None:
     assert len(listings) == 1
     product = services.core.trade._products_for_listing(listings[0])[0]
     assert product.delivery == "纳戒"
+    assert product.unit_price == 220
     plan = asyncio.run(services.core.trade._delivery_plan(user, product, 1))
     assert plan.after >= 1
