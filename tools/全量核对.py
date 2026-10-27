@@ -76,14 +76,23 @@ def main() -> int:
     failures: list[str] = []
     shutil.rmtree(_SCRATCH, ignore_errors=True)
     _SCRATCH.mkdir(parents=True, exist_ok=True)
-    # 单元测试独占跑，避免和其它判据抢核；其余项并发，留一个核给用户。
-    heavies = tuple(item for item in REQUIRED if "单元测试" in item[0])
-    others = tuple(item for item in REQUIRED if item not in heavies)
-    measured = {item[0]: run_one(item) for item in heavies}
-    workers = max(1, min((os.cpu_count() or 4) - 1, 4))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        for item, result in zip(others, pool.map(run_one, others)):
-            measured[item[0]] = result
+    cores = os.cpu_count() or 4
+    workers = max(1, min(cores - 1, 4))
+    # 单元测试自己开 4 片；核多的机器上让它与其它项同时跑，墙钟从「两段相加」变成
+    # 「取最长的一段」。核少时仍让测试独占，避免 7 个进程抢 4 个核反而更慢。
+    measured: dict[str, tuple[str, bool, str, float]] = {}
+    if cores >= 8:
+        ordered = tuple(sorted(REQUIRED, key=lambda item: "单元测试" not in item[0]))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            for item, result in zip(ordered, pool.map(run_one, ordered)):
+                measured[item[0]] = result
+    else:
+        heavies = tuple(item for item in REQUIRED if "单元测试" in item[0])
+        others = tuple(item for item in REQUIRED if item not in heavies)
+        measured.update({item[0]: run_one(item) for item in heavies})
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            for item, result in zip(others, pool.map(run_one, others)):
+                measured[item[0]] = result
     for item in REQUIRED:
         name, ok, tail, seconds = measured[item[0]]
         print(f"  [{'通过' if ok else '失败'}] {name:<14} {seconds:>6.1f}s  {tail}")

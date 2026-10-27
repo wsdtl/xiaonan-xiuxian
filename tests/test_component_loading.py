@@ -27,7 +27,42 @@ def _写(path: Path, text: str) -> None:
 
 @pytest.fixture
 def tree(tmp_path):
-    return Path(shutil.copytree(DATA, tmp_path / "data", copy_function=os.link))
+    """只造加载器需要的最小数据树。
+
+    这些用例验的是「组件清单/路径匹配/游离目录」的失败面，不需要 3131 份正式 JSON；
+    复制整棵树会让每个用例花 2 秒建上万个硬链接，把单元测试墙钟锁在 25 秒。
+    """
+
+    root = tmp_path / "data"
+    (root / "基础" / "定义").mkdir(parents=True)
+    (root / "战斗" / "定义").mkdir(parents=True)
+    (root / "战斗" / "规则").mkdir(parents=True)
+    routing = json.loads((DATA / "基础/读取规则.json").read_text(encoding="utf-8"))
+    routing["扫描目录"] = ["基础", "战斗"]
+    (root / "基础/读取规则.json").write_text(
+        json.dumps(routing, ensure_ascii=False), encoding="utf-8"
+    )
+    shutil.copy2(DATA / "基础/组件.json", root / "基础/组件.json")
+    for name in ("编号.json", "品级.json"):
+        shutil.copy2(DATA / "基础/定义" / name, root / "基础/定义" / name)
+    (root / "战斗/组件.json").write_text(
+        json.dumps(
+            {
+                "组件": "战斗",
+                "读取规则": [
+                    {
+                        "数据集": "战斗定义",
+                        "路径": "战斗/定义/*.json",
+                        "结构": "对象",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (root / "战斗/定义/样例.json").write_text("{}", encoding="utf-8")
+    return root
 
 
 @pytest.mark.parametrize("fault", ["missing", "foreign", "unknown", "identity", "unmatched"])
