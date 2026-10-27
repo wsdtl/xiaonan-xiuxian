@@ -30,7 +30,7 @@ from game.core.innate_treasure import (
     InnateTreasureActivation,
     InnateTreasureService,
 )
-from game.core.item_catalog import ItemCatalogService
+from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.core.medicine import MedicineError, MedicineService
 from game.features.presentation import require_mapping
 
@@ -47,6 +47,7 @@ from .contracts import (
     CharacterEquipResult,
     CharacterLawRequest,
     CharacterLawResult,
+    CharacterUseTarget,
 )
 
 
@@ -157,6 +158,68 @@ class CharacterCultivationFeature:
                 BreakthroughCandidate(one.medicine_id, one.name, one.permanent)
                 for one in medicines
             ),
+        )
+
+    async def resolve_use_target(
+        self, user_id: str, identifier: str
+    ) -> CharacterUseTarget:
+        """把玩家写的名字/编号解析成一件可使用的构筑与可用位置。"""
+
+        self._require_initialized()
+        try:
+            detail = self._items.inspect_entity(identifier)
+        except ItemCatalogError as exc:
+            raise CharacterCultivationFeatureError(str(exc)) from exc
+        if detail.category not in {"功法", "真意", "气机", "器律"}:
+            raise CharacterCultivationFeatureError(
+                self.copy("使用", "未接入").format_map({"名称": detail.name})
+            )
+        try:
+            profile = await self._character.profile(user_id)
+        except (CharacterStateError, CharacterCultivationError) as exc:
+            raise CharacterCultivationFeatureError(str(exc)) from exc
+        if detail.category == "器律":
+            slots = tuple(range(1, profile.weapon.open_law_slots + 1))
+        else:
+            counts = dict(profile.cultivation_slots)
+            slots = tuple(range(1, counts.get(detail.category, 0) + 1))
+        if not slots:
+            raise CharacterCultivationFeatureError(
+                self.copy("使用", "无位置").format_map({"类别": detail.category})
+            )
+        return CharacterUseTarget(
+            detail.item_id, detail.name, detail.category, slots
+        )
+
+    async def use(
+        self,
+        user_id: str,
+        request_id: str,
+        target: CharacterUseTarget,
+        grade: str,
+        slot: int,
+    ) -> CharacterEquipResult | CharacterLawResult:
+        """按构筑类别执行使用；位置校验只在这里做一次。"""
+
+        if slot not in target.slots:
+            raise CharacterCultivationFeatureError(
+                self.copy("使用", "位置不可用").format_map({"位置": slot})
+            )
+        if target.category == "器律":
+            return await self.forge_law(
+                CharacterLawRequest(user_id, request_id, target.item_id, slot)
+            )
+        if not str(grade or "").strip():
+            raise CharacterCultivationFeatureError(self.copy("使用", "缺品级"))
+        return await self.equip(
+            CharacterEquipRequest(
+                user_id,
+                request_id,
+                target.category,
+                target.item_id,
+                grade,
+                slot,
+            )
         )
 
     async def equip(self, request: CharacterEquipRequest) -> CharacterEquipResult:

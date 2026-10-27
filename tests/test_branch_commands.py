@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from game.cmd.查看与工具.帮助.branches import (
+from game.cmd.branching import (
     BranchParseError,
-    _menu,
+    branch_menu,
     parse_branches,
 )
 from message import ClosingBlock, CommandLink
@@ -31,9 +31,9 @@ def test_full_mode_keeps_each_segment() -> None:
 
 
 def test_full_mode_handles_heterogeneous_commands() -> None:
-    assert parse_branches("查看 清心散|人物装配 功法 黄品清心散 1") == (
+    assert parse_branches("查看 清心散|使用 黄品清心散 1") == (
         "查看 清心散",
-        "人物装配 功法 黄品清心散 1",
+        "使用 黄品清心散 1",
     )
 
 
@@ -52,6 +52,14 @@ def test_shared_head_repeats_the_first_command() -> None:
 
 def test_shared_head_with_place_names() -> None:
     assert parse_branches(">去 天衡城|溪隐台") == ("去 天衡城", "去 溪隐台")
+
+
+def test_shared_head_supports_multi_word_prefix() -> None:
+    assert parse_branches(">使用 黄品功法 1|2|3") == (
+        "使用 黄品功法 1",
+        "使用 黄品功法 2",
+        "使用 黄品功法 3",
+    )
 
 
 def test_shared_head_does_not_check_the_command_word() -> None:
@@ -74,10 +82,9 @@ def test_duplicate_commands_are_collapsed() -> None:
         "查看",
         "查看|",
         "查看||购买",
-        "查看|购买 清心散|人物装配 功法 黄品清心散 1",
+        "查看|购买 清心散|使用 黄品清心散 1",
         ">查看|小还丹",
         "> 小还丹|养神丹",
-        ">查看 清心散 1|小还丹",
         ">查看 清心散|小还丹 1",
     ),
 )
@@ -87,7 +94,7 @@ def test_invalid_shapes_are_rejected(text: str) -> None:
 
 
 def test_menu_only_fills_and_carries_one_fixed_closing() -> None:
-    document = _menu(("查看 清心散", "取消托管")).document
+    document = branch_menu(("查看 清心散", "取消托管")).document
     assert isinstance(document.blocks[-1], ClosingBlock)
     assert "点一条填入" in document.blocks[-1].content[0].value
     links = [

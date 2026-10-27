@@ -27,6 +27,16 @@ class CharacterEquipRequest:
 
 
 @dataclass(frozen=True)
+class CharacterUseTarget:
+    """一件可“使用”的构筑：编号、显示名、类别与可选位置。"""
+
+    item_id: str
+    name: str
+    category: str
+    slots: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class CharacterBreakthroughRequest:
     user_id: str
     request_id: str
@@ -121,4 +131,5 @@ __all__ = [
     "CharacterEquipResult",
     "CharacterLawRequest",
     "CharacterLawResult",
+    "CharacterUseTarget",
 ]

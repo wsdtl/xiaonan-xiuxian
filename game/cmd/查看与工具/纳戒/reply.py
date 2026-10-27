@@ -127,8 +127,8 @@ def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
     has_stable_id = entry.content_id.isdigit() and len(entry.content_id) == 6
     command = f"查看 {entry.name}"
     if entry.category == "道藏" and entry.grade_id:
-        # 展示区分支用中文名与品级名，不写编号；装配槽位由玩家点入后自己补。
-        command = f"{command} | 人物装配 功法 {entry.grade_name}{entry.name}"
+        # 展示区分支用中文名与品级名，不写编号；槽位由「使用」再出分支补齐。
+        command = f"{command} | 使用 {entry.grade_name}{entry.name}"
     # 品级在前连写（规则：品级永远在前、不许加分隔）；没有品级就只留名字。
     # 品级和名字同属一个可点标签，不能再把 CommandLink 拼进 f-string——
     # 那会打出「圣品CommandLink(label=...)」的 repr。
