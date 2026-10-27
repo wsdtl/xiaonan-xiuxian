@@ -20,11 +20,12 @@ from .contracts import (
     MapTerrainZone,
     WorldMapView,
     WorldStatus,
+    CraftFacility,
 )
 from .journey import JourneyPlanner
 
 _LOCATION_FIELDS = frozenset(
-    {"坐标", "说明", "可用功能", "功能配置", "单次遭遇敌人倍率", "刷新区间", "敌人等级区间",
+    {"坐标", "说明", "可用功能", "功能配置", "设施", "单次遭遇敌人倍率", "刷新区间", "敌人等级区间",
      "修士阶级区间", "灵兽阶级区间", "修士数量区间", "灵兽数量区间"}
 )
 _REGION_FIELDS = frozenset({"类别", "坐标带", "说明"})
@@ -200,10 +201,6 @@ class WorldService:
                 for section in sections:
                     if section == "商店":
                         self._require_location_shop(location_name)
-                    elif section in {
-                        "炼器工匠", "炼丹师", "阵师",
-                    }:
-                        self._require_location_entity(location_name, section)
                     else:
                         self._require_location_pool(location_name, section)
 
@@ -257,6 +254,10 @@ class WorldService:
             raise JsonDataError(f"地点 {owners[0]}.功能配置.{name} 必须是对象")
         return config
 
+    def facility_count(self) -> int:
+        self._require_initialized()
+        return sum(1 for raw in self._locations.values() if raw.get("设施") is not None)
+
     def locate(self, query: LocationQuery) -> LocationView:
         self._require_initialized()
         location_name = str(query.location_name or "").strip()
@@ -279,6 +280,7 @@ class WorldService:
                 else self._region_at(xy)
             )
         terrain = self._terrain_at(xy)
+        facility = _facility(raw.get("设施"), location_key or "荒野")
         functions = _strings(raw.get("可用功能"))
         content_sections = {
             section
@@ -320,6 +322,7 @@ class WorldService:
             beast_tiers=_texts_from(raw.get("灵兽阶级区间")),
             cultivator_count=_numbers(raw.get("修士数量区间")),
             beast_count=_numbers(raw.get("灵兽数量区间")),
+            facility=facility,
         )
 
     def plan_journey(self, query: JourneyQuery) -> JourneyPlan:
@@ -492,27 +495,6 @@ class WorldService:
         owner = self._data.entity_record("地点商店", file_id).directory_owner
         if owner != location_name:
             raise JsonDataError(f"地点商店不在对应目录：{file_id} -> {owner}")
-
-    def _require_location_entity(self, location_name: str, section: str) -> None:
-        file_id = f"{location_name}{section}"
-        values = self._data.entities(section)
-        matches = [
-            entity_id
-            for entity_id in values
-            if self._data.entity_record(section, entity_id).directory_owner == location_name
-        ]
-        if not matches:
-            raise JsonDataError(f"地点缺少同目录内容：{file_id}.json")
-        for entity_id in matches:
-            owner = self._data.entity_record(section, entity_id).directory_owner
-            if owner != location_name:
-                raise JsonDataError(
-                    f"地点内容不在对应目录：{file_id} -> {owner or '<空>'}"
-                )
-            if "地点" in values[entity_id]:
-                raise JsonDataError(
-                    f"地点内容重复保存地点字段：{file_id} -> {entity_id}"
-                )
 
     def _region_at(self, xy: tuple[int, int]) -> str:
         try:
@@ -832,6 +814,28 @@ def _strings(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value)
 
 
+def _facility(value: object, location_name: str) -> CraftFacility | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise JsonDataError(f"地点 {location_name}.设施必须是对象")
+    unknown = set(value) - {"类别", "名称", "材料节省万分比"}
+    if unknown:
+        raise JsonDataError(
+            f"地点 {location_name}.设施存在未声明字段：{'、'.join(sorted(unknown))}"
+        )
+    category = str(value.get("类别") or "").strip()
+    if category not in {"炼器", "炼丹", "炼阵"}:
+        raise JsonDataError(f"地点 {location_name}.设施.类别不合法：{category}")
+    name = str(value.get("名称") or "").strip()
+    if not name:
+        raise JsonDataError(f"地点 {location_name}.设施.名称不能为空")
+    raw_saving = value.get("材料节省万分比", 0)
+    if isinstance(raw_saving, bool) or not isinstance(raw_saving, int) or not 0 <= raw_saving <= 10_000:
+        raise JsonDataError(f"地点 {location_name}.设施.材料节省万分比必须是0至10000的整数")
+    return CraftFacility(category, name, raw_saving)
+
+
 def _validate_location_data(
     raw: Mapping[str, object],
     location_name: str,
@@ -865,6 +869,7 @@ def _validate_location_data(
         required_fields.update(nonempty)
         required_fields.update(positive_range)
         positive_range_fields.update(positive_range)
+    _facility(raw.get("设施"), location_name)
     configs = raw.get("功能配置", {})
     if not isinstance(configs, Mapping):
         raise JsonDataError(f"地点 {location_name}.功能配置必须是对象")
@@ -885,7 +890,7 @@ def _validate_location_data(
             f"地点 {location_name} 缺少专属功能配置：{'、'.join(sorted(missing_configs))}"
         )
     declared_optional = set(raw) - {
-        "坐标", "说明", "可用功能", "功能配置", "刷新区间", "敌人等级区间",
+        "坐标", "说明", "可用功能", "功能配置", "设施", "刷新区间", "敌人等级区间",
         "修士阶级区间", "灵兽阶级区间", "修士数量区间", "灵兽数量区间",
     }
     undeclared_optional = declared_optional - required_fields
@@ -967,7 +972,7 @@ def _feature_definitions(
         )
         if any(
             section not in {
-                "道侣", "敌人", "商店", "炼器工匠", "炼丹师", "阵师",
+                "道侣", "敌人", "商店",
             }
             for section in sections
         ):

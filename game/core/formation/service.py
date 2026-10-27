@@ -45,10 +45,17 @@ from game.core.innate_treasure import (
     activation_payload,
     treasure_line,
 )
+from game.core.crafting import (
+    CraftCostRules,
+    CraftEnvironment,
+    current_environment,
+    facility_from_payload,
+    facility_payload,
+    material_quantity,
+)
 from game.core.location import LocationService
 from game.core.promotion import MaterialRequirement
-from game.core.world import LocationQuery, WorldService
-from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
+from game.core.world import CraftFacility, WorldService
 
 from .contracts import (
     FormationActivationPlan,
@@ -62,7 +69,6 @@ from .contracts import (
     FormationCandidate,
     FormationChoiceError,
     FormationError,
-    FormationMaster,
     FormationMaterial,
     FormationMaterialError,
     FormationNodeRules,
@@ -150,7 +156,7 @@ class FormationService:
         self._raw_formations: Mapping[str, Mapping[str, object]] = MappingProxyType({})
         self._formations: Mapping[str, FormationDefinition] = MappingProxyType({})
         self._formation_by_name: Mapping[str, str] = MappingProxyType({})
-        self._masters: Mapping[str, FormationMaster] = MappingProxyType({})
+        self._cost_rules: CraftCostRules | None = None
         self._town_max_grade_name = ""
         self._page_limit = 0
 
@@ -202,6 +208,7 @@ class FormationService:
             contract.validate(raw, "阵法", f"阵法 {formation_id}")
             raw_formations[formation_id] = _mapping(raw, f"阵法 {formation_id}")
         self._raw_formations = MappingProxyType(raw_formations)
+        self._cost_rules = CraftCostRules(self._data)
         for formation_id, raw in raw_formations.items():
             baseline = _number(
                 raw.get("基准当量"), f"阵法 {formation_id}.基准当量"
@@ -226,7 +233,6 @@ class FormationService:
         )
         if len(self._formation_by_name) != len(self._formations):
             raise JsonDataError("阵法名称不能重复")
-        self._masters = MappingProxyType(self._load_masters())
         paging = _mapping(
             self._data.dataset("阵法展示").get("阵法-分页"), "阵法展示.阵法-分页"
         )
@@ -247,21 +253,13 @@ class FormationService:
         return FormationStatus(
             self._initialized,
             len(self._formations),
-            len(self._masters),
+            self._world.facility_count(),
             len(fixed) if isinstance(fixed, Sequence) else 0,
             str(self._rules.get("无上限品级") or ""),
         )
 
-    def formations(self, master_location: str = "") -> tuple[FormationDefinition, ...]:
+    def formations(self) -> tuple[FormationDefinition, ...]:
         self._require_initialized()
-        if master_location:
-            master = next(
-                (value for value in self._masters.values() if value.location_name == master_location),
-                None,
-            )
-            if master is None:
-                raise FormationUnavailableError("此地没有能够主持炼阵的阵师")
-            return tuple(self._formations[item] for item in master.formation_ids)
         return tuple(sorted(self._formations.values(), key=lambda value: value.formation_id))
 
     def formation_name(self, identifier: str) -> str:
@@ -306,6 +304,7 @@ class FormationService:
         grade: str,
         entries: tuple[AssetEntry, ...],
         investments: Mapping[str, int] | None = None,
+        facility: CraftFacility | None = None,
     ) -> FormationAssessment:
         self._require_initialized()
         formation = self._resolve_formation(identifier)
@@ -313,22 +312,22 @@ class FormationService:
         raw = self._raw_formations[formation.formation_id]
         if "阵核" not in raw or "基础" not in raw:
             raise FormationError(f"阵法缺少阵核或基础：{formation.formation_id}")
-        return self._assess_core(formation, raw, grade_name, entries, investments)
+        return self._assess_core(formation, raw, grade_name, entries, investments, facility)
 
     async def overview(self, user_id: str, page: int = 1) -> FormationOverview:
         normalized = _request_text(user_id, "user_id")
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
             raise FormationError("页码必须是正整数")
-        location_name, master = await self._current_master(normalized)
-        values = tuple(self._formations[item] for item in master.formation_ids)
+        environment = await self._environment(normalized)
+        values = self.formations()
         page_count = max(1, (len(values) + self._page_limit - 1) // self._page_limit)
         if page > page_count:
             raise FormationError(f"页码超出范围：1至{page_count}")
         selected = values[(page - 1) * self._page_limit : page * self._page_limit]
         return FormationOverview(
             normalized,
-            location_name,
-            master,
+            environment.location_name,
+            environment.facility,
             tuple(FormationEntry(value) for value in selected),
             page,
             page_count,
@@ -344,11 +343,15 @@ class FormationService:
         normalized = _request_text(user_id, "user_id")
         formation = self._resolve_formation(identifier)
         grade_name = _grade_name(grade)
-        location_name, master = await self._current_master(normalized)
-        if formation.formation_id not in master.formation_ids:
-            raise FormationUnavailableError("这座阵台没有开放该阵法")
+        environment = await self._environment(normalized)
         entries = await self._material_entries(normalized)
-        value = self.assess(formation.formation_id, grade_name, entries, investments)
+        value = self.assess(
+            formation.formation_id,
+            grade_name,
+            entries,
+            investments,
+            environment.facility,
+        )
         if _grade_order(value.grade_name) > _grade_order(self._town_max_grade_name):
             raise FormationUnavailableError("城镇炼阵最高支持天品")
         request_text = _request_expression(
@@ -356,10 +359,11 @@ class FormationService:
             _GRADE_IDS[value.grade_name],
             {item.category: item.required for item in value.requirements},
         )
+        cost = self._cost_rules.cost("炼阵", value.grade_name) if self._cost_rules else 0
         return FormationPreview(
             normalized,
-            location_name,
-            master,
+            environment.location_name,
+            environment.facility,
             value.formation,
             value.grade_id,
             value.grade_name,
@@ -370,10 +374,11 @@ class FormationService:
             value.impact,
             value.nodes,
             value.transmission,
-            value.can_form,
+            value.can_form and (await self._asset.spirit_stone_balance(normalized)) >= cost,
             value.detection,
             value.core_names,
             value.supplement_multipliers,
+            cost,
         )
 
     async def form(
@@ -399,7 +404,7 @@ class FormationService:
             return self._replayed_result(normalized, formation, committed.payload)
         preview = await self.preview(normalized, formation.formation_id, grade_name, investments)
         if not preview.can_form:
-            raise FormationMaterialError("纳戒中的兽宝、灵矿和灵植不足以炼成该阵法")
+            raise FormationMaterialError("纳戒中的兽宝、灵矿、灵植或灵石不足以炼成该阵法")
         adjustments = tuple(
             InventoryAdjustment(item.item_id, item.grade_id, -item.quantity)
             for item in preview.materials
@@ -430,6 +435,9 @@ class FormationService:
                 )
         try:
             inventory = await self._asset.plan_inventory_changes(normalized, adjustments)
+            stones = await self._asset.plan_spirit_stone_change(
+                normalized, -preview.spirit_stone_cost
+            )
             reserve = await self._asset.plan_formation_reserve_acquisition(
                 normalized,
                 formation.formation_id,
@@ -444,7 +452,8 @@ class FormationService:
             )
             payload = {
                 "地点": preview.location_name,
-                "阵师编号": preview.master.master_id,
+                "设施": facility_payload(preview.facility),
+                "灵石消耗": preview.spirit_stone_cost,
                 "阵法编号": formation.formation_id,
                 "品级": preview.grade_name,
                 "阵藏条目": reserve.stack.state_key,
@@ -460,7 +469,7 @@ class FormationService:
                     normalized,
                     request,
                     "炼阵",
-                    inventory.operations + (reserve.operation,),
+                    inventory.operations + stones.operations + (reserve.operation,),
                     payload,
                 )
             )
@@ -706,6 +715,7 @@ class FormationService:
         grade_name: str,
         entries: tuple[AssetEntry, ...],
         investments: Mapping[str, int] | None,
+        facility: CraftFacility | None = None,
     ) -> FormationAssessment:
         """阵核版评估：固定品级按固定消耗，圣品在最低值之上无上限追加。"""
 
@@ -768,6 +778,11 @@ class FormationService:
             )
 
         core_count = 2 * craft
+        paid_total = dict(total)
+        if facility is not None:
+            for key in _CATEGORIES:
+                paid_total[key] = material_quantity(total[key], facility.material_saving_bp)
+            paid_total["灵矿"] = max(core_count, paid_total["灵矿"])
         for core_id in core_ids:
             requirements["灵矿"] += craft
             candidates = sorted(
@@ -789,7 +804,7 @@ class FormationService:
                 need -= selected["灵矿"] - before
 
         for category in _CATEGORIES:
-            need = total[category] - (core_count if category == "灵矿" else 0)
+            need = paid_total[category] - (core_count if category == "灵矿" else 0)
             if need < 0:
                 raise FormationError(f"固定消耗的{category}不足以容纳阵核")
             requirements[category] += need
@@ -846,15 +861,11 @@ class FormationService:
             if entry.category == "基础物品" and entry.subcategory in _CATEGORIES
         )
 
-    async def _current_master(self, user_id: str) -> tuple[str, FormationMaster]:
+    async def _environment(self, user_id: str) -> CraftEnvironment:
         self._require_initialized()
-        current = await self._location.current(user_id)
-        place = self._world.locate(LocationQuery(xy=current.xy))
-        master = self._masters.get(place.location_name)
-        if master is None:
-            master = next(iter(self._masters.values()))
-            return "随身", master
-        return place.location_name, master
+        return await current_environment(
+            self._location, self._world, user_id, "炼阵"
+        )
 
     async def _resolve_reserve_key(self, user_id: str, identifier: str) -> str:
         query = _request_text(identifier, "阵藏条目")
@@ -994,58 +1005,7 @@ class FormationService:
             result[grade_name] = MappingProxyType(counts)
         return result
 
-    def _load_masters(self) -> dict[str, FormationMaster]:
-        result: dict[str, FormationMaster] = {}
-        contract = ContractSet.from_dataset(
-            self._data.dataset(WORLD_CONTRACT_DATASET), WORLD_CONTRACT_PATH
-        )
-        for master_id, raw in self._data.entities("阵师").items():
-            contract.validate(raw, "阵师", f"阵师 {master_id}")
-            location = self._data.entity_record("阵师", master_id).directory_owner
-            if not location:
-                raise JsonDataError(f"阵师 {master_id} 缺少地点目录归属")
-            if location in result:
-                raise JsonDataError(f"同一地点不能有多名主持阵师：{location}")
-            declared = tuple(raw.get("开放阵法") or ())
-            formation_ids = (
-                _texts(declared, f"阵师 {master_id}.开放阵法")
-                if declared
-                else tuple(sorted(self._formations))
-            )
-            if len(formation_ids) != len(set(formation_ids)):
-                raise JsonDataError(f"阵师开放阵法重复：{master_id}")
-            unknown = set(formation_ids) - set(self._formations)
-            if unknown:
-                raise JsonDataError(f"阵师引用未知阵法：{sorted(unknown)}")
-            result[location] = FormationMaster(
-                master_id,
-                _text(raw.get("名称"), f"阵师 {master_id}.名称"),
-                location,
-                _text(raw.get("称号"), f"阵师 {master_id}.称号"),
-                _text(raw.get("阵台"), f"阵师 {master_id}.阵台"),
-                _text(raw.get("话语风格"), f"阵师 {master_id}.话语风格"),
-                speech(raw.get("话语"), f"阵师 {master_id}.话语"),
-                formation_ids,
-            )
-        return result
-
     def _validate_static_rules(self) -> None:
-        # 阵数不再写死 46：它等于「有炼阵功能的地点」数，两者必须相等。
-        # 原先硬编码 46 会让「删掉一个炼阵地点」连带要求删阵法，而阵法又被
-        # 各阵师的 `开放阵法` 引用，改一处要连改三处。改成由数据决定。
-        locations = {
-            item.name
-            for item in self._world.map_view().locations
-            if "炼阵" in item.available_functions
-        }
-        if set(self._masters) != locations:
-            raise JsonDataError(
-                f"炼阵地点与阵师不一一对应：缺少{sorted(locations - set(self._masters))}，"
-                f"多余{sorted(set(self._masters) - locations)}"
-            )
-        opened = {item for master in self._masters.values() for item in master.formation_ids}
-        if opened != set(self._formations):
-            raise JsonDataError("阵法必须全部有阵师开放")
         for formation_id, raw in self._raw_formations.items():
             if "阵核" in raw:
                 core_ids = _sequence(raw.get("阵核"), f"阵法 {formation_id}.阵核")
@@ -1092,9 +1052,10 @@ class FormationService:
     ) -> FormationResult:
         try:
             location_name = _payload_text(payload.get("地点"), "炼阵事务.地点")
-            master = self._masters[location_name]
-            if master.master_id != _payload_text(payload.get("阵师编号"), "炼阵事务.阵师编号"):
-                raise ValueError("炼阵事务阵师与地点不一致")
+            facility = facility_from_payload(payload.get("设施"), "炼阵事务.设施")
+            stone_cost = _payload_nonnegative_int(
+                payload.get("灵石消耗"), "炼阵事务.灵石消耗"
+            )
             grade_name = _grade_name(_payload_text(payload.get("品级"), "炼阵事务.品级"))
             actual = {
                 key: _payload_positive_int(value, f"炼阵事务.投入.{key}")
@@ -1120,7 +1081,7 @@ class FormationService:
         preview = FormationPreview(
             user_id,
             location_name,
-            master,
+            facility,
             formation,
             grade.grade_id,
             grade_name,
@@ -1135,6 +1096,7 @@ class FormationService:
             profile.detection,
             (),  # 事务重放只恢复结果，不从阵材反推阵核展示
             (),
+            stone_cost,
         )
         return FormationResult(preview, reserve_key, before, after, True, activation)
 

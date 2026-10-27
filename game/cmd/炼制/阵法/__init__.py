@@ -97,7 +97,7 @@ def _request(
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
-            "summary": "查看此地阵师开放的阵法，或审看一座阵法的三相投入",
+            "summary": "查看可炼阵法，或审看一座阵法的三相投入",
             "usage": (
                 "阵法审查",
                 "阵法审查 2",
@@ -140,7 +140,7 @@ async def inspect_formation(user_id: str, message: str, manager: Any) -> None:
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "炼制",
-            "summary": "请当地阵师把三相材料炼成一份一次性阵法",
+            "summary": "把三相材料炼成一份一次性阵法",
             "usage": ("炼阵 黄品叠翠盘根阵", "炼阵 圣品叠翠盘根阵 100 200 300"),
             "side_effect": "消耗兽宝、灵矿和灵植，把阵法收入阵藏",
             "order": 66,

@@ -933,6 +933,49 @@ def check_life_attribute_pairs() -> list[str]:
     return issues
 
 
+def check_craft_facilities() -> list[str]:
+    """六座主城各一个炼制设施；可用功能不再背炼制；NPC 三类彻底移除。"""
+
+    issues: list[str] = []
+    facilities: list[tuple[str, str, int]] = []
+    for path in sorted((DATA / "世界" / "内容" / "地点").rglob("*.json")):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        functions = set(raw.get("可用功能") or ())
+        forbidden = functions & {"锻造", "炼丹", "炼阵"}
+        if forbidden:
+            issues.append(f"{path.relative_to(DATA)} 可用功能仍含炼制：{sorted(forbidden)}")
+        value = raw.get("设施")
+        if value is None:
+            continue
+        if not isinstance(value, dict):
+            issues.append(f"{path.relative_to(DATA)} 设施必须是对象")
+            continue
+        unknown = set(value) - {"类别", "名称", "材料节省万分比"}
+        if unknown:
+            issues.append(f"{path.relative_to(DATA)} 设施存在未声明字段：{sorted(unknown)}")
+        category = str(value.get("类别") or "")
+        name = str(value.get("名称") or "")
+        saving = value.get("材料节省万分比")
+        if category not in {"炼器", "炼丹", "炼阵"} or not name:
+            issues.append(f"{path.relative_to(DATA)} 设施类别或名称不合法")
+        if isinstance(saving, bool) or not isinstance(saving, int) or not 0 <= saving <= 10000:
+            issues.append(f"{path.relative_to(DATA)} 设施材料节省万分比不合法")
+        facilities.append((path.stem, category, saving if isinstance(saving, int) else 0))
+    if len(facilities) != 6:
+        issues.append(f"城池设施必须正好六个：{facilities}")
+    for category in ("炼器", "炼丹", "炼阵"):
+        count = sum(1 for _, value, _ in facilities if value == category)
+        if count != 2:
+            issues.append(f"{category}设施必须正好两座：当前{count}")
+    for kind in ("炼器工匠", "炼丹师", "阵师"):
+        if any((DATA / "世界" / "内容" / "人物").rglob(f"{kind}/*.json")):
+            issues.append(f"NPC 目录仍然存在：{kind}")
+    return issues
+
+
 def check_number_sequences() -> list[str]:
     """每个两位前缀下的六位编号必须从 0001 连续排。"""
 
@@ -1283,6 +1326,7 @@ def main() -> int:
     print("说明里没有代码引用")
     引文 = check_duplicate_quotes()
     命线属性 = check_life_attribute_pairs()
+    设施 = check_craft_facilities()
     编号连续 = check_number_sequences()
     伤势神魂 = check_injury_soul_damage()
     按钮编号 = check_button_ids_unique()
@@ -1310,6 +1354,16 @@ def main() -> int:
         print("基础属性必须血气/神魂成对同值；发展效果允许单轴，但双写必须同值。")
         return 1
     print("血气/神魂属性：基础成对、发展可选、双写同值")
+    if 设施:
+        print(f"城池炼制设施不合法 {len(设施)} 处：")
+        for item in 设施[:20]:
+            print(f"  {item}")
+        if len(设施) > 20:
+            print(f"  …… 另 {len(设施) - 20} 条")
+        print()
+        print("六座主城各一个设施，三类各两座；普通地点没有设施，可用功能不再含锻造/炼丹/炼阵。")
+        return 1
+    print("城池炼制设施：六城各一，三类各两座")
     if 编号连续:
         print(f"编号段不连续 {len(编号连续)} 处：")
         for item in 编号连续[:20]:

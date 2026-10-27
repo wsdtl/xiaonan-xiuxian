@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from game.core.innate_treasure import InnateTreasureActivation
+from game.core.world import CraftFacility
 
 
 class AlchemyError(ValueError):
@@ -13,11 +14,11 @@ class AlchemyError(ValueError):
 
 
 class AlchemyUnavailableError(AlchemyError):
-    """当前位置没有丹师主持炼制。"""
+    """当前位置不能炼丹。"""
 
 
 class AlchemyMaterialError(AlchemyError):
-    """纳戒材料不足。"""
+    """纳戒材料或灵石不足。"""
 
 
 class AlchemyConflictError(AlchemyError):
@@ -29,19 +30,8 @@ class AlchemyStatus:
     initialized: bool
     recipe_count: int
     medicine_count: int
-    alchemist_count: int
+    facility_count: int
     beast_treasure_count: int
-
-
-@dataclass(frozen=True)
-class Alchemist:
-    alchemist_id: str
-    name: str
-    location_name: str
-    title: str
-    furnace_name: str
-    speech_style: str
-    speech: Mapping[str, str]
 
 
 @dataclass(frozen=True)
@@ -89,7 +79,7 @@ class AlchemyAssessment:
 class AlchemyPreview:
     user_id: str
     location_name: str
-    alchemist: Alchemist
+    facility: CraftFacility | None
     recipe: AlchemyRecipe
     medicine_grade_id: str
     medicine_grade_name: str
@@ -97,6 +87,8 @@ class AlchemyPreview:
     herb_materials: tuple[AlchemyMaterial, ...]
     missing_materials: tuple[AlchemyMissingMaterial, ...]
     can_refine: bool
+    quantity: int = 1
+    spirit_stone_cost: int = 0
 
 
 @dataclass(frozen=True)
@@ -110,7 +102,7 @@ class AlchemyRecipeEntry:
 class AlchemyOverview:
     user_id: str
     location_name: str
-    alchemist: Alchemist
+    facility: CraftFacility | None
     category_counts: tuple[tuple[str, int], ...]
 
 
@@ -118,7 +110,7 @@ class AlchemyOverview:
 class AlchemyRecipeList:
     user_id: str
     location_name: str
-    alchemist: Alchemist
+    facility: CraftFacility | None
     category: str
     entries: tuple[AlchemyRecipeEntry, ...]
     page: int
@@ -135,7 +127,6 @@ class AlchemyResult:
 
 
 __all__ = [
-    "Alchemist",
     "AlchemyAssessment",
     "AlchemyConflictError",
     "AlchemyError",

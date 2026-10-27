@@ -350,7 +350,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         C.join(
             C.ok("炼器核心微服务已启动"),
             C.kv("laws", forging_status.law_count),
-            C.kv("artisans", forging_status.artisan_count),
+            C.kv("facilities", forging_status.facility_count),
         )
     )
     sect = SectService(data, database, player_state)
@@ -402,7 +402,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.ok("炼丹核心微服务已启动"),
             C.kv("recipes", alchemy_status.recipe_count),
             C.kv("medicines", alchemy_status.medicine_count),
-            C.kv("alchemists", alchemy_status.alchemist_count),
+            C.kv("facilities", alchemy_status.facility_count),
         )
     )
     formation = FormationService(
@@ -413,7 +413,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         C.join(
             C.ok("阵法核心微服务已启动"),
             C.kv("formations", formation_status.formation_count),
-            C.kv("masters", formation_status.master_count),
+            C.kv("facilities", formation_status.facility_count),
         )
     )
     combat = CombatService(data, formation, bloodline)

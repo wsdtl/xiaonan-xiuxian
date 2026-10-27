@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from game.core.innate_treasure import InnateTreasureActivation
+from game.core.world import CraftFacility
 
 
 class ForgingError(ValueError):
@@ -17,7 +18,7 @@ class ForgingUnavailableError(ForgingError):
 
 
 class ForgingMaterialError(ForgingError):
-    """纳戒材料不足以完成炼制。"""
+    """纳戒材料或灵石不足以完成炼制。"""
 
 
 class ForgingConflictError(ForgingError):
@@ -28,7 +29,7 @@ class ForgingConflictError(ForgingError):
 class ForgingStatus:
     initialized: bool
     law_count: int
-    artisan_count: int
+    facility_count: int
     beast_treasure_count: int
     mineral_count: int
     weapon_maximum_level: int
@@ -55,17 +56,6 @@ class WeaponAdvance:
     stage_after: str
     open_slots_before: int
     open_slots_after: int
-
-
-@dataclass(frozen=True)
-class ForgingArtisan:
-    artisan_id: str
-    name: str
-    location_name: str
-    title: str
-    furnace_name: str
-    speech_style: str
-    speech: Mapping[str, str]
 
 
 @dataclass(frozen=True)
@@ -107,12 +97,14 @@ class ForgingAssessment:
 class ForgingPreview:
     user_id: str
     location_name: str
-    artisan: ForgingArtisan
+    facility: CraftFacility | None
     law: ForgingLaw
     beast_materials: tuple[ForgingMaterial, ...]
     mineral_materials: tuple[ForgingMaterial, ...]
     missing_materials: tuple[ForgingMissingMaterial, ...]
     can_forge: bool
+    quantity: int = 1
+    spirit_stone_cost: int = 0
 
 
 @dataclass(frozen=True)
@@ -126,7 +118,7 @@ class ForgingLawEntry:
 class ForgingOverview:
     user_id: str
     location_name: str
-    artisan: ForgingArtisan
+    facility: CraftFacility | None
     stage_counts: tuple[tuple[str, int], ...]
 
 
@@ -134,7 +126,7 @@ class ForgingOverview:
 class ForgingLawList:
     user_id: str
     location_name: str
-    artisan: ForgingArtisan
+    facility: CraftFacility | None
     stage: str
     entries: tuple[ForgingLawEntry, ...]
 
@@ -149,7 +141,6 @@ class ForgingResult:
 
 
 __all__ = [
-    "ForgingArtisan",
     "ForgingAssessment",
     "ForgingConflictError",
     "ForgingError",

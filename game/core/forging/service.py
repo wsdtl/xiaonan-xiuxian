@@ -14,6 +14,15 @@ from game.core.asset import (
     InventoryAdjustment,
     InventoryChangeError,
 )
+from game.core.crafting import (
+    CraftCostRules,
+    CraftEnvironment,
+    CraftFacility,
+    current_environment,
+    facility_from_payload,
+    facility_payload,
+    material_quantity,
+)
 from game.core.data import (
     ContractSet,
     JsonDataError,
@@ -42,7 +51,6 @@ from game.core.world import LocationQuery, WorldService
 from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
 
 from .contracts import (
-    ForgingArtisan,
     ForgingAssessment,
     ForgingConflictError,
     ForgingError,
@@ -96,7 +104,7 @@ class ForgingService:
         self._stage_by_name: Mapping[str, WeaponStage] = MappingProxyType({})
         self._laws: Mapping[str, ForgingLaw] = MappingProxyType({})
         self._law_by_name: Mapping[str, str] = MappingProxyType({})
-        self._artisans: Mapping[str, ForgingArtisan] = MappingProxyType({})
+        self._cost_rules: CraftCostRules | None = None
 
     def initialize(self) -> ForgingStatus:
         if self._initialized:
@@ -139,7 +147,7 @@ class ForgingService:
         self._law_by_name = MappingProxyType(
             {law.name: law_id for law_id, law in self._laws.items()}
         )
-        self._artisans = MappingProxyType(self._load_artisans())
+        self._cost_rules = CraftCostRules(self._data)
         self._validate_static_rules(law_rule)
         self._initialized = True
         return self.status()
@@ -148,7 +156,7 @@ class ForgingService:
         return ForgingStatus(
             self._initialized,
             len(self._laws),
-            len(self._artisans),
+            self._world.facility_count(),
             len(_item_ids(self._data, "兽宝")),
             len(_item_ids(self._data, "灵矿")),
             int(self._weapon_rule.get("等级上限") or 0),
@@ -190,12 +198,16 @@ class ForgingService:
         )
 
     def assess(
-        self, identifier: str, entries: tuple[AssetEntry, ...]
+        self,
+        identifier: str,
+        entries: tuple[AssetEntry, ...],
+        facility: CraftFacility | None = None,
+        quantity: int = 1,
     ) -> ForgingAssessment:
         self._require_initialized()
         law = self._resolve_law(identifier)
         if law.materials:
-            return self._assess_materials(law, entries)
+            return self._assess_materials(law, entries, facility, quantity)
         raise ForgingError("器律缺少材料表")
 
     def initial_weapon_level(self) -> int:
@@ -298,11 +310,11 @@ class ForgingService:
 
     async def overview(self, user_id: str) -> ForgingOverview:
         normalized = _request_text(user_id, "user_id")
-        location_name, artisan = await self._current_artisan(normalized)
+        environment = await self._environment(normalized)
         return ForgingOverview(
             normalized,
-            location_name,
-            artisan,
+            environment.location_name,
+            environment.facility,
             tuple(
                 (stage, sum(law.stage == stage for law in self._laws.values()))
                 for stage in self._law_stages
@@ -314,23 +326,24 @@ class ForgingService:
         normalized_stage = str(stage or "").strip()
         if normalized_stage not in self._law_stages:
             raise ForgingError(f"未知器律器阶：{normalized_stage or '<空>'}")
-        location_name, artisan = await self._current_artisan(normalized)
+        environment = await self._environment(normalized)
         entries = await self._material_entries(normalized)
+        stones = await self._asset.spirit_stone_balance(normalized)
         laws = sorted(
             (law for law in self._laws.values() if law.stage == normalized_stage),
             key=lambda law: law.law_id,
         )
         return ForgingLawList(
             normalized,
-            location_name,
-            artisan,
+            environment.location_name,
+            environment.facility,
             normalized_stage,
             tuple(
                 ForgingLawEntry(
                     law,
                     (
                         preview := self._build_preview(
-                            normalized, location_name, artisan, law, entries
+                            normalized, environment, law, entries, stones=stones
                         )
                     ).can_forge,
                     sum(missing.quantity for missing in preview.missing_materials),
@@ -339,12 +352,18 @@ class ForgingService:
             ),
         )
 
-    async def preview(self, user_id: str, identifier: str) -> ForgingPreview:
+    async def preview(
+        self, user_id: str, identifier: str, quantity: int = 1
+    ) -> ForgingPreview:
         normalized = _request_text(user_id, "user_id")
+        count = _positive_int(quantity, "炼制数量")
         law = self._resolve_law(identifier)
-        location_name, artisan = await self._current_artisan(normalized)
+        environment = await self._environment(normalized)
         entries = await self._material_entries(normalized)
-        return self._build_preview(normalized, location_name, artisan, law, entries)
+        stones = await self._asset.spirit_stone_balance(normalized)
+        return self._build_preview(
+            normalized, environment, law, entries, quantity=count, stones=stones
+        )
 
     async def forge(
         self, user_id: str, request_id: str, identifier: str, quantity: int = 1
@@ -362,11 +381,11 @@ class ForgingService:
             ):
                 raise ForgingConflictError("请求编号已经用于其他操作")
             return self._replayed_result(normalized, law, committed.payload)
-        preview = await self.preview(normalized, law.law_id)
+        preview = await self.preview(normalized, law.law_id, quantity)
         if not preview.can_forge:
-            raise ForgingMaterialError("纳戒中的兽宝和灵矿不足以炼成该器律")
+            raise ForgingMaterialError("纳戒中的兽宝、灵矿或灵石不足以炼成该器律")
         adjustments = [
-            InventoryAdjustment(material.item_id, material.grade_id, -material.quantity * quantity)
+            InventoryAdjustment(material.item_id, material.grade_id, -material.quantity)
             for material in preview.beast_materials + preview.mineral_materials
         ]
         activation: InnateTreasureActivation | None = None
@@ -416,9 +435,14 @@ class ForgingService:
             reserve = await self._asset.plan_law_reserve_acquisition(
                 normalized, preview.law.law_id, quantity
             )
+            stones = await self._asset.plan_spirit_stone_change(
+                normalized, -preview.spirit_stone_cost
+            )
             payload = {
                 "地点": preview.location_name,
-                "工匠编号": preview.artisan.artisan_id,
+                "设施": facility_payload(preview.facility),
+                "炼器数量": quantity,
+                "灵石消耗": preview.spirit_stone_cost,
                 "器律编号": preview.law.law_id,
                 "器藏原数量": reserve.quantity_before,
                 "器藏现数量": reserve.quantity_after,
@@ -431,7 +455,7 @@ class ForgingService:
                     normalized,
                     request,
                     "炼器",
-                    inventory.operations + (reserve.operation,),
+                    inventory.operations + stones.operations + (reserve.operation,),
                     payload,
                 )
             )
@@ -457,11 +481,13 @@ class ForgingService:
     ) -> ForgingResult:
         try:
             location_name = _payload_text(payload.get("地点"), "炼器事务.地点")
-            artisan = self._artisans[location_name]
-            if artisan.artisan_id != _payload_text(
-                payload.get("工匠编号"), "炼器事务.工匠编号"
-            ):
-                raise ValueError("炼器事务工匠与地点不一致")
+            facility = facility_from_payload(payload.get("设施"), "炼器事务.设施")
+            quantity = _payload_positive_int(
+                payload.get("炼器数量"), "炼器事务.炼器数量"
+            )
+            stone_cost = _payload_nonnegative_int(
+                payload.get("灵石消耗"), "炼器事务.灵石消耗"
+            )
             beasts = _payload_materials(
                 payload.get("兽宝"), self._asset, self._data, "兽宝"
             )
@@ -480,37 +506,49 @@ class ForgingService:
         preview = ForgingPreview(
             user_id,
             location_name,
-            artisan,
+            facility,
             law,
             beasts,
             minerals,
             (),
             True,
+            quantity,
+            stone_cost,
         )
         return ForgingResult(preview, before, after, True, activation)
 
     def _build_preview(
         self,
         user_id: str,
-        location_name: str,
-        artisan: ForgingArtisan,
+        environment: CraftEnvironment,
         law: ForgingLaw,
         entries: tuple[AssetEntry, ...],
+        *,
+        quantity: int = 1,
+        stones: int = 0,
     ) -> ForgingPreview:
-        value = self.assess(law.law_id, entries)
+        value = self.assess(law.law_id, entries, environment.facility, quantity)
+        unit_cost = self._cost_rules.cost("炼器", law.stage) if self._cost_rules else 0
+        cost = unit_cost * quantity
         return ForgingPreview(
             user_id,
-            location_name,
-            artisan,
+            environment.location_name,
+            environment.facility,
             value.law,
             value.beast_materials,
             value.mineral_materials,
             value.missing_materials,
-            value.can_forge,
+            value.can_forge and stones >= cost,
+            quantity,
+            cost,
         )
 
     def _assess_materials(
-        self, law: ForgingLaw, entries: tuple[AssetEntry, ...]
+        self,
+        law: ForgingLaw,
+        entries: tuple[AssetEntry, ...],
+        facility: CraftFacility | None = None,
+        quantity: int = 1,
     ) -> ForgingAssessment:
         beasts: list[ForgingMaterial] = []
         minerals: list[ForgingMaterial] = []
@@ -518,7 +556,9 @@ class ForgingService:
         for raw in law.materials:
             category = _text(raw.get("类别"), f"{law.name}.材料.类别")
             item_id = str(raw.get("编号") or "")
-            need = _positive_int(raw.get("数量"), f"{law.name}.材料.数量")
+            need = _positive_int(raw.get("数量"), f"{law.name}.材料.数量") * quantity
+            if facility is not None:
+                need = material_quantity(need, facility.material_saving_bp)
             minimum = self._asset.grade(str(raw.get("最低品级") or "黄品"))
             candidates = sorted(
                 (
@@ -571,15 +611,11 @@ class ForgingService:
             if entry.category == "基础物品" and entry.subcategory in {"兽宝", "灵矿"}
         )
 
-    async def _current_artisan(self, user_id: str) -> tuple[str, ForgingArtisan]:
+    async def _environment(self, user_id: str) -> CraftEnvironment:
         self._require_initialized()
-        current = await self._location.current(user_id)
-        place = self._world.locate(LocationQuery(xy=current.xy))
-        artisan = self._artisans.get(place.location_name)
-        if artisan is None:
-            artisan = next(iter(self._artisans.values()))
-            return "随身", artisan
-        return place.location_name, artisan
+        return await current_environment(
+            self._location, self._world, user_id, "炼器"
+        )
 
     def _resolve_law(self, identifier: str) -> ForgingLaw:
         self._require_initialized()
@@ -609,29 +645,6 @@ class ForgingService:
             result[law_id] = ForgingLaw(law_id, name, stage, materials)
         return result
 
-    def _load_artisans(self) -> dict[str, ForgingArtisan]:
-        result: dict[str, ForgingArtisan] = {}
-        contract = ContractSet.from_dataset(
-            self._data.dataset(WORLD_CONTRACT_DATASET), WORLD_CONTRACT_PATH
-        )
-        for artisan_id, raw in self._data.entities("炼器工匠").items():
-            contract.validate(raw, "炼器工匠", f"炼器工匠 {artisan_id}")
-            location = self._data.entity_record("炼器工匠", artisan_id).directory_owner
-            if not location:
-                raise JsonDataError(f"炼器工匠 {artisan_id} 缺少地点目录归属")
-            if location in result:
-                raise JsonDataError(f"同一地点不能有多名执炉工匠：{location}")
-            result[location] = ForgingArtisan(
-                artisan_id,
-                _text(raw.get("名称"), f"炼器工匠 {artisan_id}.名称"),
-                location,
-                _text(raw.get("称号"), f"炼器工匠 {artisan_id}.称号"),
-                _text(raw.get("炉名"), f"炼器工匠 {artisan_id}.炉名"),
-                _text(raw.get("话语风格"), f"炼器工匠 {artisan_id}.话语风格"),
-                speech(raw.get("话语"), f"炼器工匠 {artisan_id}.话语"),
-            )
-        return result
-
     def _validate_static_rules(self, law_rule: Mapping[str, object]) -> None:
         maximum = _positive_int(self._weapon_rule.get("等级上限"), "本命武器.等级上限")
         if maximum != 100:
@@ -649,20 +662,6 @@ class ForgingService:
             stage = self._stage_by_name.get(law.stage)
             if stage is None or law.stage == "凡器":
                 raise JsonDataError(f"器律使用未知器阶：{law.name} -> {law.stage}")
-        world_locations = {
-            location.name: location for location in self._world.map_view().locations
-        }
-        forging_locations = {
-            name
-            for name, location in world_locations.items()
-            if "锻造" in location.available_functions
-        }
-        if set(self._artisans) != forging_locations:
-            missing = forging_locations - set(self._artisans)
-            extra = set(self._artisans) - forging_locations
-            raise JsonDataError(
-                f"锻造地点与工匠不一一对应：缺少{sorted(missing)}，多余{sorted(extra)}"
-            )
         forging = _mapping(law_rule.get("炼制"), "器则.炼制")
         if (
             forging.get("产出数量") != 1

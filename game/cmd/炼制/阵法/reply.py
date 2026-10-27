@@ -2,47 +2,48 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from ...actions import CommandAction
-
-from ...presentation import candidate_lines, error_document
-
-from game.features.lianzhen import FormationOverview, FormationPreview, FormationResult
+from collections.abc import Mapping, Sequence
 
 from message import DocumentMessage, M
 
-from collections.abc import Mapping
-
-from game.features.lianzhen import FormationAction, FormationChoiceError, FormationCopy
-
-from ...actions import message_actions
-from ...presentation import sentence
+from ...actions import CommandAction, message_actions
+from ...presentation import candidate_lines, error_document, sentence
+from game.features.lianzhen import (
+    FormationAction,
+    FormationChoiceError,
+    FormationCopy,
+    FormationOverview,
+    FormationPreview,
+    FormationResult,
+)
 
 
 def text(copy: FormationCopy, section: str, key: str, values: Mapping[str, object] | None = None) -> str:
     return copy.text[section][key].format_map(values or {})
 
 
+def _facility(value: FormationOverview | FormationPreview) -> str:
+    return value.facility.name if value.facility else "随身"
+
+
+def _saving(value: FormationPreview) -> str:
+    return value.facility.saving_label() if value.facility else "无"
+
+
 def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[FormationAction, ...]) -> DocumentMessage:
-    master = value.master
+    name = _facility(value)
     builder = (
         M.document()
-
-        .section(master.title, icon="game.swords")
-        .field(text(copy, "总览", "阵师"), master.name)
-        .line(text(copy, "总览", "引言", {"阵师": master.name}))
-        .small(master.speech["总览"].format_map({"主持": master.name}))
+        .section(name, icon="game.swords")
+        .field(text(copy, "总览", "设施"), name)
+        .line(text(copy, "总览", "引言", {"设施": name}))
         .section(text(copy, "总览", "阵法"), icon="game.box")
     )
     for index, entry in enumerate(value.entries, start=1):
         builder.item(
             index,
-            M.command(
-                M.text(entry.formation.name),
-                f"查看 {entry.formation.name}",
-            ),
-        ).small(f"{entry.formation.core}")
-    # 只有一页就不报页码，免得占一行什么都不说。
+            M.command(M.text(entry.formation.name), f"查看 {entry.formation.name}"),
+        ).small(entry.formation.core)
     if value.page_count > 1:
         builder.small(
             text(copy, "列表", "页码", {"当前页": value.page, "总页数": value.page_count})
@@ -51,26 +52,21 @@ def overview(copy: FormationCopy, value: FormationOverview, actions: tuple[Forma
 
 
 def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[FormationAction, ...]) -> DocumentMessage:
-    master = value.master
+    name = _facility(value)
     builder = (
         M.document()
-
-        .section(master.title, icon="game.swords")
-        .field(text(copy, "预览", "阵师"), master.name)
-        .small(master.speech["审材"].format_map({"主持": master.name}))
+        .section(name, icon="game.swords")
+        .field(text(copy, "预览", "设施"), name)
         .section(value.formation.name, icon="game.box")
-        .row(
-            (text(copy, "预览", "品级"), value.grade_name),
-        )
+        .row((text(copy, "预览", "品级"), value.grade_name))
         .row(
             (text(copy, "预览", "阵基"), f"承载 {value.capacity:g}"),
             (text(copy, "预览", "阵眼"), f"冲击 {value.impact:g}"),
         )
-        .field(
-            text(copy, "预览", "节点"), f"{value.nodes}位 · 传导 {value.transmission:g}"
-        )
+        .field(text(copy, "预览", "节点"), f"{value.nodes}位 · 传导 {value.transmission:g}")
+        .field(text(copy, "预览", "灵石消耗"), f"{value.spirit_stone_cost} 黄品")
+        .field(text(copy, "预览", "材料节省"), _saving(value))
     )
-    # 没有材料项就整个栏目都不开：空栏目白占玩家的地方。
     if value.requirements:
         builder.section(text(copy, "预览", "材料"), icon="game.material")
     for index, requirement in enumerate(value.requirements, start=1):
@@ -92,46 +88,32 @@ def preview(copy: FormationCopy, value: FormationPreview, actions: tuple[Formati
             "材料齐备" if value.can_form else "材料不足",
             tone="positive" if value.can_form else "danger",
         )
-    ).small(
-        master.speech["齐备" if value.can_form else "不足"].format_map({"主持": master.name})
     )
     return builder.actions(message_actions(actions)).build()
 
 
 def completed(copy: FormationCopy, value: FormationResult, actions: tuple[FormationAction, ...]) -> DocumentMessage:
     preview_value = value.preview
-    master = preview_value.master
+    name = _facility(preview_value)
     builder = (
         M.document()
-
         .inline_section("结果", M.status("完成", tone="positive"), icon="game.blue_diamond")
-        .section(master.title, icon="game.swords")
-        .field(text(copy, "完成", "阵师"), master.name)
-        .line(text(copy, "完成", "过程", {"阵师": master.name}))
+        .section(name, icon="game.swords")
+        .field(text(copy, "完成", "设施"), name)
+        .line(text(copy, "完成", "过程", {"设施": name}))
         .section(text(copy, "完成", "所得"), icon="game.box")
         .field(
             f"{preview_value.grade_name}{preview_value.formation.name}",
             f"阵藏条目 {value.reserve_key} · 数量 {value.quantity_after}",
         )
-        .small(master.speech["完成"].format_map({"主持": master.name}))
     )
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="game.amulet").field(
-            activation.name, activation.summary
-        )
+        builder.section("灵宝", icon="game.amulet").field(activation.name, activation.summary)
     return builder.actions(message_actions(actions)).build()
 
 
-def choose(
-    copy: FormationCopy, exc: FormationChoiceError, *, command: str = "炼阵"
-) -> DocumentMessage:
-    """阵藏里有多条同名阵法：铺成选择卡，候选可点，点一下精确选中。
-
-    与「布阵」同一形态：显示名带投入、命令用正规写法（**品级在前连写**的阵法名 + 三个投入数），
-    点下去就是合法输入，玩家不必手打扩展位。
-    """
-
+def choose(copy: FormationCopy, exc: FormationChoiceError, *, command: str = "炼阵") -> DocumentMessage:
     builder = M.document()
     candidate_lines(
         builder,
@@ -146,12 +128,18 @@ def choose(
 
 
 def error(
-    copy: FormationCopy, message: str, actions: Sequence[CommandAction] = (),
+    copy: FormationCopy,
+    message: str,
+    actions: Sequence[CommandAction] = (),
     *,
     command: str,
 ) -> DocumentMessage:
-    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        text(copy, "错误", "标题"), "game.pin_doc", text(copy, "错误", command), sentence(message), tone="danger",
+    return error_document(
+        text(copy, "错误", "标题"),
+        "game.pin_doc",
+        text(copy, "错误", command),
+        sentence(message),
+        tone="danger",
         actions=actions,
     )
 

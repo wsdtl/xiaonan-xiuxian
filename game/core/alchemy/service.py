@@ -13,6 +13,15 @@ from game.core.asset import (
     InventoryAdjustment,
     InventoryChangeError,
 )
+from game.core.crafting import (
+    CraftCostRules,
+    CraftEnvironment,
+    current_environment,
+    facility_from_payload,
+    facility_payload,
+    material_quantity,
+)
+from game.core.world import CraftFacility
 from game.core.data import (
     ContractSet,
     JsonDataError,
@@ -36,11 +45,9 @@ from game.core.innate_treasure import (
     activation_payload,
 )
 from game.core.location import LocationService
-from game.core.world import LocationQuery, WorldService
-from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
+from game.core.world import WorldService
 
 from .contracts import (
-    Alchemist,
     AlchemyAssessment,
     AlchemyConflictError,
     AlchemyError,
@@ -86,7 +93,7 @@ class AlchemyService:
         self._recipes: Mapping[str, AlchemyRecipe] = MappingProxyType({})
         self._recipe_by_name: Mapping[str, str] = MappingProxyType({})
         self._recipe_by_medicine: Mapping[str, str] = MappingProxyType({})
-        self._alchemists: Mapping[str, Alchemist] = MappingProxyType({})
+        self._cost_rules: CraftCostRules | None = None
         self._beast_ids: frozenset[str] = frozenset()
         self._town_max_grade_id = ""
         self._page_limit = 0
@@ -129,7 +136,7 @@ class AlchemyService:
                 for value in (recipe.medicine_id, recipe.medicine_name)
             }
         )
-        self._alchemists = MappingProxyType(self._load_alchemists())
+        self._cost_rules = CraftCostRules(self._data)
         paging = _mapping(
             self._data.dataset("炼丹展示").get("炼丹-分页"), "炼丹展示.炼丹-分页"
         )
@@ -150,7 +157,7 @@ class AlchemyService:
             self._initialized,
             len(self._recipes),
             len({recipe.medicine_id for recipe in self._recipes.values()}),
-            len(self._alchemists),
+            self._world.facility_count(),
             len(self._beast_ids),
         )
 
@@ -190,19 +197,24 @@ class AlchemyService:
         )
 
     def assess(
-        self, identifier: str, entries: tuple[AssetEntry, ...], grade_name: str = "黄品"
+        self,
+        identifier: str,
+        entries: tuple[AssetEntry, ...],
+        grade_name: str = "黄品",
+        facility: CraftFacility | None = None,
+        quantity: int = 1,
     ) -> AlchemyAssessment:
         self._require_initialized()
         recipe = self._resolve_recipe(identifier)
-        return self._assess_materials(recipe, entries, grade_name)
+        return self._assess_materials(recipe, entries, grade_name, facility, quantity)
 
     async def overview(self, user_id: str) -> AlchemyOverview:
         normalized = _request_text(user_id, "user_id")
-        location_name, alchemist = await self._current_alchemist(normalized)
+        environment = await self._environment(normalized)
         return AlchemyOverview(
             normalized,
-            location_name,
-            alchemist,
+            environment.location_name,
+            environment.facility,
             tuple(
                 (
                     category,
@@ -221,8 +233,9 @@ class AlchemyService:
             raise AlchemyError(f"未知丹药分类：{normalized_category or '<空>'}")
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
             raise AlchemyError("页码必须是正整数")
-        location_name, alchemist = await self._current_alchemist(normalized)
+        environment = await self._environment(normalized)
         entries = await self._material_entries(normalized)
+        stones = await self._asset.spirit_stone_balance(normalized)
         recipes = tuple(
             sorted(
                 (
@@ -239,15 +252,15 @@ class AlchemyService:
         selected = recipes[(page - 1) * self._page_limit : page * self._page_limit]
         return AlchemyRecipeList(
             normalized,
-            location_name,
-            alchemist,
+            environment.location_name,
+            environment.facility,
             normalized_category,
             tuple(
                 AlchemyRecipeEntry(
                     recipe,
                     (
                         preview := self._build_preview(
-                            normalized, location_name, alchemist, recipe, entries
+                            normalized, environment, recipe, entries, stones=stones
                         )
                     ).can_refine,
                     sum(item.quantity for item in preview.missing_materials),
@@ -259,14 +272,20 @@ class AlchemyService:
         )
 
     async def preview(
-        self, user_id: str, identifier: str, grade_name: str = "黄品"
+        self,
+        user_id: str,
+        identifier: str,
+        grade_name: str = "黄品",
+        quantity: int = 1,
     ) -> AlchemyPreview:
         normalized = _request_text(user_id, "user_id")
+        count = _positive_int(quantity, "炼制数量")
         recipe = self._resolve_recipe(identifier)
-        location_name, alchemist = await self._current_alchemist(normalized)
+        environment = await self._environment(normalized)
         entries = await self._material_entries(normalized)
+        stones = await self._asset.spirit_stone_balance(normalized)
         return self._build_preview(
-            normalized, location_name, alchemist, recipe, entries, grade_name
+            normalized, environment, recipe, entries, grade_name, quantity=count, stones=stones
         )
 
     async def refine(
@@ -290,12 +309,12 @@ class AlchemyService:
             ):
                 raise AlchemyConflictError("请求编号已经用于其他操作")
             return self._replayed_result(normalized, recipe, committed.payload)
-        preview = await self.preview(normalized, recipe.recipe_id, grade_name)
+        preview = await self.preview(normalized, recipe.recipe_id, grade_name, quantity)
         if not preview.can_refine or preview.beast_material is None:
-            raise AlchemyMaterialError("纳戒中的兽宝和灵植不足以炼成该丹药")
+            raise AlchemyMaterialError("纳戒中的兽宝、灵植或灵石不足以炼成该丹药")
         materials = (preview.beast_material,) + preview.herb_materials
         adjustments = [
-            InventoryAdjustment(item.item_id, item.grade_id, -item.quantity * quantity)
+            InventoryAdjustment(item.item_id, item.grade_id, -item.quantity)
             for item in materials
         ]
         activation: InnateTreasureActivation | None = None
@@ -348,9 +367,14 @@ class AlchemyService:
                 if change.item_id == preview.recipe.medicine_id
                 and change.grade.grade_id == preview.medicine_grade_id
             )
+            stones = await self._asset.plan_spirit_stone_change(
+                normalized, -preview.spirit_stone_cost
+            )
             payload = {
                 "地点": preview.location_name,
-                "丹师编号": preview.alchemist.alchemist_id,
+                "设施": facility_payload(preview.facility),
+                "炼丹数量": quantity,
+                "灵石消耗": preview.spirit_stone_cost,
                 "丹药编号": preview.recipe.recipe_id,
                 "成丹编号": preview.recipe.medicine_id,
                 "成丹品级": preview.medicine_grade_id,
@@ -365,7 +389,7 @@ class AlchemyService:
                     normalized,
                     request,
                     "炼丹",
-                    inventory.operations,
+                    inventory.operations + stones.operations,
                     payload,
                 )
             )
@@ -391,11 +415,13 @@ class AlchemyService:
     ) -> AlchemyResult:
         try:
             location_name = _payload_text(payload.get("地点"), "炼丹事务.地点")
-            alchemist = self._alchemists[location_name]
-            if alchemist.alchemist_id != _payload_text(
-                payload.get("丹师编号"), "炼丹事务.丹师编号"
-            ):
-                raise ValueError("炼丹事务丹师与地点不一致")
+            facility = facility_from_payload(payload.get("设施"), "炼丹事务.设施")
+            quantity = _payload_positive_int(
+                payload.get("炼丹数量"), "炼丹事务.炼丹数量"
+            )
+            stone_cost = _payload_nonnegative_int(
+                payload.get("灵石消耗"), "炼丹事务.灵石消耗"
+            )
             beast = _payload_material(
                 payload.get("药引"), self._asset, self._data, "药引"
             )
@@ -413,7 +439,7 @@ class AlchemyService:
         preview = AlchemyPreview(
             user_id,
             location_name,
-            alchemist,
+            facility,
             recipe,
             grade.grade_id,
             grade.name,
@@ -421,19 +447,29 @@ class AlchemyService:
             herbs,
             (),
             True,
+            quantity,
+            stone_cost,
         )
         return AlchemyResult(preview, before, after, True, activation)
 
     def _build_preview(
         self,
         user_id: str,
-        location_name: str,
-        alchemist: Alchemist,
+        environment: CraftEnvironment,
         recipe: AlchemyRecipe,
         entries: tuple[AssetEntry, ...],
         grade_name: str = "黄品",
+        *,
+        quantity: int = 1,
+        stones: int = 0,
     ) -> AlchemyPreview:
-        value = self.assess(recipe.recipe_id, entries, grade_name)
+        value = self.assess(
+            recipe.recipe_id,
+            entries,
+            grade_name,
+            environment.facility,
+            quantity,
+        )
         if recipe.no_grade:
             grade_id, grade_name_value = value.medicine_grade_id, "无品级"
         else:
@@ -442,17 +478,26 @@ class AlchemyService:
             if grade.order > town_max_grade.order:
                 grade = town_max_grade
             grade_id, grade_name_value = grade.grade_id, grade.name
+        cost_grade = "黄品" if grade_name_value == "无品级" else grade_name_value
+        unit_cost = (
+            self._cost_rules.cost("炼丹", cost_grade)
+            if self._cost_rules
+            else 0
+        )
+        cost = unit_cost * quantity
         return AlchemyPreview(
             user_id,
-            location_name,
-            alchemist,
+            environment.location_name,
+            environment.facility,
             value.recipe,
             grade_id,
             grade_name_value,
             value.beast_material,
             value.herb_materials,
             value.missing_materials,
-            value.can_refine,
+            value.can_refine and stones >= cost,
+            quantity,
+            cost,
         )
 
     def _assess_materials(
@@ -460,6 +505,8 @@ class AlchemyService:
         recipe: AlchemyRecipe,
         entries: tuple[AssetEntry, ...],
         grade_name: str,
+        facility: CraftFacility | None = None,
+        quantity: int = 1,
     ) -> AlchemyAssessment:
         grade = self._asset.grade(grade_name)
         town_max = self._asset.grade(self._town_max_grade_id)
@@ -472,7 +519,9 @@ class AlchemyService:
             category = _text(raw.get("类别"), f"{recipe.name}.材料.类别")
             item_id = str(raw.get("编号") or "")
             base_count = _positive_int(raw.get("数量"), f"{recipe.name}.材料.数量")
-            need = max(base_count, ceil(base_count * factor))
+            need = max(base_count, ceil(base_count * factor)) * quantity
+            if facility is not None:
+                need = material_quantity(need, facility.material_saving_bp)
             minimum = self._asset.grade(str(raw.get("最低品级") or "黄品"))
             candidates = sorted(
                 (
@@ -534,15 +583,11 @@ class AlchemyService:
             and entry.subcategory in {"兽宝", "灵植", "灵矿"}
         )
 
-    async def _current_alchemist(self, user_id: str) -> tuple[str, Alchemist]:
+    async def _environment(self, user_id: str) -> CraftEnvironment:
         self._require_initialized()
-        current = await self._location.current(user_id)
-        place = self._world.locate(LocationQuery(xy=current.xy))
-        alchemist = self._alchemists.get(place.location_name)
-        if alchemist is None:
-            alchemist = next(iter(self._alchemists.values()))
-            return "随身", alchemist
-        return place.location_name, alchemist
+        return await current_environment(
+            self._location, self._world, user_id, "炼丹"
+        )
 
     def _resolve_recipe(self, identifier: str) -> AlchemyRecipe:
         self._require_initialized()
@@ -592,40 +637,7 @@ class AlchemyService:
             )
         return result
 
-    def _load_alchemists(self) -> dict[str, Alchemist]:
-        result: dict[str, Alchemist] = {}
-        contract = ContractSet.from_dataset(
-            self._data.dataset(WORLD_CONTRACT_DATASET), WORLD_CONTRACT_PATH
-        )
-        for alchemist_id, raw in self._data.entities("炼丹师").items():
-            contract.validate(raw, "炼丹师", f"炼丹师 {alchemist_id}")
-            location = self._data.entity_record("炼丹师", alchemist_id).directory_owner
-            if not location:
-                raise JsonDataError(f"炼丹师 {alchemist_id} 缺少地点目录归属")
-            if location in result:
-                raise JsonDataError(f"同一地点不能有多名掌炉丹师：{location}")
-            result[location] = Alchemist(
-                alchemist_id,
-                _text(raw.get("名称"), f"炼丹师 {alchemist_id}.名称"),
-                location,
-                _text(raw.get("称号"), f"炼丹师 {alchemist_id}.称号"),
-                _text(raw.get("炉名"), f"炼丹师 {alchemist_id}.炉名"),
-                _text(raw.get("话语风格"), f"炼丹师 {alchemist_id}.话语风格"),
-                speech(raw.get("话语"), f"炼丹师 {alchemist_id}.话语"),
-            )
-        return result
-
     def _validate_static_rules(self, rules: Mapping[str, object]) -> None:
-        locations = {
-            item.name
-            for item in self._world.map_view().locations
-            if "炼丹" in item.available_functions
-        }
-        if set(self._alchemists) != locations:
-            raise JsonDataError(
-                f"炼丹地点与丹师不一一对应：缺少{sorted(locations - set(self._alchemists))}，"
-                f"多余{sorted(set(self._alchemists) - locations)}"
-            )
         dan_rule = _mapping(rules.get("丹则"), "炼药规则.丹则")
         if _mapping(dan_rule.get("药引"), "丹则.药引") != {
             "类别": "兽宝",

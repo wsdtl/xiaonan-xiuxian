@@ -32,30 +32,6 @@
     "样式": "primary"
   },
   {
-    "功能": "锻造",
-    "编号": "location.forging",
-    "名称": "炼器",
-    "命令": "炼器",
-    "行为": "callback",
-    "样式": "primary"
-  },
-  {
-    "功能": "炼丹",
-    "编号": "location.alchemy",
-    "名称": "炼丹",
-    "命令": "炼丹",
-    "行为": "callback",
-    "样式": "primary"
-  },
-  {
-    "功能": "炼阵",
-    "编号": "location.formation",
-    "名称": "阵法",
-    "命令": "阵法审查",
-    "行为": "callback",
-    "样式": "primary"
-  },
-  {
     "功能": "夺元",
     "编号": "location.cultivation-transfer",
     "名称": "铜雀夺元",

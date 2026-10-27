@@ -8,6 +8,7 @@ from typing import NamedTuple
 
 from game.core.database import StateMutation
 from game.core.innate_treasure import InnateTreasureActivation
+from game.core.world import CraftFacility
 
 
 class FormationError(ValueError):
@@ -15,7 +16,7 @@ class FormationError(ValueError):
 
 
 class FormationUnavailableError(FormationError):
-    """当前位置没有阵师或未开放指定阵法。"""
+    """当前炼制环境不支持指定阵法。"""
 
 
 class FormationMaterialError(FormationError):
@@ -59,21 +60,9 @@ class FormationConflictError(FormationError):
 class FormationStatus:
     initialized: bool
     formation_count: int
-    master_count: int
+    facility_count: int
     fixed_grade_count: int
     unlimited_grade: str
-
-
-@dataclass(frozen=True)
-class FormationMaster:
-    master_id: str
-    name: str
-    location_name: str
-    title: str
-    platform_name: str
-    speech_style: str
-    speech: Mapping[str, str]
-    formation_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -135,7 +124,7 @@ class FormationAssessment:
 class FormationPreview:
     user_id: str
     location_name: str
-    master: FormationMaster
+    facility: CraftFacility | None
     formation: FormationDefinition
     grade_id: str
     grade_name: str
@@ -150,6 +139,7 @@ class FormationPreview:
     detection: FormationDetection | None = None
     core_names: tuple[str, ...] = ()
     supplement_multipliers: tuple[tuple[str, float], ...] = ()
+    spirit_stone_cost: int = 0
 
 
 @dataclass(frozen=True)
@@ -161,7 +151,7 @@ class FormationEntry:
 class FormationOverview:
     user_id: str
     location_name: str
-    master: FormationMaster
+    facility: CraftFacility | None
     entries: tuple[FormationEntry, ...]
     page: int
     page_count: int
@@ -248,7 +238,6 @@ __all__ = [
     "FormationDetection",
     "FormationEntry",
     "FormationError",
-    "FormationMaster",
     "FormationMaterial",
     "FormationMaterialError",
     "FormationNodeRules",

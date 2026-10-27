@@ -1,7 +1,6 @@
 """炼丹核心微服务。"""
 
 from .contracts import (
-    Alchemist,
     AlchemyAssessment,
     AlchemyConflictError,
     AlchemyError,
@@ -20,7 +19,6 @@ from .contracts import (
 from .service import AlchemyService
 
 __all__ = [
-    "Alchemist",
     "AlchemyAssessment",
     "AlchemyConflictError",
     "AlchemyError",

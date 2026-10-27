@@ -16,6 +16,18 @@ class WorldStatus:
 
 
 @dataclass(frozen=True)
+class CraftFacility:
+    """地点自带的唯一炼制设施；只保存材料节省，不保存 NPC 或档位。"""
+
+    category: str
+    name: str
+    material_saving_bp: int = 0
+
+    def saving_label(self) -> str:
+        return f"{self.material_saving_bp / 100:.2f}%"
+
+
+@dataclass(frozen=True)
 class LocationQuery:
     location_name: str = ""
     xy: tuple[int, int] | None = None
@@ -40,6 +52,7 @@ class LocationView:
     beast_tiers: tuple[str, ...] = ()
     cultivator_count: tuple[int, ...] = ()
     beast_count: tuple[int, ...] = ()
+    facility: CraftFacility | None = None
 
 
 @dataclass(frozen=True)

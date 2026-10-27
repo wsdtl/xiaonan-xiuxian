@@ -1,7 +1,6 @@
 """炼器与本命武器核心微服务。"""
 
 from .contracts import (
-    ForgingArtisan,
     ForgingAssessment,
     ForgingConflictError,
     ForgingError,
@@ -22,7 +21,6 @@ from .contracts import (
 from .service import ForgingService
 
 __all__ = [
-    "ForgingArtisan",
     "ForgingAssessment",
     "ForgingConflictError",
     "ForgingError",

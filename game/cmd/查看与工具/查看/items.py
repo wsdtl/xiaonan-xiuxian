@@ -322,26 +322,6 @@ def _person_state_lines(
     return tuple(lines)
 
 
-def _artisan_lines(
-    source: SectionInput,
-) -> tuple[str, ...]:
-    """炼丹师 / 炼器工匠 / 阵师：把开放清单解析成名称，其余字段平铺。"""
-
-    lines = []
-    reference_keys = {"开放器律", "开放阵法"}
-    for key, value in source.fields.items():
-        if (
-            key in reference_keys
-            and isinstance(value, Sequence)
-            and not isinstance(value, (str, bytes))
-        ):
-            names = [_related_name(item, source.related) for item in value]
-            lines.append(f"{key}：" + "、".join(name for name in names if name))
-        else:
-            lines.append(f"{key}：{_plain_value(value)}")
-    return tuple(lines)
-
-
 def _generic_lines(fields: Mapping[str, object]) -> tuple[str, ...]:
     """没登记领域的兜底：按字段平铺，嵌套对象缩进一层。"""
 
@@ -434,9 +414,6 @@ _SECTION_LINES = {
     "战场环境": _rendered_only,
     "境界": _realm_lines,
     "人物状态": _person_state_lines,
-    "炼丹师": _artisan_lines,
-    "炼器工匠": _artisan_lines,
-    "阵师": _artisan_lines,
     "敌人": _enemy_lines,
 }
 def _previous_realm_name(target: object, related: Mapping[str, object]) -> str:
