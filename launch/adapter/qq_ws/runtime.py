@@ -16,6 +16,7 @@ https://bot.q.qq.com/wiki/develop/api-v2/dev-prepare/interface-framework/event-e
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from dataclasses import dataclass, field, replace
 
@@ -34,6 +35,12 @@ AUTH_READY = "ready"
 AUTH_RESUMED = "resumed"
 AUTH_INVALID_RESUMABLE = "invalid_resumable"
 AUTH_INVALID_FATAL = "invalid_fatal"
+
+# 离开收包循环的原因；op 7 是网关每小时的正常轮换，
+# 不能和网络断线共用 3 秒退避。
+REASON_GATEWAY_RECONNECT = "gateway_reconnect"
+REASON_INVALID_SESSION = "invalid_session"
+REASON_SHUTDOWN = "shutdown"
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,9 @@ class QqWsSettings:
     gateway_cache_seconds: float = 60.0
     # 连续建连失败多少次后进入长冷却，而不是永久退出。
     auth_failure_cooldown_seconds: float = 300.0
+    # op 7 是网关主动轮换：短延迟 + 抖动，不再空等 3 秒。
+    gateway_reconnect_delay_seconds: float = 0.2
+    gateway_reconnect_jitter_seconds: float = 0.3
 
 
 @dataclass
@@ -250,7 +260,9 @@ class QqGatewayRuntime:
             session.heartbeat_sent = False
             session_established = False
             connection: WebSocketConnection | None = None
+            auth_rejected = False
             retry_now = False
+            reconnect_reason = ""
             try:
                 # 每次重连都重新看网关信息并取 token；token 的过期刷新在
                 # client.get_access_token() 里，不能只在启动时取一次。
@@ -280,23 +292,16 @@ class QqGatewayRuntime:
                     auth_retry_used = False
                     closed_without_ready = 0
                     backoff = self.settings.reconnect_interval_seconds
-                    await self._receive_loop(connection, session, shard_id)
-                else:
-                    # 鉴权被拒：会话和 token 都可能已经失效，先清 token、
-                    # 丢弃网关缓存；第一次再给一次立即重试的机会。
-                    self.stats.auth_rejections += 1
-                    _clear_access_token()
-                    self._gateway_cache = None
-                    if not auth_retry_used:
-                        auth_retry_used = True
-                        retry_now = True
-                    logger.opt(colors=True).warning(
-                        C.join(
-                            C.warn("QQ WebSocket 鉴权被拒，准备换凭据重试"),
-                            C.kv("shard", shard_id),
-                            C.kv("retry_now", retry_now),
-                        )
+                    reconnect_reason = await self._receive_loop(
+                        connection, session, shard_id
                     )
+                    if reconnect_reason == REASON_INVALID_SESSION:
+                        auth_rejected = True
+                        # 已经 READY/RESUMED 之后才失效，也要计入连续失败；
+                        # 否则会每 60 秒无限重试，进不了长冷却。
+                        session_established = False
+                else:
+                    auth_rejected = True
             except asyncio.CancelledError:
                 raise
             except WebSocketClosed as exc:
@@ -325,15 +330,44 @@ class QqGatewayRuntime:
             if self._shutdown.is_set():
                 return
 
-            if retry_now:
-                # 第一次鉴权被拒：token 已清、网关缓存已失效，立即再试一次；
-                # 第二次再拒就走退避，不能在这里空转。
+            if auth_rejected:
+                # 鉴权被拒或收包期间收到 op 9：会话和 token 都可能已经失效。
+                # 先清 token、丢弃网关缓存；第一次再给一次立即重试的机会。
+                self.stats.auth_rejections += 1
+                _clear_access_token()
+                self._gateway_cache = None
+                if not auth_retry_used:
+                    auth_retry_used = True
+                    retry_now = True
                 logger.opt(colors=True).warning(
                     C.join(
-                        C.warn("QQ WebSocket 刷新凭据后立即重试"),
+                        C.warn("QQ WebSocket 鉴权被拒，准备换凭据重试"),
                         C.kv("shard", shard_id),
+                        C.kv("retry_now", retry_now),
                     )
                 )
+                if retry_now:
+                    # 第一次被拒：token 已清、网关缓存已失效，立即再试一次；
+                    # 第二次再拒就走退避，不能在这里空转。
+                    logger.opt(colors=True).warning(
+                        C.join(
+                            C.warn("QQ WebSocket 刷新凭据后立即重试"),
+                            C.kv("shard", shard_id),
+                        )
+                    )
+                    continue
+            elif reconnect_reason == REASON_GATEWAY_RECONNECT:
+                # op 7 是官方每小时轮换：短延迟 + 抖动，不占用 3 秒退避。
+                delay = self._gateway_reconnect_delay()
+                logger.opt(colors=True).info(
+                    C.join(
+                        C.ok("QQ WebSocket 会话轮换，快速重连"),
+                        C.kv("shard", shard_id),
+                        C.kv("delay", f"{delay:.2f}s"),
+                    )
+                )
+                await self._sleep_before_reconnect(delay, shard_id)
+                backoff = self.settings.reconnect_interval_seconds
                 continue
 
             self.stats.reconnects += 1
@@ -378,6 +412,15 @@ class QqGatewayRuntime:
             )
         except asyncio.TimeoutError:
             return
+
+    def _gateway_reconnect_delay(self) -> float:
+        """op 7 的快速重连延迟：短底数 + 抖动，避免多分片同时打网关。"""
+
+        base = max(0.0, float(self.settings.gateway_reconnect_delay_seconds))
+        jitter = max(0.0, float(self.settings.gateway_reconnect_jitter_seconds))
+        if jitter <= 0:
+            return base
+        return base + random.uniform(0.0, jitter)
 
     async def _read_hello(self, connection: WebSocketConnection) -> int:
         """读取建连后的第一条 Hello，取出心跳周期。"""
@@ -507,8 +550,8 @@ class QqGatewayRuntime:
         connection: WebSocketConnection,
         session: QqWsSession,
         shard_id: int,
-    ) -> None:
-        """持续接收事件，直到对端关闭或服务端要求重连。"""
+    ) -> str:
+        """持续接收事件，返回离开原因：轮换 / 会话失效 / 运行时关闭。"""
 
         while not self._shutdown.is_set():
             kind, payload = await connection.receive()
@@ -530,7 +573,7 @@ class QqGatewayRuntime:
                         C.kv("shard", shard_id),
                     )
                 )
-                return
+                return REASON_GATEWAY_RECONNECT
             if opcode == gateway.OP_INVALID_SESSION:
                 session.can_resume = gateway.invalid_session_resumable(message)
                 if not session.can_resume:
@@ -542,7 +585,7 @@ class QqGatewayRuntime:
                         C.kv("resume", session.can_resume),
                     )
                 )
-                return
+                return REASON_INVALID_SESSION
             if opcode != gateway.OP_DISPATCH:
                 logger.opt(colors=True).debug(
                     C.join(
@@ -565,6 +608,8 @@ class QqGatewayRuntime:
                 session.can_resume = True
                 continue
             self._submit(message, event_type, session.self_id or "qq_ws")
+
+        return REASON_SHUTDOWN
 
     async def _heartbeat_loop(
         self,
@@ -640,14 +685,24 @@ class QqGatewayRuntime:
             self._record_failure("QQ WebSocket 关闭码处理失败", error, shard=shard_id)
         finally:
             self.stats.last_close_code = exc.close_code
-            logger.opt(colors=True).warning(
-                C.join(
-                    C.warn("QQ WebSocket 连接已断开，准备重连"),
-                    C.kv("shard", shard_id),
-                    C.kv("code", exc.close_code),
-                    C.kv("resume", session.can_resume),
+            parts = [
+                C.kv("shard", shard_id),
+                C.kv("code", exc.close_code),
+                C.kv("resume", session.can_resume),
+            ]
+            if self._shutdown.is_set():
+                # reload/正常退出的主动关停不是异常断链，别刷 WARNING。
+                logger.opt(colors=True).debug(
+                    C.join(C.ok("QQ WebSocket 连接随运行时关闭"), *parts)
                 )
-            )
+            elif exc.close_code == gateway.CLOSE_NORMAL:
+                logger.opt(colors=True).info(
+                    C.join(C.ok("QQ WebSocket 连接正常关闭，准备重连"), *parts)
+                )
+            else:
+                logger.opt(colors=True).warning(
+                    C.join(C.warn("QQ WebSocket 连接已断开，准备重连"), *parts)
+                )
 
     def _apply_close_code(self, close_code: int, session: QqWsSession) -> None:
         """按关闭码决定下一次连接是 Resume 还是重新 Identify。"""

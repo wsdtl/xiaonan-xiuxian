@@ -124,7 +124,12 @@ def test_reconnect_uses_fresh_access_token(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(runtime_module, "_access_token", lambda: next(tokens))
 
     async def scenario() -> None:
-        runtime = runtime_module.QqGatewayRuntime()
+        runtime = runtime_module.QqGatewayRuntime(
+            runtime_module.QqWsSettings(
+                gateway_reconnect_delay_seconds=0.2,
+                gateway_reconnect_jitter_seconds=0.0,
+            )
+        )
         sleeps: list[float] = []
 
         async def fake_info(*, force: bool = False) -> dict:
@@ -146,7 +151,7 @@ def test_reconnect_uses_fresh_access_token(monkeypatch: pytest.MonkeyPatch) -> N
             if connection is second:
                 runtime._shutdown.set()
                 return
-            await original_receive(connection, session, shard_id)
+            return await original_receive(connection, session, shard_id)
 
         monkeypatch.setattr(runtime, "_gateway_info", fake_info)
         monkeypatch.setattr(runtime, "_sleep_before_reconnect", fake_sleep)
@@ -164,7 +169,7 @@ def test_reconnect_uses_fresh_access_token(monkeypatch: pytest.MonkeyPatch) -> N
         assert second_auth[0]["op"] == 6
         assert second_auth[0]["d"]["session_id"] == "session-1"
         assert second_auth[0]["d"]["seq"] == 1
-        assert sleeps == [runtime.settings.reconnect_interval_seconds]
+        assert sleeps == [runtime.settings.gateway_reconnect_delay_seconds]
 
     asyncio.run(scenario())
 
@@ -429,7 +434,7 @@ def test_start_runs_reconnect_loop(monkeypatch: pytest.MonkeyPatch) -> None:
             if connection is second:
                 runtime._shutdown.set()
                 return
-            await original_receive(connection, session, shard_id)
+            return await original_receive(connection, session, shard_id)
 
         monkeypatch.setattr(runtime, "_gateway_info", fake_info)
         monkeypatch.setattr(runtime, "_sleep_before_reconnect", fake_sleep)
@@ -447,3 +452,125 @@ def test_start_runs_reconnect_loop(monkeypatch: pytest.MonkeyPatch) -> None:
         ]
 
     asyncio.run(scenario())
+
+
+def test_invalid_session_in_receive_loop_refreshes_and_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """收包阶段收到 op 9 也要清 token、强刷网关并立即重试一次。"""
+
+    first = FakeConnection([hello(), ready(), invalid_session(False)])
+    second = FakeConnection([hello(), ready()])
+    install_fakes(monkeypatch, [first, second])
+
+    tokens = iter(("token-a", "token-b"))
+    monkeypatch.setattr(runtime_module, "_access_token", lambda: next(tokens))
+
+    async def scenario() -> None:
+        runtime = runtime_module.QqGatewayRuntime()
+        cleared: list[bool] = []
+        sleeps: list[float] = []
+        original_receive = runtime._receive_loop
+
+        async def fake_info(*, force: bool = False) -> dict:
+            return {
+                "url": "wss://fake.invalid",
+                "shards": 1,
+                "remaining": 10,
+                "max_concurrency": 1,
+            }
+
+        async def fake_sleep(delay: float, shard_id: int | None) -> None:
+            sleeps.append(delay)
+
+        async def stop_after_ready(
+            connection: object, session: object, shard_id: int
+        ) -> None:
+            if connection is second:
+                runtime._shutdown.set()
+                return
+            return await original_receive(connection, session, shard_id)
+
+        monkeypatch.setattr(runtime, "_gateway_info", fake_info)
+        monkeypatch.setattr(
+            runtime_module, "_clear_access_token", lambda: cleared.append(True)
+        )
+        monkeypatch.setattr(runtime, "_sleep_before_reconnect", fake_sleep)
+        monkeypatch.setattr(runtime, "_receive_loop", stop_after_ready)
+
+        await asyncio.wait_for(runtime._shard_loop(0, 1), timeout=5)
+
+        assert cleared == [True]
+        assert runtime.stats.auth_rejections == 1
+        assert [payload["d"]["token"] for payload in auth_payloads(first)] == [
+            "QQBot token-a"
+        ]
+        assert [payload["d"]["token"] for payload in auth_payloads(second)] == [
+            "QQBot token-b"
+        ]
+        assert sleeps == []
+
+    asyncio.run(scenario())
+
+
+def test_shutdown_1006_is_debug_not_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """主动关停时 1006 只记 debug；非关停的 1006 仍记 warning。"""
+
+    class FakeLogger:
+        def __init__(self) -> None:
+            self.debugs: list[str] = []
+            self.warnings: list[str] = []
+
+        def opt(self, **kwargs: object) -> FakeLogger:
+            return self
+
+        def debug(self, message: object) -> None:
+            self.debugs.append(str(message))
+
+        def info(self, message: object) -> None:
+            return
+
+        def warning(self, message: object) -> None:
+            self.warnings.append(str(message))
+
+        def error(self, message: object) -> None:
+            return
+
+    fake_logger = FakeLogger()
+    monkeypatch.setattr(runtime_module, "logger", fake_logger)
+
+    async def scenario() -> None:
+        runtime = runtime_module.QqGatewayRuntime()
+        runtime._shutdown.set()
+        runtime._handle_closed(
+            WebSocketClosed("reload", close_code=1006),
+            runtime_module.QqWsSession(session_id="s1", can_resume=True),
+            0,
+        )
+        assert fake_logger.warnings == []
+        assert fake_logger.debugs
+
+        runtime = runtime_module.QqGatewayRuntime()
+        runtime._handle_closed(
+            WebSocketClosed("network", close_code=1006),
+            runtime_module.QqWsSession(session_id="s1", can_resume=True),
+            0,
+        )
+        assert fake_logger.warnings
+
+    asyncio.run(scenario())
+
+
+def test_gateway_reconnect_delay_has_jitter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """op 7 快速重连延迟在 [base, base+jitter] 内，不会退回 3 秒。"""
+
+    monkeypatch.setattr(runtime_module.random, "uniform", lambda low, high: high)
+    runtime = runtime_module.QqGatewayRuntime(
+        runtime_module.QqWsSettings(
+            gateway_reconnect_delay_seconds=0.2,
+            gateway_reconnect_jitter_seconds=0.3,
+        )
+    )
+    assert runtime._gateway_reconnect_delay() == pytest.approx(0.5)

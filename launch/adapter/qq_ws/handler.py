@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
+from launch.config import config as framework_config
 from launch.log import C, logger
 
 from ..base_handler import BaseMessageHandler
@@ -61,6 +62,16 @@ class QqWsEventHandler(MessageDispatchMixin, BaseMessageHandler):
                 C.join(C.fail("QQ WebSocket intent 配置无效"), C.kv("reason", exc))
             )
             return
+
+        if framework_config.server.reload:
+            # 开发热重载每次保存都会重建进程，QQ 长连接必然断一次；
+            # 这是环境提示，不是重连逻辑能修的。
+            logger.opt(colors=True).warning(
+                C.join(
+                    C.warn("SERVER_RELOAD=true：开发热重载每次保存都会断开 QQ WebSocket"),
+                    C.kv("建议", "生产环境设 SERVER_RELOAD=false"),
+                )
+            )
 
         await _runtime.start(intents)
         logger.opt(colors=True).success(
