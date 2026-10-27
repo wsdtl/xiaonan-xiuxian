@@ -1,14 +1,11 @@
-"""物品统一使用入口：只接第一类（功法/真意/气机/器律）的构筑使用。"""
+"""物品统一使用入口：只查使用档案，按端口转发。"""
 from __future__ import annotations
 
 from typing import Any
 
 from game.app import current_game_services
 from game.features.presentation import ItemRefError, parse_item_ref
-from game.features.renwu_peiyang import (
-    CharacterCultivationConflictError,
-    CharacterCultivationFeatureError,
-)
+from game.features.shiyong import UseError, UseRedirect, UseRequest
 
 from ...branching import BranchParseError, branch_menu_for
 from ...command import GameCommand
@@ -17,18 +14,15 @@ from . import reply
 from launch.adapter import MessageContext
 
 
-def _split(message: str) -> tuple[str, int | None]:
+def _split(message: str) -> tuple[str, str | None]:
     parts = str(message or "").split()
     if not parts:
         raise ValueError("缺少物品")
     if len(parts) == 1:
         return parts[0], None
-    if len(parts) != 2 or not parts[1].isdecimal():
+    if len(parts) != 2:
         raise ValueError("写法")
-    position = int(parts[1])
-    if position < 1:
-        raise ValueError("位置必须是正整数")
-    return parts[0], position
+    return parts[0], parts[1]
 
 
 @GameCommand.command(
@@ -38,12 +32,14 @@ def _split(message: str) -> tuple[str, int | None]:
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "查看与工具",
-            "summary": "使用一件物品：功法/真意/气机入槽，器律入本命武器孔",
+            "summary": "使用一件物品：构筑入槽、灵宝执掌、丹药服用或按提示转到专属入口",
             "usage": (
                 "使用 黄品五岳镇界镇岳诀 1",
                 "使用 玄品太白惊鸿 2",
+                "使用 斩仙飞刀",
+                "使用 小还丹 道侣",
             ),
-            "side_effect": "按物品类别装配或覆炼；功法保留所有权，真意/气机消耗一份",
+            "side_effect": "按使用档案执行；构筑与丹药走原事务，突破丹/材料只给帮助跳转",
             "order": 15,
         },
     },
@@ -54,40 +50,47 @@ async def use_item(
     message_context: MessageContext,
     manager: Any,
 ) -> None:
-    feature = current_game_services().features.renwu_peiyang
+    feature = current_game_services().features.shiyong
     try:
-        ref_text, position = _split(message)
+        ref_text, candidate = _split(message)
         ref = parse_item_ref(ref_text)
-        target = await feature.resolve_use_target(user_id, ref.item)
-        if target.category != "器律" and not ref.grade:
-            raise CharacterCultivationFeatureError(feature.copy("使用", "缺品级"))
-        if position is None:
-            if len(target.slots) == 1:
-                position = target.slots[0]
+        plan = await feature.plan(
+            UseRequest(
+                user_id,
+                message_context.request_id,
+                ref.item,
+                grade=ref.grade,
+                treasure=ref.treasure,
+            )
+        )
+        if isinstance(plan, UseRedirect):
+            await send_game_reply(reply.redirect(plan))
+            return
+        selected = candidate
+        if selected is None:
+            selected = plan.description.default
+        if not selected:
+            candidates = plan.description.candidates
+            if len(candidates) == 1:
+                selected = candidates[0].value
+            elif not candidates:
+                selected = ""
             else:
                 branch = (
-                    f">使用 {ref.grade}{target.name} "
-                    + "|".join(str(slot) for slot in target.slots)
+                    f">使用 {plan.description.display} "
+                    + "|".join(item.value for item in candidates)
                 )
                 await send_game_reply(branch_menu_for(branch))
                 return
-        result = await feature.use(
-            user_id, message_context.request_id, target, ref.grade, position
-        )
-        if target.category == "器律":
-            await send_game_reply(reply.forged(feature, result))
-        else:
-            await send_game_reply(reply.equipped(feature, result))
+        outcome = await feature.execute(plan, selected)
+        copy_feature = getattr(current_game_services().features, plan.profile.port)
+        await send_game_reply(reply.render(outcome, copy_feature))
     except BranchParseError:
-        await send_game_reply(reply.error(feature, feature.copy("使用", "写法")))
-    except (CharacterCultivationFeatureError, CharacterCultivationConflictError) as exc:
+        await send_game_reply(reply.error(feature, feature.copy("写法")))
+    except UseError as exc:
         await send_game_reply(reply.error(feature, str(exc)))
-    except (ValueError, ItemRefError) as exc:
-        await send_game_reply(
-            reply.error(feature, feature.copy("使用", "写法"))
-            if str(exc) in {"缺少物品", "写法", "位置必须是正整数"}
-            else reply.error(feature, str(exc))
-        )
+    except (ValueError, ItemRefError):
+        await send_game_reply(reply.error(feature, feature.copy("写法")))
 
 
 __all__ = []

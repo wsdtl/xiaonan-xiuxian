@@ -1,12 +1,24 @@
-"""使用物品的公共回执：装配与覆炼成功页。"""
+"""使用物品的公共回执：装配、覆炼、灵宝、服丹。"""
 from __future__ import annotations
 
+from game.features.fudan import MedicineFeature, MedicineUseResult
 from game.features.renwu_peiyang import (
     CharacterCultivationFeature,
     CharacterEquipResult,
     CharacterLawResult,
 )
+from game.features.xiantian_lingbao import (
+    InnateTreasureEquipResult,
+    InnateTreasureFeature,
+)
 from message import DocumentMessage, M
+
+_USE_KEYS = {
+    ("人物", "恢复"): "人物恢复",
+    ("道侣", "恢复"): "道侣恢复",
+    ("人物", "寄存"): "人物寄存",
+    ("道侣", "寄存"): "道侣寄存",
+}
 
 
 def equipped(
@@ -42,4 +54,60 @@ def forged(
     )
 
 
-__all__ = ["equipped", "forged"]
+def treasure(
+    feature: InnateTreasureFeature, result: InnateTreasureEquipResult
+) -> DocumentMessage:
+    value = result.treasure
+    return (
+        M.document()
+        .section(feature.copy("标题"), icon="game.manual")
+        .line(
+            M.status("执掌完成", tone="positive"),
+            " ",
+            feature.copy("执掌成功", {"名称": value.name, "权柄": value.authority}),
+        )
+        .field(feature.copy("效果"), f"{value.effect.node}：{value.effect.ability}")
+        .build()
+    )
+
+
+def medicine(
+    feature: MedicineFeature, result: MedicineUseResult
+) -> DocumentMessage:
+    key = _USE_KEYS[(result.target, result.effect)]
+    line = feature.copy(
+        "服丹",
+        key,
+        {
+            "人物": result.target_name,
+            "道侣": result.target_name,
+            "品级": result.grade_name,
+            "丹药": result.medicine_name,
+            "资源": result.resource,
+            "实际恢复": _number(result.recovered),
+        },
+    )
+    builder = (
+        M.document().section(feature.copy("服丹", "标题"), icon="game.seed").line(line)
+    )
+    if result.treasure_activation is not None:
+        activation = result.treasure_activation
+        builder.section("灵宝", icon="game.box").field(
+            activation.name, activation.summary
+        )
+    return builder.build()
+
+
+def _number(value: float) -> str:
+    return str(int(value)) if value.is_integer() else str(round(value, 4))
+
+
+RENDERERS = {
+    "equip": equipped,
+    "forge": forged,
+    "treasure": treasure,
+    "medicine": medicine,
+}
+
+
+__all__ = ["RENDERERS", "equipped", "forged", "medicine", "treasure"]

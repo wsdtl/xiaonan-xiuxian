@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.features.xiantian_lingbao import (
-    InnateTreasureEquipRequest,
-    InnateTreasureFeatureConflictError,
-    InnateTreasureFeatureError,
-)
+from game.features.xiantian_lingbao import InnateTreasureFeatureError
 
 from ...command import GameCommand
 from . import reply
 from .site import router
 from ...reply_composer import send_game_reply
-from launch.adapter import MessageContext
 from typing import Any
 
 
@@ -70,33 +65,6 @@ async def show_innate_treasure_catalog(user_id: str, message: str, manager: Any)
             reply.catalog(feature, await feature.catalog(int(raw or 1)))
         )
     except InnateTreasureFeatureError as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
-
-
-@GameCommand.command(
-    cmd="执掌灵宝",
-    metadata={
-        "scope": "通用",
-        "guard_rule": "空闲或活动中",
-        "help": {
-            "category": "修行",
-            "summary": "从个人灵宝谱中选择一件先天灵宝执掌",
-            "usage": ("执掌灵宝 斩仙飞刀", "执掌灵宝 编号或名称",),
-            "side_effect": "替换唯一先天灵宝槽，不消耗灵宝",
-            "order": 60,
-        },
-    },
-)
-async def equip_innate_treasure(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.xiantian_lingbao
-    try:
-        result = await feature.equip(
-            InnateTreasureEquipRequest(
-                user_id, message_context.request_id, message.strip()
-            )
-        )
-        await send_game_reply(reply.equipped(feature, result))
-    except (InnateTreasureFeatureError, InnateTreasureFeatureConflictError) as exc:
         await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 

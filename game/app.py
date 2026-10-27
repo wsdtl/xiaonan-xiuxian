@@ -95,8 +95,10 @@ from .features.zongmen_shengchan import SectProductionFeature
 from .features.zongmen_sheshi import SectFacilityFeature
 from .features.zongmen_tongxing import SectFollowFeature
 from .features.zongmen_wanzhen import WanzhenFeature
+from .startup.use_ports import build_use_ports
 from .features.zhuangpei import ZhuangpeiFeature
 from .features.shengjie import ShengjieFeature
+from .features.shiyong import UseGatewayFeature
 from .features.zongmen_zhan import SectWarFeature
 from .features.xuemai import XuemaiFeature
 from .features.hunpei import HunpeiFeature
@@ -204,6 +206,7 @@ class FeatureServices:
     zhanbao: BattleReportFeature
     zhuangpei: ZhuangpeiFeature
     shengjie: ShengjieFeature
+    shiyong: UseGatewayFeature
 
 
 @dataclass(frozen=True)
@@ -940,6 +943,12 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     buzhen.initialize()
     shengjie = ShengjieFeature(data, asset, database, promotion, alchemy, forging, formation)
     shengjie.initialize()
+    shiyong = UseGatewayFeature(
+        data,
+        item_catalog,
+        build_use_ports(renwu_peiyang, xiantian_lingbao, fudan),
+    )
+    shiyong.initialize()
     features = FeatureServices(
         tiandao_houtai=message_flows,
         chuangjian_renwu=create_character,
@@ -990,6 +999,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         zhanbao=zhanbao,
         zhuangpei=zhuangpei,
         shengjie=shengjie,
+        shiyong=shiyong,
     )
     return GameServices(core=core, features=features)
 

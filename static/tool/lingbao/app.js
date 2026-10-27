@@ -151,7 +151,7 @@ function show(item) {
     text.textContent = String(item['说明']);
     host.append(text);
   }
-  host.append(commandBox('执掌灵宝 ' + idOf(item)));
+  host.append(commandBox('使用 ' + String(item['名称'] || '')));
   if (!$('detail-dialog').open) $('detail-dialog').showModal();
 }
 

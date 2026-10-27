@@ -14,7 +14,6 @@ from message import DocumentBuilder, DocumentMessage, M
 
 from game.features.xiantian_lingbao import (
     InnateTreasureFeature,
-    InnateTreasureEquipResult,
     InnateTreasureView,
 )
 
@@ -72,21 +71,6 @@ def catalog(feature: InnateTreasureFeature, result: InnateTreasureView) -> Docum
     return builder.build()
 
 
-def equipped(feature: InnateTreasureFeature, result: InnateTreasureEquipResult) -> DocumentMessage:
-    treasure = result.treasure
-    return (
-        M.document()
-        .section(feature.copy("标题"), icon="game.manual")
-        .line(
-            M.status("执掌完成", tone="positive"),
-            " ",
-            feature.copy("执掌成功", {"名称": treasure.name, "权柄": treasure.authority}),
-        )
-        .field(feature.copy("效果"), _effect(treasure))
-        .build()
-    )
-
-
 def error(
     feature: InnateTreasureFeature, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
@@ -120,4 +104,4 @@ def _effect(treasure: InnateTreasure) -> str:
     return f"{treasure.effect.node}：{treasure.effect.ability}"
 
 
-__all__ = ["catalog", "equipped", "error", "view"]
+__all__ = ["catalog", "error", "view"]
