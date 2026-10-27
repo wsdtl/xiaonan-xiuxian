@@ -97,31 +97,44 @@ def test_recipes_and_laws_use_explicit_materials(data_service: JsonDataService) 
         assert "铸法" not in value and "兽引" not in value, law_id
 
 
-def test_breakthrough_pills_cover_six_growth_axes(data_service: JsonDataService) -> None:
-    """突破丹共 114 颗：每境六条成长属性各一颗，地位相同、发展可选。"""
+def test_breakthrough_pills_align_with_plants(data_service: JsonDataService) -> None:
+    """突破丹 108 颗与 108 株灵植一一对应：前六境五轴，后十三境六轴。"""
 
     base = {"血气上限", "神魂上限", "精神上限", "攻击", "防御", "速度"}
+    early = {"510002", "510003", "510004", "510005", "510006", "510007"}
     by_realm: dict[str, list[set[str]]] = {}
+    plants: list[str] = []
     for value in data_service.entities("丹药").values():
         effect = value.get("使用效果") or {}
         if effect.get("类型") != "境界突破":
             continue
-        by_realm.setdefault(str(effect.get("目标境界")), []).append(
+        realm = str(effect.get("目标境界") or "")
+        herbs = [
+            material.get("编号")
+            for material in value.get("材料") or ()
+            if material.get("类别") == "灵植"
+        ]
+        assert len(herbs) == 1, (value.get("编号"), herbs)
+        plants.append(str(herbs[0]))
+        by_realm.setdefault(realm, []).append(
             set(effect.get("永久属性") or {})
         )
-    assert by_realm
-    assert sum(len(entries) for entries in by_realm.values()) == 114
-    assert sum(1 for entries in by_realm.values() if len(entries) == 6) == 19
+    assert len(by_realm) == 19
+    assert sum(len(entries) for entries in by_realm.values()) == 108
+    assert len(plants) == len(set(plants)) == 108
+    assert set(plants) == set(data_service.number_category_members("灵植"))
+    assert {realm for realm, entries in by_realm.items() if len(entries) == 5} == early
     for realm, entries in by_realm.items():
-        assert len(entries) == 6, (realm, len(entries))
+        wanted = base - ({"速度"} if realm in early else set())
+        assert len(entries) == len(wanted), (realm, len(entries), wanted)
         covered = set().union(*entries)
-        assert covered == base, (realm, base - covered, covered - base)
+        assert covered == wanted, (realm, wanted - covered, covered - wanted)
 
 
 def test_pills_are_flat_one_entity_per_file() -> None:
     """四类丹药都像战丹一样铺开：一个文件一颗，文件根是单个对象。"""
 
-    expected = {"恢复丹": 6, "战丹": 125, "突破丹": 114, "特殊丹": 8}
+    expected = {"恢复丹": 6, "战丹": 125, "突破丹": 108, "特殊丹": 8}
     for kind, count in expected.items():
         files = sorted((DATA_ROOT / "物品/内容/丹药" / kind).rglob("*.json"))
         assert len(files) == count, (kind, len(files))
