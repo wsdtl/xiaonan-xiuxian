@@ -40,6 +40,42 @@ def test_every_support_effect_has_explicit_target_or_branch() -> None:
     assert not missing
 
 
+def test_directional_effects_use_target_branches() -> None:
+    abilities = json.loads(
+        (DATA / "战斗/定义/原子能力.json").read_text(encoding="utf-8")
+    )
+    effect_abilities = {
+        name
+        for name, definition in abilities.items()
+        if isinstance(definition, dict) and definition.get("类别") == "效果"
+    }
+    aoe = {"全体", "任意", "友方全体"}
+    missing = []
+    for path in DATA.rglob("*.json"):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for node in _walk(document):
+            ability = node.get("能力")
+            if not isinstance(ability, str) or ability not in effect_abilities:
+                continue
+            target = node.get("目标")
+            is_aoe = (
+                isinstance(target, dict)
+                and (
+                    target.get("选择全部") is True
+                    or target.get("范围") in aoe
+                )
+            )
+            if is_aoe:
+                assert "目标分支" not in node
+                continue
+            if "目标分支" not in node:
+                missing.append(str(path))
+    assert not missing
+
+
 def test_target_branch_data_is_well_formed() -> None:
     seen = 0
     for path in DATA.rglob("*.json"):
@@ -49,7 +85,7 @@ def test_target_branch_data_is_well_formed() -> None:
             continue
         for node in _walk(document):
             raw = node.get("目标分支")
-            if raw is None:
+            if not isinstance(raw, dict) or "分支" not in raw:
                 continue
             seen += 1
             assert isinstance(raw, dict), path
