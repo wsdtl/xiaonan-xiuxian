@@ -55,7 +55,6 @@ def test_individual_shelf_can_deliver_to_inventory(services) -> None:
             "类别": "基础物品",
             "编号": "200001",
             "品级": ["01"],
-            "存入位置": "纳戒",
         },
         set(),
     )

@@ -270,16 +270,13 @@ class TradeService:
         seen: set[tuple[str, str]],
     ) -> tuple[_Listing, ...]:
         label = f"地点商店.{location_name}.货架[{index}]"
-        unknown = set(row) - {"池名", "类别", "编号", "品级", "价格", "存入位置"}
+        unknown = set(row) - {"池名", "类别", "编号", "品级", "价格"}
         if unknown:
             raise JsonDataError(f"{label} 存在未知字段：{'、'.join(sorted(unknown))}")
         grade_ids = _positive_grade_ids(self._asset, row.get("品级"), f"{label}.品级")
         raw_price = row.get("价格")
         by_reference = raw_price is None or raw_price == "参考价"
         prices = {} if by_reference else _prices(raw_price, grade_ids, f"{label}.价格")
-        delivery = _text(row.get("存入位置"), f"{label}.存入位置")
-        if delivery not in {"纳戒", "修行资粮", "器藏", "阵藏"}:
-            raise JsonDataError(f"{label}.存入位置不合法：{delivery}")
         pool = row.get("池名")
         category_value = row.get("类别")
         content_value = row.get("编号")
@@ -291,7 +288,7 @@ class TradeService:
             category, members = self._pool_members(str(pool))
             if not members:
                 raise JsonDataError(f"{label}.池名 为空：{pool}")
-            _check_delivery(category, delivery, label)
+            delivery = _delivery_for(category)
             return tuple(
                 self._listing(
                     category,
@@ -308,7 +305,7 @@ class TradeService:
             )
         category = _text(category_value, f"{label}.类别")
         content_id = _text(content_value, f"{label}.编号")
-        _check_delivery(category, delivery, label)
+        delivery = _delivery_for(category)
         return (
             self._listing(
                 category,
@@ -501,15 +498,16 @@ class _DeliveryPlan:
     after: int
 
 
-def _check_delivery(category: str, delivery: str, label: str) -> None:
-    if delivery == "修行资粮" and category not in {"真意", "气机"}:
-        raise JsonDataError(f"{label}：{category} 不能存入修行资粮")
-    if delivery == "器藏" and category != "器律":
-        raise JsonDataError(f"{label}：器藏只能存入器律")
-    if delivery == "阵藏" and category != "阵法":
-        raise JsonDataError(f"{label}：阵藏只能存入阵法")
-    if delivery == "纳戒" and category in {"真意", "气机", "器律", "阵法"}:
-        raise JsonDataError(f"{label}：{category} 不能存入纳戒")
+def _delivery_for(category: str) -> str:
+    """商品类别决定存入位置，不再由货架重复声明。"""
+
+    if category in {"真意", "气机"}:
+        return "修行资粮"
+    if category == "器律":
+        return "器藏"
+    if category == "阵法":
+        return "阵藏"
+    return "纳戒"
 
 
 def _prices(value: object, grade_ids: tuple[str, ...], label: str) -> Mapping[str, int]:
