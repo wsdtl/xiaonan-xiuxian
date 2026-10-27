@@ -62,6 +62,6 @@ def test_individual_shelf_can_deliver_to_inventory(services) -> None:
     assert len(listings) == 1
     product = services.core.trade._products_for_listing(listings[0])[0]
     assert product.delivery == "纳戒"
-    assert product.unit_price == 220
+    assert product.unit_price == 440
     plan = asyncio.run(services.core.trade._delivery_plan(user, product, 1))
     assert plan.after >= 1

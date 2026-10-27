@@ -993,13 +993,17 @@ def check_economy_fields() -> list[str]:
         if not isinstance(raw, dict) or not raw.get("编号") or not raw.get("名称"):
             continue
         parts = path.relative_to(DATA).parts
-        section = parts[2] if len(parts) >= 3 and parts[1] == "内容" else ""
-        if not section:
+        if len(parts) < 3 or parts[1] != "内容":
             continue
+        if parts[2] in {"灵植", "灵矿", "兽宝", "灵石"}:
+            section = "基础物品"
+            category = parts[2]
+        else:
+            section = parts[2]
+            category = ""
         eid = str(raw["编号"])
         entities[eid] = (section, raw)
-        if section == "基础物品" and len(parts) >= 4:
-            category = parts[3]
+        if section == "基础物品" and category:
             ref = raw.get("参考价")
             if isinstance(ref, int) and not isinstance(ref, bool):
                 base_refs[eid] = ref

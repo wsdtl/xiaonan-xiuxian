@@ -992,7 +992,7 @@ def test_spirit_stone_change_makes_change(services) -> None:
 
 
 def test_promotion_direct_upgrade(services) -> None:
-    """任意低品直接升圣，扣 1 枚圣品灵石。"""
+    """任意低品直接升圣，扣 2 枚圣品灵石。"""
 
     from game.core.asset.contracts import InventoryAdjustment
     from game.core.character.contracts import CharacterCreateCommand
@@ -1022,7 +1022,7 @@ def test_promotion_direct_upgrade(services) -> None:
     plan = asyncio.run(
         services.promotion.plan_upgrade(user_id, "200001", "01", "05", 1)
     )
-    assert plan.total_cost == 10000
+    assert plan.total_cost == 20000
     asyncio.run(
         services.database.commit(
             TransactionCommand(user_id, "upgrade-1", "测试", plan.operations, {})
@@ -1030,7 +1030,7 @@ def test_promotion_direct_upgrade(services) -> None:
     )
     stacks = asyncio.run(services.asset.inventory_stacks(user_id, "200001"))
     assert [(stack.grade.grade_id, stack.quantity) for stack in stacks] == [("05", 1)]
-    assert before - asyncio.run(services.asset.spirit_stone_balance(user_id)) == 10000
+    assert before - asyncio.run(services.asset.spirit_stone_balance(user_id)) == 20000
 
 
 def test_promotion_crafting_plan(services) -> None:
@@ -1076,7 +1076,7 @@ def test_promotion_crafting_plan(services) -> None:
     plan = asyncio.run(feature.plan_crafting(user_id, "炼丹", "120033", 1))
     assert plan.name == "一息续命丹"
     assert len(plan.plan.lines) == 3
-    assert plan.plan.total_cost == 20000
+    assert plan.plan.total_cost == 40000
     assert plan.plan.satisfiable
     assert plan.craft_command == "开丹炉 一息续命丹"
 
