@@ -1,16 +1,12 @@
-"""正文的「一键多分支」：查看|借阅功法 400001。
+"""正文的「一键多分支」：纯解析 + 只填入菜单。
 
-同一份内容常常有好几条命令可用（查看、借阅、装配…）。以前每条各占一个无边框按钮，
-又长又散。这里给一个统一写法：把分支词用 | 连在前面，后面跟**共享的参数尾巴**；
-点一次回一个选择菜单，由玩家挑一条。
+三套写法（只看结构，不查命令表）：
+- 共享尾：`查看|借阅 400001` -> 两条都带 400001；只有最后一段可带参数。
+- 全量：`查看 400001|取消托管` -> 每段原样作为一条完整命令；裸命令也算完整。
+- 共享头：`>查看 400001|400002` -> 第一段是「命令 一个参数」，后面每段是同命令的另一个单参数。
 
-**只做选择，不代为派发**：框架没有「按命令串再派发」的公开口，代派发也会绕过玩家的
-确认。回菜单既不用动 launch/，又能让每条分支按自己登记的 usage 决定「点了直接发」
-还是「只填入」——还差参数的分支当然只能填。
-
-**两种写法都行**：
-- 分支词 + 共享尾巴：`查看|借阅功法 400001`（只写命令词的段继承共享尾巴）
-- 每条分支自带完整命令：`查看 400001 | 人物装配 功法 400001 03`
+分支控件只做解析和菜单：不判断命令是否存在、不判断能否执行、不发送；
+菜单每条只填入，玩家自己确认发送。
 """
 from __future__ import annotations
 
@@ -20,57 +16,97 @@ from typing import Any
 from message import M
 
 from ...command import GameCommand
-from ...help_registry import help_registry
 from ...reply_composer import send_game_reply
 
 
-# 只要整条消息里出现 | 就交给这里；命令词的合法性由注册表判，不靠正则。
+# 只要整条消息里出现 | 就交给这里；是否是合法命令由后续正常命令链判断。
 BRANCH_PATTERN = re.compile(r"^(?P<text>[^\n]*\|[^\n]*)$")
+_SHARED_HEAD_MARKER = ">"
 
 
-def branches_of(value: object) -> tuple[tuple[str, str], ...]:
-    """把分支串解成 (命令词, 完整命令)；认不出的分支直接丢掉。
+class BranchParseError(ValueError):
+    """分支串不符合三套写法之一。"""
 
-    两种写法：分支词 + 共享尾巴（`查看|借阅功法 400001`），或每条分支自带完整命令
-    （`查看 400001 | 人物装配 功法 400001 03`）。**只写命令词的段继承共享尾巴**——
-    共享尾巴取最后一个自带参数的段的参数。
-    """
+
+def parse_branches(value: object) -> tuple[str, ...]:
+    """把分支串按结构还原成完整命令列表；不查命令注册表。"""
 
     text = " ".join(str(value or "").split())
-    if BRANCH_PATTERN.match(text) is None:
-        return ()
-    segments = [segment.strip() for segment in text.split("|")]
-    shared = ""
-    for segment in reversed(segments):
-        if " " in segment:
-            shared = segment.split(" ", 1)[1].strip()
-            break
-    result: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    for segment in segments:
-        if not segment:
-            continue
-        word, _, tail = segment.partition(" ")
-        if help_registry.find(word) is None:
-            continue
-        command = (word + " " + (tail.strip() or shared)).strip()
-        # 去重键是**完整命令**，不是命令词：同一命令词的不同参数是不同支线
-        #（人药 开 与 人药 关）；按命令词去重会把后一条吃掉。
-        if command in seen:
-            continue
-        seen.add(command)
-        result.append((word, command))
-    return tuple(result)
+    if not text or "|" not in text:
+        raise BranchParseError("分支至少要有两条")
+    if text.startswith(_SHARED_HEAD_MARKER):
+        return _shared_head(text[len(_SHARED_HEAD_MARKER) :].strip())
+    segments = _segments(text)
+    if " " in segments[0]:
+        return _full(segments)
+    return _shared_tail(segments)
 
 
-def is_complete(command: str) -> bool:
-    """按当前参数这条命令是否已经完整——**一律只填入、不直接发**（委托方 2026-10：点了就发容易出错）。"""
+def _segments(text: object) -> tuple[str, ...]:
+    segments = tuple(part.strip() for part in str(text or "").split("|"))
+    if any(not part for part in segments):
+        raise BranchParseError("分支段不能为空")
+    if len(segments) < 2:
+        raise BranchParseError("分支至少要有两条")
+    return segments
 
-    parts = command.split(" ")
-    entry = help_registry.find(parts[0])
-    if entry is None:
-        return False
-    return any(len(usage.split()) == len(parts) for usage in entry.spec.usage)
+
+def _shared_tail(segments: tuple[str, ...]) -> tuple[str, ...]:
+    if any(" " in part for part in segments[:-1]):
+        raise BranchParseError("共享尾写法里只有最后一段可以带参数")
+    _word, separator, tail = segments[-1].partition(" ")
+    shared = tail if separator else ""
+    commands = [
+        f"{part} {shared}".strip() if shared else part for part in segments[:-1]
+    ]
+    commands.append(segments[-1])
+    return _finish(commands)
+
+
+def _full(segments: tuple[str, ...]) -> tuple[str, ...]:
+    return _finish(segments)
+
+
+def _shared_head(text: str) -> tuple[str, ...]:
+    segments = _segments(text)
+    if segments[0].count(" ") != 1:
+        raise BranchParseError("共享头写法第一段必须是「命令 一个参数」")
+    word, separator, first_arg = segments[0].partition(" ")
+    if not separator or not first_arg:
+        raise BranchParseError("共享头写法第一段必须是「命令 一个参数」")
+    if any(" " in arg for arg in segments[1:]):
+        raise BranchParseError("共享头写法后面每段只能是一个参数")
+    commands = [segments[0]]
+    commands.extend(f"{word} {arg}" for arg in segments[1:])
+    return _finish(commands)
+
+
+def _finish(commands: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    unique: list[str] = []
+    for command in commands:
+        value = command.strip()
+        if value and value not in unique:
+            unique.append(value)
+    if len(unique) < 2:
+        raise BranchParseError("分支至少要有两条")
+    return tuple(unique)
+
+
+def _menu(commands: tuple[str, ...]) -> Any:
+    builder = M.document().section("选择分支", icon="game.pin_doc")
+    for index, command in enumerate(commands, start=1):
+        builder.item(index, M.command(command, command))
+    return builder.closing("点一条填入，确认后发送").build()
+
+
+def _error(message: str) -> Any:
+    return (
+        M.document()
+        .section("选择分支", icon="game.pin_doc")
+        .line(M.status("写法不明确", tone="warning"), " ", message)
+        .closing("分支只解析写法；命令能否执行由后续命令链判断。")
+        .build()
+    )
 
 
 @GameCommand.regex(
@@ -80,22 +116,14 @@ def is_complete(command: str) -> bool:
     metadata={"scope": "通用", "guard_rule": "始终可用", "hidden": True},
 )
 async def choose_branch(raw_message: str, manager: Any) -> None:
-    """回一个分支选择菜单。"""
+    """回一个只填入、不发送的分支选择菜单。"""
 
-    options = branches_of(raw_message)
-    builder = (
-        M.document().section("选择分支", icon="game.pin_doc")
-    )
-    if len(options) < 2:
-        builder.line(M.status("认不出", tone="warning"), " 分支词必须是已注册的命令。")
-        await send_game_reply(builder.build())
+    try:
+        commands = parse_branches(raw_message)
+    except BranchParseError as exc:
+        await send_game_reply(_error(str(exc)))
         return
-    # 带序号：2~5 条都一眼数得清（与列表卡同款）。
-    for index, (_word, command) in enumerate(options, start=1):
-        builder.item(index, M.command(command, command))
-    if len(options) > 2:
-        builder.small(f"共 {len(options)} 条分支 · 点一条执行")
-    await send_game_reply(builder.build())
+    await send_game_reply(_menu(commands))
 
 
-__all__ = ["BRANCH_PATTERN", "branches_of", "is_complete"]
+__all__ = ["BRANCH_PATTERN", "BranchParseError", "parse_branches"]
