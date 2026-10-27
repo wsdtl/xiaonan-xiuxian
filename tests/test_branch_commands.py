@@ -9,57 +9,41 @@ from game.cmd.查看与工具.帮助.branches import (
 )
 from message import ClosingBlock, CommandLink
 
-KNOWN = frozenset(
-    {
-        "查看",
-        "购买",
-        "取消托管",
-        "继续托管",
-        "人物装配",
-        "人药",
-        "侣药",
-        "去",
-        "前往",
-    }
-)
-
-
-def parse(text: str) -> tuple[str, ...]:
-    return parse_branches(text, known=KNOWN.__contains__)
-
 
 def test_shared_tail_uses_last_argument() -> None:
-    assert parse("去|前往 天衡城") == ("去 天衡城", "前往 天衡城")
+    assert parse_branches("去|前往 天衡城") == ("去 天衡城", "前往 天衡城")
 
 
 def test_shared_tail_without_arguments() -> None:
-    assert parse("继续托管|取消托管") == ("继续托管", "取消托管")
+    assert parse_branches("继续托管|取消托管") == ("继续托管", "取消托管")
 
 
-def test_shared_tail_rejects_unknown_command() -> None:
-    with pytest.raises(BranchParseError, match="不存在"):
-        parse("去|不存在 天衡城")
+def test_shared_tail_does_not_check_command_words() -> None:
+    # 纯解析：不查命令表，也不判断这两个词是不是命令。
+    assert parse_branches("不存在|也不存在 一份") == (
+        "不存在 一份",
+        "也不存在 一份",
+    )
 
 
 def test_full_mode_keeps_each_segment() -> None:
-    assert parse("查看 清心散|取消托管") == ("查看 清心散", "取消托管")
+    assert parse_branches("查看 清心散|取消托管") == ("查看 清心散", "取消托管")
 
 
 def test_full_mode_handles_heterogeneous_commands() -> None:
-    assert parse("查看 清心散|人物装配 功法 黄品清心散 1") == (
+    assert parse_branches("查看 清心散|人物装配 功法 黄品清心散 1") == (
         "查看 清心散",
         "人物装配 功法 黄品清心散 1",
     )
 
 
-def test_full_mode_rejects_a_bare_argument_as_command() -> None:
-    # 小还丹 是物品名，不是命令词；同一命令换参数应该走共享头，而不是全量。
-    with pytest.raises(BranchParseError, match="小还丹"):
-        parse("查看 清心散|小还丹")
+def test_full_mode_does_not_judge_a_bare_segment() -> None:
+    # 第二段是不是命令，不归分支控件判断；它只按结构原样收下。
+    assert parse_branches("查看 清心散|小还丹") == ("查看 清心散", "小还丹")
 
 
 def test_shared_head_repeats_the_first_command() -> None:
-    assert parse(">查看 清心散|小还丹|养神丹") == (
+    assert parse_branches(">查看 清心散|小还丹|养神丹") == (
         "查看 清心散",
         "查看 小还丹",
         "查看 养神丹",
@@ -67,17 +51,18 @@ def test_shared_head_repeats_the_first_command() -> None:
 
 
 def test_shared_head_with_place_names() -> None:
-    assert parse(">去 天衡城|溪隐台") == ("去 天衡城", "去 溪隐台")
+    assert parse_branches(">去 天衡城|溪隐台") == ("去 天衡城", "去 溪隐台")
 
 
-def test_shared_head_checks_only_the_first_command_word() -> None:
-    assert parse(">查看 清心散|小还丹") == ("查看 清心散", "查看 小还丹")
-    with pytest.raises(BranchParseError, match="不存在"):
-        parse(">不存在 清心散|小还丹")
+def test_shared_head_does_not_check_the_command_word() -> None:
+    assert parse_branches(">不存在 清心散|小还丹") == (
+        "不存在 清心散",
+        "不存在 小还丹",
+    )
 
 
 def test_duplicate_commands_are_collapsed() -> None:
-    assert parse("查看 清心散|查看 清心散|购买 小还丹") == (
+    assert parse_branches("查看 清心散|查看 清心散|购买 小还丹") == (
         "查看 清心散",
         "购买 小还丹",
     )
@@ -90,18 +75,15 @@ def test_duplicate_commands_are_collapsed() -> None:
         "查看|",
         "查看||购买",
         "查看|购买 清心散|人物装配 功法 黄品清心散 1",
-        "查看 清心散|小还丹",
-        "查看|不存在 清心散",
         ">查看|小还丹",
         "> 小还丹|养神丹",
-        ">不存在 清心散|小还丹",
         ">查看 清心散 1|小还丹",
         ">查看 清心散|小还丹 1",
     ),
 )
 def test_invalid_shapes_are_rejected(text: str) -> None:
     with pytest.raises(BranchParseError):
-        parse(text)
+        parse_branches(text)
 
 
 def test_menu_only_fills_and_carries_one_fixed_closing() -> None:
