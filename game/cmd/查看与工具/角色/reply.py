@@ -7,6 +7,45 @@ from message import DocumentBuilder, DocumentMessage, M
 from game.features.chakan_juese import CharacterOverviewResult
 from game.features.chuangjian_renwu import CreateCharacterResult
 
+#: 资源名 -> 上限属性。展示层只决定“怎么画”，资源集合仍以 CharacterProfile.resources 为准。
+_RESOURCE_MAX_ATTRIBUTE = {
+    "血气": "血气上限",
+    "神魂": "神魂上限",
+    "精神": "精神上限",
+    "护盾": "护盾上限",
+}
+_RESOURCE_ORDER = ("血气", "神魂", "精神", "护盾")
+_RESOURCE_TONE = {"血气": "health", "神魂": "spirit", "精神": "spirit", "护盾": "spirit"}
+_RESOURCE_CAPS = frozenset(_RESOURCE_MAX_ATTRIBUTE.values())
+
+
+def _resource_fields(
+    builder: DocumentBuilder,
+    resources: tuple[tuple[str, int | float], ...],
+    attributes: dict[str, int | float],
+) -> None:
+    """按 CharacterProfile.resources 逐个画资源，避免只认血气和精神。"""
+
+    values = dict(resources)
+    ordered = [name for name in _RESOURCE_ORDER if name in values]
+    ordered.extend(name for name, _value in resources if name not in ordered)
+    for name in ordered:
+        value = values[name]
+        cap_name = _RESOURCE_MAX_ATTRIBUTE.get(name, "")
+        cap = attributes.get(cap_name, 0) if cap_name else 0
+        if cap > 0:
+            builder.field(
+                name,
+                M.progress(
+                    value,
+                    cap,
+                    tone=_RESOURCE_TONE.get(name, "spirit"),
+                    display="value",
+                ),
+            )
+        else:
+            builder.field(name, _display_number(value))
+
 
 def invalid_create_format() -> DocumentMessage:
     return (
@@ -85,7 +124,6 @@ def overview(
     bloodlines: tuple[str, ...] = (),
 ) -> DocumentMessage:
     character = result.character
-    resources = dict(character.resources)
     attributes = dict(character.attributes)
     builder = (
         M.document()
@@ -131,36 +169,8 @@ def overview(
             ("海拔", f"{result.altitude}{unit}"),
         )
         .section("资源", icon="game.gem")
-        .field(
-            "血气",
-            M.progress(
-                resources.get("血气", 0),
-                attributes.get("血气上限", 1),
-                tone="health",
-                display="value",
-            ),
-        )
-        .field(
-            "神魂",
-            M.progress(
-                resources.get("神魂", attributes.get("神魂上限", 0)),
-                attributes.get("神魂上限", 1),
-                tone="spirit",
-                display="value",
-            ),
-        )
-        .field(
-            "精神",
-            M.progress(
-                resources.get("精神", 0),
-                attributes.get("精神上限", 1),
-                tone="spirit",
-                display="value",
-            ),
-        )
     )
-    if shield := resources.get("护盾", 0):
-        builder.field("护盾", _display_number(shield))
+    _resource_fields(builder, character.resources, attributes)
     # 血脉：DNA 与命中的血脉。没取到就不显示这一段（不许出现空栏目）。
     if dna:
         builder.section("血脉", icon="game.dna")
@@ -204,7 +214,7 @@ def overview(
         item
         for item in character.attributes
         if item[0] not in primary
-        and item[0] not in {"血气上限", "神魂上限", "精神上限"}
+        and item[0] not in _RESOURCE_CAPS
         and item[1] != baselines.get(item[0], 0)
         and not (item[0] == "连击伤害" and attributes.get("连击率", 0) == 0)
     )
