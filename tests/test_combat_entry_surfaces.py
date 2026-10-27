@@ -1232,7 +1232,7 @@ def test_inventory_row_renders_grade_with_command_link() -> None:
     spans = document.document.blocks[0].lines[0].content
     link = next(span for span in spans if isinstance(span, CommandLink))
     assert link.label[0].value == "圣品灵石"
-    assert link.command == "查看 230001"
+    assert link.command == "查看 灵石"
     rendered = render_markdown(document.document)
     assert "CommandLink" not in rendered
     assert "圣品灵石" in rendered

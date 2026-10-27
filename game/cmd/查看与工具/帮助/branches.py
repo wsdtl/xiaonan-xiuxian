@@ -1,45 +1,58 @@
 """正文的「一键多分支」：纯解析 + 只填入菜单。
 
-三套写法（只看结构，不查命令表）：
-- 共享尾：`查看|借阅 400001` -> 两条都带 400001；只有最后一段可带参数。
-- 全量：`查看 400001|取消托管` -> 每段原样作为一条完整命令；裸命令也算完整。
-- 共享头：`>查看 400001|400002` -> 第一段是「命令 一个参数」，后面每段是同命令的另一个单参数。
+三套写法（只按结构还原；命令词必须是已注册的公开命令，但不校验用法与守卫）：
+- 共享尾：`去|前往 天衡城` -> 两条都带 天衡城；只有最后一段可带参数。
+- 全量：`查看 清心散|取消托管` -> 每段一条完整命令；裸命令也可以，但必须本身是命令。
+- 共享头：`>查看 清心散|小还丹` -> 第一段是「命令 一个参数」，后面每段是同命令的另一个单参数。
 
-分支控件只做解析和菜单：不判断命令是否存在、不判断能否执行、不发送；
-菜单每条只填入，玩家自己确认发送。
+分支控件只做解析和菜单：不判断命令能否执行、不发送；菜单每条只填入。
 """
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 from message import M
 
 from ...command import GameCommand
+from ...help_registry import help_registry
 from ...reply_composer import send_game_reply
 
 
-# 只要整条消息里出现 | 就交给这里；是否是合法命令由后续正常命令链判断。
+# 只要整条消息里出现 | 就交给这里；命令词只用来识别分支，能否执行由后续正常命令链判断。
 BRANCH_PATTERN = re.compile(r"^(?P<text>[^\n]*\|[^\n]*)$")
 _SHARED_HEAD_MARKER = ">"
+CommandWord = Callable[[str], bool]
 
 
 class BranchParseError(ValueError):
     """分支串不符合三套写法之一。"""
 
 
-def parse_branches(value: object) -> tuple[str, ...]:
-    """把分支串按结构还原成完整命令列表；不查命令注册表。"""
+def parse_branches(
+    value: object, *, known: CommandWord | None = None
+) -> tuple[str, ...]:
+    """把分支串按结构还原成命令列表。
 
+    `known` 只回答「这个词是不是命令词」，不回答「这条命令现在能不能用」。
+    生产默认查公开命令表；测试可以注入自己的命令词集合。
+    """
+
+    is_command = known or _registered
     text = " ".join(str(value or "").split())
     if not text or "|" not in text:
         raise BranchParseError("分支至少要有两条")
     if text.startswith(_SHARED_HEAD_MARKER):
-        return _shared_head(text[len(_SHARED_HEAD_MARKER) :].strip())
+        return _shared_head(text[len(_SHARED_HEAD_MARKER) :].strip(), is_command)
     segments = _segments(text)
     if " " in segments[0]:
-        return _full(segments)
-    return _shared_tail(segments)
+        return _full(segments, is_command)
+    return _shared_tail(segments, is_command)
+
+
+def _registered(word: str) -> bool:
+    return help_registry.find(word) is not None
 
 
 def _segments(text: object) -> tuple[str, ...]:
@@ -51,10 +64,22 @@ def _segments(text: object) -> tuple[str, ...]:
     return segments
 
 
-def _shared_tail(segments: tuple[str, ...]) -> tuple[str, ...]:
+def _require_commands(
+    segments: tuple[str, ...], is_command: CommandWord
+) -> None:
+    for segment in segments:
+        word = segment.split(" ", 1)[0]
+        if not is_command(word):
+            raise BranchParseError(f"「{word}」不是命令")
+
+
+def _shared_tail(
+    segments: tuple[str, ...], is_command: CommandWord
+) -> tuple[str, ...]:
+    _require_commands(segments, is_command)
     if any(" " in part for part in segments[:-1]):
         raise BranchParseError("共享尾写法里只有最后一段可以带参数")
-    _word, separator, tail = segments[-1].partition(" ")
+    _last_word, separator, tail = segments[-1].partition(" ")
     shared = tail if separator else ""
     commands = [
         f"{part} {shared}".strip() if shared else part for part in segments[:-1]
@@ -63,17 +88,20 @@ def _shared_tail(segments: tuple[str, ...]) -> tuple[str, ...]:
     return _finish(commands)
 
 
-def _full(segments: tuple[str, ...]) -> tuple[str, ...]:
+def _full(segments: tuple[str, ...], is_command: CommandWord) -> tuple[str, ...]:
+    _require_commands(segments, is_command)
     return _finish(segments)
 
 
-def _shared_head(text: str) -> tuple[str, ...]:
+def _shared_head(text: str, is_command: CommandWord) -> tuple[str, ...]:
     segments = _segments(text)
     if segments[0].count(" ") != 1:
         raise BranchParseError("共享头写法第一段必须是「命令 一个参数」")
     word, separator, first_arg = segments[0].partition(" ")
     if not separator or not first_arg:
         raise BranchParseError("共享头写法第一段必须是「命令 一个参数」")
+    if not is_command(word):
+        raise BranchParseError(f"「{word}」不是命令")
     if any(" " in arg for arg in segments[1:]):
         raise BranchParseError("共享头写法后面每段只能是一个参数")
     commands = [segments[0]]

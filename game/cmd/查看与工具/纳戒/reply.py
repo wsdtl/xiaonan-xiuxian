@@ -125,11 +125,10 @@ def error(message: str) -> DocumentMessage:
 
 def _entry_parts(entry: NajieEntry) -> tuple[object, ...]:
     has_stable_id = entry.content_id.isdigit() and len(entry.content_id) == 6
-    command = f"查看 {entry.content_id}"
+    command = f"查看 {entry.name}"
     if entry.category == "道藏" and entry.grade_id:
-        # 同一条功法有两个动作、参数还不一样（查看只吃编号，装配要品类与器阶），
-        # 用「每条分支自带完整命令」的写法合成一个控件：点一次回选择菜单。
-        command = f"{command} | 人物装配 功法 {entry.content_id} {entry.grade_id}"
+        # 展示区分支用中文名与品级名，不写编号；装配槽位由玩家点入后自己补。
+        command = f"{command} | 人物装配 功法 {entry.grade_name}{entry.name}"
     # 品级在前连写（规则：品级永远在前、不许加分隔）；没有品级就只留名字。
     # 品级和名字同属一个可点标签，不能再把 CommandLink 拼进 f-string——
     # 那会打出「圣品CommandLink(label=...)」的 repr。
