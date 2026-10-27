@@ -260,7 +260,7 @@ class CompanionCultivationFeature:
 
     def _resolve_item(self, identifier: str, category: str) -> ItemDetail:
         try:
-            item = self._items.inspect(identifier)
+            item = self._items.inspect_entity(identifier)
         except ItemCatalogError as exc:
             raise CompanionCultivationFeatureError(str(exc)) from exc
         if item.category != category:
