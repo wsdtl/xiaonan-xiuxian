@@ -13,7 +13,6 @@ from game.features.daolv_peiyang import (
     CompanionCultivationFeature,
     CompanionBreakthroughResult,
     CompanionCultivationView,
-    CompanionLawResult,
 )
 
 from message import Status, Progress, DocumentMessage, M
@@ -122,18 +121,6 @@ def breakthrough(
     )
 
 
-def forged(feature: CompanionCultivationFeature, result: CompanionLawResult) -> DocumentMessage:
-    text = feature.copy("覆炼", "道侣成功").format_map(
-        {"名称": result.view.definition.name, "器律": result.law_name, "孔位": result.slot}
-    )
-    return (
-        M.document()
-        .section("覆炼", icon="game.hammer")
-        .line(M.status("覆炼完成", tone="positive"), " ", text)
-        .build()
-    )
-
-
 def error(
     feature: CompanionCultivationFeature,
     message: str,
@@ -165,4 +152,4 @@ def _progress(current: int, required: int, *, tone: str = "cultivation") -> Stat
     return M.progress(current, required, tone=tone, display="both")
 
 
-__all__ = ["breakthrough", "error", "forged", "view"]
+__all__ = ["breakthrough", "error", "view"]

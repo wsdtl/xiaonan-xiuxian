@@ -948,7 +948,10 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     shiyong = UseGatewayFeature(
         data,
         item_catalog,
-        build_use_ports(renwu_peiyang, xiantian_lingbao, fudan, buzhen),
+        location,
+        build_use_ports(
+            renwu_peiyang, daolv_peiyang, xiantian_lingbao, fudan, buzhen
+        ),
     )
     shiyong.initialize()
     features = FeatureServices(

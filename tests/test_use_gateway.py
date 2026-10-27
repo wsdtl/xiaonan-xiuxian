@@ -25,8 +25,8 @@ def test_use_profiles_cover_every_prefix() -> None:
     for row in rules:
         assert row["方式"] in {"执行", "重定向", "暂缓", "不可使用"}
         if row["方式"] == "执行":
-            assert row["端口"] in {"renwu_peiyang", "xiantian_lingbao", "fudan", "buzhen"}
-            assert row["结果"] in {"equip", "forge", "treasure", "medicine", "formation"}
+            assert row["端口"] in {"renwu_peiyang", "law", "xiantian_lingbao", "fudan", "buzhen"}
+            assert row["结果"] in {"equip", "forge", "law", "treasure", "medicine", "formation"}
         elif row["方式"] in {"重定向", "暂缓"}:
             assert row["帮助"]
 
@@ -60,8 +60,8 @@ def test_gateway_executes_card_and_redirects(services) -> None:
         gateway.plan(UseRequest(user_id, "use-gateway-card", "400001", grade="01"))
     )
     assert isinstance(plan, UsePlan)
-    assert [item.value for item in plan.description.candidates] == ["1", "2", "3", "4", "5", "6"]
-    result = asyncio.run(gateway.execute(plan, "1"))
+    assert [item.position for item in plan.description.options] == [1, 2, 3, 4, 5, 6]
+    result = asyncio.run(gateway.execute(plan, "", 1))
     assert result.result.category == "功法"
 
     breakthrough = asyncio.run(
@@ -83,13 +83,23 @@ def test_gateway_executes_card_and_redirects(services) -> None:
         gateway.plan(UseRequest(user_id, "use-gateway-treasure", "540001"))
     )
     assert isinstance(treasure, UsePlan)
-    assert treasure.description.candidates == ()
+    assert treasure.description.options == ()
 
     medicine = asyncio.run(
         gateway.plan(UseRequest(user_id, "use-gateway-medicine", "100001"))
     )
     assert isinstance(medicine, UsePlan)
-    assert [item.value for item in medicine.description.candidates] == ["人物", "道侣"]
+    assert [item.target for item in medicine.description.options] == ["人物", "道侣"]
+
+    special = asyncio.run(
+        gateway.plan(UseRequest(user_id, "use-gateway-special", "160007"))
+    )
+    assert isinstance(special, UseRedirect)
+    assert [action.command for action in special.actions] == [
+        "帮助 坐忘",
+        "坐忘",
+        "去 坐忘台",
+    ]
 
     unavailable = asyncio.run(
         gateway.plan(UseRequest(user_id, "use-gateway-enemy", "300001"))

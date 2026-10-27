@@ -5,10 +5,14 @@ from typing import Any
 
 from game.core.asset import ItemRef, format_item_ref
 
+from game.features.daolv_peiyang import (
+    CompanionCultivationFeatureError,
+    CompanionLawRequest,
+)
 from game.features.fudan import MedicineUseRequest
 from game.features.shiyong import (
-    UseCandidate,
     UseDescription,
+    UseOption,
     UsePort,
     UseRequest,
 )
@@ -17,19 +21,20 @@ from game.features.xiantian_lingbao import InnateTreasureEquipRequest
 
 def build_use_ports(
     renwu_peiyang: Any,
+    daolv_peiyang: Any,
     xiantian_lingbao: Any,
     fudan: Any,
     buzhen: Any,
 ) -> dict[str, UsePort]:
     async def describe_peiyang(request: UseRequest) -> UseDescription:
         target = await renwu_peiyang.resolve_use_target(request.user_id, request.item_id)
-        position = "本命武器孔" if target.category == "器律" else "人物修行槽"
+        options = tuple(
+            UseOption("", slot, str(slot)) for slot in target.slots
+        )
         return UseDescription(
             display=f"{request.grade}{target.name}",
-            position_kind=position,
-            candidates=tuple(
-                UseCandidate(str(slot), str(slot), "位置") for slot in target.slots
-            ),
+            options=options,
+            position_default="1" if options else "",
         )
 
     async def execute_peiyang(request: UseRequest) -> object:
@@ -42,11 +47,51 @@ def build_use_ports(
             request.position,
         )
 
-    async def describe_treasure(request: UseRequest) -> UseDescription:
+    async def _companion_law_slots(request: UseRequest) -> int:
+        try:
+            view = await daolv_peiyang.inspect(request.user_id)
+        except CompanionCultivationFeatureError:
+            return 0
+        return int(view.open_law_slots)
+
+    async def describe_law(request: UseRequest) -> UseDescription:
+        player = await renwu_peiyang.resolve_use_target(request.user_id, request.item_id)
+        options = [
+            UseOption("人物", slot, f"人物 {slot}") for slot in player.slots
+        ]
+        companion_slots = await _companion_law_slots(request)
+        options.extend(
+            UseOption("道侣", slot, f"道侣 {slot}")
+            for slot in range(1, companion_slots + 1)
+        )
         return UseDescription(
             display=request.name,
-            position_kind="无",
+            options=tuple(options),
+            target_default="人物",
+            position_default="1",
         )
+
+    async def execute_law(request: UseRequest) -> object:
+        if request.target == "道侣":
+            return await daolv_peiyang.forge_law(
+                CompanionLawRequest(
+                    request.user_id,
+                    request.request_id,
+                    request.item_id,
+                    request.position,
+                )
+            )
+        target = await renwu_peiyang.resolve_use_target(request.user_id, request.item_id)
+        return await renwu_peiyang.use(
+            request.user_id,
+            request.request_id,
+            target,
+            request.grade,
+            request.position,
+        )
+
+    async def describe_treasure(request: UseRequest) -> UseDescription:
+        return UseDescription(display=request.name)
 
     async def execute_treasure(request: UseRequest) -> object:
         return await xiantian_lingbao.equip(
@@ -58,12 +103,11 @@ def build_use_ports(
     async def describe_fudan(request: UseRequest) -> UseDescription:
         return UseDescription(
             display=f"{request.grade}{request.name}",
-            position_kind="服用对象",
-            candidates=(
-                UseCandidate("人物", "人物", "目标"),
-                UseCandidate("道侣", "道侣", "目标"),
+            options=(
+                UseOption("人物", 0, "人物"),
+                UseOption("道侣", 0, "道侣"),
             ),
-            default="人物",
+            target_default="人物",
         )
 
     async def execute_fudan(request: UseRequest) -> object:
@@ -78,7 +122,7 @@ def build_use_ports(
         )
 
     async def describe_buzhen(request: UseRequest) -> UseDescription:
-        return UseDescription(display=request.name, position_kind="无")
+        return UseDescription(display=request.name)
 
     async def execute_buzhen(request: UseRequest) -> object:
         identifier = format_item_ref(
@@ -94,6 +138,7 @@ def build_use_ports(
 
     return {
         "renwu_peiyang": UsePort(describe_peiyang, execute_peiyang),
+        "law": UsePort(describe_law, execute_law),
         "xiantian_lingbao": UsePort(describe_treasure, execute_treasure),
         "fudan": UsePort(describe_fudan, execute_fudan),
         "buzhen": UsePort(describe_buzhen, execute_buzhen),

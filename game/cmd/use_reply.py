@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from game.features.buzhen import FormationArmResult
+from game.features.daolv_peiyang import CompanionLawResult
 from game.features.fudan import MedicineFeature, MedicineUseResult
 from game.features.renwu_peiyang import (
     CharacterCultivationFeature,
@@ -47,6 +48,28 @@ def forged(
     text = feature.copy("覆炼", "人物成功").format_map(
         {"器律": result.law_name, "孔位": result.slot}
     )
+    return (
+        M.document()
+        .section("覆炼", icon="game.hammer")
+        .line(M.status("覆炼完成", tone="positive"), " ", text)
+        .build()
+    )
+
+
+def law(feature: object, result: object) -> DocumentMessage:
+    if isinstance(result, CompanionLawResult):
+        view = result.view
+        text = feature.copy("覆炼", "道侣成功").format_map(
+            {
+                "名称": view.definition.name,
+                "器律": result.law_name,
+                "孔位": result.slot,
+            }
+        )
+    else:
+        text = feature.copy("覆炼", "人物成功").format_map(
+            {"器律": result.law_name, "孔位": result.slot}
+        )
     return (
         M.document()
         .section("覆炼", icon="game.hammer")
@@ -122,10 +145,11 @@ def _number(value: float) -> str:
 RENDERERS = {
     "equip": equipped,
     "forge": forged,
+    "law": law,
     "treasure": treasure,
     "medicine": medicine,
     "formation": formation,
 }
 
 
-__all__ = ["RENDERERS", "equipped", "forged", "formation", "medicine", "treasure"]
+__all__ = ["RENDERERS", "equipped", "forged", "formation", "law", "medicine", "treasure"]

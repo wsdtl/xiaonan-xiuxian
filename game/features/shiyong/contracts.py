@@ -19,12 +19,14 @@ class UseAction:
 class UseProfile:
     prefix: str
     mode: str
+    effect: str = ""
     port: str = ""
+    target: str = "无"
+    target_default: str = ""
     position: str = "无"
-    candidates: tuple[str, ...] = ()
-    default: str = ""
     grade: str = "可选"
     render_key: str = ""
+    location: str = ""
     title: str = ""
     message: str = ""
     actions: tuple[UseAction, ...] = ()
@@ -50,11 +52,18 @@ class UseCandidate:
 
 
 @dataclass(frozen=True)
+class UseOption:
+    target: str
+    position: int
+    label: str
+
+
+@dataclass(frozen=True)
 class UseDescription:
     display: str
-    position_kind: str
-    candidates: tuple[UseCandidate, ...] = ()
-    default: str = ""
+    options: tuple[UseOption, ...] = ()
+    target_default: str = ""
+    position_default: str = ""
 
 
 @dataclass(frozen=True)
@@ -88,6 +97,7 @@ __all__ = [
     "UseCandidate",
     "UseDescription",
     "UseError",
+    "UseOption",
     "UseOutcome",
     "UsePlan",
     "UsePort",

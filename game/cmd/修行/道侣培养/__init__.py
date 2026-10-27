@@ -7,7 +7,6 @@ from game.features.daolv_peiyang import (
     CompanionBreakthroughRequest,
     CompanionCultivationConflictError,
     CompanionCultivationFeatureError,
-    CompanionLawRequest,
 )
 
 from ...command import GameCommand
@@ -72,40 +71,6 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
         await send_game_reply(
             reply.error(feature, str(exc), feature.format_actions(), offer)
         )
-
-
-@GameCommand.command(
-    cmd="道侣覆炼",
-    metadata={
-        "scope": "通用",
-        "guard_rule": "空闲或活动中",
-        "help": {
-            "category": "修行",
-            "summary": "把器藏中的器律覆入当前同行道侣本命武器",
-            "usage": ("道侣覆炼 太白惊鸿 1", "道侣覆炼 器律编号或名称 孔位",),
-            "side_effect": "消耗器藏中的一份器律并覆盖道侣武器指定孔位",
-            "order": 70,
-        },
-    },
-)
-async def forge_companion_law(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.daolv_peiyang
-    parts = message.rsplit(maxsplit=1)
-    if len(parts) != 2 or not parts[1].isdecimal():
-        await send_game_reply(reply.error(feature, feature.copy("道侣培养", "写法"), feature.format_actions()))
-        return
-    try:
-        result = await feature.forge_law(
-            CompanionLawRequest(
-                user_id,
-                message_context.request_id,
-                parts[0],
-                int(parts[1]),
-            )
-        )
-        await send_game_reply(reply.forged(feature, result))
-    except (CompanionCultivationFeatureError, CompanionCultivationConflictError) as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
 
 
 __all__ = []
