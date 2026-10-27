@@ -1,3 +1,5 @@
+"""网页资源开关：公开/关闭网页对玩家数据的读取。"""
+
 from __future__ import annotations
 
 from game.app import current_game_services

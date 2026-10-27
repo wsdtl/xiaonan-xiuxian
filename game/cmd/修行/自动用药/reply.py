@@ -1,4 +1,4 @@
-"""服丹命令回复构造。"""
+"""自动用药命令回复构造。"""
 
 from __future__ import annotations
 
