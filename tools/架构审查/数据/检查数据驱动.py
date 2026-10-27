@@ -892,8 +892,10 @@ QUOTE_PATTERN = re.compile(r"(?:云|曰|谓)[：:]\s*“([^”]+)”")
 
 
 def check_life_attribute_pairs() -> list[str]:
-    """基础属性里的数值型血气上限必须同时有同值神魂上限；永久属性补丁允许单选。"""
+    """基础属性血气/神魂必须成对同值；发展效果允许单轴，但双写必须同值。"""
 
+    base_markers = ("属性覆盖", "属性成长")
+    development_markers = ("永久属性", "能力[", "效果[", "状态.属性", "使用效果", "增幅")
     issues: list[str] = []
     for path in sorted(DATA.rglob("*.json")):
         try:
@@ -901,23 +903,33 @@ def check_life_attribute_pairs() -> list[str]:
         except (OSError, UnicodeError, json.JSONDecodeError):
             continue
 
-        def walk(value: object, *, permanent_bonus: bool = False) -> None:
+        def walk(value: object, trail: str) -> None:
             if isinstance(value, dict):
                 health = value.get("血气上限")
-                if (
-                    not permanent_bonus
-                    and isinstance(health, (int, float))
-                    and not isinstance(health, bool)
-                    and "神魂上限" not in value
-                ):
-                    issues.append(f"{path.relative_to(PROJECT_ROOT)} 血气上限缺同值神魂上限")
+                soul = value.get("神魂上限")
+                has_health = isinstance(health, (int, float)) and not isinstance(health, bool)
+                has_soul = isinstance(soul, (int, float)) and not isinstance(soul, bool)
+                base = any(marker in trail for marker in base_markers)
+                development = any(marker in trail for marker in development_markers)
+                if has_health and has_soul and health != soul:
+                    issues.append(
+                        f"{path.relative_to(PROJECT_ROOT)} {trail} 血气上限与神魂上限不等"
+                    )
+                elif base and (has_health or has_soul) and not (has_health and has_soul):
+                    issues.append(
+                        f"{path.relative_to(PROJECT_ROOT)} {trail} 基础属性缺血气或神魂"
+                    )
+                elif not base and not development and (has_health != has_soul):
+                    issues.append(
+                        f"{path.relative_to(PROJECT_ROOT)} {trail} 非发展属性只写了单条命线"
+                    )
                 for key, child in value.items():
-                    walk(child, permanent_bonus=permanent_bonus or key == "永久属性")
+                    walk(child, f"{trail}.{key}" if trail else str(key))
             elif isinstance(value, list):
-                for child in value:
-                    walk(child, permanent_bonus=permanent_bonus)
+                for index, child in enumerate(value):
+                    walk(child, f"{trail}[{index}]")
 
-        walk(document)
+        walk(document, "")
     return issues
 
 
@@ -1295,9 +1307,9 @@ def main() -> int:
         if len(命线属性) > 20:
             print(f"  …… 另 {len(命线属性) - 20} 条")
         print()
-        print("基础属性里的数值型血气上限必须同时写同值神魂上限；突破丹等永久属性补丁是可选择的发展加成，允许单独一项。")
+        print("基础属性必须血气/神魂成对同值；发展效果允许单轴，但双写必须同值。")
         return 1
-    print("血气/神魂属性：数值成对")
+    print("血气/神魂属性：基础成对、发展可选、双写同值")
     if 编号连续:
         print(f"编号段不连续 {len(编号连续)} 处：")
         for item in 编号连续[:20]:

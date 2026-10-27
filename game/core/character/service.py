@@ -1812,9 +1812,6 @@ class CharacterService:
         attributes = _add_numbers(
             _state_mapping(character.get("属性"), "人物.属性"), permanent
         )
-        bonuses = _add_numbers(
-            _state_mapping(character.get("属性加成"), "人物.属性加成"), permanent
-        )
         advance = self._growth.advance_cultivator(
             level=level_before,
             experience=_state_nonnegative_int(character.get("经验"), "人物.经验"),
@@ -1838,7 +1835,6 @@ class CharacterService:
                 "等级": advance.level_after,
                 "经验": advance.experience_after,
                 "属性": attributes,
-                "属性加成": bonuses,
                 "突破记录": records,
             }
         )
@@ -1952,12 +1948,8 @@ class CharacterService:
         attributes = _add_numbers(
             _state_mapping(character.get("属性"), "人物.属性"), permanent
         )
-        bonuses = _add_numbers(
-            _state_mapping(character.get("属性加成"), "人物.属性加成"), permanent
-        )
         record["补正来源丹药"] = str(source_medicine_id).strip()
         character["属性"] = attributes
-        character["属性加成"] = bonuses
         character["突破记录"] = records
         return CharacterBreakthroughCorrectionPlan(
             realm_id,
@@ -2194,7 +2186,6 @@ class CharacterService:
             "经验": int(self._role_rule.get("经验") or 0),
             "宗门贡献": 0,
             "属性": attributes,
-            "属性加成": {},
             "五行根性": five_elements,
             "资源": {"血气": blood, "精神": spirit, "神魂": soul, "护盾": 0},
             "自动用药": self._medicine_default,
