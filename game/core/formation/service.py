@@ -77,6 +77,7 @@ from .contracts import (
     FormationPreview,
     FormationRequirement,
     FormationResult,
+    FormationSnapshot,
     FormationStageProfile,
     FormationStatus,
     FormationUnavailableError,
@@ -501,14 +502,26 @@ class FormationService:
                 self._prepared_from_payload(normalized, committed.payload), True
             )
         existing = await self.prepared(normalized)
-        if existing is not None:
-            raise FormationConflictError("已有一座阵法处于待战状态")
         reserve_key = await self._resolve_reserve_key(normalized, identifier)
         try:
             reserve = await self._asset.plan_formation_reserve_consumption(
                 normalized, reserve_key
             )
             stack = reserve.stack
+            # 换阵：旧待战阵法先回阵藏，再扣新阵法；同一件重复布阵直接视为已完成。
+            if existing is not None and existing.reserve_key == reserve_key:
+                return FormationArmResult(existing, False)
+            operations = []
+            if existing is not None:
+                returned = await self._asset.plan_formation_reserve_acquisition(
+                    normalized,
+                    existing.formation_id,
+                    existing.grade_id,
+                    materials=dict(existing.materials),
+                    treasure_id=existing.treasure_id,
+                    modifiers=dict(existing.modifiers),
+                )
+                operations.append(returned.operation)
             materials = dict(stack.materials)
             value = {
                 "阵藏条目": stack.state_key,
@@ -533,21 +546,22 @@ class FormationService:
             )
             payload = dict(value)
             payload["名称"] = stack.name
+            operations.append(reserve.operation)
+            operations.append(
+                StateMutation(
+                    normalized,
+                    _PREPARED_STATE,
+                    _PREPARED_KEY,
+                    value,
+                    existing.version if existing is not None else 0,
+                )
+            )
             receipt = await self._database.commit(
                 TransactionCommand(
                     normalized,
                     request,
                     "布阵",
-                    (
-                        reserve.operation,
-                        StateMutation(
-                            normalized,
-                            _PREPARED_STATE,
-                            _PREPARED_KEY,
-                            value,
-                            0,
-                        ),
-                    ),
+                    tuple(operations),
                     payload,
                 )
             )
@@ -587,10 +601,10 @@ class FormationService:
             self._treasure_line(treasure_id),
         )
 
-    async def activation_plan(
+    async def snapshot(
         self, user_id: str, *, position: int = 0
-    ) -> FormationActivationPlan | None:
-        """为下一场正式战斗返回快照，并生成结算时清除待战状态的操作。"""
+    ) -> FormationSnapshot | None:
+        """只读的待战快照：切磋用，不产生清除操作。"""
 
         prepared = await self.prepared(user_id)
         if prepared is None:
@@ -602,15 +616,25 @@ class FormationService:
             modifiers=dict(prepared.modifiers),
             position=position,
         )
+        return FormationSnapshot(prepared, profile)
+
+    async def activation_plan(
+        self, user_id: str, *, position: int = 0
+    ) -> FormationActivationPlan | None:
+        """为下一场正式战斗返回快照，并生成结算时清除待战状态的操作。"""
+
+        snapshot = await self.snapshot(user_id, position=position)
+        if snapshot is None:
+            return None
         return FormationActivationPlan(
-            prepared,
-            profile,
+            snapshot.prepared,
+            snapshot.profile,
             StateMutation(
-                prepared.user_id,
+                snapshot.prepared.user_id,
                 _PREPARED_STATE,
                 _PREPARED_KEY,
                 None,
-                prepared.version,
+                snapshot.prepared.version,
             ),
         )
 

@@ -31,8 +31,6 @@ class SectWarView:
     winner: str = ""
     attacker_locked: bool = False
     defender_locked: bool = False
-    attacker_formation: str = ""
-    defender_formation: str = ""
     report_id: str = ""
 
 

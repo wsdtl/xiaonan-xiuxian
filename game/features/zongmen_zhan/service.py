@@ -90,8 +90,8 @@ class SectWarFeature:
     async def cancel(self, user_id: str, request_id: str) -> SectWarView:
         return await self._pass(self._war.cancel(user_id, request_id))
 
-    async def lock(self, user_id: str, request_id: str, formation_entry: str="") -> SectWarView:
-        return await self._pass(self._war.lock(user_id, request_id, formation_entry))
+    async def lock(self, user_id: str, request_id: str) -> SectWarView:
+        return await self._pass(self._war.lock(user_id, request_id))
 
     async def unlock(self, user_id: str, request_id: str) -> SectWarView:
         return await self._pass(self._war.unlock(user_id, request_id))

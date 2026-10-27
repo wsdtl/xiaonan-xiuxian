@@ -102,29 +102,6 @@ async def withdraw(user_id: str, message_context: MessageContext, manager: Any) 
     await _run(manager, _feature().withdraw(user_id, message_context.request_id))
 
 
-def _has_cjk(value: str) -> bool:
-    """含中文就是「名字写法」；只有数字与冒号就是「id 写法」（原汁原味）。"""
-
-    return any('\u4e00' <= ch <= '\u9fff' for ch in value)
-
-
-async def _formation_key(user_id: str, wanted: str) -> str:
-    """把玩家写的阵法换成万珍殿条目键——与「万珍殿 发放」共用同一份解析（玩法层 `resolve_vault_entry`）。
-
-    认不出就原样返回，由核心按展示数据的话回绝；玩法层的回绝（多条说不清）翻成宗门战自己的错误类型。
-    """
-    text = str(wanted or '').strip()
-    if not text:
-        return text
-    try:
-        return await current_game_services().features.zongmen_wanzhen.resolve_vault_entry(
-            user_id, text
-        )
-    except SectWarError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - 命令层不认核心/玩法异常类型，翻成自己这层的话
-        raise SectWarError(str(exc)) from exc
-
 @GameCommand.command(
     cmd=("锁阵", "锁定宗门战阵容"),
     metadata={
@@ -132,30 +109,18 @@ async def _formation_key(user_id: str, wanted: str) -> str:
         "guard_rule": "宗门战待命",
         "help": {
             "category": "宗门",
-            "summary": "锁定宗门同行和可选宗门阵法",
-            "usage": (
-                "锁定宗门战阵容",
-                "锁定宗门战阵容 阵法名[灵宝名]",
-                "锁阵 阵法名[灵宝名]",
-            ),
-            "side_effect": "所选宗门阵法在正式开战时消耗",
+            "summary": "锁定宗门同行；阵法由每个参战单位自己的待战槽带入",
+            "usage": ("锁定宗门战阵容", "锁阵"),
+            "side_effect": "锁定只锁同行名单，不锁阵法；开战时读每个单位当前待战阵法",
             "order": 5,
         },
     },
 )
 
-async def lock(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    raw = str(message or "").strip()
-    try:
-        key = await _formation_key(user_id, raw) if raw else ""
-    except SectWarError as exc:
-        await send_game_reply(
-            reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式"))
-        )
-        return
+async def lock(user_id: str, message_context: MessageContext, manager: Any) -> None:
     await _run(
         manager,
-        _feature().lock(user_id, message_context.request_id, key),
+        _feature().lock(user_id, message_context.request_id),
     )
 
 

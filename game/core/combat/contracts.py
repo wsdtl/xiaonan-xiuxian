@@ -39,6 +39,8 @@ class CombatFormationSpec:
     grade: str = "黄品"
     position: int = 0
     materials: Mapping[str, float] = field(default_factory=dict)
+    #: 阵法主人所在的战斗编组；空串表示无主（测试/旧战斗构造）。
+    owner_group: str = ""
 
 
 @dataclass(frozen=True)
@@ -182,8 +184,8 @@ class CombatRequest:
     medicine_selection_strategy: str = ""
     report: CombatReportSpec | None = None
     field: CombatFieldSpec | None = None
-    left_formation: CombatFormationSpec | None = None
-    right_formation: CombatFormationSpec | None = None
+    left_formations: tuple[CombatFormationSpec, ...] = ()
+    right_formations: tuple[CombatFormationSpec, ...] = ()
     left_groups: tuple[CombatGroupSpec, ...] = ()
     right_groups: tuple[CombatGroupSpec, ...] = ()
 
@@ -222,6 +224,7 @@ class CombatFormationResult:
     nodes: int
     rotations: int
     collapsed: bool
+    owner_group: str = ""
 
 
 @dataclass(frozen=True)

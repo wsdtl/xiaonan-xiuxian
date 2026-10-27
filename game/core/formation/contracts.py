@@ -221,6 +221,12 @@ class FormationBattleProfile:
 
 
 @dataclass(frozen=True)
+class FormationSnapshot:
+    prepared: FormationPrepared
+    profile: FormationBattleProfile
+
+
+@dataclass(frozen=True)
 class FormationActivationPlan:
     prepared: FormationPrepared
     profile: FormationBattleProfile
@@ -246,6 +252,7 @@ __all__ = [
     "FormationPreview",
     "FormationRequirement",
     "FormationResult",
+    "FormationSnapshot",
     "FormationStageProfile",
     "FormationStatus",
     "FormationUnavailableError",

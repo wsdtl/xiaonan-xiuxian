@@ -25,8 +25,8 @@ def test_use_profiles_cover_every_prefix() -> None:
     for row in rules:
         assert row["方式"] in {"执行", "重定向", "暂缓", "不可使用"}
         if row["方式"] == "执行":
-            assert row["端口"] in {"renwu_peiyang", "xiantian_lingbao", "fudan"}
-            assert row["结果"] in {"equip", "forge", "treasure", "medicine"}
+            assert row["端口"] in {"renwu_peiyang", "xiantian_lingbao", "fudan", "buzhen"}
+            assert row["结果"] in {"equip", "forge", "treasure", "medicine", "formation"}
         elif row["方式"] in {"重定向", "暂缓"}:
             assert row["帮助"]
 

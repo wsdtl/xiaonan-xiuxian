@@ -1,6 +1,7 @@
 """使用物品的公共回执：装配、覆炼、灵宝、服丹。"""
 from __future__ import annotations
 
+from game.features.buzhen import FormationArmResult
 from game.features.fudan import MedicineFeature, MedicineUseResult
 from game.features.renwu_peiyang import (
     CharacterCultivationFeature,
@@ -71,6 +72,22 @@ def treasure(
     )
 
 
+def formation(feature: object, result: FormationArmResult) -> DocumentMessage:
+    copy = feature.copy()
+    prepared = result.prepared
+    text = copy.text["布阵"]
+    builder = (
+        M.document()
+        .section(f"{prepared.grade_name}{prepared.name}", icon="game.swords")
+        .line(M.status("阵法入槽", tone="positive"))
+        .line(text["过程"])
+        .field(text["结果"], "下一场正式战斗")
+    )
+    if prepared.treasure_line:
+        builder = builder.field(text["灵宝"], prepared.treasure_line)
+    return builder.small(text["话语"]).build()
+
+
 def medicine(
     feature: MedicineFeature, result: MedicineUseResult
 ) -> DocumentMessage:
@@ -107,7 +124,8 @@ RENDERERS = {
     "forge": forged,
     "treasure": treasure,
     "medicine": medicine,
+    "formation": formation,
 }
 
 
-__all__ = ["RENDERERS", "equipped", "forged", "medicine", "treasure"]
+__all__ = ["RENDERERS", "equipped", "forged", "formation", "medicine", "treasure"]

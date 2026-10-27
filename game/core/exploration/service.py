@@ -210,20 +210,25 @@ class ExplorationService:
         if not location.cultivator_tiers and not location.beast_tiers:
             raise ExplorationStateError("地点没有修士或灵兽阶级区间")
 
-        formation_plan = await self._formation.activation_plan(owner, position=0)
-        formation_spec = (
-            CombatFormationSpec(
-                formation_id=formation_plan.prepared.formation_id,
-                grade=formation_plan.prepared.grade_name,
-                position=formation_plan.profile.position,
-                materials={
-                    key: float(value)
-                    for key, value in formation_plan.prepared.materials
-                },
+        formation_plans = []
+        formation_specs = []
+        for user_id in participants:
+            plan = await self._formation.activation_plan(user_id, position=0)
+            if plan is None:
+                continue
+            formation_plans.append(plan)
+            formation_specs.append(
+                CombatFormationSpec(
+                    formation_id=plan.prepared.formation_id,
+                    grade=plan.prepared.grade_name,
+                    position=plan.profile.position,
+                    materials={
+                        key: float(value)
+                        for key, value in plan.prepared.materials
+                    },
+                    owner_group=f"玩家编组:{user_id}",
+                )
             )
-            if formation_plan is not None
-            else None
-        )
 
         transition_plans = []
         combatants: list[CombatantSpec] = []
@@ -471,7 +476,7 @@ class ExplorationService:
                         altitude=location.altitude,
                         terrain=location.terrain,
                     ),
-                    left_formation=formation_spec if battle_index == 1 else None,
+                    left_formations=tuple(formation_specs) if battle_index == 1 else (),
                     left_groups=_living_groups(
                         ally_groups, {value.id for value in living}
                     ),
@@ -650,16 +655,16 @@ class ExplorationService:
             "种子": seed,
             "战败敌人": defeated_total,
             "用户结果": normalized_results,
-            "首战阵法": (
+            "首战阵法": [
                 {
-                    "阵藏条目": formation_plan.prepared.reserve_key,
-                    "阵法编号": formation_plan.prepared.formation_id,
-                    "名称": formation_plan.prepared.name,
-                    "品级": formation_plan.prepared.grade_id,
+                    "用户": plan.prepared.user_id,
+                    "阵藏条目": plan.prepared.reserve_key,
+                    "阵法编号": plan.prepared.formation_id,
+                    "名称": plan.prepared.name,
+                    "品级": plan.prepared.grade_id,
                 }
-                if formation_plan is not None
-                else None
-            ),
+                for plan in formation_plans
+            ],
         }
         operations: list[StateMutation] = [
             StateMutation(owner, SESSION_STATE, session_id, session_value, 0)
@@ -671,8 +676,8 @@ class ExplorationService:
             for user_id in participants
             for operation in inventory_plans[user_id].operations
         )
-        if formation_plan is not None:
-            operations.append(formation_plan.operation)
+        for plan in formation_plans:
+            operations.append(plan.operation)
         for user_id in participants:
             previous = await self._database.get(
                 StateAddress(user_id, LATEST_STATE, LATEST_KEY)

@@ -63,8 +63,9 @@ async def _formation_key(feature: Any, user_id: str, wanted: str, qualifier: str
                 "万珍殿 阵法 2",
                 "万珍殿 捐入 丹药 01100005 3",
                 "万珍殿 发放 角色名 01100005",
+                "万珍殿 领取 阵法名",
             ),
-            "side_effect": "查看只读；捐入扣个人成品、发放扣宗门成品，均记入同一事务",
+            "side_effect": "查看只读；捐入扣个人成品、发放/领取扣宗门成品，均记入同一事务；发放与领取仅宗主/长老",
             "order": 82,
         },
     },
@@ -80,6 +81,9 @@ async def show_wanzhen(
         return
     if head == "发放":
         await grant_wanzhen(user_id, rest, message_context, manager)
+        return
+    if head == "领取":
+        await claim_wanzhen(user_id, rest, message_context, manager)
         return
     parts = raw.split()
     try:
@@ -141,6 +145,25 @@ async def donate_wanzhen(user_id: str, message: str, message_context: MessageCon
             category,
             identifier,
             grade_or_key,
+            quantity,
+        )
+        await send_game_reply(reply.transferred(feature.copy(), value))
+    except WanzhenFeatureError as exc:
+        await send_game_reply(reply.error(feature.copy(), str(exc)))
+
+
+async def claim_wanzhen(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
+    feature = current_game_services().features.zongmen_wanzhen
+    parts = str(message or "").split()
+    try:
+        if len(parts) not in {1, 2}:
+            raise WanzhenFeatureError("格式：万珍殿 领取 条目 [数量]")
+        quantity = _positive(parts[1], "数量") if len(parts) == 2 else 1
+        entry_key = await feature.resolve_vault_entry(user_id, parts[0])
+        value = await feature.claim(
+            user_id,
+            message_context.request_id,
+            entry_key,
             quantity,
         )
         await send_game_reply(reply.transferred(feature.copy(), value))

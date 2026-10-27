@@ -64,7 +64,8 @@ from game.core.data import (
 from game.core.location import LocationService
 from game.core.medicine import MedicineService, RecoveryMedicineStack
 from game.core.player_state import PlayerStateService, StateTransitionCommand
-from game.core.sect_assets import SectAssetEntry, SectAssetService
+from game.core.formation import FormationError, FormationService
+from game.core.sect_assets import SectAssetService
 from game.core.world import LocationQuery, WorldService
 
 from .contracts import SectWarError, SectWarHistoryPage, SectWarStatus, SectWarView
@@ -89,6 +90,7 @@ class SectWarService:
         companion: CompanionService,
         player_state: PlayerStateService,
         medicine: MedicineService,
+        formation: FormationService,
         combat: CombatService,
         activity: ActivityLifecycleService,
         injury: InjuryService,
@@ -105,6 +107,7 @@ class SectWarService:
         self._companion = companion
         self._state = player_state
         self._medicine = medicine
+        self._formation = formation
         self._combat = combat
         self._activity = activity
         self._injury = injury
@@ -139,11 +142,6 @@ class SectWarService:
         self._actions = _positive(
             battle.get("战斗行动上限"), "宗门战.战斗.战斗行动上限"
         )
-        if (
-            _nonnegative(battle.get("每宗阵法上限"), "宗门战.战斗.每宗阵法上限") != 1
-            or battle.get("阵法来源") != "宗门万珍殿"
-        ):
-            raise JsonDataError("宗门战必须允许每宗从万珍殿使用至多一座阵法")
         self._maximum = _positive(participants.get("玩家上限"), "宗门战.参战.玩家上限")
         self._history_page_size = _positive(
             history.get("每页数量"), "宗门战.记录.每页数量"
@@ -273,9 +271,7 @@ class SectWarService:
             user_id, request_id, record, "已取消", "取消宗门战"
         )
 
-    async def lock(
-        self, user_id: str, request_id: str, formation_entry: str = ""
-    ) -> SectWarView:
+    async def lock(self, user_id: str, request_id: str) -> SectWarView:
         member = await self._member_officer(user_id)
         record = await self._current_record(member.sect_id, user_id)
         value = dict(record.value)
@@ -302,16 +298,8 @@ class SectWarService:
             location.space_type != "地表" or location.xy != xy for location in locations
         ):
             raise SectWarError("location_mismatch")
-        formation_key = str(formation_entry or "").strip()
-        formation = (
-            await self._formation_entry(member.sect_id, formation_key)
-            if formation_key
-            else None
-        )
         value[f"{side}锁定"] = True
         value[f"{side}成员"] = list(follow.member_user_ids)
-        value[f"{side}阵法条目"] = formation.entry_key if formation else ""
-        value[f"{side}阵法名称"] = formation.name if formation else ""
         if value.get("甲方锁定") and value.get("乙方锁定"):
             value["状态"] = "已锁定"
         state_plans = []
@@ -354,8 +342,6 @@ class SectWarService:
         value["状态"] = "备战"
         value[f"{side}锁定"] = False
         value.pop(f"{side}成员", None)
-        value.pop(f"{side}阵法条目", None)
-        value.pop(f"{side}阵法名称", None)
         operations: list[object] = [
             SharedEntityMutation(ENTITY_TYPE, record.entity_id, value, record.version)
         ]
@@ -401,11 +387,11 @@ class SectWarService:
         right = _attach_inventory(
             right, inventory, self._medicine.auto_medicine_threshold
         )
-        left_formation, left_formation_operation = await self._formation_spec(
-            str(value.get("甲方")), str(value.get("甲方阵法条目") or ""), 0
+        left_formations, left_formation_operations = await self._formation_specs(
+            left_ids
         )
-        right_formation, right_formation_operation = await self._formation_spec(
-            str(value.get("乙方")), str(value.get("乙方阵法条目") or ""), 0
+        right_formations, right_formation_operations = await self._formation_specs(
+            right_ids
         )
         result = await self._combat.execute(
             CombatRequest(
@@ -429,8 +415,8 @@ class SectWarService:
                     altitude=location.altitude,
                     terrain=location.terrain,
                 ),
-                left_formation=left_formation,
-                right_formation=right_formation,
+                left_formations=left_formations,
+                right_formations=right_formations,
                 left_groups=_combat_groups(left_ids, left),
                 right_groups=_combat_groups(right_ids, right),
             )
@@ -530,10 +516,8 @@ class SectWarService:
         operations.extend(left_battle_medicine)
         operations.extend(right_battle_medicine)
         operations.extend(inventory_operations)
-        if left_formation_operation is not None:
-            operations.append(left_formation_operation)
-        if right_formation_operation is not None:
-            operations.append(right_formation_operation)
+        operations.extend(left_formation_operations)
+        operations.extend(right_formation_operations)
         await self._commit(
             user_id,
             request_id,
@@ -828,32 +812,34 @@ class SectWarService:
             for record in records
         )
 
-    async def _formation_entry(self, sect_id: str, entry_key: str) -> SectAssetEntry:
-        sect = await self._sect.sect(sect_id)
-        if sect is None:
-            raise SectWarError("sect_changed")
-        vault = await self._assets.wanzhen(sect.leader_user_id)
-        entry = next(
-            (item for item in vault.entries if item.entry_key == entry_key), None
-        )
-        if entry is None or entry.category != "阵法":
-            raise SectWarError("formation_missing")
-        return entry
+    async def _formation_specs(
+        self, user_ids: Sequence[str]
+    ) -> tuple[tuple[CombatFormationSpec, ...], tuple[StateMutation, ...]]:
+        """每个人/道侣单位各带自己当前待战阵法；开战读槽并一次性清除。"""
 
-    async def _formation_spec(self, sect_id: str, entry_key: str, position: int) -> tuple[CombatFormationSpec | None, dict[str, float] | None]:
-        if not entry_key:
-            return None, None
-        plan = await self._assets.plan_formation_consumption(sect_id, entry_key)
-        entry = plan.entry
-        return (
-            CombatFormationSpec(
-                entry.content_id,
-                entry.grade_name,
-                position,
-                {key: float(value) for key, value in entry.materials},
-            ),
-            plan.operation,
-        )
+        specs = []
+        operations = []
+        for user_id in user_ids:
+            try:
+                plan = await self._formation.activation_plan(user_id, position=0)
+            except FormationError as exc:
+                raise SectWarError("formation_missing") from exc
+            if plan is None:
+                continue
+            specs.append(
+                CombatFormationSpec(
+                    formation_id=plan.prepared.formation_id,
+                    grade=plan.prepared.grade_name,
+                    position=plan.profile.position,
+                    materials={
+                        key: float(value)
+                        for key, value in plan.prepared.materials
+                    },
+                    owner_group=f"玩家编组:{user_id}",
+                )
+            )
+            operations.append(plan.operation)
+        return tuple(specs), tuple(operations)
 
     async def _combatants(self, user_ids: tuple[str, ...]) -> tuple[tuple[CombatantSpec, ...], dict[str, tuple[RecoveryMedicineStack, ...]], tuple[StateMutation, ...], dict[str, tuple[InjuryState, str]]]:
         combatants: list[CombatantSpec] = []
@@ -1007,8 +993,6 @@ class SectWarService:
             str(raw.get("胜方") or ""),
             bool(raw.get("甲方锁定")),
             bool(raw.get("乙方锁定")),
-            str(raw.get("甲方阵法名称") or ""),
-            str(raw.get("乙方阵法名称") or ""),
             str(raw.get("战报编号") or ""),
         )
 

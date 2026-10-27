@@ -574,6 +574,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         companion,
         player_state,
         action_group,
+        formation,
         combat,
         battle_reports=battle_reports,
     )
@@ -619,6 +620,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         companion,
         player_state,
         medicine,
+        formation,
         combat,
         activity,
         injury,
@@ -946,7 +948,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     shiyong = UseGatewayFeature(
         data,
         item_catalog,
-        build_use_ports(renwu_peiyang, xiantian_lingbao, fudan),
+        build_use_ports(renwu_peiyang, xiantian_lingbao, fudan, buzhen),
     )
     shiyong.initialize()
     features = FeatureServices(

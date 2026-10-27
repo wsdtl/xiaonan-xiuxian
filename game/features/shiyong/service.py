@@ -23,7 +23,7 @@ from .contracts import (
 _MODES = {"执行", "重定向", "暂缓", "不可使用"}
 _POSITIONS = {"无", "人物修行槽", "本命武器孔", "服用对象"}
 _GRADES = {"必填", "可选", "不需要"}
-_RESULTS = {"equip", "forge", "treasure", "medicine"}
+_RESULTS = {"equip", "forge", "treasure", "medicine", "formation"}
 
 
 class UseGatewayFeature:

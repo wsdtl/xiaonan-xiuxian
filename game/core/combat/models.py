@@ -976,6 +976,7 @@ class PreparedFormation:
     transmission: float
     stages: tuple[PreparedFormationStage, ...]
     detection: FormationDetection | None = None
+    owner_group: str = ""
 
 
 @dataclass

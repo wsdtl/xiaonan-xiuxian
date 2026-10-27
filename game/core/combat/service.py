@@ -177,8 +177,18 @@ class CombatService:
         right = tuple(self._runtime_snapshot(value) for value in request.right_team)
         medicine_definitions = self._medicine_definitions(request)
         field = self._prepared_field(request.field)
-        left_formation = self._prepared_formation(request.left_formation, side=0)
-        right_formation = self._prepared_formation(request.right_formation, side=1)
+        left_formations = tuple(
+            value
+            for spec in request.left_formations
+            for value in (self._prepared_formation(spec, side=0),)
+            if value is not None
+        )
+        right_formations = tuple(
+            value
+            for spec in request.right_formations
+            for value in (self._prepared_formation(spec, side=1),)
+            if value is not None
+        )
         result = self._simulate_runtime_teams(
             left=left,
             right=right,
@@ -187,11 +197,7 @@ class CombatService:
             seed=request.seed,
             action_limit=request.action_limit,
             field=field,
-            formations=tuple(
-                value
-                for value in (left_formation, right_formation)
-                if value is not None
-            ),
+            formations=left_formations + right_formations,
             event_capture_filter=(
                 self._require_report_catalog().compact_hidden_kinds
                 - {"行动开始", "行动结束"}
@@ -261,6 +267,7 @@ class CombatService:
             profile.transmission,
             stages,
             profile.detection,
+            spec.owner_group,
         )
 
     def _prepared_field(

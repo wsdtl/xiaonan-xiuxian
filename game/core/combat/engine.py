@@ -416,6 +416,7 @@ class BattleEngine(AbilityRuntime):
                     "阵法名称": formation.definition.name,
                     "品级": formation.definition.grade,
                     "方位": formation.definition.position,
+                    "主人": formation.definition.owner_group,
                     "阵基承载": formation.definition.capacity,
                     "阵眼冲击": formation.definition.impact,
                     "节点数量": formation.definition.nodes,
@@ -436,6 +437,7 @@ class BattleEngine(AbilityRuntime):
             nodes=value.definition.nodes,
             rotations=value.rotations,
             collapsed=value.collapsed,
+            owner_group=value.definition.owner_group,
         )
 
     def _battle_damage(self, pace_percent: float | None = None) -> DamageEngine:
@@ -733,10 +735,23 @@ class BattleEngine(AbilityRuntime):
         )
         self._rotate_formations(context)
 
+    def _formation_active(self, context: BattleContext, formation: RuntimeFormation) -> bool:
+        """阵基未崩，且主人单位（玩家+道侣）至少一人存活。"""
+
+        if not formation.active:
+            return False
+        owner = formation.definition.owner_group
+        if not owner:
+            return True
+        members = [value for value in context.fighters if value.group_id == owner]
+        return any(value.alive for value in members)
+
     def _rotate_formations(self, context: BattleContext) -> None:
         """到期的阵法各轮转一次：定目标、摊算冲击、结算、播报。"""
 
-        active = [value for value in context.formations if value.active]
+        active = [
+            value for value in context.formations if self._formation_active(context, value)
+        ]
         due = [
             value for value in active if context.action_number >= value.next_rotation
         ]
@@ -897,6 +912,7 @@ class BattleEngine(AbilityRuntime):
                     "阵法编号": formation.definition.formation_id,
                     "阵法名称": formation.definition.name,
                     "方位": formation.definition.position,
+                    "主人": formation.definition.owner_group,
                     "轮转次数": formation.rotations,
                     "阵势倍率": stage.impact_multiplier,
                     "行动周期倍率": stage.cycle_multiplier,
@@ -917,7 +933,8 @@ class BattleEngine(AbilityRuntime):
         enemy_formations = [
             value
             for value in active
-            if value.side != formation.side and value.active
+            if value.side != formation.side
+            and self._formation_active(context, value)
         ]
         if node_rules.enemy_formation_first and enemy_formations:
             return (
@@ -992,6 +1009,7 @@ class BattleEngine(AbilityRuntime):
                             "阵法编号": formation.definition.formation_id,
                             "阵法名称": formation.definition.name,
                             "方位": formation.definition.position,
+                            "主人": formation.definition.owner_group,
                             "冲击目标": target.definition.formation_id
                             if isinstance(target, RuntimeFormation)
                             else target.id,
@@ -1131,6 +1149,7 @@ class BattleEngine(AbilityRuntime):
                     "阵法编号": formation.definition.formation_id,
                     "阵法名称": formation.definition.name,
                     "方位": formation.definition.position,
+                    "主人": formation.definition.owner_group,
                     "原因": "阵基承载归零",
                     "累计轮转": formation.rotations,
                 },

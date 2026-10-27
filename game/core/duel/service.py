@@ -12,6 +12,7 @@ from game.core.database import (
 
 from game.core.combat import (
     CombatantSpec,
+    CombatFormationSpec,
     CombatGroupSpec,
     CombatReportSpec,
     CombatRequest,
@@ -33,6 +34,7 @@ from game.core.companion import CompanionService
 from game.core.data import JsonDataError, JsonDataService, materialize, nonempty_text, positive_int
 from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
+from game.core.formation import FormationService
 
 from .contracts import DuelChallenge, DuelError, DuelResult, DuelStartCommand
 
@@ -50,6 +52,7 @@ class DuelService:
         companion: CompanionService,
         player_state: PlayerStateService,
         action_group: ActionGroupService,
+        formation: FormationService,
         combat: CombatService,
         battle_reports: BattleReportSink | None = None,
     ) -> None:
@@ -60,6 +63,7 @@ class DuelService:
         self._companion = companion
         self._player_state = player_state
         self._action_group = action_group
+        self._formation = formation
         self._combat = combat
         self._battle_reports = battle_reports
         self._initialized = False
@@ -152,6 +156,12 @@ class DuelService:
         await self._validate_participants(users)
         combatants, groups = await self._combat_side(current_left, challenge_id, "甲方")
         right_combatants, right_groups = await self._combat_side(current_right, challenge_id, "乙方")
+        left_formations = await self._formation_specs(
+            current_left, challenge_id, "甲方"
+        )
+        right_formations = await self._formation_specs(
+            current_right, challenge_id, "乙方"
+        )
         result = await self._combat.execute(
             CombatRequest(
                 left_team=tuple(combatants),
@@ -159,6 +169,8 @@ class DuelService:
                 seed=_seed(challenge_id),
                 action_limit=_positive_int(self._rules["战斗行动上限"], "切磋.战斗行动上限"),
                 report=CombatReportSpec(scene="切磋"),
+                left_formations=left_formations,
+                right_formations=right_formations,
                 left_groups=groups,
                 right_groups=right_groups,
             )
@@ -236,6 +248,28 @@ class DuelService:
                 raise DuelError(
                     f"{profile.name if profile else '有参与修士'}当前不能切磋：{guard.reason}"
                 )
+
+    async def _formation_specs(
+        self, users: tuple[str, ...], challenge_id: str, side: str
+    ) -> tuple[CombatFormationSpec, ...]:
+        specs = []
+        for index, user_id in enumerate(users, start=1):
+            snapshot = await self._formation.snapshot(user_id, position=0)
+            if snapshot is None:
+                continue
+            specs.append(
+                CombatFormationSpec(
+                    formation_id=snapshot.prepared.formation_id,
+                    grade=snapshot.prepared.grade_name,
+                    position=snapshot.profile.position,
+                    materials={
+                        key: float(value)
+                        for key, value in snapshot.prepared.materials
+                    },
+                    owner_group=f"切磋:{challenge_id}:{side}:{index:02d}",
+                )
+            )
+        return tuple(specs)
 
     async def _combat_side(self, users: tuple[str, ...], challenge_id: str, side: str) -> tuple[tuple[CombatantSpec, ...], tuple[CombatGroupSpec, ...]]:
         combatants = []

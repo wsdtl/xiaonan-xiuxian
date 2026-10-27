@@ -173,11 +173,15 @@ def test_every_formation_grade_fights(services) -> None:
                 (
                     f"{formation_id} {name} {grade}",
                     {
-                        "left_formation": CombatFormationSpec(
-                            formation_id=formation_id, grade=grade, position=0
+                        "left_formations": (
+                            CombatFormationSpec(
+                                formation_id=formation_id, grade=grade, position=0
+                            ),
                         ),
-                        "right_formation": CombatFormationSpec(
-                            formation_id=formation_id, grade=grade, position=0
+                        "right_formations": (
+                            CombatFormationSpec(
+                                formation_id=formation_id, grade=grade, position=0
+                            ),
                         ),
                     },
                 )
@@ -271,11 +275,31 @@ def test_entry_surfaces_reach_their_deep_paths(services) -> None:
         limit=120,
         left_team=(sturdy,),
         right_team=(replace(sturdy, id="R", name="R"),),
-        left_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄品"),
-        right_formation=CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄品"),
+        left_formations=(CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄品"),),
+        right_formations=(CombatFormationSpec(formation_id=str(formation["编号"]), grade="黄品"),),
     )
     formation_kinds = {event.kind for event in result.events}
     assert {"阵法展开", "阵法轮转后", "阵法冲击后"} <= formation_kinds, "阵法没有完整轮转"
+
+
+def test_formation_stops_when_owner_unit_is_dead(services) -> None:
+    """主人单位全灭后阵法不再轮转；另一个单位还活着仍照常。"""
+
+    dead = replace(_spec("dead"), group_id="owner-dead", health=0.0)
+    alive = replace(_spec("alive"), group_id="owner-alive")
+    result = _fight(
+        services,
+        limit=60,
+        left_team=(dead, alive),
+        right_team=(replace(_spec("R"), name="R"),),
+        left_formations=(
+            CombatFormationSpec("530001", "黄品", owner_group="owner-dead"),
+            CombatFormationSpec("530001", "黄品", owner_group="owner-alive"),
+        ),
+    )
+    by_owner = {value.owner_group: value for value in result.formations}
+    assert by_owner["owner-alive"].rotations > 0
+    assert by_owner["owner-dead"].rotations == 0
 
 
 def test_formation_detection_scales_impact(services) -> None:
@@ -291,7 +315,7 @@ def test_formation_detection_scales_impact(services) -> None:
         limit=30,
         left_team=(sturdy,),
         right_team=(replace(sturdy, id="R", name="R"),),
-        left_formation=CombatFormationSpec(formation_id="530001", grade="黄品"),
+        left_formations=(CombatFormationSpec(formation_id="530001", grade="黄品"),),
     )
     rotations = [event for event in result.events if event.kind == "阵法轮转后"]
     assert rotations
@@ -329,7 +353,7 @@ def test_formation_assessment_reaches_battle(services) -> None:
         limit=30,
         left_team=(replace(_spec("L"), health=600),),
         right_team=(_spec("R"),),
-        left_formation=CombatFormationSpec("530001", "黄品"),
+        left_formations=(CombatFormationSpec("530001", "黄品"),),
     )
     assert any(event.kind == "阵法冲击后" for event in result.events)
 
@@ -408,7 +432,7 @@ def test_formation_activation_plan_reaches_battle(services) -> None:
         limit=30,
         left_team=(replace(_spec("L"), health=600),),
         right_team=(_spec("R"),),
-        left_formation=CombatFormationSpec("530001", "黄品"),
+        left_formations=(CombatFormationSpec("530001", "黄品"),),
     )
     assert any(event.kind == "阵法冲击后" for event in result.events)
 
@@ -743,7 +767,7 @@ def test_formation_craft_arm_and_battle(services) -> None:
         limit=30,
         left_team=(replace(_spec("L"), health=600),),
         right_team=(_spec("R"),),
-        left_formation=CombatFormationSpec("530001", "黄品"),
+        left_formations=(CombatFormationSpec("530001", "黄品"),),
     )
     assert any(event.kind == "阵法冲击后" for event in result.events)
 

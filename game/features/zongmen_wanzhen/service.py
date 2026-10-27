@@ -455,6 +455,27 @@ class WanzhenFeature:
             raise WanzhenFeatureError("万珍殿发放结果缺少条目")
         return WanzhenTransferResult("发放", result.entry, target_name)
 
+    async def claim(
+        self,
+        user_id: str,
+        request_id: str,
+        entry_key: str,
+        quantity: int,
+    ) -> WanzhenTransferResult:
+        """宗主/长老从万珍殿直接取一份到自己阵藏/纳戒。"""
+
+        await self._require_write(user_id)
+        profile = await self._character.profile(user_id)
+        try:
+            result = await self._assets.grant_product(
+                user_id, request_id, user_id, entry_key, quantity
+            )
+        except SectAssetError as exc:
+            raise WanzhenFeatureError(str(exc)) from exc
+        if result.entry is None:
+            raise WanzhenFeatureError("万珍殿领取结果缺少条目")
+        return WanzhenTransferResult("领取", result.entry, profile.name)
+
     def _resolve_content(self, category: str, identifier: str) -> str:
         normalized_category = str(category or "").strip()
         query = str(identifier or "").strip()

@@ -65,11 +65,6 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             feature.text("查看", "剩余时间"),
             duration(max(0, int((value.ends_at - datetime.now(UTC)).total_seconds()))),
         )
-    if value.attacker_formation or value.defender_formation:
-        builder.section("阵法", icon="game.box").row(
-            ("攻方阵法", value.attacker_formation or "无"),
-            ("守方阵法", value.defender_formation or "无"),
-        )
     if value.winner:
         builder.field(
             feature.text("查看", "胜负"),

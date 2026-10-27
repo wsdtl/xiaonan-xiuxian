@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from game.core.asset import ItemRef, format_item_ref
+
 from game.features.fudan import MedicineUseRequest
 from game.features.shiyong import (
     UseCandidate,
@@ -17,6 +19,7 @@ def build_use_ports(
     renwu_peiyang: Any,
     xiantian_lingbao: Any,
     fudan: Any,
+    buzhen: Any,
 ) -> dict[str, UsePort]:
     async def describe_peiyang(request: UseRequest) -> UseDescription:
         target = await renwu_peiyang.resolve_use_target(request.user_id, request.item_id)
@@ -74,10 +77,26 @@ def build_use_ports(
             )
         )
 
+    async def describe_buzhen(request: UseRequest) -> UseDescription:
+        return UseDescription(display=request.name, position_kind="无")
+
+    async def execute_buzhen(request: UseRequest) -> object:
+        identifier = format_item_ref(
+            ItemRef(
+                item=request.name,
+                grade=request.grade,
+                treasure=request.treasure,
+            )
+        )
+        return await buzhen.arm(
+            request.user_id, request.request_id, identifier
+        )
+
     return {
         "renwu_peiyang": UsePort(describe_peiyang, execute_peiyang),
         "xiantian_lingbao": UsePort(describe_treasure, execute_treasure),
         "fudan": UsePort(describe_fudan, execute_fudan),
+        "buzhen": UsePort(describe_buzhen, execute_buzhen),
     }
 
 
