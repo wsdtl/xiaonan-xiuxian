@@ -723,7 +723,7 @@ class PlayerStateService:
                 rule.get("资源要求", {}), f"状态守卫.{name}.资源要求"
             )
             for resource_name, raw_requirement in resources.items():
-                if resource_name not in {"血气", "精神"}:
+                if resource_name not in {"血气", "精神", "神魂"}:
                     raise PlayerStateRuleError(
                         f"状态守卫{name}使用未知人物资源：{resource_name}"
                     )
