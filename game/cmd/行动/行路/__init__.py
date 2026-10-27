@@ -51,17 +51,10 @@ async def travel(user_id: str, message: str, message_context: MessageContext, ma
         await send_game_reply(reply.conflict())
         return
     position = services.features.weizhi
-    functions = position.open_location_functions(
-        result.plan.destination.available_functions
-    )
     await send_game_reply(
         reply.success(
             result,
-            position.position_actions(
-                functions,
-                plant_pool=result.plan.destination.plant_pool,
-                mineral_pool=result.plan.destination.mineral_pool,
-            ),
+            position.position_actions(result.plan.destination),
             result.altitude_unit,
         )
     )

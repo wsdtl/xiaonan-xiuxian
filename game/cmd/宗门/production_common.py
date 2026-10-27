@@ -32,7 +32,7 @@ async def dispatch(
                 reply.collected(feature.copy(), value, feature.actions(value.view))
             )
             return
-        if kind == "灵田" and args[0] == "选地形" and len(args) <= 2:
+        if kind in ("灵脉", "灵田") and args[0] == "选地形" and len(args) <= 2:
             if len(args) == 1:
                 value = await feature.view(kind, user_id)
                 await send_game_reply(
@@ -44,7 +44,7 @@ async def dispatch(
                 reply.placed(feature.copy(), value, feature.actions(value))
             )
             return
-        if kind == "灵田" and args == ["清地形"]:
+        if kind in ("灵脉", "灵田") and args == ["清地形"]:
             value = await feature.clear_terrain(kind, user_id, request_id)
             await send_game_reply(
                 reply.placed(feature.copy(), value, feature.actions(value))
@@ -60,7 +60,9 @@ def _usage(kind: str) -> str:
         return (
             "灵田、灵田 开启、灵田 收取、灵田 选地形 [地形名] 或 灵田 清地形"
         )
-    return f"{kind}、{kind} 开启 或 {kind} 收取"
+    return (
+        f"{kind}、{kind} 开启、{kind} 收取、{kind} 选地形 [地形名] 或 {kind} 清地形"
+    )
 
 
 __all__ = ["dispatch"]

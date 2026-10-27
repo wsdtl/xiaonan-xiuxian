@@ -20,7 +20,7 @@ class SectProductionFacility:
     base_multiplier: float
     primary_range: tuple[int, int]
     material_range: tuple[int, int]
-    #: 可以选定的地形池；只有灵田有，灵脉为空（空表示该设施不能选地形）。
+    #: 可以选定的地形池；灵脉选灵矿池，灵田选灵植池。
     terrain_options: tuple[str, ...] = ()
 
 

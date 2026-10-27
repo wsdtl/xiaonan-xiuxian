@@ -15,6 +15,7 @@ from game.core.retreat import (
     RetreatStartCommand,
     RetreatStarted,
 )
+from game.core.auto_travel import AutoTravelError, AutoTravelService
 
 from .contracts import RetreatAction, RetreatCopy, RetreatFeatureError
 from game.features.presentation import paged_settlement_actions
@@ -28,11 +29,13 @@ class RetreatFeature:
         retreat: RetreatService,
         asset: AssetService,
         action_group: ActionGroupService,
+        auto_travel: AutoTravelService,
     ) -> None:
         self._data = data
         self._retreat = retreat
         self._asset = asset
         self._action_group = action_group
+        self._auto_travel = auto_travel
         self._copy: RetreatCopy | None = None
         self._buttons = ()
 
@@ -52,7 +55,11 @@ class RetreatFeature:
         return self._copy
 
     async def start(self, user_id: str, request_id: str) -> RetreatStarted:
+        moved_to = ""
         try:
+            moved_to = await self._auto_travel.ensure_at_function(
+                user_id, "闭关", request_id, "空闲或托管"
+            )
             participants = await self._action_group.participants(user_id)
             return await self._retreat.start(
                 RetreatStartCommand(user_id, request_id, participants)
@@ -64,8 +71,11 @@ class RetreatFeature:
                 else "同行状态刚刚发生变化"
             )
             raise RetreatFeatureError(message) from exc
-        except RetreatError as exc:
+        except AutoTravelError as exc:
             raise RetreatFeatureError(str(exc)) from exc
+        except RetreatError as exc:
+            message = f"已到达{moved_to}，但开始失败：{exc}" if moved_to else str(exc)
+            raise RetreatFeatureError(message) from exc
 
     async def progress(
         self, user_id: str, *, now: datetime | None = None

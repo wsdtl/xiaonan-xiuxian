@@ -52,6 +52,7 @@ from .core.team import TeamService
 from .core.trade import TradeService
 from .core.visibility import VisibilityService
 from .core.world import WorldService
+from .core.auto_travel import AutoTravelService
 from .features.biguan import RetreatFeature
 from .features.butian import ButianFeature
 from .features.buzhen import FormationArmFeature
@@ -133,6 +134,7 @@ class CoreServices:
     sect_production: SectProductionService
     sect_progress: SectProgressService
     action_group: ActionGroupService
+    auto_travel: AutoTravelService
     activity: ActivityLifecycleService
     hosting: HostingService
     injury: InjuryService
@@ -679,6 +681,10 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     transaction_log = TransactionLogService()
     transaction_log.initialize()
     logger.opt(colors=True).success(C.ok("事务流水核心微服务已启动"))
+    auto_travel = AutoTravelService(
+        data, world, location, character, player_state, action_group
+    )
+    logger.opt(colors=True).success(C.ok("自动寻路核心微服务已启动"))
     core = CoreServices(
         data=data,
         bloodline=bloodline,
@@ -705,6 +711,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         sect_production=sect_production,
         sect_progress=sect_progress,
         action_group=action_group,
+        auto_travel=auto_travel,
         activity=activity,
         hosting=hosting,
         injury=injury,
@@ -871,6 +878,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     weizhi.initialize()
     xinglu = TravelFeature(world, character, location, action_group, player_state)
     xinglu.initialize()
+    auto_travel = core.auto_travel
     daolv_jiejiao = CompanionInteractionFeature(
         data,
         companion,
@@ -926,10 +934,16 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
     duiwu = TeamFeature(data, team, character, location, player_state)
     duiwu.initialize()
     tanxian = ExplorationFeature(
-        data, exploration, item_catalog, asset, action_group, medicine
+        data,
+        exploration,
+        item_catalog,
+        asset,
+        action_group,
+        auto_travel,
+        medicine,
     )
     tanxian.initialize()
-    biguan = RetreatFeature(data, retreat, asset, action_group)
+    biguan = RetreatFeature(data, retreat, asset, action_group, auto_travel)
     biguan.initialize()
     caiyao = HerbGatheringFeature(data, gathering, asset, action_group)
     caiyao.initialize()

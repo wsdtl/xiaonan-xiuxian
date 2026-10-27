@@ -27,13 +27,8 @@ from typing import Any
 )
 async def show_position(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.weizhi
-    services = current_game_services()
     result = await feature.current(user_id)
-    position_actions = feature.position_actions(
-        result.location.available_functions,
-        plant_pool=result.location.plant_pool,
-        mineral_pool=result.location.mineral_pool,
-    )
+    position_actions = feature.position_actions(result.location)
     await send_game_reply(
         reply.current(
             feature.copy(),

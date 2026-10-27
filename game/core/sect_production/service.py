@@ -44,8 +44,6 @@ from .contracts import (
 
 _FACILITY_TYPES = ("灵脉", "灵田")
 _ENTITY_TYPES = {"灵脉": "宗门灵脉", "灵田": "宗门灵田"}
-#: 灵植池的命名约定：一个地形一个池，池名就是 `灵植-<地形>`。
-_TERRAIN_PREFIX = "灵植-"
 _TERRAIN_KEY = "选定地形"
 _OFFICER_DENIED = "只有宗主和长老可以收取宗门资源"
 
@@ -293,7 +291,7 @@ class SectProductionService:
         *,
         now: datetime | None = None,
     ) -> SectProductionView:
-        """给灵田选定一处地形，之后按该地形的灵植池产出。"""
+        """给灵脉/灵田选定一处地形，之后按该地形的矿池/灵植池产出。"""
 
         chosen = _terrain_choice(self._facility(kind), terrain)
         return await self._write_terrain(kind, user_id, request_id, chosen, now)
@@ -306,7 +304,7 @@ class SectProductionService:
         *,
         now: datetime | None = None,
     ) -> SectProductionView:
-        """清空灵田地形，回到该设施原本的全池随机。"""
+        """清空灵脉/灵田地形，回到该设施原本的全池随机。"""
 
         return await self._write_terrain(kind, user_id, request_id, "", now)
 
@@ -322,7 +320,7 @@ class SectProductionService:
             kind,
             user_id,
             officer=True,
-            denied="只有宗主和长老可以选定或清空灵田地形",
+            denied="只有宗主和长老可以选定或清空资源设施地形",
         )
         if not facility.terrain_options:
             raise SectProductionError(f"{facility.kind}不能选定地形")
@@ -383,32 +381,33 @@ class SectProductionService:
     def _terrain_options(
         self, kind: str, output: Mapping[str, object]
     ) -> tuple[str, ...]:
-        """读设施的可选地形，并核到已登记的灵植池上。
+        """读设施的可选地形，并核到已登记的基础物品池上。
 
-        灵植池的命名约定是 `灵植-<地形>`，成员只能是灵植。声明了却对不上池子，
-        就等于给玩家一个抽不出东西的选项——这类错必须在启动期报出来。
+        灵田选 `灵植-<地形>`，灵脉选 `灵矿-<地形>`。声明了却对不上池子、
+        或池里混入别的类别，都会给玩家一个抽不出东西的选项——启动期直接报。
         """
 
+        if kind not in ("灵田", "灵脉"):
+            raise JsonDataError(f"未知宗门资源设施：{kind}")
         declared = output.get("可选地形")
-        if kind != "灵田":
-            if declared is not None:
-                raise JsonDataError(f"产出.产出.{kind} 不能声明可选地形")
-            return ()
         options = _texts(declared, f"产出.产出.{kind}.可选地形")
         if not options:
-            raise JsonDataError("宗门灵田必须声明可选地形")
+            raise JsonDataError(f"宗门{kind}必须声明可选地形")
         if len(set(options)) != len(options):
-            raise JsonDataError("宗门灵田的可选地形不能重复")
+            raise JsonDataError(f"宗门{kind}的可选地形不能重复")
+        prefix = "灵植-" if kind == "灵田" else "灵矿-"
+        expected = "灵植" if kind == "灵田" else "灵矿"
+        label = "灵植池" if kind == "灵田" else "灵矿池"
         pools = self._data.pools()
         for name in options:
-            if not name.startswith(_TERRAIN_PREFIX):
-                raise JsonDataError(f"宗门灵田可选地形必须是灵植池：{name}")
+            if not name.startswith(prefix):
+                raise JsonDataError(f"宗门{kind}可选地形必须是{label}：{name}")
             if pools.get(name) != "基础物品":
-                raise JsonDataError(f"宗门灵田可选地形不是已登记的灵植池：{name}")
+                raise JsonDataError(f"宗门{kind}可选地形不是已登记的{label}：{name}")
             for item_id in self._data.pool_members((name,), "基础物品"):
                 record = self._data.entity_record("基础物品", item_id)
-                if record.number_category != "灵植":
-                    raise JsonDataError(f"灵植池混入了非灵植：{name}/{item_id}")
+                if record.number_category != expected:
+                    raise JsonDataError(f"{label}混入了非{expected}：{name}/{item_id}")
         return options
 
     async def _context(
@@ -547,8 +546,7 @@ def _state_value(sect_id: str, kind: str, settled_at: datetime, version: int, *,
         "结算序号": sequence,
         "规则版本": version,
     }
-    if kind == "灵田":
-        value[_TERRAIN_KEY] = terrain
+    value[_TERRAIN_KEY] = terrain
     return value
 
 
@@ -567,7 +565,8 @@ def _terrain_choice(facility: SectProductionFacility, value: str) -> str:
     name = str(value or "").strip()
     if not name:
         raise SectProductionError(f"{facility.kind}地形不能为空")
-    pool = name if name.startswith(_TERRAIN_PREFIX) else f"{_TERRAIN_PREFIX}{name}"
+    prefix = "灵植-" if facility.kind == "灵田" else "灵矿-"
+    pool = name if name.startswith(prefix) else f"{prefix}{name}"
     if pool not in facility.terrain_options:
         raise SectProductionError(f"未知{facility.kind}地形：{name}")
     return pool

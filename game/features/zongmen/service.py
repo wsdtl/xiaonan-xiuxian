@@ -131,6 +131,9 @@ class SectFeature:
         current = await self._location.current(user_id)
         if current.space_type != "地表":
             raise SectFeatureError("not_surface")
+        location = self._world.locate(LocationQuery(xy=current.xy))
+        if "宗门事务" not in location.available_functions:
+            raise SectFeatureError("not_at_park")
         try:
             sect = await self._sect.create(user_id, request_id, name, current.xy)
         except SectConflictError as exc:

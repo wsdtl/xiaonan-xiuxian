@@ -287,8 +287,8 @@ class WorldService:
             for function in functions
             for section in self._feature_contents[function]
         }
-        # 门面地点（例如宗门园区）可以在功能配置里写 `可采集: false`：池子照旧存在，
-        # 但不往地点面板上摆采药/采矿——世界不必认识是哪个功能，只认这个开关。
+        # 地点可以在功能配置里写 `可采集: false`：池子清空，只影响采集命令；
+        # 按钮由可用功能配置，世界不参与面板。当前没有地点使用这个开关。
         gatherable = all(
             (config or {}).get("可采集", True) is not False
             for config in (raw.get("功能配置") or {}).values()

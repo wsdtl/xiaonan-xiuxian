@@ -23,13 +23,12 @@ def test_root_surface_has_no_old_entrypoints() -> None:
 
 def test_action_and_craft_buttons_use_new_roots() -> None:
     location = _load("data/世界/展示/按钮/地点功能.json")
-    terrain = _load("data/世界/展示/按钮/地形功能.json")
     alchemy = _load("data/物品/展示/按钮.json")
     forging = _load("data/物品/展示/炼器-按钮.json")
     formation = _load("data/物品/展示/阵法-按钮.json")
     commands = [
         str(row["命令"])
-        for rows in (location, terrain, alchemy, forging, formation)
+        for rows in (location, alchemy, forging, formation)
         for row in rows
     ]
     forbidden = ("开始探险", "开始闭关", "开始采药", "开始采矿", "开丹炉", "开炉", "阵法审查")

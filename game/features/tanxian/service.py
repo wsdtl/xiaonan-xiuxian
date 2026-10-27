@@ -17,6 +17,7 @@ from game.core.exploration import (
 )
 from game.core.item_catalog import ItemCatalogService
 from game.core.medicine import MedicineError, MedicineService
+from game.core.auto_travel import AutoTravelError, AutoTravelService
 
 from .contracts import ExplorationAction, ExplorationCopy, ExplorationFeatureError
 from game.features.presentation import paged_settlement_actions
@@ -31,6 +32,7 @@ class ExplorationFeature:
         items: ItemCatalogService,
         asset: AssetService,
         action_group: ActionGroupService,
+        auto_travel: AutoTravelService,
         medicine: MedicineService | None = None,
     ) -> None:
         self._data = data
@@ -40,6 +42,7 @@ class ExplorationFeature:
         self._asset = asset
         self._medicine = medicine
         self._action_group = action_group
+        self._auto_travel = auto_travel
         self._copy: ExplorationCopy | None = None
         self._buttons = ()
 
@@ -59,7 +62,11 @@ class ExplorationFeature:
         return self._copy
 
     async def start(self, user_id: str, request_id: str) -> ExplorationStarted:
+        moved_to = ""
         try:
+            moved_to = await self._auto_travel.ensure_at_function(
+                user_id, "探险", request_id, "空闲或托管且可行动"
+            )
             participants = await self._action_group.participants(user_id)
             return await self._exploration.start(
                 ExplorationStartCommand(user_id, request_id, participants)
@@ -71,8 +78,11 @@ class ExplorationFeature:
                 else "同行状态刚刚发生变化"
             )
             raise ExplorationFeatureError(message) from exc
-        except ExplorationError as exc:
+        except AutoTravelError as exc:
             raise ExplorationFeatureError(str(exc)) from exc
+        except ExplorationError as exc:
+            message = f"已到达{moved_to}，但开始失败：{exc}" if moved_to else str(exc)
+            raise ExplorationFeatureError(message) from exc
 
     async def progress(
         self, user_id: str, *, now: datetime | None = None

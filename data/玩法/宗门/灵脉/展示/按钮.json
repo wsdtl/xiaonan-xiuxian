@@ -18,5 +18,15 @@
     "样式": "primary",
     "行为": "callback",
     "设施": "灵脉"
+  },
+  {
+    "编号": "sect-production.lingmai.terrain",
+    "名称": "选矿脉",
+    "条件": "已经开始",
+    "命令": "灵脉 选地形",
+    "页面": "查看",
+    "样式": "secondary",
+    "行为": "callback",
+    "设施": "灵脉"
   }
 ]
