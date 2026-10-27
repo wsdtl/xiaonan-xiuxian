@@ -58,14 +58,14 @@ async def create_character(user_id: str, message: str, message_context: MessageC
 
 
 @GameCommand.fullmatch(
-    cmd=("人物", "角色"),
+    cmd=("人物", "角色", "我的存档", "存档"),
     metadata={
         "scope": "通用",
         "guard_rule": "已创建",
         "help": {
             "category": "查看与工具",
             "summary": "查看当前人物的修为、状态、位置与已有构筑",
-            "usage": ("人物",),
+            "usage": ("人物", "角色", "我的存档", "存档"),
             "side_effect": "只查看，不会改变人物状态",
             "order": 20,
         },

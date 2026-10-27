@@ -8,6 +8,8 @@ from main import create_app
 _KEEP = (
     "创建角色",
     "角色",
+    "我的存档",
+    "存档",
     "兑换码",
     "组队",
     "前往",
