@@ -1071,6 +1071,8 @@ class BattleContext(RuntimeExtensions):
     combat_objects: dict[str, CombatObject] = dataclass_field(default_factory=dict)
     battle_rules: list[dict[str, Any]] = dataclass_field(default_factory=list)
     saved_results: dict[str, Any] = dataclass_field(default_factory=dict)
+    #: 目标分支已选好的目标；只对分支写入的 selector 对象生效，避免处理器二次摇随机。
+    target_override: tuple[Mapping[str, Any], tuple[Fighter, ...]] | None = None
     last_result: dict[str, Any] = dataclass_field(default_factory=dict)
     effect_history: list[dict[str, Any]] = dataclass_field(default_factory=list)
     action_intent: ActionIntent | None = None

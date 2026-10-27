@@ -39,6 +39,10 @@ TARGET_SCOPES: Mapping[str, str] = {
     "事件承受者": "event_target",
     "行动者": "actor",
     "己方": "allies",
+    "友方全体": "allies",
+    "本编组": "own_group",
+    "友方单位": "other_allies",
+    "其他己方": "other_allies",
     "敌方": "enemies",
     "全体": "everyone",
     "任意": "anyone",
@@ -315,6 +319,76 @@ class AbilityRuntime(ChainRuntime):
     _event_depth_limit: int = MAX_EVENT_DEPTH
     _ability_depth_limit: int = MAX_ABILITY_DEPTH
 
+    def _choose_target_branch(
+        self,
+        context: BattleContext,
+        source: Fighter,
+        target: Fighter,
+        effect: Mapping[str, Any],
+        event_amount: float,
+        event_values: Mapping[str, Any],
+        tags: tuple[str, ...],
+    ) -> tuple[Mapping[str, Any], Mapping[str, Any], tuple[Fighter, ...]] | None:
+        raw = effect.get("目标分支")
+        if raw is None:
+            return None
+        if isinstance(raw, Mapping):
+            mode = str(raw.get("方式") or "顺序")
+            branches = raw.get("分支") or ()
+        else:
+            mode = "顺序"
+            branches = raw
+        if not isinstance(branches, Sequence) or isinstance(branches, (str, bytes)):
+            raise ValueError("目标分支.分支必须是列表")
+        eligible = []
+        for branch in branches:
+            if not isinstance(branch, Mapping):
+                raise ValueError("目标分支的每一项必须是对象")
+            conditions = branch.get("条件") or ()
+            if conditions and not self._conditions_allow(
+                context, source, target, conditions, event_amount, event_values, tags
+            ):
+                continue
+            selector = branch.get("目标")
+            if not isinstance(selector, Mapping):
+                raise ValueError("目标分支.目标必须是选择目标对象")
+            resolved = dict(selector)
+            resolved["排除召唤物"] = True
+            if resolved.get("选择全部"):
+                raise ValueError("AOE 不能使用目标分支")
+            if resolved.get("范围") in {"全体", "任意"}:
+                raise ValueError("AOE 不能使用目标分支")
+            selected = tuple(self._select_targets(context, source, target, resolved))
+            if not selected:
+                continue
+            eligible.append((branch, resolved, selected))
+        if not eligible:
+            return None
+        if mode in {"权重", "随机"}:
+            weights = [
+                max(0.0, float(branch.get("权重", 1) or 1))
+                for branch, _, _ in eligible
+            ]
+            total = sum(weights)
+            if total <= 0:
+                return eligible[0]
+            roll = context.rng.random() * total
+            for item, weight in zip(eligible, weights):
+                roll -= weight
+                if roll <= 0:
+                    return item
+            return eligible[-1]
+        if mode != "顺序":
+            raise ValueError(f"未知目标分支方式：{mode}")
+        return eligible[0]
+
+    @staticmethod
+    def _branch_strength(branch: Mapping[str, Any]) -> float:
+        strength = float(branch.get("强度", 100) or 100)
+        if strength <= 0:
+            raise ValueError("目标分支.强度必须大于 0")
+        return strength
+
     def _execute_mechanism(
         self,
         context: BattleContext,
@@ -363,6 +437,31 @@ class AbilityRuntime(ChainRuntime):
         if needs_composition and context.current_element_composition:
             effective = dict(effect)
             effective['属性构成'] = dict(context.current_element_composition)
+        branch = self._choose_target_branch(
+            context,
+            source,
+            target,
+            effect,
+            event_amount,
+            event_values or {},
+            tags if type(tags) is tuple else tuple(tags),
+        )
+        if branch is None and effect.get("目标分支") is not None:
+            context.last_result = {
+                "成功": False,
+                "执行器": node.executor,
+                "目标分支": "无可用分支",
+            }
+            return False
+        previous_override = context.target_override
+        if branch is not None:
+            _, target_selector, selected = branch
+            effective = dict(effective)
+            effective["目标"] = target_selector
+            effective.pop("目标分支", None)
+            strength = self._branch_strength(branch[0])
+            multiplier *= strength / 100.0
+            context.target_override = (target_selector, tuple(selected))
         before_events = context.event_count
         previous_result = context.last_result
         context.ability_depth += 1
@@ -382,6 +481,7 @@ class AbilityRuntime(ChainRuntime):
                 result = handler(context, source, target, effective, multiplier)
         finally:
             context.ability_depth -= 1
+            context.target_override = previous_override
         success = True if result is None else bool(result)
         # 原子执行器没有产生新详情时清空旧详情；每次都替换对象，让外层组合
         # 执行器能够按身份判断子效果是否产生了结果。原地更新会混入前次伤害。
@@ -3770,6 +3870,10 @@ class AbilityRuntime(ChainRuntime):
         """
         if context is None:
             return self._select_targets_uncached(context, source, target, value)
+        if context.target_override is not None:
+            selector, targets = context.target_override
+            if value is selector:
+                return list(targets)
         cached = context.target_selector_cache.get(id(value))
         if cached is None or cached[0] is not value:
             if value is None:
@@ -3839,8 +3943,20 @@ class AbilityRuntime(ChainRuntime):
         elif scope == "行动者":
             actor = context.fighter_by_id(str(frame.facts.get("行动者") or "")) if frame else None
             candidates = [actor] if actor else []
-        elif scope == "己方":
+        elif scope in {"己方", "友方全体"}:
             candidates = context.allies_of(source, alive=None)
+        elif scope == "本编组":
+            candidates = [
+                value
+                for value in context.allies_of(source, alive=None)
+                if source.group_id and value.group_id == source.group_id
+            ]
+        elif scope in {"友方单位", "其他己方"}:
+            candidates = [
+                value
+                for value in context.allies_of(source, alive=None)
+                if not source.group_id or value.group_id != source.group_id
+            ]
         elif scope == "敌方":
             candidates = context.enemies_of(source, alive=None)
         elif scope in {"全体", "任意"}:
@@ -3898,6 +4014,30 @@ class AbilityRuntime(ChainRuntime):
         status_name = str(selector.get("拥有状态") or "")
         if status_name:
             candidates = [value for value in candidates if any(status.name == status_name for status in value.statuses)]
+        if selector.get("排除召唤物", False):
+            candidates = [value for value in candidates if not value.summoned]
+        if selector.get("排除有护盾", False):
+            candidates = [value for value in candidates if value.shield <= 0]
+        if selector.get("排除无负面", False):
+            candidates = [
+                value
+                for value in candidates
+                if any(status.category == "负面" for status in value.statuses)
+            ]
+        excluded_full = selector.get("排除满值")
+        if excluded_full:
+            resources = (
+                tuple(str(value) for value in excluded_full)
+                if isinstance(excluded_full, (list, tuple))
+                else (str(excluded_full),)
+            )
+            for resource in resources:
+                candidates = [
+                    value
+                    for value in candidates
+                    if self._resource_values(value, resource)[0]
+                    < self._resource_values(value, resource)[1]
+                ]
         # 规则层：`被选为目标` 拦截点。规则是常驻事实，所以这里只判合法性，
         # 不产生事件、也不进战报的事件明细（它不是「发生了什么」，是「本来就不能选他」）。
         eligible = []
@@ -3912,20 +4052,55 @@ class AbilityRuntime(ChainRuntime):
             ):
                 eligible.append(value)
         candidates = eligible
-        order = str(selector.get("排序") or "默认")
-        if order == "随机":
+        order_value = selector.get("排序") or "默认"
+        orders = (
+            [str(order_value)]
+            if isinstance(order_value, str)
+            else [str(value) for value in order_value]
+        )
+        if "随机" in orders:
             candidates = list(candidates)
             context.rng.shuffle(candidates)
-        elif order == "血气比例从低到高":
-            candidates.sort(key=lambda value: value.health / value.health_max)
-        elif order == "血气比例从高到低":
-            candidates.sort(key=lambda value: value.health / value.health_max, reverse=True)
-        elif order == "速度从高到低":
-            candidates.sort(key=lambda value: value.value("速度", 100), reverse=True)
-        elif order == "行动条从高到低":
-            candidates.sort(key=lambda value: context.action_progress.get(value.id, 0), reverse=True)
+            orders = [value for value in orders if value != "随机"]
+        if orders:
+            candidates = sorted(
+                candidates,
+                key=lambda value: tuple(
+                    self._target_sort_value(context, value, order)
+                    for order in orders
+                ),
+            )
         count = len(candidates) if selector.get("选择全部", False) else max(1, int(selector.get("数量", 1)))
         return candidates[:count]
+
+    def _target_sort_value(
+        self, context: BattleContext, value: Fighter, order: str
+    ) -> float:
+        """目标排序键；数字越小越靠前。"""
+
+        if order in {"默认", "参战位序"}:
+            return float(context.fighter_order.get(value.id, 0))
+        if order == "血气比例从低到高":
+            return value.health / max(1.0, value.health_max)
+        if order == "血气比例从高到低":
+            return -value.health / max(1.0, value.health_max)
+        if order in {"神魂比例从低到高", "精神比例从低到高", "护盾比例从低到高"}:
+            resource = order[:2]
+            current, maximum = self._resource_values(value, resource)
+            return current / max(1.0, maximum)
+        if order == "有效气血比例从低到高":
+            return (value.health + value.shield) / max(1.0, value.health_max)
+        if order == "速度从高到低":
+            return -value.value("速度", 100)
+        if order == "行动条从高到低":
+            return -context.action_progress.get(value.id, 0)
+        if order == "负面层数从多到少":
+            return -sum(
+                max(1, int(status.stacks))
+                for status in value.statuses
+                if status.category == "负面"
+            )
+        raise ValueError(f"未知目标排序：{order}")
 
     #: 资源 -> `Fighter` 上承载它的属性名。资源身份与字段名的对应关系在这里写一次，
     #: 不再散成 `if 资源 == "血气": return target.health` 这样的三分支（加第四个资源
