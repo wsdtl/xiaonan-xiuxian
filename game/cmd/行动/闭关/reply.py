@@ -7,7 +7,7 @@ from ...actions import CommandAction
 
 from ...presentation import error_document
 
-from message import DocumentBuilder, DocumentMessage, M
+from message import DocumentMessage, M
 
 from collections.abc import Mapping
 
@@ -18,7 +18,6 @@ from game.features.biguan import (
     RetreatProgress,
     RetreatSettlement,
     RetreatStarted,
-    RetreatUserSummary,
 )
 
 from ...actions import message_actions
@@ -140,112 +139,94 @@ def progress(
     return builder.actions(message_actions(actions)).build()
 
 
-def settlement_page(
+def settlement_summary(
     copy: RetreatCopy,
     feature: RetreatFeature,
     value: RetreatSettlement,
-    page: int,
-    actions: tuple[RetreatAction, ...],
 ) -> DocumentMessage:
-    total_pages = 1 + len(value.users)
-    if page == 1:
-        insight_count = sum(len(user.insights) for user in value.users)
-        builder = (
-            M.document()
+    """出关总结：单屏紧凑，不按用户分页。"""
 
-            .inline_section(
-                "闭关", M.status("已出关", tone="positive"), icon="game.success"
+    insight_count = sum(len(user.insights) for user in value.users)
+    builder = (
+        M.document()
+        .inline_section(
+            text(copy, "总结", "标题"),
+            M.status("已出关", tone="positive"),
+            icon="game.success",
+        )
+        .section(value.location_name, icon="game.seed")
+        .row(
+            (
+                text(copy, "总结", "轮次"),
+                M.progress(
+                    value.completed_rounds,
+                    value.maximum_rounds,
+                    tone="cultivation",
+                    display="value",
+                ),
+            ),
+            (text(copy, "总结", "参与用户"), value.participant_count),
+        )
+        .field(text(copy, "总结", "感悟次数"), insight_count)
+    )
+    for user in value.users:
+        if user.treasure_activation is not None:
+            activation = user.treasure_activation
+            builder.field("灵宝", f"{activation.name} · {activation.summary}")
+        for character in user.characters:
+            title = text(copy, "用户", "道侣" if character.companion else "人物")
+            level = (
+                str(character.level_after)
+                if character.level_before == character.level_after
+                else f"{character.level_before} → {character.level_after}"
             )
-            .section(value.location_name, icon="game.seed")
-            .row(
+            builder.section(f"{title} · {character.name}", icon="game.role").row(
                 (
-                    text(copy, "总结", "轮次"),
-                    M.progress(
-                        value.completed_rounds,
-                        value.maximum_rounds,
-                        tone="cultivation",
-                        display="value",
+                    text(copy, "用户", "等级"),
+                    level,
+                ),
+                (
+                    text(copy, "用户", "经验"),
+                    M.text(f"+{character.experience_gained}", tone="positive"),
+                ),
+            ).row(
+                (
+                    text(copy, "用户", "血气"),
+                    M.text(_resource(character.health), tone="health"),
+                ),
+                (
+                    text(copy, "用户", "精神"),
+                    M.text(_resource(character.spirit), tone="spirit"),
+                ),
+            )
+            if character.injury_changes:
+                builder.field(
+                    text(copy, "用户", "疗伤"),
+                    "、".join(
+                        f"{name} {before}→{after}"
+                        for name, before, after in character.injury_changes
                     ),
-                ),
-                (text(copy, "总结", "参与用户"), value.participant_count),
-            )
-            .field(text(copy, "总结", "感悟次数"), insight_count)
-            .small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
-        )
-    else:
-        builder = _user_page(copy, feature, value.users[page - 2], page, total_pages)
-    return builder.actions(message_actions(actions)).build()
-
-
-def _user_page(
-    copy: RetreatCopy,
-    feature: RetreatFeature,
-    value: RetreatUserSummary,
-    page: int,
-    total_pages: int,
-) -> DocumentBuilder:
-    builder = M.document()
-    if value.treasure_activation is not None:
-        activation = value.treasure_activation
-        builder.section("灵宝", icon="game.box").field(
-            activation.name, activation.summary
-        )
-    for character in value.characters:
-        title = text(copy, "用户", "道侣" if character.companion else "人物")
-        level = (
-            str(character.level_after)
-            if character.level_before == character.level_after
-            else f"{character.level_before} → {character.level_after}"
-        )
-        builder.section(f"{title} · {character.name}", icon="game.role").row(
-            (
-                text(copy, "用户", "经验"),
-                M.text(f"+{character.experience_gained}", tone="positive"),
-            ),
-            (
-                text(copy, "用户", "等级"),
-                level,
-            ),
-        ).row(
-            (
-                text(copy, "用户", "血气"),
-                M.text(_resource(character.health), tone="health"),
-            ),
-            (
-                text(copy, "用户", "精神"),
-                M.text(_resource(character.spirit), tone="spirit"),
-            ),
-        )
-        if character.injury_changes:
-            builder.field(
-                text(copy, "用户", "疗伤"),
-                "、".join(
-                    f"{name} {before}→{after}"
-                    for name, before, after in character.injury_changes
-                ),
-            )
-        if character.injuries:
-            builder.field(
-                text(copy, "用户", "剩余伤势"),
-                "、".join(f"{name}×{stacks}" for name, stacks in character.injuries),
-            )
-    builder.section(text(copy, "用户", "功法"), icon="game.manual")
-    if value.insights:
-        for index, insight in enumerate(value.insights, start=1):
-            result = text(copy, "用户", insight.outcome or "复悟")
-            builder.item(
-                index,
-                f"第{insight.round_number}轮 · {result} · ",
-                M.command(
-                    M.text(
-                        feature.cultivation_label(insight.content_id, insight.grade_id),
+                )
+            if character.injuries:
+                builder.field(
+                    text(copy, "用户", "剩余伤势"),
+                    "、".join(
+                        f"{name}×{stacks}"
+                        for name, stacks in character.injuries
                     ),
-                    f"查看 {feature.cultivation_name(insight.content_id)}",
-                ),
-            )
-    else:
-        builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "无"))
-    return builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
+                )
+        if user.insights:
+            entries = []
+            for insight in user.insights:
+                entries.append(
+                    f"第{insight.round_number}轮 "
+                    f"{text(copy, '用户', insight.outcome or '复悟')} "
+                    f"{feature.cultivation_label(insight.content_id, insight.grade_id)}"
+                )
+            builder.field(text(copy, "用户", "功法"), "、".join(entries))
+        else:
+            builder.field(text(copy, "用户", "功法"), text(copy, "用户", "无"))
+    return builder.build()
 
 
 def _resource(value: float) -> str:
@@ -256,4 +237,4 @@ def _resource(value: float) -> str:
     )
 
 
-__all__ = ["error", "progress", "settlement_page", "started", "text"]
+__all__ = ["error", "progress", "settlement_summary", "started", "text"]

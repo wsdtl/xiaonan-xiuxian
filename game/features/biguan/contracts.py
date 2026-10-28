@@ -39,8 +39,6 @@ class RetreatEntry:
     started: RetreatStarted | None = None
     progress: RetreatProgress | None = None
     settlement: RetreatSettlement | None = None
-    page: int = 1
-    total_pages: int = 1
 
 
 __all__ = [

@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import fields
 
 import pytest
 
 from game.core.character.contracts import CharacterCreateCommand
-from game.features.biguan import RetreatFeatureError
+from game.features.biguan import RetreatEntry, RetreatFeatureError
 from game.features.caikuang import OreGatheringFeatureError
 from game.features.caiyao import HerbGatheringFeatureError
 from game.features.tanxian import ExplorationFeatureError
@@ -20,11 +21,23 @@ def _create(services, user_id: str, name: str) -> None:
     )
 
 
+def test_retreat_entry_has_no_page_fields() -> None:
+    names = {field.name for field in fields(RetreatEntry)}
+    assert "page" not in names
+    assert "total_pages" not in names
+
+
+def test_retreat_exit_without_session_is_rejected(services) -> None:
+    user_id = "entry-biguan"
+    _create(services, user_id, "分支闭关")
+    with pytest.raises(RetreatFeatureError):
+        asyncio.run(services.features.biguan.exit(user_id, "req-biguan"))
+
+
 @pytest.mark.parametrize(
     "feature_name, error_type, command",
     [
         ("tanxian", ExplorationFeatureError, "探险 胡说"),
-        ("biguan", RetreatFeatureError, "闭关 胡说"),
         ("caiyao", HerbGatheringFeatureError, "采药 胡说"),
         ("caikuang", OreGatheringFeatureError, "采矿 胡说"),
     ],

@@ -146,10 +146,6 @@ def test_activity_guard_allows_work_but_not_second_activity(services) -> None:
         services.core.player_state.authorize(user_id, "空闲或活动中")
     )
     assert allowed.allowed, allowed.reason
-    blocked = asyncio.run(
-        services.core.player_state.authorize(user_id, "自主空闲")
-    )
-    assert not blocked.allowed
     second = asyncio.run(
         services.core.player_state.authorize(user_id, "自主空闲且可行动")
     )

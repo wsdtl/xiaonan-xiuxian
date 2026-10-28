@@ -23,7 +23,6 @@ from .contracts import (
     RetreatEntry,
     RetreatFeatureError,
 )
-from game.features.presentation import paged_settlement_actions
 from .presentation import actions, load_presentation
 
 
@@ -71,7 +70,7 @@ class RetreatFeature:
             )
         except ActionGroupError as exc:
             message = (
-                "当前正在跟随领队，只有领队可以发起闭关（可看闭关进度，等领队统一出关）"
+                "当前正在跟随领队，只有领队可以发起闭关（可发「闭关」看进度，等领队统一出关）"
                 if exc.code == "member_cannot_start"
                 else "同行状态刚刚发生变化"
             )
@@ -82,44 +81,9 @@ class RetreatFeature:
             message = f"已到达{moved_to}，但开始失败：{exc}" if moved_to else str(exc)
             raise RetreatFeatureError(message) from exc
 
-    async def enter(
-        self, user_id: str, request_id: str, raw_message: str
-    ) -> RetreatEntry:
-        """解析根命令与紧凑子命令；分支是否合规只由本玩法判定。"""
+    async def enter_bare(self, user_id: str, request_id: str) -> RetreatEntry:
+        """闭关：空闲开始，进行中看进度，已出关再开一轮。"""
 
-        text = str(raw_message or "").strip()
-        if text.startswith("闭关"):
-            text = text[2:].strip()
-        action, _, args = text.partition(" ")
-        action = action.strip()
-        args = args.strip()
-        if not action:
-            return await self._enter_default(user_id, request_id)
-        if action == "开始":
-            if args:
-                raise self._invalid_command()
-            return RetreatEntry(
-                "started", started=await self.start(user_id, request_id)
-            )
-        if action == "进度":
-            if args:
-                raise self._invalid_command()
-            return RetreatEntry("progress", progress=await self.progress(user_id))
-        if action in {"结束", "结果"}:
-            page = self._page_number(args)
-            result = await self.settle(user_id, request_id)
-            total_pages = 1 + len(result.users)
-            if page < 1 or page > total_pages:
-                raise RetreatFeatureError(f"页码必须在1至{total_pages}之间")
-            return RetreatEntry(
-                "settlement",
-                settlement=result,
-                page=page,
-                total_pages=total_pages,
-            )
-        raise self._invalid_command()
-
-    async def _enter_default(self, user_id: str, request_id: str) -> RetreatEntry:
         try:
             result = await self.progress(user_id)
         except RetreatFeatureError:
@@ -132,21 +96,12 @@ class RetreatFeature:
             )
         return RetreatEntry("progress", progress=result)
 
-    def _page_number(self, args: str) -> int:
-        if not args:
-            return 1
-        try:
-            page = int(args)
-        except ValueError as exc:
-            raise self._invalid_command() from exc
-        if page < 1:
-            raise self._invalid_command()
-        return page
+    async def exit(self, user_id: str, request_id: str) -> RetreatEntry:
+        """出关：立刻结算；已出关时重放同一份总结。"""
 
-    def _invalid_command(self) -> RetreatFeatureError:
-        text = self.copy().text
-        return RetreatFeatureError(
-            str(text.get("错误", {}).get("写法", "写法错误"))
+        return RetreatEntry(
+            "settlement",
+            settlement=await self.settle(user_id, request_id),
         )
 
     async def progress(
@@ -175,15 +130,6 @@ class RetreatFeature:
 
     def progress_actions(self, can_end: bool) -> tuple[RetreatAction, ...]:
         return actions(self._buttons, "进度", {"可以出关"} if can_end else set())
-
-    def settlement_actions(
-        self, page: int, total_pages: int
-    ) -> tuple[RetreatAction, ...]:
-        return paged_settlement_actions(actions, self._buttons, page=page, total_pages=total_pages)
-
-    def cultivation_name(self, content_id: str) -> str:
-        """只取名字（不带品级），给「查看」这类联动当参数用。"""
-        return str(self._data.entity("功法", content_id).get("名称") or content_id)
 
     def cultivation_label(self, content_id: str, grade_id: str) -> str:
         name = str(self._data.entity("功法", content_id).get("名称") or content_id)

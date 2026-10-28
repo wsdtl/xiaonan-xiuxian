@@ -3,6 +3,7 @@
 from .contracts import (
     RetreatAction,
     RetreatCopy,
+    RetreatEntry,
     RetreatFeatureError,
     RetreatProgress,
     RetreatSettlement,
@@ -14,6 +15,7 @@ from .service import RetreatFeature
 __all__ = [
     "RetreatAction",
     "RetreatCopy",
+    "RetreatEntry",
     "RetreatFeature",
     "RetreatFeatureError",
     "RetreatProgress",
