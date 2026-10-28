@@ -226,4 +226,16 @@ body{background:radial-gradient(ellipse at 50% 0%,rgba(110,80,160,.30),transpare
   .speed-group{flex:0 0 auto!important;padding:2px!important;gap:1px!important}.speed-group button{padding:4px 5px!important;font-size:10px!important;border:0!important}
   .progress{flex:1 0 100%!important;order:10;min-width:0!important;height:5px!important;margin-top:1px;background:#3a2d4d!important}.control-time{order:11;font-size:9px!important;min-width:0!important;white-space:nowrap!important;margin-left:auto!important;display:block!important}
 }
-@media(max-width:380px){.report-title h1{font-size:21px!important}.report-sub{font-size:10px!important}.unit-card{width:36px!important;flex-basis:36px!important}.unit-bars,.unit-bars .bar{width:36px!important}.avatar{width:34px!important;height:34px!important;font-size:14px!important}.unit-flag{width:21px!important;height:34px!important;flex-basis:21px!important}.flag-art{width:16px!important;height:34px!important}.unit-flag .formation-bar{height:34px!important}.unit-card .unit-name{max-width:36px!important;font-size:8.5px!important}.control-time{display:none!important}}
+@media(max-width:480px){
+  .battle-grid{padding:18px 3px 4px!important}
+  .unit-card{width:34px!important;flex-basis:34px!important;padding-top:0!important}
+  .unit-bars,.unit-bars .bar{width:34px!important}.unit-bars{gap:0!important;margin-bottom:0!important}.unit-bars .bar{height:2px!important}
+  .avatar{width:32px!important;height:32px!important;font-size:13px!important}
+  .unit-flag{width:20px!important;height:32px!important;flex-basis:20px!important}.flag-art{width:16px!important;height:32px!important}.unit-flag .formation-bar{height:32px!important;width:3px!important}
+  .unit-card .unit-name{max-width:34px!important;font-size:9px!important;line-height:1.2!important}
+  .unit-card .unit-cast{font-size:8px!important;top:-14px!important;padding:0 4px!important}
+  .unit-row{gap:0!important}.unit-grid{gap:0!important}
+  .side-title{font-size:8px!important;line-height:1.2!important}.center-column{height:22px!important}.turn-badge{width:22px!important;height:22px!important;font-size:10px!important}
+  .control-bar{gap:4px!important;padding:5px 6px!important}.speed-group button{padding:3px 4px!important;font-size:9px!important}.progress{height:4px!important}
+}
+@media(max-width:380px){.report-title h1{font-size:21px!important}.report-sub{font-size:10px!important}.unit-card{width:30px!important;flex-basis:30px!important}.unit-bars,.unit-bars .bar{width:30px!important}.avatar{width:28px!important;height:28px!important;font-size:12px!important}.unit-flag{width:19px!important;height:28px!important;flex-basis:19px!important}.flag-art{width:14px!important;height:28px!important}.unit-flag .formation-bar{height:28px!important}.unit-card .unit-name{max-width:30px!important;font-size:8px!important}.control-time{display:none!important}}
