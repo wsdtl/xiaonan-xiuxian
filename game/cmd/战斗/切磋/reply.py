@@ -20,7 +20,10 @@ def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> D
 
         .inline_section("状态", M.status("待应战", tone="warning"), icon="game.swords")
         .section("邀约内容", icon="game.role")
-        .field("邀约对象", M.text(target_name, tone="emphasis"))
+        .field(
+            "邀约对象",
+            M.command(target_name, f"查看 {target_name}"),
+        )
         .row(
             ("我方修士", len(value.user_participants)),
             ("对方修士", len(value.target_participants)),

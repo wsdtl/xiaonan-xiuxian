@@ -18,7 +18,10 @@ def upgraded(copy: Mapping[str, str], value: ShengjieResult) -> DocumentMessage:
         M.document()
         .section(_text(copy, "标题"), icon="game.box")
         .row(
-            (_text(copy, "物品"), M.text(value.item_name)),
+            (
+                _text(copy, "物品"),
+                M.command(value.item_name, f"查看 {value.item_name}"),
+            ),
             (_text(copy, "数量"), str(value.quantity)),
         )
         .row(
@@ -75,8 +78,7 @@ def plan(
         for index, missing in enumerate(plan_value.missing, start=1):
             builder.item(
                 index,
-                f"{missing.category} · {missing.item_id or '任意'} · "
-                f"{missing.quantity} 件",
+                f"{missing.category} · {missing.quantity} 件",
             )
     if isinstance(value, CraftingPlan) and plan_value.satisfiable:
         builder.small(f"{_text(copy, '然后')}：{value.craft_command}")

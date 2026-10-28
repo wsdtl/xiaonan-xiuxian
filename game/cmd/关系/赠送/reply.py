@@ -59,7 +59,7 @@ def _result(feature: GiftFeature, target_name: str) -> DocumentBuilder:
 
         .inline_section("赠礼", M.status("完成", tone="positive"), icon="game.success")
         .section("去向", icon="game.role")
-        .field("接收者", M.text(target_name, tone="emphasis"))
+        .field("接收者", M.command(target_name, f"查看 {target_name}"))
     )
 
 
