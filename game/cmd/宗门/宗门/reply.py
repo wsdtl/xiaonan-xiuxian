@@ -89,7 +89,12 @@ def page(
             )
             if names:
                 label = role if role == "宗主" else f"{role}（{len(names)}）"
-                builder.field(label, "、".join(names))
+                content = M.text(label + "：")
+                for index, name in enumerate(names):
+                    if index:
+                        content += M.text("、")
+                    content += (M.command(name, f"查看 {name}"),)
+                builder.line(content)
         builder.section(_text(copy, "查看", "进境"), icon="game.seed").row(
             (
                 _text(copy, "查看", "等级"),

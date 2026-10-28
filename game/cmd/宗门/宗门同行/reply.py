@@ -72,11 +72,16 @@ def page(
                     {"当前": len(value.members), "上限": value.maximum_members}
                 ),
             ),
-            ("领队", leader),
+            ("领队", M.command(leader, f"查看 {leader}")),
         )
         names = tuple(member.name for member in value.members if member.name != leader)
         if names:
-            builder.field(f"同行（{len(names)}）", "、".join(names))
+            content = M.text(f"同行（{len(names)}）：")
+            for index, name in enumerate(names):
+                if index:
+                    content += M.text("、")
+                content += (M.command(name, f"查看 {name}"),)
+            builder.line(content)
     return builder.actions(message_actions(actions)).build()
 
 
