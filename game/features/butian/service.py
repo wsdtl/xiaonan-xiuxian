@@ -56,6 +56,16 @@ class ButianFeature:
             raise JsonDataError(f"补天展示缺少文本：{section}.{key}")
         return value.format_map(values or {})
 
+    async def apply_from_text(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> ButianResult:
+        parts = str(raw_message or "").split()
+        if len(parts) != 3:
+            raise ButianError("格式：补天 人物或道侣 同境界 单属性突破丹编号")
+        return await self.apply(
+            user_id, request_id, parts[0], parts[1], parts[2]
+        )
+
     async def apply(self, user_id: str, request_id: str, target: str, realm: str, source_medicine_id: str) -> ButianResult:
         target = str(target or "").strip()
         if target not in {"人物", "道侣"}:

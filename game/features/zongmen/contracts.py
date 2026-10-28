@@ -60,9 +60,19 @@ class SectCopy:
     text: Mapping[str, Mapping[str, str]]
 
 
+@dataclass(frozen=True)
+class SectEntry:
+    """一次宗门根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    page: SectPage | None = None
+    operation: SectOperationResult | None = None
+
+
 __all__ = [
     "SectAction",
     "SectCopy",
+    "SectEntry",
     "SectFeatureError",
     "SectMemberView",
     "SectOperationResult",

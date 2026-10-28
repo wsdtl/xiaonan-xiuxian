@@ -36,9 +36,20 @@ class LingcangCopy:
     text: Mapping[str, str]
 
 
+@dataclass(frozen=True)
+class LingcangEntry:
+    """一次灵藏根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    page: LingcangPage | None = None
+    quantity: int = 0
+    transfer: SectAssetTransfer | None = None
+
+
 __all__ = [
     "LingcangAction",
     "LingcangCopy",
+    "LingcangEntry",
     "LingcangFeatureError",
     "LingcangPage",
     "SectAssetTransfer",

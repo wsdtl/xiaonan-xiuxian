@@ -49,9 +49,19 @@ class SectFollowCopy:
     text: Mapping[str, Mapping[str, str]]
 
 
+@dataclass(frozen=True)
+class SectFollowEntry:
+    """一次宗门同行根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    page: SectFollowPage | None = None
+    result: SectFollowResult | None = None
+
+
 __all__ = [
     "SectFollowAction",
     "SectFollowCopy",
+    "SectFollowEntry",
     "SectFollowFeatureError",
     "SectFollowMemberView",
     "SectFollowPage",

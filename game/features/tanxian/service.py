@@ -19,7 +19,12 @@ from game.core.item_catalog import ItemCatalogService
 from game.core.medicine import MedicineError, MedicineService
 from game.core.auto_travel import AutoTravelError, AutoTravelService
 
-from .contracts import ExplorationAction, ExplorationCopy, ExplorationFeatureError
+from .contracts import (
+    ExplorationAction,
+    ExplorationCopy,
+    ExplorationEntry,
+    ExplorationFeatureError,
+)
 from game.features.presentation import paged_settlement_actions
 from .presentation import actions, load_presentation
 
@@ -83,6 +88,77 @@ class ExplorationFeature:
         except ExplorationError as exc:
             message = f"已到达{moved_to}，但开始失败：{exc}" if moved_to else str(exc)
             raise ExplorationFeatureError(message) from exc
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> ExplorationEntry:
+        """解析根命令与紧凑子命令；分支是否合规只由本玩法判定。"""
+
+        text = str(raw_message or "").strip()
+        if text.startswith("探险"):
+            text = text[2:].strip()
+        action, _, args = text.partition(" ")
+        action = action.strip()
+        args = args.strip()
+        if not action:
+            return await self._enter_default(user_id, request_id)
+        if action == "开始":
+            if args:
+                raise self._invalid_command()
+            return ExplorationEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        if action == "进度":
+            if args:
+                raise self._invalid_command()
+            return ExplorationEntry(
+                "progress", progress=await self.progress(user_id)
+            )
+        if action in {"结束", "结果"}:
+            page = self._page_number(args)
+            result = await self.settle(user_id, request_id)
+            total_pages = 1 + len(result.users)
+            if page < 1 or page > total_pages:
+                raise ExplorationFeatureError(f"页码必须在1至{total_pages}之间")
+            return ExplorationEntry(
+                "settlement",
+                settlement=result,
+                page=page,
+                total_pages=total_pages,
+            )
+        raise self._invalid_command()
+
+    async def _enter_default(
+        self, user_id: str, request_id: str
+    ) -> ExplorationEntry:
+        try:
+            result = await self.progress(user_id)
+        except ExplorationFeatureError:
+            return ExplorationEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        if result.ended and not result.can_settle:
+            return ExplorationEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        return ExplorationEntry("progress", progress=result)
+
+    def _page_number(self, args: str) -> int:
+        if not args:
+            return 1
+        try:
+            page = int(args)
+        except ValueError as exc:
+            raise self._invalid_command() from exc
+        if page < 1:
+            raise self._invalid_command()
+        return page
+
+    def _invalid_command(self) -> ExplorationFeatureError:
+        text = self.copy().text
+        return ExplorationFeatureError(
+            str(text.get("错误", {}).get("写法", "写法错误"))
+        )
 
     async def progress(
         self, user_id: str, *, now: datetime | None = None

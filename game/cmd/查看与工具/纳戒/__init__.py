@@ -26,29 +26,20 @@ from typing import Any
     },
 )
 async def show_najie(user_id: str, message: str, manager: Any) -> None:
-    query = tuple(str(message or "").split())
     feature = current_game_services().features.najie
     try:
-        if not query:
-            message_value = reply.home(await feature.home(user_id))
-        elif len(query) == 1:
-            message_value = reply.category(await feature.category(user_id, query[0]))
-        elif len(query) in {2, 3}:
-            page = _page_number(query[2]) if len(query) == 3 else 1
-            message_value = reply.page(
-                await feature.page(user_id, query[0], query[1], page)
-            )
+        entry = await feature.enter_query(user_id, message)
+        if entry.kind == "home" and entry.home is not None:
+            message_value = reply.home(entry.home)
+        elif entry.kind == "category" and entry.category is not None:
+            message_value = reply.category(entry.category)
+        elif entry.kind == "page" and entry.page is not None:
+            message_value = reply.page(entry.page)
         else:
-            raise NajieQueryError("纳戒命令最多接收大类、小类和页码")
+            raise NajieQueryError("纳戒查询结果无效")
     except (NajieQueryError, NajieStateError) as exc:
         message_value = reply.error(str(exc))
     await send_game_reply(message_value)
-
-
-def _page_number(value: str) -> int:
-    if not value.isdecimal() or int(value) < 1:
-        raise NajieQueryError("纳戒页码必须是正整数")
-    return int(value)
 
 
 __all__ = []

@@ -13,56 +13,44 @@ async def dispatch(
 ) -> None:
     feature = current_game_services().features.zongmen_shengchan
     try:
-        args = query.split()
-        if not args:
-            value = await feature.view(kind, user_id)
-            await send_game_reply(
-                reply.viewed(feature.copy(), value, feature.actions(value))
-            )
-            return
-        if args == ["开启"]:
-            value = await feature.start(kind, user_id, request_id)
-            await send_game_reply(
-                reply.started(feature.copy(), value, feature.actions(value.view))
-            )
-            return
-        if args == ["收取"]:
-            value = await feature.collect(kind, user_id, request_id)
-            await send_game_reply(
-                reply.collected(feature.copy(), value, feature.actions(value.view))
-            )
-            return
-        if kind in ("灵脉", "灵田") and args[0] == "选地形" and len(args) <= 2:
-            if len(args) == 1:
-                value = await feature.view(kind, user_id)
-                await send_game_reply(
-                    reply.terrains(feature.copy(), value, feature.actions(value))
-                )
-                return
-            value = await feature.select_terrain(kind, user_id, request_id, args[1])
-            await send_game_reply(
-                reply.placed(feature.copy(), value, feature.actions(value))
-            )
-            return
-        if kind in ("灵脉", "灵田") and args == ["清地形"]:
-            value = await feature.clear_terrain(kind, user_id, request_id)
-            await send_game_reply(
-                reply.placed(feature.copy(), value, feature.actions(value))
-            )
-            return
-        raise SectProductionFeatureError(f"格式：{_usage(kind)}")
+        entry = await feature.enter(kind, user_id, request_id, query)
     except SectProductionFeatureError as exc:
         await send_game_reply(reply.error(feature.copy(), str(exc)))
-
-
-def _usage(kind: str) -> str:
-    if kind == "灵田":
-        return (
-            "灵田、灵田 开启、灵田 收取、灵田 选地形 [地形名] 或 灵田 清地形"
+        return
+    if entry.kind == "view" and entry.view is not None:
+        await send_game_reply(
+            reply.viewed(
+                feature.copy(), entry.view, feature.actions(entry.view)
+            )
         )
-    return (
-        f"{kind}、{kind} 开启、{kind} 收取、{kind} 选地形 [地形名] 或 {kind} 清地形"
-    )
+    elif entry.kind == "started" and entry.result is not None:
+        await send_game_reply(
+            reply.started(
+                feature.copy(),
+                entry.result,
+                feature.actions(entry.result.view),
+            )
+        )
+    elif entry.kind == "collected" and entry.result is not None:
+        await send_game_reply(
+            reply.collected(
+                feature.copy(),
+                entry.result,
+                feature.actions(entry.result.view),
+            )
+        )
+    elif entry.kind == "terrains" and entry.view is not None:
+        await send_game_reply(
+            reply.terrains(
+                feature.copy(), entry.view, feature.actions(entry.view)
+            )
+        )
+    elif entry.kind == "placed" and entry.view is not None:
+        await send_game_reply(
+            reply.placed(
+                feature.copy(), entry.view, feature.actions(entry.view)
+            )
+        )
 
 
 __all__ = ["dispatch"]

@@ -73,6 +73,63 @@ class ShengjieFeature:
         self._require_initialized()
         return self._copy
 
+    async def enter_upgrade(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> ShengjieResult:
+        """解析升阶根命令；分支与参数合规由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        if len(parts) not in (2, 3):
+            raise ShengjieError(
+                "写法：升阶 <来源品级><物品> <目标品级> [数量]"
+            )
+        quantity = self._quantity(parts[2]) if len(parts) == 3 else 1
+        return await self.upgrade_from_text(
+            user_id, request_id, parts[0], parts[1], quantity
+        )
+
+    async def enter_plan(self, user_id: str, raw_message: str) -> object:
+        """解析升阶方案；分支与参数合规由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        if not parts:
+            raise ShengjieError(
+                "写法：升阶方案 炼丹|炼器 <名称> [数量]，或 "
+                "升阶方案 灵植|灵矿|兽宝 [编号] <目标品级> [数量]"
+            )
+        kind = parts[0]
+        if kind in ("炼丹", "炼器", "炼阵"):
+            if len(parts) not in (2, 3):
+                raise ShengjieError(
+                    "写法：升阶方案 炼丹|炼器|炼阵 <名称> [数量]"
+                )
+            quantity = self._quantity(parts[2]) if len(parts) == 3 else 1
+            return await self.plan_crafting(user_id, kind, parts[1], quantity)
+        if kind in ("灵植", "灵矿", "兽宝"):
+            if len(parts) == 3:
+                item_text, target_text, quantity_text = "", parts[1], parts[2]
+            elif len(parts) == 4:
+                item_text, target_text, quantity_text = parts[1], parts[2], parts[3]
+            else:
+                raise ShengjieError(
+                    "写法：升阶方案 灵植|灵矿|兽宝 [编号] <目标品级> [数量]"
+                )
+            return await self.plan_material(
+                user_id, kind, item_text, target_text, self._quantity(quantity_text)
+            )
+        raise ShengjieError(
+            "升阶方案目前支持炼丹、炼器、炼阵、灵植、灵矿、兽宝"
+        )
+
+    def _quantity(self, text: str) -> int:
+        try:
+            value = int(text)
+        except ValueError as exc:
+            raise ShengjieError("数量必须是正整数") from exc
+        if value < 1:
+            raise ShengjieError("数量必须是正整数")
+        return value
+
     async def upgrade_from_text(
         self,
         user_id: str,

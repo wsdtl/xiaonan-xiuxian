@@ -31,9 +31,22 @@ class ExplorationCopy:
     text: Mapping[str, Mapping[str, str]]
 
 
+@dataclass(frozen=True)
+class ExplorationEntry:
+    """一次根命令进入后的结果；分支合规由玩法判定。"""
+
+    kind: str
+    started: ExplorationStarted | None = None
+    progress: ExplorationProgress | None = None
+    settlement: ExplorationSettlement | None = None
+    page: int = 1
+    total_pages: int = 1
+
+
 __all__ = [
     "ExplorationAction",
     "ExplorationCopy",
+    "ExplorationEntry",
     "ExplorationFeatureError",
     "ExplorationProgress",
     "ExplorationSettlement",

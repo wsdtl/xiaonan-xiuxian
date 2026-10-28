@@ -3,6 +3,7 @@
 from .contracts import (
     CharacterExistsError,
     CreateCharacterError,
+    CreateCharacterFormatError,
     CreateCharacterRequest,
     CreateCharacterResult,
     InvalidCreateCharacterError,
@@ -13,6 +14,7 @@ __all__ = [
     "CharacterExistsError",
     "CreateCharacterError",
     "CreateCharacterFeature",
+    "CreateCharacterFormatError",
     "CreateCharacterRequest",
     "CreateCharacterResult",
     "InvalidCreateCharacterError",

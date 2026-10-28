@@ -19,6 +19,7 @@ from game.core.world import LocationQuery, WorldService
 
 from .contracts import (
     YijingConflictError,
+    YijingEntry,
     YijingError,
     YijingRefundResult,
     YijingRoute,
@@ -152,6 +153,31 @@ class YijingFeature:
             (content_id, str(entity.get("名称") or ""))
             for content_id, entity in sorted(self._data.entities("意境").items())
         )
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> YijingEntry:
+        """解析意境根命令；分支与目标合规由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        if parts and parts[0] == "点" and len(parts) == 2:
+            view = await self.inspect(user_id)
+            wanted = parts[1]
+            content_id = next(
+                (
+                    route.content_id
+                    for route in view.routes
+                    if route.content_id == wanted or route.name == wanted
+                ),
+                "",
+            )
+            if not content_id:
+                raise YijingError(f"没有叫「{wanted}」的意境")
+            pointed = await self.point(user_id, request_id, content_id)
+            return YijingEntry(
+                "pointed", view=pointed, content_id=content_id
+            )
+        return YijingEntry("view", view=await self.inspect(user_id))
 
     async def inspect(self, user_id: str) -> YijingView:
         """看：六条路各自的阶、共享的道行、当前境界给的阶上限。"""

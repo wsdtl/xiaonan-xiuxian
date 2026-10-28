@@ -15,7 +15,7 @@ from types import MappingProxyType
 from game.core.data import JsonDataError, JsonDataService
 from game.features.presentation import require_mapping
 
-from .contracts import SectProductionAction
+from .contracts import SectProductionAction, SectProductionEntry
 
 
 class SectProductionFeatureError(RuntimeError):
@@ -106,6 +106,46 @@ class SectProductionFeature:
             if button["页面"] == "查看"
             and button["设施"] == view.facility.kind
             and button["条件"] == condition
+        )
+
+    async def enter(
+        self, kind: str, user_id: str, request_id: str, query: str
+    ) -> SectProductionEntry:
+        """解析资源设施根命令；分支与参数合规只由本玩法判定。"""
+
+        args = str(query or "").split()
+        if not args:
+            return SectProductionEntry(
+                "view", view=await self.view(kind, user_id)
+            )
+        if args == ["开启"]:
+            return SectProductionEntry(
+                "started", result=await self.start(kind, user_id, request_id)
+            )
+        if args == ["收取"]:
+            return SectProductionEntry(
+                "collected", result=await self.collect(kind, user_id, request_id)
+            )
+        if args[0] == "选地形" and len(args) <= 2:
+            if len(args) == 1:
+                return SectProductionEntry(
+                    "terrains", view=await self.view(kind, user_id)
+                )
+            return SectProductionEntry(
+                "placed",
+                view=await self.select_terrain(kind, user_id, request_id, args[1]),
+            )
+        if args == ["清地形"]:
+            return SectProductionEntry(
+                "placed",
+                view=await self.clear_terrain(kind, user_id, request_id),
+            )
+        raise SectProductionFeatureError(f"格式：{self._usage(kind)}")
+
+    def _usage(self, kind: str) -> str:
+        return (
+            f"{kind}、{kind} 开启、{kind} 收取、"
+            f"{kind} 选地形 [地形名] 或 {kind} 清地形"
         )
 
     async def view(self, kind: str, user_id: str) -> SectProductionView:

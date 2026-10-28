@@ -6,7 +6,7 @@ from game.app import current_game_services
 from game.features.chakan_juese import CharacterOverviewError
 from game.features.chuangjian_renwu import (
     CharacterExistsError,
-    CreateCharacterRequest,
+    CreateCharacterFormatError,
     InvalidCreateCharacterError,
 )
 
@@ -32,22 +32,13 @@ from typing import Any
     },
 )
 async def create_character(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    parts = message.split()
-    if len(parts) not in (2, 3):
+    try:
+        result = await current_game_services().features.chuangjian_renwu.create_from_text(
+            user_id, message_context.request_id, message
+        )
+    except CreateCharacterFormatError:
         await send_game_reply(reply.invalid_create_format())
         return
-    name, gender = parts[0], parts[1]
-    race = parts[2] if len(parts) == 3 else ""
-    try:
-        result = await current_game_services().features.chuangjian_renwu.create(
-            CreateCharacterRequest(
-                user_id=user_id,
-                request_id=message_context.request_id,
-                name=name,
-                gender=gender,
-                race=race,
-            )
-        )
     except InvalidCreateCharacterError as exc:
         await send_game_reply(reply.create_error(str(exc)))
         return

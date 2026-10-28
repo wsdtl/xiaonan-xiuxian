@@ -15,98 +15,42 @@ from . import reply
 _COMPACT = re.compile(r"^探险(?P<action>进度|结束|结果)(?:\s+(?P<args>.*))?$")
 
 
-def _split(message: str) -> tuple[str, str]:
-    parts = str(message or "").strip().split(maxsplit=1)
-    if not parts:
-        return "", ""
-    return parts[0], parts[1] if len(parts) > 1 else ""
-
-
-async def _start(user_id: str, request_id: str) -> None:
+async def _enter(
+    user_id: str, raw_message: str, message_context: MessageContext
+) -> None:
     feature = current_game_services().features.tanxian
     try:
-        result = await feature.start(user_id, request_id)
-        await send_game_reply(
-            reply.started(feature.copy(), result, feature.start_actions())
+        entry = await feature.enter(
+            user_id, message_context.request_id, raw_message
         )
     except ExplorationFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
-
-
-async def _progress(user_id: str) -> None:
-    feature = current_game_services().features.tanxian
-    try:
-        result = await feature.progress(user_id)
+        await send_game_reply(
+            reply.error(feature.copy(), str(exc), feature.format_actions())
+        )
+        return
+    if entry.kind == "started" and entry.started is not None:
+        await send_game_reply(
+            reply.started(feature.copy(), entry.started, feature.start_actions())
+        )
+    elif entry.kind == "progress" and entry.progress is not None:
         await send_game_reply(
             reply.progress(
                 feature.copy(),
-                result,
-                feature.progress_actions(result.ended, result.can_settle),
+                entry.progress,
+                feature.progress_actions(
+                    entry.progress.ended, entry.progress.can_settle
+                ),
             )
         )
-    except ExplorationFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
-
-
-async def _settle(user_id: str, page_text: str, request_id: str) -> None:
-    feature = current_game_services().features.tanxian
-    try:
-        page = 1 if not page_text else int(page_text)
-    except ValueError:
-        await send_game_reply(
-            reply.error(feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions())
-        )
-        return
-    try:
-        result = await feature.settle(user_id, request_id)
-        total_pages = 1 + len(result.users)
-        if page < 1 or page > total_pages:
-            raise ExplorationFeatureError(f"页码必须在1至{total_pages}之间")
+    elif entry.kind == "settlement" and entry.settlement is not None:
         await send_game_reply(
             reply.settlement_page(
                 feature.copy(),
                 feature,
-                result,
-                page,
-                feature.settlement_actions(page, total_pages),
+                entry.settlement,
+                entry.page,
+                feature.settlement_actions(entry.page, entry.total_pages),
             )
-        )
-    except ExplorationFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
-
-
-async def _dispatch(
-    user_id: str,
-    action: str,
-    args: str,
-    message_context: MessageContext,
-) -> None:
-    feature = current_game_services().features.tanxian
-    if not action:
-        try:
-            result = await feature.progress(user_id)
-            if result.ended and not result.can_settle:
-                await _start(user_id, message_context.request_id)
-            else:
-                await send_game_reply(
-                    reply.progress(
-                        feature.copy(),
-                        result,
-                        feature.progress_actions(result.ended, result.can_settle),
-                    )
-                )
-        except ExplorationFeatureError:
-            await _start(user_id, message_context.request_id)
-        return
-    if action == "开始":
-        await _start(user_id, message_context.request_id)
-    elif action == "进度":
-        await _progress(user_id)
-    elif action in {"结束", "结果"}:
-        await _settle(user_id, args, message_context.request_id)
-    else:
-        await send_game_reply(
-            reply.error(feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions())
         )
 
 
@@ -127,8 +71,7 @@ async def _dispatch(
 async def exploration_root(
     user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
-    action, args = _split(message)
-    await _dispatch(user_id, action, args, message_context)
+    await _enter(user_id, message, message_context)
 
 
 @GameCommand.regex(
@@ -142,9 +85,7 @@ async def exploration_compact(
     manager: Any,
     match: re.Match,
 ) -> None:
-    await _dispatch(
-        user_id, match.group("action"), match.group("args") or "", message_context
-    )
+    await _enter(user_id, raw_message, message_context)
 
 
 @GameCommand.command(
@@ -159,7 +100,7 @@ async def exploration_compact(
 async def exploration_hosted_start(
     user_id: str, message_context: MessageContext, manager: Any
 ) -> None:
-    await _start(user_id, message_context.request_id)
+    await _enter(user_id, "探险 开始", message_context)
 
 
 @GameCommand.command(
@@ -174,7 +115,7 @@ async def exploration_hosted_start(
 async def exploration_hosted_end(
     user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
-    await _settle(user_id, message, message_context.request_id)
+    await _enter(user_id, f"探险 结束 {message}".strip(), message_context)
 
 
 __all__ = []

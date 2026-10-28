@@ -16,8 +16,14 @@ from game.core.alchemy import (
 
 
 from game.core.data import JsonDataService
+from game.features.presentation import parse_item_ref
 
-from .contracts import AlchemyAction, AlchemyCopy, AlchemyFeatureError
+from .contracts import (
+    AlchemyAction,
+    AlchemyCopy,
+    AlchemyEntry,
+    AlchemyFeatureError,
+)
 from .presentation import actions, load_presentation
 
 
@@ -44,6 +50,77 @@ class AlchemyFeature:
         if self._copy is None:
             raise RuntimeError("炼丹玩法尚未初始化")
         return self._copy
+
+    async def enter_direct(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> AlchemyEntry:
+        """解析直接炼丹；分支与参数合规只由本玩法判定。"""
+
+        query = str(raw_message or "").strip()
+        if not query:
+            return AlchemyEntry("overview", overview=await self.overview(user_id))
+        ref, quantity = self._direct(query)
+        return await self._finish(user_id, request_id, ref, quantity)
+
+    async def enter_catalog(
+        self, user_id: str, raw_message: str
+    ) -> AlchemyEntry:
+        """解析炼丹目录；类别、页码与单条预览由本玩法判定。"""
+
+        query = str(raw_message or "").strip()
+        if not query:
+            return AlchemyEntry("overview", overview=await self.overview(user_id))
+        parts = query.split()
+        categories = {"恢复丹", "战丹", "突破丹", "特殊丹"}
+        if parts[0] in categories and len(parts) <= 2:
+            page = self._page_number(parts[1]) if len(parts) == 2 else 1
+            return AlchemyEntry(
+                "recipes", recipes=await self.recipes(user_id, parts[0], page)
+            )
+        return await self._finish(
+            user_id, "", parse_item_ref(query), 1, allow_refine=False
+        )
+
+    def _direct(self, query: str) -> tuple[object, int]:
+        parts = str(query or "").strip().split()
+        quantity = 1
+        if len(parts) > 1 and parts[-1].isdecimal():
+            quantity = int(parts[-1])
+            parts = parts[:-1]
+        if not parts:
+            raise ValueError("缺少丹药名")
+        return parse_item_ref(" ".join(parts)), quantity
+
+    def _page_number(self, value: str) -> int:
+        if not value.isdecimal():
+            raise ValueError("写法：炼丹目录 [类别] [页码]")
+        page = int(value)
+        if page < 1:
+            raise ValueError("写法：炼丹目录 [类别] [页码]")
+        return page
+
+    async def _finish(
+        self,
+        user_id: str,
+        request_id: str,
+        ref: object,
+        quantity: int,
+        *,
+        allow_refine: bool = True,
+    ) -> AlchemyEntry:
+        item = str(getattr(ref, "item"))
+        grade = str(getattr(ref, "grade") or "")
+        if not grade:
+            return AlchemyEntry("choose_grade", item=item)
+        preview = await self.preview(user_id, item, grade, quantity)
+        if not allow_refine or not preview.can_refine:
+            return AlchemyEntry("preview", preview=preview)
+        return AlchemyEntry(
+            "completed",
+            result=await self.refine(
+                user_id, request_id, item, grade, quantity
+            ),
+        )
 
     async def overview(self, user_id: str) -> AlchemyOverview:
         return await self._call(self._alchemy.overview(user_id))

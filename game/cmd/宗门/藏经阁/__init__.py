@@ -35,60 +35,25 @@ async def cangjing(
 ) -> None:
     feature = current_game_services().features.zongmen_cangjing
     copy = feature.copy()
-    parts = str(message or "").strip().split(maxsplit=1)
     try:
-        if not parts:
-            await _page(feature, user_id, 1, manager)
-            return
-        action = parts[0]
-        rest = parts[1].strip() if len(parts) > 1 else ""
-        if action.isdecimal():
-            await _page(feature, user_id, _positive(action, "藏经阁页码"), manager)
-            return
-        if action == "借阅":
-            await _borrow(feature, user_id, rest, message_context, manager)
-            return
-        raise CangjingFeatureError(copy.text["分支"])
+        entry = await feature.enter(
+            user_id, message_context.request_id, message
+        )
     except CangjingFeatureError as exc:
         await send_game_reply(reply.error(copy, str(exc)))
-
-
-async def _page(feature: Any, user_id: str, page: int, manager: Any) -> None:
-    value = await feature.page(user_id, page)
-    await send_game_reply(reply.page(feature.copy(), value, feature.page_actions(value)))
-
-
-async def _borrow(
-    feature: Any,
-    user_id: str,
-    rest: str,
-    message_context: MessageContext,
-    manager: Any,
-) -> None:
-    copy = feature.copy()
-    words = rest.split()
-    if not words:
-        raise CangjingFeatureError(copy.text["借阅写法"])
-    identifier = words[0]
-    if len(words) == 1:
-        slots = await feature.borrow_slots(user_id)
-        if slots < 1:
-            raise CangjingFeatureError("没有可用的功法槽")
-        await send_game_reply(reply.borrow_prompt(copy, identifier, range(1, slots + 1)))
         return
-    if len(words) != 2:
-        raise CangjingFeatureError(copy.text["借阅写法"])
-    slot = _positive(words[1], "功法槽位")
-    value = await feature.borrow(
-        user_id, message_context.request_id, identifier, slot
-    )
-    await send_game_reply(reply.borrowed(copy, value))
-
-
-def _positive(value: str, label: str) -> int:
-    if not value.isdecimal() or int(value) < 1:
-        raise CangjingFeatureError(f"{label}必须是正整数")
-    return int(value)
+    if entry.kind == "page" and entry.page is not None:
+        await send_game_reply(
+            reply.page(copy, entry.page, feature.page_actions(entry.page))
+        )
+    elif entry.kind == "prompt":
+        await send_game_reply(
+            reply.borrow_prompt(
+                copy, entry.identifier, range(1, entry.slots + 1)
+            )
+        )
+    elif entry.kind == "borrowed" and entry.borrowed is not None:
+        await send_game_reply(reply.borrowed(copy, entry.borrowed))
 
 
 __all__ = []

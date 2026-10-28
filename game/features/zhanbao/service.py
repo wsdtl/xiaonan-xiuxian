@@ -106,6 +106,28 @@ class BattleReportFeature:
             raise RuntimeError("宗门战核心必须先于战报页面玩法启动")
         self._initialized = True
 
+    async def reports_from_text(
+        self,
+        participant: str,
+        raw_page: str,
+        *,
+        kind: str = "",
+        size: int = 5,
+        strict: bool = False,
+    ) -> MyReportPage:
+        """从玩家原始页码文本取战报；页码合规由本玩法判定。"""
+
+        text = str(raw_page or "").strip()
+        if text and (not text.isdecimal() or int(text) < 1):
+            if strict:
+                raise ValueError("战报页码")
+            page = 1
+        else:
+            page = int(text or 1)
+        return await self.my_reports(
+            participant, kind=kind, page=page, size=size
+        )
+
     async def my_reports(
         self, participant: str, *, kind: str = "", page: int = 1, size: int = 5
     ) -> MyReportPage:

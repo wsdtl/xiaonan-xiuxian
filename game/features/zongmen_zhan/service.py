@@ -75,8 +75,68 @@ class SectWarFeature:
         self._text = text
         self._buttons = buttons
 
+    async def challenge_from_text(
+        self, user_id: str, raw_args: str, request_id: str
+    ) -> SectWarView:
+        """从原始约战参数取目标与押注；格式合规由本玩法判定。"""
+
+        parts = str(raw_args or "").split()
+        if len(parts) != 2 or not parts[1].isdecimal() or int(parts[1]) < 1:
+            raise ValueError("约战格式")
+        return await self.challenge(
+            user_id, parts[0], int(parts[1]), request_id
+        )
+
+    async def history_from_text(
+        self, user_id: str, raw_page: str
+    ) -> SectWarHistoryPage:
+        text = str(raw_page or "").strip()
+        if text and (not text.isdecimal() or int(text) < 1):
+            raise ValueError("战录页码")
+        return await self.history(user_id, int(text or 1))
+
+    async def current_from_text(
+        self, user_id: str, war_id: str, request_id: str
+    ) -> SectWarView:
+        return (
+            await self.view(user_id, war_id)
+            if war_id
+            else await self.current(user_id, request_id)
+        )
+
     async def challenge(self, user_id: str, target: str, wager: int, request_id: str) -> SectWarView:
         return await self._pass(self._war.challenge(user_id, target, wager, request_id))
+
+    async def enter_ready(
+        self, user_id: str, action: str, request_id: str
+    ) -> SectWarView:
+        """接战/拒战/撤战/锁阵的分支合规由本玩法判定。"""
+
+        methods = {
+            "接战": self.accept,
+            "拒战": self.reject,
+            "撤战": self.withdraw,
+            "锁阵": self.lock,
+        }
+        method = methods.get(action)
+        if method is None:
+            raise SectWarError("宗门战待命动作无效")
+        return await method(user_id, request_id)
+
+    async def enter_operate(
+        self, user_id: str, action: str, request_id: str
+    ) -> SectWarView:
+        """解阵/开战/停战的分支合规由本玩法判定。"""
+
+        methods = {
+            "解阵": self.unlock,
+            "开战": self.start,
+            "停战": self.cancel,
+        }
+        method = methods.get(action)
+        if method is None:
+            raise SectWarError("宗门战操作动作无效")
+        return await method(user_id, request_id)
 
     async def accept(self, user_id: str, request_id: str) -> SectWarView:
         return await self._pass(self._war.accept(user_id, request_id))

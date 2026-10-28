@@ -24,6 +24,7 @@ from .contracts import (
     NajieQueryError,
     NajieStateError,
     NajieSubcategorySummary,
+    NajieViewResult,
 )
 
 
@@ -41,6 +42,33 @@ class NajieFeature:
         if not self._assets.status().initialized:
             raise RuntimeError("玩家资产核心微服务必须先于纳戒玩法启动")
         self._initialized = True
+
+    async def enter_query(
+        self, user_id: str, raw_message: str
+    ) -> NajieViewResult:
+        """解析纳戒根命令；分支与页码合规由本玩法判定。"""
+
+        query = tuple(str(raw_message or "").split())
+        if not query:
+            return NajieViewResult("home", home=await self.home(user_id))
+        if len(query) == 1:
+            return NajieViewResult(
+                "category", category=await self.category(user_id, query[0])
+            )
+        if len(query) in {2, 3}:
+            page = self._page_number(query[2]) if len(query) == 3 else 1
+            return NajieViewResult(
+                "page",
+                page=await self.page(
+                    user_id, query[0], query[1], page
+                ),
+            )
+        raise NajieQueryError("纳戒命令最多接收大类、小类和页码")
+
+    def _page_number(self, value: str) -> int:
+        if not value.isdecimal() or int(value) < 1:
+            raise NajieQueryError("纳戒页码必须是正整数")
+        return int(value)
 
     async def home(self, user_id: str) -> NajieHome:
         snapshot = await self._snapshot(user_id)

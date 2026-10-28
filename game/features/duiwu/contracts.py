@@ -54,9 +54,19 @@ class TeamOperationResult:
     page: TeamPage
 
 
+@dataclass(frozen=True)
+class TeamEntry:
+    """一次队伍根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    page: TeamPage | None = None
+    operation: TeamOperationResult | None = None
+
+
 __all__ = [
     "TeamAction",
     "TeamCopy",
+    "TeamEntry",
     "TeamFeatureError",
     "TeamInvitationView",
     "TeamMemberView",

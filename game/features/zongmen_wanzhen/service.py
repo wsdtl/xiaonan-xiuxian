@@ -23,6 +23,10 @@ from game.core.sect import SectService
 from game.core.sect_assets import SectAssetEntry, SectAssetError, SectAssetService
 
 from game.features.presentation import (
+    ItemRef,
+    ItemRefError,
+    format_item_ref,
+    parse_item_ref,
     project_dungeon_buttons,
     require_mapping,
 )
@@ -30,6 +34,7 @@ from game.features.presentation import (
 from .contracts import (
     WanzhenAction,
     WanzhenCopy,
+    WanzhenEntry,
     WanzhenFeatureError,
     WanzhenOwnProduct,
     WanzhenPage,
@@ -134,6 +139,134 @@ class WanzhenFeature:
             for button in self._buttons
             if button["条件"] in conditions
         )
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> WanzhenEntry:
+        """解析万珍殿根命令；分支与参数合规只由本玩法判定。"""
+
+        raw = str(raw_message or "").strip()
+        head, _, rest = raw.partition(" ")
+        if head == "捐入":
+            return await self._enter_donate(user_id, request_id, rest)
+        if head == "发放":
+            return await self._enter_grant(user_id, request_id, rest)
+        if head == "领取":
+            return await self._enter_claim(user_id, request_id, rest)
+        parts = raw.split()
+        if len(parts) > 2:
+            raise WanzhenFeatureError("格式：万珍殿 [类别] [页码]")
+        category = parts[0] if parts else "全部"
+        page = self._positive(parts[1], "万珍殿页码") if len(parts) == 2 else 1
+        return WanzhenEntry("page", page=await self.page(user_id, category, page))
+
+    async def _enter_donate(
+        self, user_id: str, request_id: str, raw: str
+    ) -> WanzhenEntry:
+        parts = str(raw or "").split()
+        categories = {"丹药", "真意", "气机", "器律", "阵法"}
+        if not parts or parts[0] not in categories:
+            raise WanzhenFeatureError("格式：万珍殿 捐入 类别 内容 ...")
+        category = parts[0]
+        if category == "阵法" and 2 <= len(parts) <= 3:
+            name_word = parts[1]
+            old_qualifier = parts[2] if len(parts) == 3 else ""
+            try:
+                ref = parse_item_ref(name_word)
+            except ItemRefError:
+                ref = None
+            if ref is not None and (ref.grade or ref.treasure):
+                wanted = format_item_ref(
+                    ItemRef(item=ref.item, treasure=ref.treasure)
+                )
+                identifier = await self._formation_key(
+                    user_id, wanted, ref.grade or old_qualifier
+                )
+            else:
+                identifier = await self._formation_key(
+                    user_id, name_word, old_qualifier
+                )
+            grade_or_key, quantity = identifier, 1
+        elif category == "器律" and len(parts) == 3:
+            identifier, grade_or_key = parts[1], ""
+            quantity = self._positive(parts[2], "数量")
+        elif category in {"丹药", "真意", "气机"} and len(parts) in {3, 4}:
+            if len(parts) == 4:
+                identifier, grade_or_key = parts[1], parts[2]
+            else:
+                ref = parse_item_ref(parts[1])
+                identifier, grade_or_key = ref.item, ref.grade
+            quantity = self._positive(parts[-1], "数量")
+        else:
+            raise WanzhenFeatureError("万珍殿存入参数与类别不匹配")
+        return WanzhenEntry(
+            "transferred",
+            transfer=await self.donate(
+                user_id,
+                request_id,
+                category,
+                identifier,
+                grade_or_key,
+                quantity,
+            ),
+        )
+
+    async def _enter_grant(
+        self, user_id: str, request_id: str, raw: str
+    ) -> WanzhenEntry:
+        parts = str(raw or "").split()
+        if len(parts) not in {2, 3}:
+            raise WanzhenFeatureError("格式：万珍殿 发放 目标 条目编号 [数量]")
+        quantity = self._positive(parts[2], "数量") if len(parts) == 3 else 1
+        entry_key = await self.resolve_vault_entry(user_id, parts[1])
+        return WanzhenEntry(
+            "transferred",
+            transfer=await self.grant(
+                user_id, request_id, parts[0], entry_key, quantity
+            ),
+        )
+
+    async def _enter_claim(
+        self, user_id: str, request_id: str, raw: str
+    ) -> WanzhenEntry:
+        parts = str(raw or "").split()
+        if len(parts) not in {1, 2}:
+            raise WanzhenFeatureError("格式：万珍殿 领取 条目 [数量]")
+        quantity = self._positive(parts[1], "数量") if len(parts) == 2 else 1
+        entry_key = await self.resolve_vault_entry(user_id, parts[0])
+        return WanzhenEntry(
+            "transferred",
+            transfer=await self.claim(
+                user_id, request_id, entry_key, quantity
+            ),
+        )
+
+    async def _formation_key(
+        self, user_id: str, wanted: str, qualifier: str
+    ) -> str:
+        query = str(wanted or "").strip()
+        bracket = ""
+        if query.endswith("]") and "[" in query:
+            head, _, bracket = query[:-1].partition("[")
+            head, bracket = head.strip(), bracket.strip()
+            if head.isdecimal():
+                text = self.copy().text
+                raise WanzhenFeatureError(
+                    str(text.get("阵法编号别带方括号") or "阵法编号别带方括号").format(
+                        number=head
+                    )
+                )
+            query = head
+        if bracket and not qualifier:
+            qualifier = bracket
+        return await self.resolve_formation_entry(
+            user_id, query, qualifier, treasure=bracket
+        )
+
+    def _positive(self, value: str, label: str) -> int:
+        if not value.isdecimal() or int(value) < 1:
+            raise WanzhenFeatureError(f"{label}必须是正整数")
+        return int(value)
 
     async def page(
         self, user_id: str, category: str = "全部", page: int = 1

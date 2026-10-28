@@ -22,7 +22,13 @@ from game.features.presentation import (
     require_mapping,
 )
 
-from .contracts import CangjingAction, CangjingCopy, CangjingFeatureError, CangjingPage
+from .contracts import (
+    CangjingAction,
+    CangjingCopy,
+    CangjingEntry,
+    CangjingFeatureError,
+    CangjingPage,
+)
 
 
 class CangjingFeature:
@@ -88,6 +94,45 @@ class CangjingFeature:
             for button in self._buttons
             if button["条件"] in conditions
         )
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> CangjingEntry:
+        """解析藏经阁根命令；分支与参数合规只由本玩法判定。"""
+
+        copy = self.copy()
+        parts = str(raw_message or "").strip().split(maxsplit=1)
+        if not parts:
+            return CangjingEntry("page", page=await self.page(user_id, 1))
+        action = parts[0]
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if action.isdecimal():
+            return CangjingEntry(
+                "page", page=await self.page(user_id, self._positive(action, "藏经阁页码"))
+            )
+        if action != "借阅":
+            raise CangjingFeatureError(copy.text["分支"])
+        words = rest.split()
+        if not words:
+            raise CangjingFeatureError(copy.text["借阅写法"])
+        identifier = words[0]
+        if len(words) == 1:
+            slots = await self.borrow_slots(user_id)
+            if slots < 1:
+                raise CangjingFeatureError("没有可用的功法槽")
+            return CangjingEntry("prompt", identifier=identifier, slots=slots)
+        if len(words) != 2:
+            raise CangjingFeatureError(copy.text["借阅写法"])
+        slot = self._positive(words[1], "功法槽位")
+        return CangjingEntry(
+            "borrowed",
+            borrowed=await self.borrow(user_id, request_id, identifier, slot),
+        )
+
+    def _positive(self, value: str, label: str) -> int:
+        if not value.isdecimal() or int(value) < 1:
+            raise CangjingFeatureError(f"{label}必须是正整数")
+        return int(value)
 
     async def borrow_slots(self, user_id: str) -> int:
         """先确认在洞天且可行动，再返回可借入的功法槽数量。"""

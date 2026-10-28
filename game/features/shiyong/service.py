@@ -8,10 +8,13 @@ from game.core.data import JsonDataError, JsonDataService, mapping, sequence
 from game.core.item_catalog import ItemCatalogError, ItemCatalogService
 from game.core.location import LocationService
 
+from game.features.presentation import parse_item_ref
+
 from .contracts import (
     UseAction,
     UseCandidate,
     UseDescription,
+    UseEntry,
     UseError,
     UseOutcome,
     UsePlan,
@@ -112,6 +115,113 @@ class UseGatewayFeature:
         if not value:
             raise RuntimeError(f"使用规则缺少文本：{key}")
         return value
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> UseEntry:
+        """解析使用根命令；分支与参数合规只由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        if not parts:
+            raise UseError("缺少物品")
+        if len(parts) > 3:
+            raise UseError(self.copy("写法"))
+        ref = parse_item_ref(parts[0])
+        args = tuple(parts[1:])
+        plan = await self.plan(
+            UseRequest(
+                user_id,
+                request_id,
+                ref.item,
+                grade=ref.grade,
+                treasure=ref.treasure,
+            )
+        )
+        if isinstance(plan, UseRedirect):
+            return UseEntry("redirect", redirect=plan)
+        options = plan.description.options
+        target = ""
+        position = 0
+        if plan.profile.target != "无":
+            first = args[0] if args else ""
+            if first and any(option.target == first for option in options):
+                target = first
+                args = args[1:]
+            elif first and not first.isdecimal():
+                raise UseError(f"目标不可用：{first}")
+            elif args or plan.profile.position == "无":
+                target = plan.description.target_default
+        if args:
+            if plan.profile.position == "无":
+                raise UseError("这件物品不需要位置")
+            if len(args) != 1 or not args[0].isdecimal():
+                raise UseError(f"位置不可用：{args[0]}")
+            position = int(args[0])
+        if not options:
+            return UseEntry(
+                "outcome",
+                plan=plan,
+                outcome=await self.execute(plan, target, position),
+                target=target,
+            )
+        if plan.profile.target != "无" and plan.profile.position != "无":
+            if not target:
+                filtered = options
+            else:
+                filtered = tuple(option for option in options if option.target == target)
+            if not position:
+                if len(filtered) == 1:
+                    target = filtered[0].target
+                    position = filtered[0].position
+                else:
+                    return UseEntry(
+                        "branch",
+                        plan=plan,
+                        commands=self._option_commands(
+                            plan.description.display, filtered
+                        ),
+                    )
+        elif plan.profile.position != "无":
+            if not position:
+                if len(options) == 1:
+                    position = options[0].position
+                else:
+                    return UseEntry(
+                        "branch",
+                        plan=plan,
+                        commands=self._option_commands(
+                            plan.description.display, options
+                        ),
+                    )
+        elif plan.profile.target != "无":
+            if not target:
+                if len(options) == 1:
+                    target = options[0].target
+                else:
+                    return UseEntry(
+                        "branch",
+                        plan=plan,
+                        commands=self._option_commands(
+                            plan.description.display, options
+                        ),
+                    )
+        return UseEntry(
+            "outcome",
+            plan=plan,
+            outcome=await self.execute(plan, target, position),
+            target=target,
+        )
+
+    def _option_commands(self, display: str, options: object) -> tuple[str, ...]:
+        result = []
+        for option in options:
+            parts = [f"使用 {display}"]
+            if option.target:
+                parts.append(option.target)
+            if option.position:
+                parts.append(str(option.position))
+            result.append(" ".join(parts))
+        return tuple(result)
 
     async def plan(self, request: UseRequest) -> UsePlan | UseRedirect:
         self._require_initialized()

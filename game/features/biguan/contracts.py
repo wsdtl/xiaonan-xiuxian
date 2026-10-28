@@ -31,9 +31,22 @@ class RetreatCopy:
     text: Mapping[str, Mapping[str, str]]
 
 
+@dataclass(frozen=True)
+class RetreatEntry:
+    """一次根命令进入后的结果；分支合规由玩法判定。"""
+
+    kind: str
+    started: RetreatStarted | None = None
+    progress: RetreatProgress | None = None
+    settlement: RetreatSettlement | None = None
+    page: int = 1
+    total_pages: int = 1
+
+
 __all__ = [
     "RetreatAction",
     "RetreatCopy",
+    "RetreatEntry",
     "RetreatFeatureError",
     "RetreatProgress",
     "RetreatSettlement",

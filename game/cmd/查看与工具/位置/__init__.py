@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from game.app import current_game_services
-from game.features.weizhi import NearbyPageError
 
 from ...command import GameCommand
 from . import reply
@@ -55,71 +54,47 @@ async def show_position(user_id: str, manager: Any) -> None:
 async def show_nearby(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.weizhi
     copy = feature.copy()
-    parts = str(message or "").split()
-    if not parts:
-        result = await feature.nearby_overview(user_id)
+    entry = await feature.nearby_enter(user_id, message)
+    if entry.kind == "overview" and entry.overview is not None:
         await send_game_reply(
             reply.nearby_overview(
                 copy,
-                result,
+                entry.overview,
                 feature.nearby_overview_actions(
-                    result.locations,
-                    surface=result.current.space_type == "地表",
+                    entry.overview.locations,
+                    surface=entry.overview.current.space_type == "地表",
                 ),
             )
         )
-        return
-    if parts == ["地点"]:
-        result = await feature.nearby_locations(user_id)
+    elif entry.kind == "locations" and entry.locations is not None:
         await send_game_reply(
             reply.nearby_locations(
                 copy,
-                result,
-                feature.nearby_location_actions(result.values),
+                entry.locations,
+                feature.nearby_location_actions(entry.locations.values),
             )
         )
-        return
-    if parts[0] == "修士" and len(parts) <= 2:
-        try:
-            page = _page_number(parts[1], copy.invalid_page) if len(parts) == 2 else 1
-            result = await feature.nearby_cultivators(user_id, page)
-            await send_game_reply(
-                reply.nearby_cultivators(
-                    copy,
-                    result,
-                    feature.nearby_cultivator_actions(
-                        result.page,
-                        result.has_next,
-                        surface=result.space_type == "地表",
-                    ),
-                )
+    elif entry.kind == "cultivators" and entry.cultivators is not None:
+        await send_game_reply(
+            reply.nearby_cultivators(
+                copy,
+                entry.cultivators,
+                feature.nearby_cultivator_actions(
+                    entry.cultivators.page,
+                    entry.cultivators.has_next,
+                    surface=entry.cultivators.space_type == "地表",
+                ),
             )
-        except NearbyPageError as exc:
-            await send_game_reply(
-                reply.error(
-                    copy,
-                    copy.cultivators_title,
-                    str(exc),
-                    feature.nearby_overview_actions(),
-                )
-            )
-        return
-    await send_game_reply(
-        reply.error(
-            copy,
-            copy.overview_title.format_map({"地点": "附近"}),
-            copy.invalid_command,
-            feature.format_actions(),
         )
-    )
-
-
-def _page_number(value: str, invalid_message: str) -> int:
-    try:
-        return int(value)
-    except ValueError as exc:
-        raise NearbyPageError(invalid_message) from exc
-
+    else:
+        await send_game_reply(
+            reply.error(
+                copy,
+                entry.error_title,
+                entry.error_message,
+                feature.nearby_overview_actions(),
+            )
+        )
 
 
 __all__ = []

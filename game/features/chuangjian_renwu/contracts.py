@@ -13,6 +13,10 @@ class InvalidCreateCharacterError(CreateCharacterError, ValueError):
     """玩家提交的创建信息无效。"""
 
 
+class CreateCharacterFormatError(InvalidCreateCharacterError):
+    """创建命令的写法不合法。"""
+
+
 class CharacterExistsError(CreateCharacterError):
     """该用户已经拥有角色。"""
 
@@ -49,6 +53,7 @@ class CreateCharacterResult:
 __all__ = [
     "CharacterExistsError",
     "CreateCharacterError",
+    "CreateCharacterFormatError",
     "CreateCharacterRequest",
     "CreateCharacterResult",
     "InvalidCreateCharacterError",

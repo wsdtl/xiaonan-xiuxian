@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from game.core.trade import TradeOverview, TradePage
+
 """交易玩法微服务的稳定公共契约。"""
 
 
@@ -20,4 +22,13 @@ class TradeAction:
     style: str
 
 
-__all__ = ["TradeFeatureError"]
+@dataclass(frozen=True)
+class TradeQueryEntry:
+    """一次交易查询根命令的结果；分支与页码由玩法判定。"""
+
+    kind: str
+    overview: TradeOverview | None = None
+    page: TradePage | None = None
+
+
+__all__ = ["TradeAction", "TradeFeatureError", "TradeQueryEntry"]

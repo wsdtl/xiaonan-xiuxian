@@ -37,43 +37,31 @@ from typing import Any
 )
 async def team_command(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.duiwu
-    parts = str(message or "").strip().split(maxsplit=1)
     try:
-        if not parts:
-            value = await feature.page(user_id)
-            await send_game_reply(
-                reply.page(feature.copy(), value, feature.page_actions(value))
-            )
-            return
-        action = parts[0]
-        target = parts[1].strip() if len(parts) == 2 else ""
-        request_id = message_context.request_id
-        if action == "邀请":
-            result = await feature.invite(user_id, target, request_id)
-        elif action == "接受" and not target:
-            result = await feature.accept(user_id, request_id)
-        elif action == "拒绝" and not target:
-            result = await feature.reject(user_id, request_id)
-        elif action == "离开" and not target:
-            result = await feature.leave(user_id, request_id)
-        elif action == "请离":
-            result = await feature.kick(user_id, target, request_id)
-        elif action == "移交":
-            result = await feature.transfer(user_id, target, request_id)
-        elif action == "解散" and not target:
-            result = await feature.disband(user_id, request_id)
-        else:
-            await send_game_reply(reply.format_error(feature.copy(), feature.page_actions("格式")))
-            return
-        await send_game_reply(
-            reply.operation(
-                feature.copy(),
-                result,
-                feature.page_actions(result.page),
-            )
+        entry = await feature.enter(
+            user_id, message_context.request_id, message
         )
     except TeamFeatureError as exc:
         await send_game_reply(reply.error(feature.copy(), exc.code))
+        return
+    if entry.kind == "format":
+        await send_game_reply(
+            reply.format_error(feature.copy(), feature.page_actions("格式"))
+        )
+    elif entry.kind == "page" and entry.page is not None:
+        await send_game_reply(
+            reply.page(
+                feature.copy(), entry.page, feature.page_actions(entry.page)
+            )
+        )
+    elif entry.kind == "operation" and entry.operation is not None:
+        await send_game_reply(
+            reply.operation(
+                feature.copy(),
+                entry.operation,
+                feature.page_actions(entry.operation.page),
+            )
+        )
 
 
 __all__ = []

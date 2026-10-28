@@ -19,6 +19,16 @@ from game.core.character import CharacterService
 from game.core.data import JsonDataError, JsonDataService
 from game.core.gift import GiftError, GiftResult, GiftSendCommand, GiftService
 from game.core.item_catalog import ItemCatalogService
+from game.features.presentation import parse_item_ref
+
+
+@dataclass(frozen=True)
+class GiftEntry:
+    """一次赠送根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    target_name: str
+    result: GiftResult
 
 
 class GiftFeature:
@@ -58,6 +68,53 @@ class GiftFeature:
         if not isinstance(result, str):
             raise TypeError(f"赠送展示缺少文本：{key}")
         return result.format_map(values or {})
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> GiftEntry:
+        """解析赠送根命令；分支与参数合规只由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        if len(parts) == 3 and parts[1] == "灵石":
+            target = await self.resolve_target(user_id, parts[0])
+            target_name = await self.target_name(target)
+            result = await self.send(
+                GiftSendCommand(
+                    user_id,
+                    target,
+                    request_id,
+                    spirit_stones=self._positive(parts[2]),
+                )
+            )
+            return GiftEntry("stones", target_name, result)
+        if len(parts) not in {3, 4}:
+            raise ValueError(self.text("命令", "物品格式"))
+        if len(parts) == 4:
+            item_word, grade = parts[1], parts[2]
+            quantity = self._positive(parts[3])
+        else:
+            ref = parse_item_ref(parts[1])
+            item_word, grade = ref.item, ref.grade
+            quantity = self._positive(parts[2])
+        target = await self.resolve_target(user_id, parts[0])
+        target_name = await self.target_name(target)
+        item_id = self.resolve_item(item_word)
+        result = await self.send(
+            GiftSendCommand(
+                user_id,
+                target,
+                request_id,
+                item_id=item_id,
+                grade_id=grade,
+                quantity=quantity,
+            )
+        )
+        return GiftEntry("item", target_name, result)
+
+    def _positive(self, value: str) -> int:
+        if not value.isdecimal() or int(value) < 1:
+            raise ValueError("数量必须是正整数")
+        return int(value)
 
     async def resolve_target(self, user_id: str, query: str) -> str:
         return await self._gift.resolve_target(user_id, query)

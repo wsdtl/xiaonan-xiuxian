@@ -15,6 +15,7 @@ from game.core.world import LocationQuery, WorldService
 
 from .contracts import (
     CharacterExistsError,
+    CreateCharacterFormatError,
     CreateCharacterRequest,
     CreateCharacterResult,
     InvalidCreateCharacterError,
@@ -64,6 +65,24 @@ class CreateCharacterFeature:
             if isinstance(item, Mapping)
         }
         return birthplace
+
+    async def create_from_text(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> CreateCharacterResult:
+        """解析创建人物根命令；写法合规由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        if len(parts) not in (2, 3):
+            raise CreateCharacterFormatError("创建人物写法")
+        return await self.create(
+            CreateCharacterRequest(
+                user_id=user_id,
+                request_id=request_id,
+                name=parts[0],
+                gender=parts[1],
+                race=parts[2] if len(parts) == 3 else "",
+            )
+        )
 
     async def create(self, request: CreateCharacterRequest) -> CreateCharacterResult:
         if not self._birthplace:

@@ -9,7 +9,6 @@ from ...command import GameCommand
 from . import reply
 from .site import router
 from ...reply_composer import send_game_reply
-from typing import Any
 
 
 @GameCommand.command(
@@ -26,15 +25,11 @@ from typing import Any
         },
     },
 )
-async def show_innate_treasures(user_id: str, message: str, manager: Any) -> None:
+async def show_innate_treasures(user_id: str, message: str) -> None:
     feature = current_game_services().features.xiantian_lingbao
-    raw = message.strip()
-    if raw and not raw.isdecimal():
-        await send_game_reply(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
-        return
     try:
         await send_game_reply(
-            reply.view(feature, await feature.inspect(user_id, int(raw or 1)))
+            reply.view(feature, await feature.inspect_from_text(user_id, message))
         )
     except InnateTreasureFeatureError as exc:
         await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
@@ -54,15 +49,11 @@ async def show_innate_treasures(user_id: str, message: str, manager: Any) -> Non
         },
     },
 )
-async def show_innate_treasure_catalog(user_id: str, message: str, manager: Any) -> None:
+async def show_innate_treasure_catalog(message: str) -> None:
     feature = current_game_services().features.xiantian_lingbao
-    raw = message.strip()
-    if raw and not raw.isdecimal():
-        await send_game_reply(reply.error(feature, feature.copy("错误格式"), feature.format_actions()))
-        return
     try:
         await send_game_reply(
-            reply.catalog(feature, await feature.catalog(int(raw or 1)))
+            reply.catalog(feature, await feature.catalog_from_text(message))
         )
     except InnateTreasureFeatureError as exc:
         await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))

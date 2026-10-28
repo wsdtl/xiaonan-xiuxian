@@ -11,7 +11,7 @@ from game.features.daolv_jiejiao import (
 )
 
 from ...command import GameCommand
-from . import input as command_input, reply
+from . import reply
 from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from typing import Any
@@ -35,12 +35,8 @@ async def converse_companion(user_id: str, message: str, manager: Any) -> None:
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
-    query = str(message or "").strip()
-    if not query:
-        await send_game_reply(reply.error(copy, reply.text(copy, "命令", "交谈格式"), feature.format_actions("格式交谈")))
-        return
     try:
-        result = await feature.converse(user_id, query)
+        result = await feature.converse_from_text(user_id, message)
         actions = feature.actions("交谈", result.view)
         await send_game_reply(reply.conversation(copy, result, actions))
     except CompanionInteractionError as exc:
@@ -69,15 +65,8 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
     try:
-        companion, item, grade, quantity = command_input.gift_arguments(
-            message,
-            reply.text(copy, "命令", "赠予格式"),
-            reply.text(copy, "命令", "赠礼数量"),
-        )
-        result = await feature.gift(
-            CompanionGiftRequest(
-                user_id, message_context.request_id, companion, item, grade, quantity
-            )
+        result = await feature.gift_from_text(
+            user_id, message_context.request_id, message
         )
         actions = feature.actions("赠礼", result.view)
         await send_game_reply(reply.gift(copy, result, actions))
@@ -103,13 +92,9 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
-    query = str(message or "").strip()
-    if not query:
-        await send_game_reply(reply.error(copy, reply.text(copy, "命令", "邀约格式"), feature.format_actions("格式邀约")))
-        return
     try:
-        result = await feature.invite(
-            CompanionInvitationRequest(user_id, message_context.request_id, query)
+        result = await feature.invite_from_text(
+            user_id, message_context.request_id, message
         )
         actions = feature.actions("邀约", result.view)
         await send_game_reply(reply.invitation(copy, result, actions))
@@ -135,13 +120,9 @@ async def farewell_companion(user_id: str, message: str, message_context: Messag
     services = current_game_services()
     feature = services.features.daolv_jiejiao
     copy = feature.copy()
-    query = str(message or "").strip()
-    if not query:
-        await send_game_reply(reply.error(copy, reply.text(copy, "命令", "暂别格式"), feature.format_actions("格式暂别")))
-        return
     try:
-        result = await feature.farewell(
-            CompanionFarewellRequest(user_id, message_context.request_id, query)
+        result = await feature.farewell_from_text(
+            user_id, message_context.request_id, message
         )
         actions = feature.farewell_actions(result.definition.companion_id)
         await send_game_reply(reply.farewell(copy, result, actions))

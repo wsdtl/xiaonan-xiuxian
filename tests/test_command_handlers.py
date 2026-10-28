@@ -31,6 +31,12 @@ class _AlchemyFeature:
         self.preview_calls.append((identifier, grade, quantity))
         return object()
 
+    async def enter_catalog(self, user_id, message):
+        if message == "聚气丹":
+            return SimpleNamespace(kind="choose_grade", item="聚气丹")
+        preview = await self.preview(user_id, "聚气丹", "黄品", 1)
+        return SimpleNamespace(kind="preview", preview=preview)
+
     @staticmethod
     def preview_actions(value):
         return ()
@@ -47,6 +53,10 @@ class _ForgingFeature:
     async def preview(self, user_id, identifier):
         self.preview_calls.append(identifier)
         return object()
+
+    async def enter_catalog(self, user_id, message):
+        preview = await self.preview(user_id, message)
+        return SimpleNamespace(kind="preview", preview=preview)
 
     @staticmethod
     def preview_actions(value):
@@ -71,6 +81,16 @@ class _FormationFeature:
     async def preview(self, user_id, identifier, grade, investments):
         self.preview_calls.append((identifier, grade, investments))
         return object()
+
+    async def enter(self, user_id, request_id, message):
+        if message == "叠翠盘根阵":
+            return SimpleNamespace(kind="choose_grade", identifier="叠翠盘根阵")
+        preview = await self.preview(user_id, "叠翠盘根阵", "黄品", None)
+        return SimpleNamespace(kind="preview", preview=preview)
+
+    async def enter_catalog(self, user_id, message):
+        preview = await self.preview(user_id, "叠翠盘根阵", "黄品", None)
+        return SimpleNamespace(kind="preview", preview=preview)
 
     @staticmethod
     def preview_actions(value):

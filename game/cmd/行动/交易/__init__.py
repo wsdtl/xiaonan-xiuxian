@@ -31,23 +31,22 @@ from typing import Any
 )
 async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.jiaoyi
-    parts = str(message or "").split()
     try:
-        if not parts:
-            value = await feature.overview(user_id)
-            await send_game_reply(reply.overview(feature, value))
-            return
-        if len(parts) > 2:
-            raise TradeFeatureError(feature.copy("错误", "交易格式"))
-        page_number = 1
-        if len(parts) == 2:
-            if not parts[1].isdecimal() or int(parts[1]) < 1:
-                raise TradeFeatureError("交易页码必须是正整数")
-            page_number = int(parts[1])
-        value = await feature.page(user_id, parts[0], page_number)
-        await send_game_reply(reply.page(feature, value))
+        entry = await feature.enter_query(user_id, message)
     except TradeFeatureError as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions(), command="交易"))
+        await send_game_reply(
+            reply.error(
+                feature,
+                str(exc),
+                feature.format_actions(),
+                command="交易",
+            )
+        )
+        return
+    if entry.kind == "overview" and entry.overview is not None:
+        await send_game_reply(reply.overview(feature, entry.overview))
+    elif entry.kind == "page" and entry.page is not None:
+        await send_game_reply(reply.page(feature, entry.page))
 
 
 @GameCommand.command(

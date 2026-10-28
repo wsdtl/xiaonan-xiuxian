@@ -28,11 +28,8 @@ async def _run(operation: Awaitable[SectWarView]) -> None:
 
 
 async def _challenge(user_id: str, args: str, request_id: str) -> None:
-    parts = str(args or "").split()
     try:
-        if len(parts) != 2 or not parts[1].isdecimal() or int(parts[1]) < 1:
-            raise ValueError
-        value = await _feature().challenge(user_id, parts[0], int(parts[1]), request_id)
+        value = await _feature().challenge_from_text(user_id, args, request_id)
         await send_game_reply(reply.view(_feature(), value))
     except ValueError:
         await send_game_reply(
@@ -46,10 +43,8 @@ async def _challenge(user_id: str, args: str, request_id: str) -> None:
 
 async def _current(user_id: str, war_id: str, request_id: str) -> None:
     try:
-        value = (
-            await _feature().view(user_id, war_id)
-            if war_id
-            else await _feature().current(user_id, request_id)
+        value = await _feature().current_from_text(
+            user_id, war_id, request_id
         )
         await send_game_reply(reply.view(_feature(), value))
     except SectWarError as exc:
@@ -59,12 +54,11 @@ async def _current(user_id: str, war_id: str, request_id: str) -> None:
 
 
 async def _history(user_id: str, raw: str) -> None:
-    text = str(raw or "").strip()
     try:
-        if text and (not text.isdecimal() or int(text) < 1):
-            raise ValueError
         await send_game_reply(
-            reply.history(_feature(), await _feature().history(user_id, int(text or 1)))
+            reply.history(
+                _feature(), await _feature().history_from_text(user_id, raw)
+            )
         )
     except ValueError:
         await send_game_reply(
@@ -77,15 +71,12 @@ async def _history(user_id: str, raw: str) -> None:
 
 
 async def _reports(user_id: str, raw: str) -> None:
-    text = str(raw or "").strip()
     try:
-        if text and (not text.isdecimal() or int(text) < 1):
-            raise ValueError
         await send_game_reply(
             reply.recent_reports(
                 _feature(),
-                await current_game_services().features.zhanbao.my_reports(
-                    user_id, kind="宗门战", page=int(text or 1)
+                await current_game_services().features.zhanbao.reports_from_text(
+                    user_id, raw, kind="宗门战", strict=True
                 ),
             )
         )
@@ -143,16 +134,11 @@ async def sect_war_challenge(user_id: str, raw_message: str, message_context: Me
     metadata={"scope": "通用", "guard_rule": "宗门战待命", "hidden": True},
 )
 async def sect_war_ready(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    action = match.group("action")
-    feature = _feature()
-    if action == "接战":
-        await _run(feature.accept(user_id, message_context.request_id))
-    elif action == "拒战":
-        await _run(feature.reject(user_id, message_context.request_id))
-    elif action == "撤战":
-        await _run(feature.withdraw(user_id, message_context.request_id))
-    elif action == "锁阵":
-        await _run(feature.lock(user_id, message_context.request_id))
+    await _run(
+        _feature().enter_ready(
+            user_id, match.group("action"), message_context.request_id
+        )
+    )
 
 
 @GameCommand.regex(
@@ -160,14 +146,11 @@ async def sect_war_ready(user_id: str, raw_message: str, message_context: Messag
     metadata={"scope": "通用", "guard_rule": "宗门战操作", "hidden": True},
 )
 async def sect_war_operate(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    action = match.group("action")
-    feature = _feature()
-    if action == "解阵":
-        await _run(feature.unlock(user_id, message_context.request_id))
-    elif action == "开战":
-        await _run(feature.start(user_id, message_context.request_id))
-    elif action == "停战":
-        await _run(feature.cancel(user_id, message_context.request_id))
+    await _run(
+        _feature().enter_operate(
+            user_id, match.group("action"), message_context.request_id
+        )
+    )
 
 
 @GameCommand.regex(

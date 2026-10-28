@@ -1,5 +1,11 @@
 from game.core.gift import GiftError, GiftResult, GiftSendCommand
 
-from .service import GiftFeature
+from .service import GiftEntry, GiftFeature
 
-__all__ = ["GiftError", "GiftFeature", "GiftResult", "GiftSendCommand"]
+__all__ = [
+    "GiftEntry",
+    "GiftError",
+    "GiftFeature",
+    "GiftResult",
+    "GiftSendCommand",
+]

@@ -35,37 +35,33 @@ from typing import Any
 )
 async def sect_follow_command(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zongmen_tongxing
-    parts = str(message or "").strip().split(maxsplit=1)
     try:
-        if not parts:
-            value = await feature.page(user_id)
-            await send_game_reply(
-                reply.page(feature.copy(), value, feature.page_actions(value.page))
-            )
-            return
-        action = parts[0]
-        target = parts[1].strip() if len(parts) == 2 else ""
-        request_id = message_context.request_id
-        if action == "召集" and not target:
-            result = await feature.assemble(user_id, request_id)
-        elif action == "加入" and not target:
-            result = await feature.join(user_id, request_id)
-        elif action == "离开" and not target:
-            result = await feature.leave(user_id, request_id)
-        elif action == "请离" and target:
-            result = await feature.kick(user_id, target, request_id)
-        elif action == "解散" and not target:
-            result = await feature.disband(user_id, request_id)
-        else:
-            await send_game_reply(reply.format_error(feature.copy(), feature.page_actions("格式")))
-            return
-        await send_game_reply(
-            reply.operation(
-                feature.copy(), result, feature.page_actions(result.page.page)
-            )
+        entry = await feature.enter(
+            user_id, message_context.request_id, message
         )
     except SectFollowFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), exc.code, feature.page_actions("格式")))
+        await send_game_reply(
+            reply.error(feature.copy(), exc.code, feature.page_actions("格式"))
+        )
+        return
+    if entry.kind == "format":
+        await send_game_reply(
+            reply.format_error(feature.copy(), feature.page_actions("格式"))
+        )
+    elif entry.kind == "page" and entry.page is not None:
+        await send_game_reply(
+            reply.page(
+                feature.copy(), entry.page, feature.page_actions(entry.page.page)
+            )
+        )
+    elif entry.kind == "result" and entry.result is not None:
+        await send_game_reply(
+            reply.operation(
+                feature.copy(),
+                entry.result,
+                feature.page_actions(entry.result.page.page),
+            )
+        )
 
 
 __all__ = []

@@ -59,9 +59,19 @@ class WanzhenCopy:
     text: Mapping[str, str]
 
 
+@dataclass(frozen=True)
+class WanzhenEntry:
+    """一次万珍殿根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    page: WanzhenPage | None = None
+    transfer: WanzhenTransferResult | None = None
+
+
 __all__ = [
     "WanzhenAction",
     "WanzhenCopy",
+    "WanzhenEntry",
     "WanzhenFeatureError",
     "WanzhenOwnProduct",
     "WanzhenPage",

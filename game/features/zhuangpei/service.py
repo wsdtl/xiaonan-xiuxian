@@ -185,6 +185,14 @@ class ZhuangpeiFeature:
         value = self.scheme(self._profile_build(await self._character.profile(user_id)))
         return ZhuangpeiResult(value["code"], tuple(value["lines"]))
 
+    async def import_from_text(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> ZhuangpeiResult:
+        parts = str(raw_message or "").split()
+        if len(parts) != 1:
+            raise ZhuangpeiFeatureError("格式：导入装配 装配码")
+        return await self.import_code(user_id, request_id, parts[0])
+
     async def import_code(self, user_id: str, request_id: str, code: str) -> ZhuangpeiResult:
         # 同一个 (人物, 请求编号) 的两次并发导入必须串行：先到的落库之后，后到的才查得到回执。
         # 否则后到的会在「库存刚被扣走、回执尚未可见」的那几毫秒里判成储备不足并直接报错——

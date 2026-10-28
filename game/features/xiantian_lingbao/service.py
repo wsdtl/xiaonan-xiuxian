@@ -76,6 +76,22 @@ class InnateTreasureFeature:
             raise RuntimeError(f"先天灵宝展示缺少文本：{key}")
         return text.format_map(values or {})
 
+    async def inspect_from_text(
+        self, user_id: str, raw_page: str
+    ) -> InnateTreasureView:
+        """从原始页码文本查看；页码格式由本玩法判定。"""
+
+        return await self.inspect(user_id, self._page_from_text(raw_page))
+
+    async def catalog_from_text(self, raw_page: str) -> InnateTreasureView:
+        return await self.catalog(self._page_from_text(raw_page))
+
+    def _page_from_text(self, raw_page: str) -> int:
+        text = str(raw_page or "").strip()
+        if text and not text.isdecimal():
+            raise InnateTreasureFeatureError(self.copy("错误格式"))
+        return int(text or 1)
+
     async def inspect(self, user_id: str, page: int = 1) -> InnateTreasureView:
         self._require_initialized()
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:

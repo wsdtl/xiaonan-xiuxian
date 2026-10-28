@@ -5,29 +5,37 @@ from typing import Any
 
 from game.app import current_game_services
 from game.features.liandan import AlchemyFeatureError
-from game.features.presentation import ItemRefError, parse_item_ref
+from game.features.presentation import ItemRefError
 
 from ...command import GameCommand
 from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 from . import reply
 
-_CATEGORIES = {"恢复丹", "战丹", "突破丹", "特殊丹"}
-
-
-def _direct(message: str) -> tuple[object, int]:
-    parts = str(message or "").strip().split()
-    quantity = 1
-    if len(parts) > 1 and parts[-1].isdecimal():
-        quantity = int(parts[-1])
-        parts = parts[:-1]
-    if not parts:
-        raise ValueError("缺少丹药名")
-    return parse_item_ref(" ".join(parts)), quantity
-
-
 def _error(feature: Any, message: str) -> object:
     return reply.error(feature.copy(), message, feature.format_actions(), command="炼丹")
+
+
+def _render(feature: Any, entry: Any) -> object:
+    if entry.kind == "overview" and entry.overview is not None:
+        return reply.overview(
+            feature.copy(), entry.overview, feature.overview_actions()
+        )
+    if entry.kind == "choose_grade":
+        return reply.choose_grade(feature.copy(), entry.item)
+    if entry.kind == "preview" and entry.preview is not None:
+        return reply.preview(
+            feature.copy(), entry.preview, feature.preview_actions(entry.preview)
+        )
+    if entry.kind == "completed" and entry.result is not None:
+        return reply.completed(
+            feature.copy(), entry.result, feature.completed_actions()
+        )
+    if entry.kind == "recipes" and entry.recipes is not None:
+        return reply.recipe_list(
+            feature.copy(), entry.recipes, feature.list_actions(entry.recipes)
+        )
+    raise ValueError("炼丹结果无效")
 
 
 @GameCommand.command(
@@ -48,30 +56,11 @@ async def alchemy_root(
     user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
     feature = current_game_services().features.liandan
-    query = str(message or "").strip()
     try:
-        if not query:
-            value = await feature.overview(user_id)
-            await send_game_reply(
-                reply.overview(feature.copy(), value, feature.overview_actions())
-            )
-            return
-        ref, quantity = _direct(query)
-        if not ref.grade:
-            await send_game_reply(reply.choose_grade(feature.copy(), ref.item))
-            return
-        value = await feature.preview(user_id, ref.item, ref.grade, quantity)
-        if value.can_refine:
-            result = await feature.refine(
-                user_id, message_context.request_id, ref.item, ref.grade, quantity
-            )
-            await send_game_reply(
-                reply.completed(feature.copy(), result, feature.completed_actions())
-            )
-        else:
-            await send_game_reply(
-                reply.preview(feature.copy(), value, feature.preview_actions(value))
-            )
+        entry = await feature.enter_direct(
+            user_id, message_context.request_id, message
+        )
+        await send_game_reply(_render(feature, entry))
     except ValueError as exc:
         await send_game_reply(_error(feature, str(exc)))
     except ItemRefError as exc:
@@ -96,33 +85,9 @@ async def alchemy_root(
 )
 async def alchemy_catalog(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.liandan
-    query = str(message or "").strip()
     try:
-        if not query:
-            value = await feature.overview(user_id)
-            await send_game_reply(
-                reply.overview(feature.copy(), value, feature.overview_actions())
-            )
-            return
-        parts = query.split()
-        if parts[0] in _CATEGORIES and len(parts) <= 2:
-            category = parts[0]
-            page = int(parts[1]) if len(parts) == 2 and parts[1].isdecimal() else 1
-            if len(parts) == 2 and not parts[1].isdecimal():
-                raise ValueError("写法：炼丹目录 [类别] [页码]")
-            value = await feature.recipes(user_id, category, page)
-            await send_game_reply(
-                reply.recipe_list(feature.copy(), value, feature.list_actions(value))
-            )
-            return
-        ref = parse_item_ref(query)
-        if not ref.grade:
-            await send_game_reply(reply.choose_grade(feature.copy(), ref.item))
-            return
-        value = await feature.preview(user_id, ref.item, ref.grade, 1)
-        await send_game_reply(
-            reply.preview(feature.copy(), value, feature.preview_actions(value))
-        )
+        entry = await feature.enter_catalog(user_id, message)
+        await send_game_reply(_render(feature, entry))
     except ItemRefError as exc:
         await send_game_reply(_error(feature, str(exc)))
     except ValueError as exc:

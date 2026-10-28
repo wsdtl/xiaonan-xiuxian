@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Any
 
 from game.app import current_game_services
-from game.features.presentation import ItemRefError, parse_item_ref
-from game.features.shiyong import UseError, UseOption, UseRedirect, UseRequest
+from game.features.presentation import ItemRefError
+from game.features.shiyong import UseError
 
 from ...branching import BranchParseError, branch_menu
 from ...command import GameCommand
@@ -14,32 +14,11 @@ from . import reply
 from launch.adapter import MessageContext
 
 
-def _split(message: str) -> tuple[str, tuple[str, ...]]:
-    parts = str(message or "").split()
-    if not parts:
-        raise ValueError("缺少物品")
-    if len(parts) > 3:
-        raise ValueError("写法")
-    return parts[0], tuple(parts[1:])
-
-
 def _copy_feature(plan: Any, target: str) -> Any:
     key = plan.profile.port
     if key == "law":
         key = "daolv_peiyang" if target == "道侣" else "renwu_peiyang"
     return getattr(current_game_services().features, key)
-
-
-def _commands(display: str, options: tuple[UseOption, ...]) -> tuple[str, ...]:
-    result = []
-    for option in options:
-        parts = [f"使用 {display}"]
-        if option.target:
-            parts.append(option.target)
-        if option.position:
-            parts.append(str(option.position))
-        result.append(" ".join(parts))
-    return tuple(result)
 
 
 @GameCommand.command(
@@ -70,70 +49,24 @@ async def use_item(
 ) -> None:
     feature = current_game_services().features.shiyong
     try:
-        ref_text, args = _split(message)
-        ref = parse_item_ref(ref_text)
-        plan = await feature.plan(
-            UseRequest(
-                user_id,
-                message_context.request_id,
-                ref.item,
-                grade=ref.grade,
-                treasure=ref.treasure,
-            )
+        entry = await feature.enter(
+            user_id, message_context.request_id, message
         )
-        if isinstance(plan, UseRedirect):
-            await send_game_reply(reply.redirect(plan))
-            return
-        options = plan.description.options
-        target = ""
-        position = 0
-        if plan.profile.target != "无":
-            first = args[0] if args else ""
-            if first and any(option.target == first for option in options):
-                target = first
-                args = args[1:]
-            elif first and not first.isdecimal():
-                raise UseError(f"目标不可用：{first}")
-            elif args or plan.profile.position == "无":
-                target = plan.description.target_default
-        if args:
-            if plan.profile.position == "无":
-                raise UseError("这件物品不需要位置")
-            if len(args) != 1 or not args[0].isdecimal():
-                raise UseError(f"位置不可用：{args[0]}")
-            position = int(args[0])
-        if not options:
-            outcome = await feature.execute(plan, target, position)
-            await send_game_reply(reply.render(outcome, _copy_feature(plan, target)))
-            return
-        if plan.profile.target != "无" and plan.profile.position != "无":
-            if not target:
-                filtered = options
-            else:
-                filtered = tuple(option for option in options if option.target == target)
-            if not position:
-                if len(filtered) == 1:
-                    target = filtered[0].target
-                    position = filtered[0].position
-                else:
-                    await send_game_reply(branch_menu(_commands(plan.description.display, filtered)))
-                    return
-        elif plan.profile.position != "无":
-            if not position:
-                if len(options) == 1:
-                    position = options[0].position
-                else:
-                    await send_game_reply(branch_menu(_commands(plan.description.display, options)))
-                    return
-        elif plan.profile.target != "无":
-            if not target:
-                if len(options) == 1:
-                    target = options[0].target
-                else:
-                    await send_game_reply(branch_menu(_commands(plan.description.display, options)))
-                    return
-        outcome = await feature.execute(plan, target, position)
-        await send_game_reply(reply.render(outcome, _copy_feature(plan, target)))
+        if entry.kind == "redirect" and entry.redirect is not None:
+            await send_game_reply(reply.redirect(entry.redirect))
+        elif entry.kind == "branch":
+            await send_game_reply(branch_menu(entry.commands))
+        elif (
+            entry.kind == "outcome"
+            and entry.outcome is not None
+            and entry.plan is not None
+        ):
+            await send_game_reply(
+                reply.render(
+                    entry.outcome,
+                    _copy_feature(entry.plan, entry.target),
+                )
+            )
     except BranchParseError:
         await send_game_reply(reply.error(feature, feature.copy("写法")))
     except UseError as exc:

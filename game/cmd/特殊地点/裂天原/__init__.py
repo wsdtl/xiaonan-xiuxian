@@ -27,15 +27,12 @@ from typing import Any
 )
 async def correct_breakthrough(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.butian
-    parts = str(message or "").split()
     try:
-        if len(parts) != 3:
-            raise ButianError("格式：补天 人物或道侣 同境界 单属性突破丹编号")
         await send_game_reply(
             reply.result(
                 feature,
-                await feature.apply(
-                    user_id, message_context.request_id, parts[0], parts[1], parts[2]
+                await feature.apply_from_text(
+                    user_id, message_context.request_id, message
                 ),
             )
         )

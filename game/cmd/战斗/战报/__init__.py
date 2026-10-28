@@ -28,9 +28,9 @@ from ...reply_composer import send_game_reply
 )
 async def show_my_reports_page(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.zhanbao
-    raw = str(message or "").strip()
-    page = int(raw) if raw.isdecimal() and int(raw) > 0 else 1
-    await send_game_reply(reply.view(feature, await feature.my_reports(user_id, page=page)))
+    await send_game_reply(
+        reply.view(feature, await feature.reports_from_text(user_id, message))
+    )
 
 
 __all__ = ["router"]

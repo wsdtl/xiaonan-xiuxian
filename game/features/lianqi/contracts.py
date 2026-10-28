@@ -32,9 +32,21 @@ class ForgingCopy:
     text: Mapping[str, Mapping[str, str]]
 
 
+@dataclass(frozen=True)
+class ForgingEntry:
+    """一次炼器根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    overview: ForgingOverview | None = None
+    preview: ForgingPreview | None = None
+    result: ForgingResult | None = None
+    laws: ForgingLawList | None = None
+
+
 __all__ = [
     "ForgingAction",
     "ForgingCopy",
+    "ForgingEntry",
     "ForgingFeatureError",
     "ForgingLawList",
     "ForgingOverview",

@@ -36,6 +36,15 @@ class YijingView:
 
 
 @dataclass(frozen=True)
+class YijingEntry:
+    """一次意境根命令的结果；分支与目标合规由玩法判定。"""
+
+    kind: str
+    view: YijingView | None = None
+    content_id: str = ""
+
+
+@dataclass(frozen=True)
 class YijingRefundResult:
     """一次坐忘（退点）的结果。"""
 
@@ -50,6 +59,7 @@ class YijingRefundResult:
 
 __all__ = [
     "YijingConflictError",
+    "YijingEntry",
     "YijingError",
     "YijingRefundResult",
     "YijingRoute",

@@ -77,10 +77,6 @@ class AutoTravelService:
             target = self._world.locate(LocationQuery(location_name=name))
             if function not in target.available_functions:
                 continue
-            if function == "探险" and not (
-                target.cultivator_tiers or target.beast_tiers
-            ):
-                continue
             try:
                 plan = self._world.plan_journey(
                     JourneyQuery(

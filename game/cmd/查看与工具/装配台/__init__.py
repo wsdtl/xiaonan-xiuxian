@@ -30,10 +30,9 @@ async def my_assembly(user_id: str, manager: Any) -> None:
 async def import_assembly(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.zhuangpei
     try:
-        parts = message.split()
-        if len(parts) != 1:
-            raise ZhuangpeiFeatureError("格式：导入装配 装配码")
-        value = await feature.import_code(user_id, message_context.request_id, parts[0])
+        value = await feature.import_from_text(
+            user_id, message_context.request_id, message
+        )
         await send_game_reply(reply.scheme(feature.copy()["成功"], value))
     except ZhuangpeiFeatureError as exc:
         await send_game_reply(reply.error(str(exc), "可发送「我的装配」查看当前装配与最新装配码。"))

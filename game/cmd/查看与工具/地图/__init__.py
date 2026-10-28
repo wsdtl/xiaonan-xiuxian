@@ -9,7 +9,6 @@ from ...command import GameCommand
 from . import reply
 from .site import router
 from ...reply_composer import send_game_reply
-from typing import Any
 
 
 @GameCommand.command(
@@ -26,7 +25,7 @@ from typing import Any
         },
     },
 )
-async def show_world_map(user_id: str, message: str, manager: Any) -> None:
+async def show_world_map(message: str) -> None:
     overview = current_game_services().features.ditu.overview()
     url = public_url("world-map")
     query = " ".join(str(message or "").split())

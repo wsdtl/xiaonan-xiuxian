@@ -35,26 +35,16 @@ async def yijing(user_id: str, message: str, message_context: MessageContext, ma
     """`意境` 看六条路各自的阶；`意境 点 <路名或编号>` 给那一条路点一阶。"""
 
     feature = current_game_services().features.yijing
-    parts = message.split()
     try:
-        if parts and parts[0] == "点" and len(parts) == 2:
-            view = await feature.inspect(user_id)
-            wanted = parts[1]
-            content_id = next(
-                (
-                    route.content_id
-                    for route in view.routes
-                    if route.content_id == wanted or route.name == wanted
-                ),
-                "",
+        entry = await feature.enter(
+            user_id, message_context.request_id, message
+        )
+        if entry.kind == "pointed" and entry.view is not None:
+            await send_game_reply(
+                reply.yijing_pointed(entry.view, entry.content_id)
             )
-            if not content_id:
-                await send_game_reply(reply.yijing_refused(f"没有叫「{wanted}」的意境"))
-                return
-            view = await feature.point(user_id, message_context.request_id, content_id)
-            await send_game_reply(reply.yijing_pointed(view, content_id))
-        else:
-            await send_game_reply(reply.yijing_view(await feature.inspect(user_id)))
+        elif entry.view is not None:
+            await send_game_reply(reply.yijing_view(entry.view))
     except YijingError as exc:
         await send_game_reply(reply.yijing_refused(str(exc)))
 

@@ -6,6 +6,7 @@ from game.core.data import JsonDataService
 from .contracts import (
     SectAction,
     SectCopy,
+    SectEntry,
     SectFeatureError,
     SectMemberView,
     SectOperationResult,
@@ -123,6 +124,43 @@ class SectFeature:
             gathering_multiplier=progress.gathering_multiplier if progress else 1.0,
             facility_cost_multiplier=progress.facility_cost_multiplier if progress else 1.0,
         )
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> SectEntry:
+        """解析宗门根命令；分支与参数合规只由本玩法判定。"""
+
+        if not await self.can_manage(user_id):
+            raise SectFeatureError("not_in_cave")
+        parts = str(raw_message or "").strip().split(maxsplit=2)
+        if not parts:
+            return SectEntry("page", page=await self.page(user_id))
+        action = parts[0]
+        target = parts[1].strip() if len(parts) >= 2 else ""
+        extra = parts[2].strip() if len(parts) == 3 else ""
+        if action == "创建" and target and not extra:
+            result = await self.create(user_id, request_id, target)
+        elif action == "邀请" and target and not extra:
+            result = await self.invite(user_id, target, request_id)
+        elif action == "接受" and not target:
+            result = await self.accept(user_id, request_id)
+        elif action == "拒绝" and not target:
+            result = await self.reject(user_id, request_id)
+        elif action == "退出" and not target:
+            result = await self.leave(user_id, request_id)
+        elif action == "逐出" and target and not extra:
+            result = await self.kick(user_id, target, request_id)
+        elif action == "任命长老" and target and not extra:
+            result = await self.appoint_elder(user_id, target, request_id)
+        elif action == "罢免长老" and target and not extra:
+            result = await self.remove_elder(user_id, target, request_id)
+        elif action == "转让" and target and not extra:
+            result = await self.transfer(user_id, target, request_id)
+        elif action == "解散" and not target:
+            result = await self.disband(user_id, request_id)
+        else:
+            return SectEntry("format")
+        return SectEntry("operation", operation=result)
 
     async def create(
         self, user_id: str, request_id: str, name: str

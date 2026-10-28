@@ -19,6 +19,7 @@ from game.core.gathering import (
 from .contracts import (
     HerbGatheringAction,
     HerbGatheringCopy,
+    HerbGatheringEntry,
     HerbGatheringFeatureError,
 )
 from game.features.presentation import paged_settlement_actions
@@ -71,6 +72,75 @@ class HerbGatheringFeature:
             raise HerbGatheringFeatureError(message) from exc
         except (GatheringError, ValueError) as exc:
             raise HerbGatheringFeatureError(str(exc)) from exc
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> HerbGatheringEntry:
+        """解析采药根命令与紧凑子命令；分支合规只由本玩法判定。"""
+
+        text = str(raw_message or "").strip()
+        if text.startswith("采药"):
+            text = text[2:].strip()
+        action, _, args = text.partition(" ")
+        action = action.strip()
+        args = args.strip()
+        if not action:
+            return await self._enter_default(user_id, request_id)
+        if action == "开始":
+            if args:
+                raise self._invalid_command()
+            return HerbGatheringEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        if action == "进度":
+            if args:
+                raise self._invalid_command()
+            return HerbGatheringEntry("progress", progress=await self.progress(user_id))
+        if action in {"结束", "结果"}:
+            page = self._page_number(args)
+            result = await self.settle(user_id, request_id)
+            total_pages = 1 + len(result.users)
+            if page < 1 or page > total_pages:
+                raise HerbGatheringFeatureError(f"页码必须在1至{total_pages}之间")
+            return HerbGatheringEntry(
+                "settlement",
+                settlement=result,
+                page=page,
+                total_pages=total_pages,
+            )
+        raise self._invalid_command()
+
+    async def _enter_default(
+        self, user_id: str, request_id: str
+    ) -> HerbGatheringEntry:
+        try:
+            result = await self.progress(user_id)
+        except HerbGatheringFeatureError:
+            return HerbGatheringEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        if result.settled and not result.can_end:
+            return HerbGatheringEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        return HerbGatheringEntry("progress", progress=result)
+
+    def _page_number(self, args: str) -> int:
+        if not args:
+            return 1
+        try:
+            page = int(args)
+        except ValueError as exc:
+            raise self._invalid_command() from exc
+        if page < 1:
+            raise self._invalid_command()
+        return page
+
+    def _invalid_command(self) -> HerbGatheringFeatureError:
+        text = self.copy().text
+        return HerbGatheringFeatureError(
+            str(text.get("错误", {}).get("写法", "写法错误"))
+        )
 
     async def progress(
         self, user_id: str, *, now: datetime | None = None

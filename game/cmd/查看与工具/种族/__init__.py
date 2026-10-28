@@ -8,7 +8,6 @@ from launch.paths import public_url
 from ...command import GameCommand
 from . import reply
 from ...reply_composer import send_game_reply
-from typing import Any
 
 
 @GameCommand.command(
@@ -25,7 +24,7 @@ from typing import Any
         },
     },
 )
-async def browse_races(user_id: str, message: str, manager: Any) -> None:
+async def browse_races(message: str) -> None:
     query = " ".join(str(message or "").split())
     feature = current_game_services().features.zhongzu
     copy = feature.copy()

@@ -13,16 +13,6 @@ from ...reply_composer import send_game_reply
 from launch.adapter import MessageContext
 
 
-def _quantity(text: str) -> int:
-    try:
-        value = int(text)
-    except ValueError as exc:
-        raise ShengjieError("数量必须是正整数") from exc
-    if value < 1:
-        raise ShengjieError("数量必须是正整数")
-    return value
-
-
 @GameCommand.command(
     cmd="升阶",
     metadata={
@@ -47,28 +37,19 @@ async def upgrade(
     manager: Any,
 ) -> None:
     feature = current_game_services().features.shengjie
-    parts = str(message or "").split()
-    if len(parts) not in (2, 3):
-        await send_game_reply(
-            reply.error(
-                feature.copy(),
-                "写法：升阶 <来源品级><物品> <目标品级> [数量]",
-                "升阶 黄品岩露黄精 圣品",
-            )
-        )
-        return
     try:
-        quantity = _quantity(parts[2]) if len(parts) == 3 else 1
-        value = await feature.upgrade_from_text(
-            user_id,
-            message_context.request_id,
-            parts[0],
-            parts[1],
-            quantity,
+        value = await feature.enter_upgrade(
+            user_id, message_context.request_id, message
         )
         await send_game_reply(reply.upgraded(feature.copy(), value))
     except ShengjieError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), "升阶 <来源品级><物品> <目标品级> [数量]"))
+        await send_game_reply(
+            reply.error(
+                feature.copy(),
+                str(exc),
+                "升阶 <来源品级><物品> <目标品级> [数量]",
+            )
+        )
 
 
 @GameCommand.command(
@@ -98,40 +79,13 @@ async def plan(
     manager: Any,
 ) -> None:
     feature = current_game_services().features.shengjie
-    parts = str(message or "").split()
-    if not parts:
-        await send_game_reply(
-            reply.error(
-                feature.copy(),
-                "写法：升阶方案 炼丹|炼器 <名称> [数量]，或 升阶方案 灵植|灵矿|兽宝 [编号] <目标品级> [数量]",
-                "升阶方案 炼丹 一息续命丹 3",
-            )
-        )
-        return
     try:
-        kind = parts[0]
-        if kind in ("炼丹", "炼器", "炼阵"):
-            if len(parts) not in (2, 3):
-                raise ShengjieError("写法：升阶方案 炼丹|炼器|炼阵 <名称> [数量]")
-            quantity = _quantity(parts[2]) if len(parts) == 3 else 1
-            value = await feature.plan_crafting(user_id, kind, parts[1], quantity)
-        elif kind in ("灵植", "灵矿", "兽宝"):
-            if len(parts) == 3:
-                item_text, target_text, quantity_text = "", parts[1], parts[2]
-            elif len(parts) == 4:
-                item_text, target_text, quantity_text = parts[1], parts[2], parts[3]
-            else:
-                raise ShengjieError(
-                    "写法：升阶方案 灵植|灵矿|兽宝 [编号] <目标品级> [数量]"
-                )
-            value = await feature.plan_material(
-                user_id, kind, item_text, target_text, _quantity(quantity_text)
-            )
-        else:
-            raise ShengjieError("升阶方案目前支持炼丹、炼器、炼阵、灵植、灵矿、兽宝")
+        value = await feature.enter_plan(user_id, message)
         await send_game_reply(reply.plan(feature.copy(), value))
     except ShengjieError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), "升阶方案 <类别> ..."))
+        await send_game_reply(
+            reply.error(feature.copy(), str(exc), "升阶方案 <类别> ...")
+        )
 
 
 __all__ = []

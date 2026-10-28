@@ -39,6 +39,7 @@ from game.core.innate_treasure import (
 )
 from game.core.location import LocationService
 from game.core.world import LocationQuery, WorldService
+from game.features.presentation import ItemRefError, parse_item_ref
 
 from .contracts import (
     CompanionAccessError,
@@ -118,6 +119,75 @@ class CompanionInteractionFeature:
         if self._copy is None:
             raise RuntimeError("道侣展示契约尚未完成初始化")
         return self._copy
+
+    async def converse_from_text(
+        self, user_id: str, raw_message: str
+    ) -> CompanionConversation:
+        query = str(raw_message or "").strip()
+        if not query:
+            raise CompanionQueryError(self._command_text("交谈格式"))
+        return await self.converse(user_id, query)
+
+    async def gift_from_text(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> CompanionGiftResult:
+        parts = str(raw_message or "").split()
+        if len(parts) < 2 or len(parts) > 4:
+            raise CompanionQueryError(self._command_text("赠予格式"))
+        companion, item = parts[:2]
+        grade = ""
+        quantity = 1
+        try:
+            ref = parse_item_ref(item)
+        except ItemRefError:
+            ref = None
+        if ref is not None and ref.grade:
+            item, grade = ref.item, ref.grade
+        rest = parts[2:]
+        if len(rest) == 1:
+            if rest[0].isdecimal():
+                quantity = int(rest[0])
+            elif grade:
+                raise CompanionQueryError(self._command_text("赠予格式"))
+            else:
+                grade = rest[0]
+        elif len(rest) == 2:
+            if grade:
+                raise CompanionQueryError(self._command_text("赠予格式"))
+            grade = rest[0]
+            if not rest[1].isdecimal():
+                raise CompanionQueryError(self._command_text("赠礼数量"))
+            quantity = int(rest[1])
+        if quantity < 1:
+            raise CompanionQueryError(self._command_text("赠礼数量"))
+        return await self.gift(
+            CompanionGiftRequest(
+                user_id, request_id, companion, item, grade, quantity
+            )
+        )
+
+    async def invite_from_text(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> CompanionInvitationResult:
+        query = str(raw_message or "").strip()
+        if not query:
+            raise CompanionQueryError(self._command_text("邀约格式"))
+        return await self.invite(
+            CompanionInvitationRequest(user_id, request_id, query)
+        )
+
+    async def farewell_from_text(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> CompanionFarewellResult:
+        query = str(raw_message or "").strip()
+        if not query:
+            raise CompanionQueryError(self._command_text("暂别格式"))
+        return await self.farewell(
+            CompanionFarewellRequest(user_id, request_id, query)
+        )
+
+    def _command_text(self, key: str) -> str:
+        return str(self.copy().text["命令"].get(key, "写法"))
 
     async def inspect(self, user_id: str, companion: str) -> CompanionView:
         self._require_initialized()

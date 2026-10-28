@@ -170,6 +170,18 @@ class NearbyOverview:
     locations: tuple[NearbyWorldLocation, ...]
 
 
+@dataclass(frozen=True)
+class NearbyQueryResult:
+    """一次附近根命令的结果；分支与页码合规由玩法判定。"""
+
+    kind: str
+    overview: NearbyOverview | None = None
+    locations: NearbyWorldLocations | None = None
+    cultivators: NearbyCultivatorPage | None = None
+    error_title: str = ""
+    error_message: str = ""
+
+
 __all__ = [
     "CurrentPositionView",
     "StatusView",

@@ -32,6 +32,18 @@ class OreGatheringCopy:
     text: Mapping[str, Mapping[str, str]]
 
 
+@dataclass(frozen=True)
+class OreGatheringEntry:
+    """一次采矿根命令的结果；分支合规由玩法判定。"""
+
+    kind: str
+    started: GatheringStarted | None = None
+    progress: GatheringProgress | None = None
+    settlement: GatheringSettlement | None = None
+    page: int = 1
+    total_pages: int = 1
+
+
 __all__ = [
     "GatheredItem",
     "GatheringProgress",
@@ -40,5 +52,6 @@ __all__ = [
     "GatheringUserSummary",
     "OreGatheringAction",
     "OreGatheringCopy",
+    "OreGatheringEntry",
     "OreGatheringFeatureError",
 ]

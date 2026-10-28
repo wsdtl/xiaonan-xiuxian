@@ -15,79 +15,42 @@ from . import reply
 _COMPACT = re.compile(r"^闭关(?P<action>进度|结束|结果)(?:\s+(?P<args>.*))?$")
 
 
-def _split(message: str) -> tuple[str, str]:
-    parts = str(message or "").strip().split(maxsplit=1)
-    if not parts:
-        return "", ""
-    return parts[0], parts[1] if len(parts) > 1 else ""
-
-
-async def _start(user_id: str, request_id: str) -> None:
+async def _enter(
+    user_id: str, raw_message: str, message_context: MessageContext
+) -> None:
     feature = current_game_services().features.biguan
     try:
-        result = await feature.start(user_id, request_id)
-        await send_game_reply(reply.started(feature.copy(), result, feature.started_actions()))
+        entry = await feature.enter(
+            user_id, message_context.request_id, raw_message
+        )
     except RetreatFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
-
-
-async def _progress(user_id: str) -> None:
-    feature = current_game_services().features.biguan
-    try:
-        result = await feature.progress(user_id)
+        await send_game_reply(
+            reply.error(feature.copy(), str(exc), feature.format_actions())
+        )
+        return
+    if entry.kind == "started" and entry.started is not None:
+        await send_game_reply(
+            reply.started(feature.copy(), entry.started, feature.started_actions())
+        )
+    elif entry.kind == "progress" and entry.progress is not None:
         await send_game_reply(
             reply.progress(
                 feature.copy(),
                 feature,
-                result,
-                feature.progress_actions(result.can_end),
+                entry.progress,
+                feature.progress_actions(entry.progress.can_end),
             )
         )
-    except RetreatFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
-
-
-async def _settle(user_id: str, page_text: str, request_id: str) -> None:
-    feature = current_game_services().features.biguan
-    try:
-        page = 1 if not page_text else int(page_text)
-    except ValueError:
-        await send_game_reply(reply.error(feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions()))
-        return
-    try:
-        result = await feature.settle(user_id, request_id)
-        total_pages = 1 + len(result.users)
-        if page < 1 or page > total_pages:
-            raise RetreatFeatureError(f"页码必须在1至{total_pages}之间")
+    elif entry.kind == "settlement" and entry.settlement is not None:
         await send_game_reply(
-            reply.settlement_page(feature.copy(), feature, result, page, feature.settlement_actions(page, total_pages))
+            reply.settlement_page(
+                feature.copy(),
+                feature,
+                entry.settlement,
+                entry.page,
+                feature.settlement_actions(entry.page, entry.total_pages),
+            )
         )
-    except RetreatFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc), feature.format_actions()))
-
-
-async def _dispatch(user_id: str, action: str, args: str, message_context: MessageContext) -> None:
-    feature = current_game_services().features.biguan
-    if not action:
-        try:
-            result = await feature.progress(user_id)
-            if result.settled and not result.can_end:
-                await _start(user_id, message_context.request_id)
-            else:
-                await send_game_reply(
-                    reply.progress(feature.copy(), feature, result, feature.progress_actions(result.can_end))
-                )
-        except RetreatFeatureError:
-            await _start(user_id, message_context.request_id)
-        return
-    if action == "开始":
-        await _start(user_id, message_context.request_id)
-    elif action == "进度":
-        await _progress(user_id)
-    elif action in {"结束", "结果"}:
-        await _settle(user_id, args, message_context.request_id)
-    else:
-        await send_game_reply(reply.error(feature.copy(), reply.text(feature.copy(), "错误", "写法"), feature.format_actions()))
 
 
 @GameCommand.command(
@@ -105,8 +68,7 @@ async def _dispatch(user_id: str, action: str, args: str, message_context: Messa
     },
 )
 async def retreat_root(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    action, args = _split(message)
-    await _dispatch(user_id, action, args, message_context)
+    await _enter(user_id, message, message_context)
 
 
 @GameCommand.regex(
@@ -116,7 +78,7 @@ async def retreat_root(user_id: str, message: str, message_context: MessageConte
 async def retreat_compact(
     user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match
 ) -> None:
-    await _dispatch(user_id, match.group("action"), match.group("args") or "", message_context)
+    await _enter(user_id, raw_message, message_context)
 
 
 @GameCommand.command(
@@ -129,7 +91,7 @@ async def retreat_compact(
     },
 )
 async def retreat_hosted_start(user_id: str, message_context: MessageContext, manager: Any) -> None:
-    await _start(user_id, message_context.request_id)
+    await _enter(user_id, "闭关 开始", message_context)
 
 
 @GameCommand.command(
@@ -142,7 +104,7 @@ async def retreat_hosted_start(user_id: str, message_context: MessageContext, ma
     },
 )
 async def retreat_hosted_end(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
-    await _settle(user_id, message, message_context.request_id)
+    await _enter(user_id, f"闭关 结束 {message}".strip(), message_context)
 
 
 __all__ = []

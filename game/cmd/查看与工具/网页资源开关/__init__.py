@@ -12,6 +12,17 @@ from launch.adapter import MessageContext
 from typing import Any
 
 
+async def _set_web_public(
+    user_id: str, request_id: str, enabled: bool
+) -> None:
+    feature = current_game_services().features.wangye
+    try:
+        await feature.set_public(user_id, request_id, enabled)
+        await send_game_reply(reply.notice(feature, enabled))
+    except (WangyeError, WangyeConflictError) as exc:
+        await send_game_reply(reply.error(feature, str(exc)))
+
+
 @GameCommand.fullmatch(
     cmd='网页资源公开',
     metadata={
@@ -28,12 +39,7 @@ from typing import Any
     allow_long=True,
 )
 async def web_public_on(user_id: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.wangye
-    try:
-        await feature.set_public(user_id, message_context.request_id, True)
-        await send_game_reply(reply.notice(feature, True))
-    except (WangyeError, WangyeConflictError) as exc:
-        await send_game_reply(reply.error(feature, str(exc)))
+    await _set_web_public(user_id, message_context.request_id, True)
 
 
 @GameCommand.fullmatch(
@@ -52,12 +58,7 @@ async def web_public_on(user_id: str, message_context: MessageContext, manager: 
     allow_long=True,
 )
 async def web_public_off(user_id: str, message_context: MessageContext, manager: Any) -> None:
-    feature = current_game_services().features.wangye
-    try:
-        await feature.set_public(user_id, message_context.request_id, False)
-        await send_game_reply(reply.notice(feature, False))
-    except (WangyeError, WangyeConflictError) as exc:
-        await send_game_reply(reply.error(feature, str(exc)))
+    await _set_web_public(user_id, message_context.request_id, False)
 
 
 __all__ = []

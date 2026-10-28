@@ -87,6 +87,18 @@ class UseOutcome:
 
 
 @dataclass(frozen=True)
+class UseEntry:
+    """一次使用根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    plan: UsePlan | None = None
+    redirect: UseRedirect | None = None
+    outcome: UseOutcome | None = None
+    commands: tuple[str, ...] = ()
+    target: str = ""
+
+
+@dataclass(frozen=True)
 class UsePort:
     describe: Callable[[UseRequest], Awaitable[UseDescription]]
     execute: Callable[[UseRequest], Awaitable[object]]
@@ -96,6 +108,7 @@ __all__ = [
     "UseAction",
     "UseCandidate",
     "UseDescription",
+    "UseEntry",
     "UseError",
     "UseOption",
     "UseOutcome",

@@ -34,9 +34,21 @@ class CangjingCopy:
     text: Mapping[str, str]
 
 
+@dataclass(frozen=True)
+class CangjingEntry:
+    """一次藏经阁根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    page: CangjingPage | None = None
+    identifier: str = ""
+    slots: int = 0
+    borrowed: SectBorrowResult | None = None
+
+
 __all__ = [
     "CangjingAction",
     "CangjingCopy",
+    "CangjingEntry",
     "CangjingFeatureError",
     "CangjingPage",
     "SectBorrowResult",

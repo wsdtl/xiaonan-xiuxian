@@ -29,6 +29,7 @@ from .contracts import (
     NearbyCultivatorView,
     NearbyOverview,
     NearbyPageError,
+    NearbyQueryResult,
     NearbyWorldLocation,
     NearbyWorldLocations,
     PositionAction,
@@ -271,6 +272,53 @@ class PositionFeature:
             visiting_cultivator_count=cultivators.visible_count,
             locations=locations.values,
         )
+
+    async def nearby_enter(
+        self, user_id: str, raw_message: str
+    ) -> NearbyQueryResult:
+        """解析附近根命令；分支与页码合规只由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        copy = self.copy()
+        if not parts:
+            return NearbyQueryResult(
+                "overview", overview=await self.nearby_overview(user_id)
+            )
+        if parts == ["地点"]:
+            return NearbyQueryResult(
+                "locations", locations=await self.nearby_locations(user_id)
+            )
+        if parts[0] == "修士" and len(parts) <= 2:
+            try:
+                page = await self.nearby_cultivators_from_text(
+                    user_id, parts[1] if len(parts) == 2 else ""
+                )
+            except NearbyPageError as exc:
+                return NearbyQueryResult(
+                    "error",
+                    error_title=copy.cultivators_title,
+                    error_message=str(exc),
+                )
+            return NearbyQueryResult("cultivators", cultivators=page)
+        return NearbyQueryResult(
+            "error",
+            error_title=copy.overview_title.format_map({"地点": "附近"}),
+            error_message=copy.invalid_command,
+        )
+
+    async def nearby_cultivators_from_text(
+        self, user_id: str, raw_page: str
+    ) -> NearbyCultivatorPage:
+        """从原始页码文本查看附近修士；页码合规由本玩法判定。"""
+
+        text = str(raw_page or "").strip()
+        if not text:
+            page = 1
+        elif text.isdecimal() and int(text) > 0:
+            page = int(text)
+        else:
+            raise NearbyPageError(self.copy().invalid_page)
+        return await self.nearby_cultivators(user_id, page)
 
     async def nearby_cultivators(
         self, user_id: str, page: int = 1

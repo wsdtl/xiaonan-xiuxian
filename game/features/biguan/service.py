@@ -17,7 +17,12 @@ from game.core.retreat import (
 )
 from game.core.auto_travel import AutoTravelError, AutoTravelService
 
-from .contracts import RetreatAction, RetreatCopy, RetreatFeatureError
+from .contracts import (
+    RetreatAction,
+    RetreatCopy,
+    RetreatEntry,
+    RetreatFeatureError,
+)
 from game.features.presentation import paged_settlement_actions
 from .presentation import actions, load_presentation
 
@@ -76,6 +81,73 @@ class RetreatFeature:
         except RetreatError as exc:
             message = f"已到达{moved_to}，但开始失败：{exc}" if moved_to else str(exc)
             raise RetreatFeatureError(message) from exc
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> RetreatEntry:
+        """解析根命令与紧凑子命令；分支是否合规只由本玩法判定。"""
+
+        text = str(raw_message or "").strip()
+        if text.startswith("闭关"):
+            text = text[2:].strip()
+        action, _, args = text.partition(" ")
+        action = action.strip()
+        args = args.strip()
+        if not action:
+            return await self._enter_default(user_id, request_id)
+        if action == "开始":
+            if args:
+                raise self._invalid_command()
+            return RetreatEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        if action == "进度":
+            if args:
+                raise self._invalid_command()
+            return RetreatEntry("progress", progress=await self.progress(user_id))
+        if action in {"结束", "结果"}:
+            page = self._page_number(args)
+            result = await self.settle(user_id, request_id)
+            total_pages = 1 + len(result.users)
+            if page < 1 or page > total_pages:
+                raise RetreatFeatureError(f"页码必须在1至{total_pages}之间")
+            return RetreatEntry(
+                "settlement",
+                settlement=result,
+                page=page,
+                total_pages=total_pages,
+            )
+        raise self._invalid_command()
+
+    async def _enter_default(self, user_id: str, request_id: str) -> RetreatEntry:
+        try:
+            result = await self.progress(user_id)
+        except RetreatFeatureError:
+            return RetreatEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        if result.settled and not result.can_end:
+            return RetreatEntry(
+                "started", started=await self.start(user_id, request_id)
+            )
+        return RetreatEntry("progress", progress=result)
+
+    def _page_number(self, args: str) -> int:
+        if not args:
+            return 1
+        try:
+            page = int(args)
+        except ValueError as exc:
+            raise self._invalid_command() from exc
+        if page < 1:
+            raise self._invalid_command()
+        return page
+
+    def _invalid_command(self) -> RetreatFeatureError:
+        text = self.copy().text
+        return RetreatFeatureError(
+            str(text.get("错误", {}).get("写法", "写法错误"))
+        )
 
     async def progress(
         self, user_id: str, *, now: datetime | None = None

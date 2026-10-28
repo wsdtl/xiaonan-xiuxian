@@ -79,6 +79,16 @@ class NajiePage:
     entries: tuple[NajieEntry, ...]
 
 
+@dataclass(frozen=True)
+class NajieViewResult:
+    """一次纳戒根命令的结果；分支与页码由玩法判定。"""
+
+    kind: str
+    home: NajieHome | None = None
+    category: NajieCategoryView | None = None
+    page: NajiePage | None = None
+
+
 __all__ = [
     "NajieCategorySummary",
     "NajieCategoryView",

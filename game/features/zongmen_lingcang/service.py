@@ -18,11 +18,18 @@ from game.core.location import LocationService
 from game.core.player_state import PlayerStateService
 from game.core.sect import SectService
 from game.features.presentation import (
+    parse_item_ref,
     project_dungeon_buttons,
     require_mapping,
 )
 
-from .contracts import LingcangAction, LingcangCopy, LingcangFeatureError, LingcangPage
+from .contracts import (
+    LingcangAction,
+    LingcangCopy,
+    LingcangEntry,
+    LingcangFeatureError,
+    LingcangPage,
+)
 
 
 class LingcangFeature:
@@ -90,6 +97,61 @@ class LingcangFeature:
             for button in self._buttons
             if button["条件"] in conditions
         )
+
+    async def enter(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> LingcangEntry:
+        """解析灵藏根命令；分支与参数合规只由本玩法判定。"""
+
+        parts = str(raw_message or "").split()
+        if parts and parts[0] == "捐入":
+            return await self._enter_donate(user_id, request_id, parts[1:])
+        if len(parts) > 2:
+            raise LingcangFeatureError("格式：灵藏 [灵植/灵矿/兽宝] [页码]")
+        category = parts[0] if parts else "全部"
+        page = self._positive(parts[1], "灵藏页码") if len(parts) == 2 else 1
+        return LingcangEntry(
+            "page", page=await self.page(user_id, category, page)
+        )
+
+    async def _enter_donate(
+        self, user_id: str, request_id: str, args: list[str]
+    ) -> LingcangEntry:
+        if len(args) == 2 and args[0] == "灵石":
+            quantity = self._positive(args[1], "灵石数量")
+            return LingcangEntry(
+                "donated_stones",
+                quantity=quantity,
+                transfer=await self.donate_stones(
+                    user_id, request_id, quantity
+                ),
+            )
+        categories = {"灵植", "灵矿", "兽宝"}
+        if len(args) not in {3, 4} or args[0] not in categories:
+            raise LingcangFeatureError(
+                "格式：灵藏 捐入 类别 <品级><物品> 数量"
+            )
+        if len(args) == 4:
+            item, grade = args[1], args[2]
+        else:
+            ref = parse_item_ref(args[1])
+            item, grade = ref.item, ref.grade
+        return LingcangEntry(
+            "donated_material",
+            transfer=await self.donate_material(
+                user_id,
+                request_id,
+                args[0],
+                item,
+                grade,
+                self._positive(args[-1], "捐献数量"),
+            ),
+        )
+
+    def _positive(self, value: str, label: str) -> int:
+        if not value.isdecimal() or int(value) < 1:
+            raise LingcangFeatureError(f"{label}必须是正整数")
+        return int(value)
 
     async def page(
         self, user_id: str, category: str = "全部", page: int = 1

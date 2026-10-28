@@ -16,7 +16,12 @@ from game.core.forging import (
     ForgingService,
 )
 
-from .contracts import ForgingAction, ForgingCopy, ForgingFeatureError
+from .contracts import (
+    ForgingAction,
+    ForgingCopy,
+    ForgingEntry,
+    ForgingFeatureError,
+)
 from .presentation import actions, load_presentation
 
 
@@ -43,6 +48,51 @@ class ForgingFeature:
         if self._copy is None:
             raise RuntimeError("炼器玩法尚未初始化")
         return self._copy
+
+    async def enter_direct(
+        self, user_id: str, request_id: str, raw_message: str
+    ) -> ForgingEntry:
+        """解析直接炼器；分支与参数合规只由本玩法判定。"""
+
+        query = str(raw_message or "").strip()
+        if not query:
+            return ForgingEntry("overview", overview=await self.overview(user_id))
+        identifier, quantity = self._direct(query)
+        preview = await self.preview(user_id, identifier, quantity)
+        if not preview.can_forge:
+            return ForgingEntry("preview", preview=preview)
+        return ForgingEntry(
+            "completed",
+            result=await self.forge(
+                user_id, request_id, identifier, quantity
+            ),
+        )
+
+    async def enter_catalog(
+        self, user_id: str, raw_message: str
+    ) -> ForgingEntry:
+        """解析炼器目录；阶段/页码与单条预览由本玩法判定。"""
+
+        query = str(raw_message or "").strip()
+        if not query:
+            return ForgingEntry("overview", overview=await self.overview(user_id))
+        if query in {"灵器", "法器", "法宝", "后天灵宝"}:
+            return ForgingEntry(
+                "law_list", laws=await self.laws(user_id, query)
+            )
+        return ForgingEntry(
+            "preview", preview=await self.preview(user_id, query)
+        )
+
+    def _direct(self, query: str) -> tuple[str, int]:
+        parts = str(query or "").strip().split()
+        quantity = 1
+        if len(parts) > 1 and parts[-1].isdecimal():
+            quantity = int(parts[-1])
+            parts = parts[:-1]
+        if not parts:
+            raise ValueError("缺少器律名")
+        return " ".join(parts), quantity
 
     async def overview(self, user_id: str) -> ForgingOverview:
         return await self._call(self._forging.overview(user_id))

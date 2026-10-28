@@ -16,7 +16,7 @@ from game.core.trade import (
     TradeService,
 )
 
-from .contracts import TradeFeatureError, TradeAction
+from .contracts import TradeAction, TradeFeatureError, TradeQueryEntry
 
 
 _Result = TypeVar("_Result")
@@ -67,6 +67,25 @@ class TradeFeature:
         if not isinstance(value, str) or not value.strip():
             raise RuntimeError(f"交易展示缺少文本：{section}.{key}")
         return value.format_map(values or {})
+
+    async def enter_query(
+        self, user_id: str, raw_message: str
+    ) -> TradeQueryEntry:
+        """解析交易查询根命令；分支与页码由本玩法判定。"""
+
+        parts = str(raw_message or "").strip().split()
+        if not parts:
+            return TradeQueryEntry("overview", overview=await self.overview(user_id))
+        if len(parts) > 2:
+            raise TradeFeatureError(self.copy("错误", "交易格式"))
+        page = 1
+        if len(parts) == 2:
+            if not parts[1].isdecimal() or int(parts[1]) < 1:
+                raise TradeFeatureError("交易页码必须是正整数")
+            page = int(parts[1])
+        return TradeQueryEntry(
+            "page", page=await self.page(user_id, parts[0], page)
+        )
 
     async def overview(self, user_id: str) -> TradeOverview:
         return await self._call(self._trade.overview(user_id))

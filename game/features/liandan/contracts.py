@@ -32,9 +32,22 @@ class AlchemyCopy:
     text: Mapping[str, Mapping[str, str]]
 
 
+@dataclass(frozen=True)
+class AlchemyEntry:
+    """一次炼丹根命令的结果；分支与参数合规由玩法判定。"""
+
+    kind: str
+    overview: AlchemyOverview | None = None
+    item: str = ""
+    preview: AlchemyPreview | None = None
+    result: AlchemyResult | None = None
+    recipes: AlchemyRecipeList | None = None
+
+
 __all__ = [
     "AlchemyAction",
     "AlchemyCopy",
+    "AlchemyEntry",
     "AlchemyFeatureError",
     "AlchemyOverview",
     "AlchemyPreview",
