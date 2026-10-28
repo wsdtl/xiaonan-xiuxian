@@ -633,3 +633,36 @@ def test_adapter_intents_rejects_invalid(monkeypatch: pytest.MonkeyPatch) -> Non
     )
     with pytest.raises(ValueError, match="QQ_WS_INTENTS"):
         gateway_module.resolve_intents()
+
+
+def test_single_bot_transport_mode_matrix(monkeypatch: pytest.MonkeyPatch) -> None:
+    """单 bot 三模式：适配器数量与 /qq/events 挂载必须对得上。"""
+
+    from fastapi import FastAPI
+
+    from launch.config import AdapterConfig
+    from launch.mount import AdapterMount
+
+    cases = (
+        ("webhook", 2, True),
+        ("websocket", 2, False),
+        ("both", 3, True),
+    )
+    for mode, handler_count, webhook_mounted in cases:
+        _install_adapter_config(monkeypatch, AdapterConfig(mode, "", ""))
+        application = FastAPI()
+        handlers = AdapterMount(application)
+        paths = {getattr(route, "path", "") for route in application.routes}
+        assert len(handlers) == handler_count, mode
+        assert ("/qq/events" in paths) is webhook_mounted, mode
+
+
+def test_invalid_transport_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi import FastAPI
+
+    from launch.config import AdapterConfig
+    from launch.mount import AdapterMount
+
+    _install_adapter_config(monkeypatch, AdapterConfig("websocket2", "", ""))
+    with pytest.raises(ValueError, match="QQ_TRANSPORT"):
+        AdapterMount(FastAPI())

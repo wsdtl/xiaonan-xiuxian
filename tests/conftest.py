@@ -6,12 +6,40 @@
 """
 from __future__ import annotations
 
+import os
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
-import game.app as app
 import game.core.database.battle_report_store as battle_log
+from game import app
+from launch.config import config as framework_config
+from launch.log import FILE_FORMAT, local_logger_id, logger
+
+
+def _redirect_file_logs() -> None:
+    """把 pytest 的文件日志挪到 _输出，别污染线上 runserver.log。"""
+
+    root = Path(__file__).resolve().parents[1] / "_输出" / "测试日志"
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        logger.remove(local_logger_id)
+    except ValueError:
+        pass
+    logger.add(
+        root / f"runserver-{os.getpid()}.log",
+        level=framework_config.log.level,
+        format=FILE_FORMAT,
+        encoding="utf-8",
+        colorize=False,
+        backtrace=True,
+        diagnose=False,
+        enqueue=True,
+    )
+
+
+_redirect_file_logs()
 
 
 @pytest.fixture(scope="session", autouse=True)
