@@ -124,7 +124,12 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
     elif value.mode == "护契":
         builder.line(
             M.status("道契保留", tone="positive"), " ", feature.copy("结算", "护契")
-        ).small(feature.copy("结算", "护契回应", {"名称": value.companion_name})).field(
+        ).line(
+            *linked_name_line(
+                feature.copy("结算", "护契回应", {"名称": "\u0000"}),
+                value.companion_name,
+            )
+        ).field(
             "消耗",
             M.text(f"{value.medicine_grade_name}")
             + (M.command(value.medicine_name, f"查看 {value.medicine_name}"),)
@@ -133,10 +138,19 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
     else:
         builder.line(
             M.status("道契断离", tone="warning"), " ", feature.copy("结算", "离契")
-        ).small(feature.copy("结算", "离契回应", {"名称": value.companion_name})).line(
-            feature.copy(
-                "结算",
-                "返回", {"名称": value.companion_name, "地点": value.companion_origin},
+        ).line(
+            *linked_name_line(
+                feature.copy("结算", "离契回应", {"名称": "\u0000"}),
+                value.companion_name,
+            )
+        ).line(
+            *linked_name_line(
+                feature.copy(
+                    "结算",
+                    "返回",
+                    {"名称": "\u0000", "地点": value.companion_origin},
+                ),
+                value.companion_name,
             )
         )
     if value.treasure_activation is not None:
