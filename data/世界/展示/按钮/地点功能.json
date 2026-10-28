@@ -40,14 +40,6 @@
     "行为": "callback"
   },
   {
-    "编号": "location.cultivation-reset",
-    "名称": "万法归元",
-    "功能": "归元",
-    "命令": "归元",
-    "样式": "secondary",
-    "行为": "callback"
-  },
-  {
     "编号": "location.breakthrough-correction",
     "名称": "九霄补天",
     "功能": "补天",

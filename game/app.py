@@ -66,7 +66,6 @@ from .features.daolv_peiyang import CompanionCultivationFeature
 from .features.ditu import WorldMapFeature
 from .features.duiwu import TeamFeature
 from .features.fudan import MedicineFeature
-from .features.guiyuan import GuiyuanFeature
 from .features.jiaoyi import TradeFeature
 from .features.liandan import AlchemyFeature
 from .features.lianqi import ForgingFeature
@@ -185,7 +184,6 @@ class FeatureServices:
     jiaoyi: TradeFeature
     fudan: MedicineFeature
     tongquetai: TongquetaiFeature
-    guiyuan: GuiyuanFeature
     butian: ButianFeature
     fanben: FanbenFeature
     xigen: XigenFeature
@@ -433,7 +431,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("formations", combat_status.formation_count),
         )
     )
-    companion = CompanionService(data, database, growth, forging, bloodline)
+    companion = CompanionService(data, database, growth, forging, bloodline, world)
     companion_status = companion.initialize()
     logger.opt(colors=True).success(
         C.join(
@@ -737,7 +735,9 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
             C.kv("birthplace", birthplace),
         )
     )
-    chakan_wupin = ItemInspectionFeature(item_catalog, combat, asset, data, character)
+    chakan_wupin = ItemInspectionFeature(
+        item_catalog, combat, asset, data, character, formation
+    )
     chakan_wupin.initialize()
     chakan_juese = CharacterOverviewFeature(
         character,
@@ -789,10 +789,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         innate_treasure,
     )
     tongquetai.initialize()
-    guiyuan = GuiyuanFeature(
-        data, medicine, companion, asset, player_state, location, world, database
-    )
-    guiyuan.initialize()
     butian = ButianFeature(
         data,
         medicine,
@@ -995,7 +991,6 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         jiaoyi=jiaoyi,
         fudan=fudan,
         tongquetai=tongquetai,
-        guiyuan=guiyuan,
         butian=butian,
         yixing=yixing,
         fanben=fanben,

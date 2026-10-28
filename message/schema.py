@@ -212,12 +212,37 @@ class NoteBlock:
 
 @dataclass(frozen=True)
 class ClosingBlock:
-    """整条消息最后的引用行；用于提示或总结，必须位于所有内容块之后。"""
+    """整条消息最后的引用行；用于提示或总结，必须位于所有内容块之后。
+
+    允许夹一个行内命令（例如「帮助 查看」），但仍必须单行、不能换行。
+    """
 
     content: RichText
 
     def __post_init__(self) -> None:
-        _plain_header_text(self.content, "消息结尾")
+        _closing_text(self.content, "消息结尾")
+
+
+def _closing_text(value: RichText, label: str) -> str:
+    """结尾行只允许普通文本与行内命令；行内命令的标签也必须是普通文本。"""
+
+    spans = tuple(value)
+    if not spans:
+        raise ValueError(f"{label}不能为空")
+    pieces: list[str] = []
+    for span in spans:
+        if isinstance(span, Text):
+            pieces.append(span.value)
+        elif isinstance(span, CommandLink):
+            pieces.append(_plain_header_text(span.label, f"{label}.命令标签"))
+        else:
+            raise ValueError(f"{label}只允许普通文本或行内命令")
+    text = "".join(pieces)
+    if not text.strip():
+        raise ValueError(f"{label}不能为空")
+    if any(character in text for character in "\r\n"):
+        raise ValueError(f"{label}必须保持单行")
+    return text
 
 
 DocumentBlock: TypeAlias = (

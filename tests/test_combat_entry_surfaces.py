@@ -1518,7 +1518,11 @@ def test_send_game_reply_uses_current_context(monkeypatch) -> None:
     assert rendered.blocks[1].command == "查看 人物"
     assert rendered.blocks[-1].__class__.__name__ == "ClosingBlock"
     assert "查看 编号" in "".join(
-        span.value for span in rendered.blocks[-1].content
+        getattr(span, "value", "") for span in rendered.blocks[-1].content
+    )
+    assert any(
+        getattr(span, "command", "") == "帮助 查看"
+        for span in rendered.blocks[-1].content
     )
 
 

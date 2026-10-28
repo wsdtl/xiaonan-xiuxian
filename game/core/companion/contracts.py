@@ -194,14 +194,6 @@ class CompanionBreakthroughPlan:
 
 
 @dataclass(frozen=True)
-class CompanionBuildResetPlan:
-    companion_id: str
-    category: str
-    content_ids: tuple[str, ...]
-    operations: tuple[StateMutation, ...]
-
-
-@dataclass(frozen=True)
 class CompanionBreakthroughCorrectionPlan:
     companion_id: str
     target_realm: str
@@ -323,7 +315,6 @@ __all__ = [
     "CompanionBreakthroughCorrectionPlan",
     "CompanionBreakthroughPlan",
     "CompanionBreakthroughPreview",
-    "CompanionBuildResetPlan",
     "CompanionCultivationError",
     "CompanionCultivationResetPlan",
     "CompanionDefinition",

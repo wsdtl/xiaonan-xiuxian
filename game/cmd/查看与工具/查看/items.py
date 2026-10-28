@@ -43,6 +43,34 @@ def _player_description(detail: ItemDetail) -> str:
     """返回短引言；构筑的数值与处理顺序统一由下方节点说明。"""
 
     description = _normalize_brackets(_description(detail).strip())
+    if detail.section == "丹药":
+        effect = detail.fields.get("使用效果")
+        if isinstance(effect, Mapping):
+            kind = str(effect.get("类型") or "")
+            if kind == "恢复血气":
+                description = re.sub(
+                    r"，恢复血气上限的[^。]+。", "。", description, count=1
+                )
+            elif kind == "境界突破":
+                description = re.sub(r"，永久增[^。]+。", "。", description, count=1)
+            elif kind == "寄存战丹":
+                description = re.split(r"\s+触发：", description, maxsplit=1)[0].rstrip()
+        description = description.replace(" 触发：", "\n触发：", 1)
+        description = description.replace(
+            "；丹成而药意犹存", "；\n丹成而药意犹存", 1
+        )
+    if detail.section == "种族":
+        description = description.replace("；同伴", "；\n同伴", 1)
+    if detail.section == "阵法":
+        description = description.replace("《道德经》", "\n《道德经》", 1)
+        description = description.replace(" 检测", "\n检测", 1)
+    if detail.section == "敌人":
+        race = str(detail.fields.get("种族") or "").strip()
+        if race:
+            description = re.sub(
+                rf"^{re.escape(race)}人也[，,]\s*", "", description
+            )
+        return description
     if detail.section not in {"功法", "真意", "气机", "器律"}:
         return description
     if not description:
@@ -215,9 +243,17 @@ def _innate_treasure_lines(
 def _rendered_only(
     source: SectionInput,
 ) -> tuple[str, ...]:
-    """正文全部由能力树现算，这里只做转交（丹药、战场环境）。"""
+    """正文全部由能力树现算，这里只做转交（丹药、战场环境）。
 
-    return source.rendered
+    战场环境是多阶段并列：在 ② 起的每个阶段前留一行空行，避免几段粘在一起。
+    """
+
+    lines: list[str] = []
+    for line in source.rendered:
+        if line[:1] in "②③④⑤⑥⑦⑧⑨⑩" and lines:
+            lines.append(" ")
+        lines.append(line)
+    return tuple(lines)
 
 
 def _base_item_lines(
@@ -336,10 +372,82 @@ def _generic_lines(fields: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
-    """意境：只讲人看得懂的——定位、主项轴、倾向来源、输出途径、七到九的质变与九阶戒律。
+def _race_lines(source: SectionInput) -> tuple[str, ...]:
+    """种族：寿元系数与天生锁定技。"""
 
-    `载体` 与 `质变监听` 是实现用的内部字段，不上查看页。
+    lines = []
+    life = source.fields.get("寿元系数")
+    if life is not None:
+        lines.append(f"寿元系数：×{_display_number(life)}")
+    rules = source.fields.get("天生规则")
+    if isinstance(rules, Sequence) and not isinstance(rules, (str, bytes)):
+        for rule in rules:
+            if isinstance(rule, Mapping):
+                name = str(rule.get("名称") or "").strip()
+                if name:
+                    lines.append(f"•{name}")
+    return tuple(lines) if lines else None
+
+
+def _build_lines(source: SectionInput) -> tuple[str, ...]:
+    """构筑模板：六张卡与建议种族。"""
+
+    lines = []
+    for category in ("功法", "真意", "气机"):
+        values = source.fields.get(category)
+        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+            continue
+        names = [_related_name(value, source.related) for value in values]
+        names = [name for name in names if name]
+        if names:
+            lines.append(f"{category}（{len(names)}）：" + "、".join(names))
+    race = _related_name(source.fields.get("建议种族"), source.related)
+    if race:
+        lines.append(f"建议种族：{race}")
+    return tuple(lines) if lines else None
+
+
+def _bloodline_lines(source: SectionInput) -> tuple[str, ...]:
+    """血脉：生效判断、形态/负面、可觉醒与能力效果。"""
+
+    lines = []
+    judge = source.fields.get("判定")
+    if judge:
+        lines.append(f"生效判断：{judge}")
+    else:
+        conditions = source.fields.get("条件")
+        if isinstance(conditions, Sequence) and not isinstance(conditions, (str, bytes)):
+            parts = []
+            for row in conditions:
+                if not isinstance(row, Mapping):
+                    continue
+                group = row.get("组")
+                low = row.get("下限")
+                high = row.get("上限")
+                if low is None and high is None:
+                    continue
+                label = f"G{group}" if group is not None else "条件"
+                parts.append(f"{label}：{low}~{high}")
+            if parts:
+                lines.append("生效判断：" + "；".join(parts))
+    for key in ("形态", "负面"):
+        value = source.fields.get(key)
+        if value:
+            lines.append(f"{key}：{value}")
+    if "能觉醒" in source.fields:
+        lines.append("可觉醒：" + ("是" if source.fields["能觉醒"] else "否"))
+    for line in source.rendered:
+        if line.startswith("契合："):
+            line = "效果：" + line.removeprefix("契合：")
+        lines.append(line)
+    return tuple(lines) if lines else None
+
+
+def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
+    """意境：定位、主项轴、输出途径、逐阶增幅、七到九质变监听与九阶戒律。
+
+    `载体.增幅` 给每阶数值，`质变监听` 由战斗渲染器出完整原子能力正文；
+    这两块都不是给人看的花名，不能省。
     """
 
     fields = source.fields
@@ -348,12 +456,41 @@ def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
         value = fields.get(label)
         if value:
             lines.append(f"{label}：{value}")
+    carrier = fields.get("载体")
+    if isinstance(carrier, Mapping):
+        amplification = carrier.get("增幅")
+        if isinstance(amplification, Mapping):
+            base = amplification.get("基准")
+            if isinstance(base, Mapping) and base:
+                lines.append(
+                    "基准：" + "、".join(f"{key}{value}" for key, value in base.items())
+                )
+            per_tier = amplification.get("每阶")
+            if isinstance(per_tier, Mapping) and per_tier:
+                parts = []
+                for name, row in per_tier.items():
+                    if not isinstance(row, Mapping):
+                        continue
+                    value = row.get("数值")
+                    if value is None:
+                        continue
+                    unit = "%" if row.get("口径") == "百分比" else ""
+                    parts.append(f"{name}+{value}{unit}")
+                if parts:
+                    lines.append("每阶增幅：" + "、".join(parts))
+    main = str(fields.get("主项轴") or "意境")
+    lines.append(f"1阶：初入此境，{main}。")
+    for tier in range(2, 7):
+        lines.append(f"{tier}阶：在{tier - 1}阶基础上，{main}再增强一档。")
     tiers = fields.get("质变")
     if isinstance(tiers, Mapping):
         for tier in ("7", "8", "9"):
             text = tiers.get(tier)
             if text:
                 lines.append(f"{tier}阶：{text}")
+    if source.rendered:
+        lines.append(" ")
+        lines.extend(source.rendered)
     law = fields.get("戒律")
     if isinstance(law, Mapping):
         limits = "、".join(str(value) for value in (law.get("行动限制") or ()))
@@ -369,10 +506,17 @@ def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
 
 
 def _enemy_lines(source: SectionInput) -> tuple[str, ...]:
-    """敌人条目页：范围照给，答案遮住。"""
+    """敌人条目页：境界、种族、完整构筑与掉落范围。"""
 
     fields = source.fields
     lines: list[str] = []
+    race = str(fields.get("种族") or "").strip()
+    if race:
+        lines.append(f"种族：{race}")
+    lines.append("性别：生成时随机")
+    stage = str(fields.get("境界") or "").strip()
+    if stage:
+        lines.append(f"境界：{stage}")
     level = fields.get("等级")
     if isinstance(level, Sequence) and not isinstance(level, str) and len(level) == 2:
         lines.append(f"等级：{level[0]} ~ {level[1]}")
@@ -397,9 +541,22 @@ def _enemy_lines(source: SectionInput) -> tuple[str, ...]:
         lines.append(
             f"本命武器：{weapon.get('名称')}（攻击 {weapon.get('攻击')}）"
         )
-    lines.append(
-        f"种族：{source.mask}　性别：{source.mask}　器律：{source.mask}"
-    )
+    build_id = str(fields.get("构筑") or "").strip()
+    build_detail = source.related.get(build_id)
+    build = getattr(build_detail, "fields", None)
+    if isinstance(build, Mapping):
+        lines.append(f"构筑：{getattr(build_detail, 'name', '')}")
+        for category in ("功法", "真意", "气机"):
+            values = build.get(category)
+            if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+                continue
+            names = [_related_name(value, source.related) for value in values]
+            names = [name for name in names if name]
+            if names:
+                lines.append(f"{category}（{len(names)}）：" + "、".join(names))
+        suggested = _related_name(build.get("建议种族"), source.related)
+        if suggested:
+            lines.append(f"建议种族：{suggested}")
     return tuple(lines) if lines else None
 
 #: 领域 → 自己的详情行构造。返回 `None` 表示不接管，交给 `_generic_lines` 兜底。
@@ -415,6 +572,9 @@ _SECTION_LINES = {
     "境界": _realm_lines,
     "人物状态": _person_state_lines,
     "敌人": _enemy_lines,
+    "种族": _race_lines,
+    "构筑": _build_lines,
+    "血脉": _bloodline_lines,
 }
 def _previous_realm_name(target: object, related: Mapping[str, object]) -> str:
     """找出「下一境界」指向目标的那个境界名——境界链单向，只能反查。"""

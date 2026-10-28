@@ -68,8 +68,20 @@ def compose_player_reply(
         )
     blocks.extend(document.blocks)
     if not any(isinstance(block, ClosingBlock) for block in document.blocks):
-        blocks.append(ClosingBlock(M.text(closing_for(title))))
+        blocks.append(_default_closing(title))
     return DocumentMessage(Document(tuple(blocks), document.actions))
+
+
+def _default_closing(title: str) -> ClosingBlock:
+    """默认结尾；`查看` 的「帮助 查看」做成无边框命令，其余保持纯文本。"""
+
+    if title.split(maxsplit=1)[:1] == ["查看"]:
+        return ClosingBlock(
+            M.text("发送「查看 编号」查看目标详情；发送「")
+            + (M.command("帮助 查看", "帮助 查看"),)
+            + M.text("」看写法。")
+        )
+    return ClosingBlock(M.text(closing_for(title)))
 
 
 async def send_game_reply(
@@ -77,8 +89,13 @@ async def send_game_reply(
     *,
     is_log: bool = True,
     request_id: object | None = None,
+    title: str | None = None,
 ) -> bool:
-    """发送玩家命令的回包：自动前置人物头与命令标题。"""
+    """发送玩家命令的回包：自动前置人物头与命令标题。
+
+    `title` 只在展示名与玩家原文不同的时候传（如 `查看 400001` 显示卡名）；
+    不传就沿用当前消息原文。
+    """
 
     context = current_message_context()
     if context is None:
@@ -91,7 +108,7 @@ async def send_game_reply(
     decorated = compose_player_reply(
         payload,
         identity=await _identity_text(context.user_id),
-        title=context.raw_message.strip(),
+        title=(context.raw_message if title is None else title).strip(),
         icon="game.cmd",
     )
     return await manager.send(decorated, is_log=is_log, request_id=request_id)

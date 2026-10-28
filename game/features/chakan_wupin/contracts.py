@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from game.core.item_catalog import ItemDetail, ItemSummary
 
@@ -23,6 +23,19 @@ class HeldGrade:
 
 
 @dataclass(frozen=True)
+class GradePreview:
+    """同一件实体在某个品级下的展示快照；字段与规则正文都按该品级算过。"""
+
+    grade_id: str
+    name: str
+    multiplier: float
+    quantity: int = 0
+    fields: Mapping[str, object] = field(default_factory=dict)
+    rendered: tuple[str, ...] = ()
+    extra_lines: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ItemInspectionResult:
     query: str
     detail: ItemDetail | None = None
@@ -33,6 +46,12 @@ class ItemInspectionResult:
     rendered: tuple[str, ...] = ()
     #: 执行者持有该编号的品级（可能多份不同品级）；空表示没持有。
     held_grades: tuple[HeldGrade, ...] = ()
+    #: 按品级算好的展示快照；丹药/构筑/阵法用它出逐品级文本。
+    grade_previews: tuple[GradePreview, ...] = ()
+    #: 特殊丹药的使用地点（来自 物品/规则/使用.json）；空表示无地点门槛。
+    use_location: str = ""
+    #: 特殊丹药的用途名（同一地点可能有多条命令，如生育、求子）。
+    use_purposes: tuple[str, ...] = ()
     #: 敌人条目页的遮罩词（来自 角色/展示/敌人.json）：配置里没有的答案就不假装知道。
     mask_text: str = ""
 
@@ -90,6 +109,7 @@ __all__ = [
     "BaikeEntry",
     "BaikePrefixRow",
     "BaikeReference",
+    "GradePreview",
     "HeldGrade",
     "ItemInspectionResult",
     "ItemDetail",

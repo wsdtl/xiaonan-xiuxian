@@ -16,29 +16,6 @@ from launch.adapter import MessageContext
 from typing import Any
 
 
-@GameCommand.fullmatch(
-    cmd="道侣培养",
-    metadata={
-        "scope": "通用",
-        "guard_rule": "空闲或活动中",
-        "help": {
-            "category": "修行",
-            "summary": "查看当前同行道侣的独立成长与本命武器",
-            "usage": ("道侣培养",),
-            "side_effect": "只读查询，不重新随机道侣构筑",
-            "order": 50,
-        },
-    },
-)
-async def show_companion_cultivation(user_id: str, manager: Any) -> None:
-    feature = current_game_services().features.daolv_peiyang
-    try:
-        result = await feature.inspect(user_id)
-        await send_game_reply(reply.view(feature, result))
-    except CompanionCultivationFeatureError as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
-
-
 @GameCommand.command(
     cmd="道侣突破",
     metadata={

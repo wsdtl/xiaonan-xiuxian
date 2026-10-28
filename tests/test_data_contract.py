@@ -71,8 +71,8 @@ def test_obsolete_names_are_absent() -> None:
     assert all("归脉" not in path.read_text(encoding="utf-8") for path in json_files)
 
 
-def test_herbs_carry_their_own_meridian(data_service: JsonDataService) -> None:
-    """归脉映射退役后，本脉落在灵植实体自己身上。"""
+def test_herbs_use_their_directory_terrain(data_service: JsonDataService) -> None:
+    """灵植和灵矿/兽宝一样是纯材料，地形只在目录/池名上。"""
 
     herbs = [
         item_id
@@ -80,10 +80,10 @@ def test_herbs_carry_their_own_meridian(data_service: JsonDataService) -> None:
         if data_service.entity_record("基础物品", item_id).number_category == "灵植"
     ]
     assert herbs
-    allowed = {"青华", "丹离", "坤载", "太白", "玄冥"}
     for item_id in herbs:
         value = data_service.entity("基础物品", item_id)
-        assert value.get("本脉") in allowed, (item_id, value.get("本脉"))
+        assert "地形" not in value, item_id
+        assert "本脉" not in value, item_id
 
 
 def test_recipes_and_laws_use_explicit_materials(data_service: JsonDataService) -> None:
@@ -134,7 +134,7 @@ def test_breakthrough_pills_align_with_plants(data_service: JsonDataService) -> 
 def test_pills_are_flat_one_entity_per_file() -> None:
     """四类丹药都像战丹一样铺开：一个文件一颗，文件根是单个对象。"""
 
-    expected = {"恢复丹": 6, "战丹": 125, "突破丹": 108, "特殊丹": 8}
+    expected = {"恢复丹": 6, "战丹": 125, "突破丹": 108, "特殊丹": 7}
     for kind, count in expected.items():
         files = sorted((DATA_ROOT / "物品/内容/丹药" / kind).rglob("*.json"))
         assert len(files) == count, (kind, len(files))

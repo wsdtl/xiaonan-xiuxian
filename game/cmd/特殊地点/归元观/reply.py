@@ -1,48 +1,5 @@
-from game.features.guiyuan import GuiyuanFeature, GuiyuanPreview, GuiyuanResult
 from game.features.xigen import XigenFeature, XigenResult
 from message import DocumentMessage, M
-from ...presentation import error_document
-
-
-def preview(feature: GuiyuanFeature, value: GuiyuanPreview) -> DocumentMessage:
-    builder = (
-        M.document()
-
-        .inline_section("状态", M.status("待确认", tone="warning"), icon="game.seed")
-        .section(value.location_name, icon="game.pin")
-        .field("同行道侣", M.text(value.companion_name, tone="companion"))
-        .small(feature.copy("预览", "说明"))
-    )
-    for index, (category, count) in enumerate(value.counts, start=1):
-        builder.item(index, f"{category} · 当前承载 {count} 项")
-    return builder.line(
-        M.status(
-            "丹药齐备" if value.has_medicine else "缺少丹药",
-            tone="positive" if value.has_medicine else "danger",
-        ),
-        " ",
-        feature.copy("预览", "有丹" if value.has_medicine else "无丹"),
-    ).build()
-
-
-def result(feature: GuiyuanFeature, value: GuiyuanResult) -> DocumentMessage:
-    return (
-        M.document()
-
-        .section(value.companion_name, icon="game.heart")
-        .line(
-            M.status("归元完成", tone="positive"),
-            " ",
-            feature.copy("结算", "完成", {"类别": value.category, "数量": value.content_count}),
-        )
-        .build()
-    )
-
-
-def error(feature: GuiyuanFeature, message: str) -> DocumentMessage:
-    # 形状统一走 error_document（game/cmd/presentation.py），行为与原来一致。
-    return error_document(        feature.copy("错误", "标题"), "game.pin_doc", "归元失败", message, tone="danger"
-    )
 
 
 def xigen_result(feature: XigenFeature, value: XigenResult) -> DocumentMessage:

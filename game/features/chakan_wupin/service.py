@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import replace
 from types import MappingProxyType
 
 from game.core.asset import AssetService, AssetStateError, ItemRefError, parse_item_ref
 from game.core.character import CharacterService
 from game.core.data import JsonDataError, JsonDataService
 from game.core.combat import CombatService, render_body, render_listeners
+from game.core.formation import FormationService
 from game.core.item_catalog import (
     ItemCatalogService,
     ItemDetail,
@@ -22,6 +25,7 @@ from .contracts import (
     BaikeEntry,
     BaikePrefixRow,
     BaikeReference,
+    GradePreview,
     HeldGrade,
     ItemInspectionResult,
 )
@@ -41,12 +45,14 @@ class ItemInspectionFeature:
         asset: AssetService,
         data: JsonDataService,
         character: CharacterService,
+        formation: FormationService,
     ) -> None:
         self._catalog = catalog
         self._data = data
         self._combat = combat
         self._asset = asset
         self._character = character
+        self._formation = formation
         self._initialized = False
         self._enemy_ids: frozenset[str] | None = None
         self._mask_text: str | None = None
@@ -60,42 +66,233 @@ class ItemInspectionFeature:
             raise RuntimeError("战斗核心必须先于查看实体玩法启动")
         if not self._character.status().initialized:
             raise RuntimeError("角色核心必须先于查看实体玩法启动")
+        if not self._formation.status().initialized:
+            raise RuntimeError("阵法核心必须先于查看实体玩法启动")
         self._initialized = True
 
-    def _split_grade(self, query: str) -> str:
-        """剥掉品级前缀，返回剩下的名字（认不出就整串照旧）。
+    def _grade_aliases(self) -> Mapping[str, str]:
+        aliases: dict[str, str] = {}
+        for grade in self._asset.grades():
+            aliases[grade.name] = grade.grade_id
+            aliases[grade.name[:1]] = grade.grade_id
+            aliases[grade.grade_id] = grade.grade_id
+        return aliases
 
-        口径（委托方 2026-10-15）：交互区写「品级＋名称」连写（天品七星草）。
-        拆法**不自己造**：走 core/asset/ref.py 的 parse_item_ref（品级以「品」结尾即认）。
-        """
+    def _parse_query(self, query: str) -> tuple[str, str]:
+        """拆出「物品名 + 显式品级编号」；没写品级返回空串。"""
 
         try:
-            return parse_item_ref(query).item
+            ref = parse_item_ref(query, grades=self._grade_aliases())
         except ItemRefError:
-            return query
+            return query, ""
+        return ref.item, ref.grade
 
     async def inspect(self, query: str, user_id: str = "") -> ItemInspectionResult:
         if not self._initialized:
             raise RuntimeError("查看实体玩法微服务尚未初始化")
         normalized = " ".join(str(query or "").split())
-        normalized = self._split_grade(normalized)
+        item_query, grade_token = self._parse_query(normalized)
         try:
-            detail = self._catalog.inspect_entity(normalized)
-            return ItemInspectionResult(
-                normalized,
-                detail=detail,
-                related_details=self._related_details(detail),
-                # 突破丹把「从哪到哪」写在正文最前——境界名与来源都由这一层从数据取。
-                rendered=(
-                    *self._breakthrough_realm_lines(detail),
-                    *_rendered_lines(detail, self._combat.rule_layer()),
-                ),
-                held_grades=await self._held_grades(user_id, detail.item_id),
-            )
+            detail = self._catalog.inspect_entity(item_query)
         except ItemNameAmbiguousError as exc:
-            return ItemInspectionResult(normalized, candidates=exc.candidates)
+            return ItemInspectionResult(item_query, candidates=exc.candidates)
         except ItemNotFoundError:
-            return ItemInspectionResult(normalized)
+            return ItemInspectionResult(item_query)
+        requested = None
+        if grade_token:
+            requested = self._asset.grade(grade_token)
+        held = await self._held_grades(user_id, detail.item_id)
+        previews = await self._grade_previews(detail, requested, held, user_id)
+        rendered = (
+            *self._breakthrough_realm_lines(detail),
+            *_rendered_lines(detail, self._combat.rule_layer()),
+        )
+        if detail.section == "血脉" and detail.fields.get("能觉醒"):
+            rendered = (*rendered, *self._awakening_lines())
+        if detail.section == "意境":
+            rendered = (*rendered, *self._yijing_listener_lines(detail))
+        use_location, use_purposes = self._use_profile(detail)
+        return ItemInspectionResult(
+            item_query,
+            detail=detail,
+            related_details=self._related_details(detail),
+            # 突破丹把「从哪到哪」写在正文最前——境界名与来源都由这一层从数据取。
+            rendered=rendered,
+            held_grades=held,
+            grade_previews=previews,
+            use_location=use_location,
+            use_purposes=use_purposes,
+        )
+
+    async def _grade_previews(
+        self,
+        detail: ItemDetail,
+        requested: object | None,
+        held: tuple[HeldGrade, ...],
+        user_id: str,
+    ) -> tuple[GradePreview, ...]:
+        """丹药/构筑/阵法按品级算一份展示快照。"""
+
+        if detail.section not in _GRADE_SECTIONS:
+            return ()
+        if detail.section == "阵法":
+            grades = tuple(self._asset.grades())
+            quantities = await self._formation_quantities(user_id, detail.item_id)
+        else:
+            if detail.fields.get("无品级"):
+                # 特殊丹无品级：仍走一份展示快照，但回复层不印品级行。
+                grades = (self._asset.grade("01"),)
+            elif requested is not None:
+                grades = (requested,)
+            elif held:
+                grades = tuple(self._asset.grade(value.grade_id) for value in held)
+            else:
+                grades = (self._asset.grade("01"),)
+            quantities = {value.grade_id: value.quantity for value in held}
+        previews: list[GradePreview] = []
+        for grade in grades:
+            multiplier = float(grade.ability_multiplier)
+            fields = _scale_fields(detail.fields, multiplier)
+            scaled = replace(detail, fields=MappingProxyType(fields))
+            rendered = (
+                *self._breakthrough_realm_lines(scaled),
+                *_rendered_lines(scaled, self._combat.rule_layer()),
+            )
+            extra: tuple[str, ...] = ()
+            if detail.section == "阵法":
+                try:
+                    assessment = self._formation.assess(
+                        detail.item_id, grade.name, ()
+                    )
+                except Exception:  # noqa: BLE001 - 预览失败不挡详情
+                    assessment = None
+                if assessment is not None:
+                    extra = (
+                        f"承载：{_clean_number(assessment.capacity)}",
+                        f"冲击：{_clean_number(assessment.impact)}",
+                        f"节点：{assessment.nodes}",
+                        f"传导：{_clean_number(assessment.transmission)}",
+                    )
+                    detection = assessment.detection
+                    if detection is not None:
+                        extra += (
+                            f"检测：{detection.field} {detection.relation}"
+                            f"（{_clean_number(float(detection.coefficient) * multiplier)}）",
+                        )
+            previews.append(
+                GradePreview(
+                    grade.grade_id,
+                    grade.name,
+                    multiplier,
+                    quantities.get(grade.grade_id, 0),
+                    fields,
+                    rendered,
+                    extra,
+                )
+            )
+        return tuple(previews)
+
+    def _yijing_listener_lines(self, detail: ItemDetail) -> tuple[str, ...]:
+        """意境七到九阶的质变监听：按原子能力渲染器出完整条件与数值。"""
+
+        tiers = detail.fields.get("质变监听")
+        if not isinstance(tiers, Mapping):
+            return ()
+        lines: list[str] = []
+        for tier in ("7", "8", "9"):
+            node = tiers.get(tier)
+            if not isinstance(node, Mapping):
+                continue
+            rendered, _unknown = render_listeners(
+                {"监听": [node]}, self._combat.rule_layer()
+            )
+            if rendered:
+                if lines:
+                    lines.append(" ")
+                lines.append(f"{tier}阶效果：")
+                lines.extend(rendered)
+        return tuple(lines)
+
+    def _awakening_lines(self) -> tuple[str, ...]:
+        """血脉觉醒档：按气血百分比给倍率，档位来自战斗规则数据集。"""
+
+        dataset = self._data.dataset("血脉规则")
+        rules = dataset.get("血脉") if isinstance(dataset, Mapping) else None
+        rows = rules.get("觉醒档") if isinstance(rules, Mapping) else None
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            return ()
+        lines: list[str] = []
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            low = row.get("下限")
+            high = row.get("上限")
+            multiplier = _clean_number(row.get("倍率"))
+            if low is not None and high is not None:
+                label = f"气血 {low}%~{high}%"
+            elif low is not None:
+                label = f"气血 ≥{low}%"
+            else:
+                label = f"气血 <{high}%"
+            lines.append(f"{label}：×{multiplier}")
+        return tuple(lines)
+
+    def _use_profile(self, detail: ItemDetail) -> tuple[str, tuple[str, ...]]:
+        """特殊丹药的使用地点与用途名；普通丹药没有地点门槛。"""
+
+        if detail.section != "丹药" or not detail.fields.get("无品级"):
+            return "", ()
+        effect = detail.fields.get("使用效果")
+        if not isinstance(effect, Mapping):
+            return "", ()
+        kind = str(effect.get("类型") or "").strip()
+        if not kind:
+            return "", ()
+        dataset = self._data.dataset("使用规则")
+        if "使用" in dataset:
+            document = dataset.get("使用")
+        elif len(dataset) == 1:
+            document = next(iter(dataset.values()))
+        else:
+            document = dataset
+        rows = document.get("使用方式") if isinstance(document, Mapping) else None
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            return "", ()
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            if str(row.get("效果") or "").strip() != kind:
+                continue
+            location = str(row.get("地点") or "").strip()
+            purposes: list[str] = []
+            actions = row.get("帮助")
+            if isinstance(actions, Sequence) and not isinstance(actions, (str, bytes)):
+                for action in actions:
+                    if not isinstance(action, Mapping):
+                        continue
+                    command = str(action.get("命令") or "").strip()
+                    if command.startswith("帮助 "):
+                        name = command.removeprefix("帮助 ").strip()
+                        if name and name not in purposes:
+                            purposes.append(name)
+            return location, tuple(purposes or [kind])
+        return "", ()
+
+    async def _formation_quantities(
+        self, user_id: str, formation_id: str
+    ) -> dict[str, int]:
+        if not str(user_id or "").strip():
+            return {}
+        try:
+            entries = await self._asset.formation_entries(user_id)
+        except AssetStateError:
+            return {}
+        counts: dict[str, int] = {}
+        for entry in entries:
+            if entry.content_id != formation_id or not entry.grade_id:
+                continue
+            counts[entry.grade_id] = counts.get(entry.grade_id, 0) + int(entry.quantity)
+        return counts
 
     def id_aliases(self, sections: Sequence[str]) -> Mapping[str, str]:
         """「中文名 / 品级名 → 编号」的别名表。
@@ -318,16 +515,44 @@ class ItemInspectionFeature:
         if not number:
             return None
         entry = self._data.entity("敌人", number)
+        fields = {
+            str(key): value for key, value in entry.items() if key != "编号"
+        }
+        stage = self._enemy_stage(entry)
+        if stage:
+            fields["境界"] = stage
         return ItemDetail(
             item_id=number,
             category="敌人",
             name=name,
             description=str(entry.get("说明") or "").strip(),
-            fields=MappingProxyType(
-                {str(key): value for key, value in entry.items() if key != "编号"}
-            ),
+            fields=MappingProxyType(fields),
             section="敌人",
         )
+
+    def _enemy_stage(self, entry: Mapping[str, object]) -> str:
+        """按敌人等级区间匹配角色规则里的阶梯名；跨阶写「A~B」。"""
+
+        rules = self._data.dataset("角色规则").get("敌方修士")
+        tiers = rules.get("阶梯") if isinstance(rules, Mapping) else None
+        level = entry.get("等级")
+        if not isinstance(tiers, Sequence) or isinstance(tiers, (str, bytes)):
+            return ""
+        if not isinstance(level, Sequence) or isinstance(level, (str, bytes)) or len(level) != 2:
+            return ""
+        low, high = int(level[0]), int(level[1])
+        names: list[str] = []
+        for tier in tiers:
+            if not isinstance(tier, Mapping):
+                continue
+            span = tier.get("等级范围")
+            if not isinstance(span, Sequence) or isinstance(span, (str, bytes)) or len(span) != 2:
+                continue
+            if max(low, int(span[0])) <= min(high, int(span[1])):
+                name = str(tier.get("阶梯") or "").strip()
+                if name:
+                    names.append(name)
+        return " ~ ".join(names)
 
     async def _held_grades(self, user_id: str, content_id: str) -> tuple[HeldGrade, ...]:
         """执行者持有该编号的品级。没创建人物、没持有，都按「未持有」处理。
@@ -355,6 +580,11 @@ class ItemInspectionFeature:
                 entry.quantity + (previous.quantity if previous else 0),
             )
         return tuple(sorted(found.values(), key=lambda item: item.multiplier))
+
+    def related_details(self, detail: ItemDetail) -> tuple[ItemDetail, ...]:
+        """公开的详情引用解析：敌人页也要用同一份构筑/卡名。"""
+
+        return self._related_details(detail)
 
     def _related_details(self, detail: ItemDetail) -> tuple[ItemDetail, ...]:
         """解析详情实际引用的编号实体，供玩家页显示名称和真实效果。"""
@@ -439,7 +669,9 @@ def _entity_references(value: object) -> Iterator[str]:
 
 #: 正文由能力树现算的领域。构筑四类、丹药、战场环境走 `render_body`；
 #: 伤势的战斗状态走 `render_listeners`。其余领域没有能力树，正文在命令层成形。
-_ABILITY_TREE_SECTIONS = frozenset({"功法", "真意", "气机", "器律", "丹药", "战场环境"})
+_ABILITY_TREE_SECTIONS = frozenset(
+    {"功法", "真意", "气机", "器律", "丹药", "战场环境", "血脉"}
+)
 
 
 def _rendered_lines(detail: ItemDetail, rule_layer: Mapping[str, object]) -> tuple[str, ...]:
@@ -458,6 +690,72 @@ def _rendered_lines(detail: ItemDetail, rule_layer: Mapping[str, object]) -> tup
         if isinstance(state, Mapping):
             return tuple(render_listeners(state, rule_layer)[0])
     return ()
+
+
+_GRADE_SECTIONS = frozenset(
+    {"丹药", "功法", "真意", "气机", "器律", "阵法"}
+)
+_SCALE_KEYS = frozenset(
+    {
+        "数值",
+        "属性",
+        "永久属性",
+        "威力倍率",
+        "恢复百分比",
+        "保留血气",
+        "保留神魂",
+        "护盾比例",
+        "治疗比例",
+    }
+)
+
+
+def _clean_number(value: object) -> str:
+    number = round(float(value), 4)
+    return str(int(number)) if number == int(number) else f"{number:g}"
+
+
+def _plain(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _plain(raw) for key, raw in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [_plain(raw) for raw in value]
+    return value
+
+
+def _scale_fields(fields: Mapping[str, object], multiplier: float) -> dict[str, object]:
+    value = _plain(fields)
+    assert isinstance(value, dict)
+    _scale_node(value, multiplier)
+    return value
+
+
+def _scale_node(value: object, multiplier: float) -> None:
+    """只放大展示用数值；层数、持续时间、冷却、概率与次数一律不动。"""
+
+    if isinstance(value, dict):
+        for key, raw in list(value.items()):
+            if key in _SCALE_KEYS:
+                if isinstance(raw, bool):
+                    continue
+                if isinstance(raw, (int, float)):
+                    value[key] = round(float(raw) * multiplier, 4)
+                elif isinstance(raw, dict):
+                    for name, number in list(raw.items()):
+                        if isinstance(number, (int, float)) and not isinstance(number, bool):
+                            raw[name] = round(float(number) * multiplier, 4)
+                elif isinstance(raw, list):
+                    value[key] = [
+                        round(float(item) * multiplier, 4)
+                        if isinstance(item, (int, float)) and not isinstance(item, bool)
+                        else item
+                        for item in raw
+                    ]
+            else:
+                _scale_node(raw, multiplier)
+    elif isinstance(value, list):
+        for raw in value:
+            _scale_node(raw, multiplier)
 
 
 __all__ = ["ItemInspectionFeature"]

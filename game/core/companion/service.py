@@ -30,7 +30,12 @@ from game.core.database import DatabaseService, StateAddress, StateMutation
 from game.core.forging import ForgingService
 from game.core.growth import GrowthError, GrowthService
 from game.core.medicine import PreparedBattleMedicine
-from game.core.world import WORLD_CONTRACT_DATASET, WORLD_CONTRACT_PATH
+from game.core.world import (
+    WORLD_CONTRACT_DATASET,
+    WORLD_CONTRACT_PATH,
+    LocationQuery,
+    WorldService,
+)
 
 from .contracts import (
     ActiveCompanion,
@@ -40,7 +45,6 @@ from .contracts import (
     CompanionBreakthroughCorrectionPlan,
     CompanionBreakthroughPlan,
     CompanionBreakthroughPreview,
-    CompanionBuildResetPlan,
     CompanionCultivationError,
     CompanionCultivationResetPlan,
     CompanionDefinition,
@@ -86,12 +90,14 @@ class CompanionService:
         growth: GrowthService,
         forging: ForgingService,
         bloodline: BloodlineService,
+        world: WorldService,
     ) -> None:
         self._data = data
         self._database = database
         self._growth = growth
         self._forging = forging
         self._bloodline = bloodline
+        self._world = world
         self._initialized = False
         self._rules: CompanionRules | None = None
         self._definitions: Mapping[str, CompanionDefinition] = MappingProxyType({})
@@ -100,7 +106,6 @@ class CompanionService:
             {}
         )
         self._attribute_definitions: Mapping[str, object] = {}
-        self._plant_pool_meridians: Mapping[str, str] = {}
         self._five_element_rules: Mapping[str, object] = {}
         #: 种族：道侣核心构造在角色核心之前，所以种族表由组合根在角色核心就绪后回填
         #: （`attach_races`），回填时当场校验每名道侣的固定种族都登记过。
@@ -135,7 +140,6 @@ class CompanionService:
         self._attribute_definitions = _mapping(
             self._data.dataset("战斗字段定义").get("属性"), "战斗定义.属性"
         )
-        self._plant_pool_meridians = self._load_plant_pool_meridians()
         if self._rules.active_limit != 1:
             raise JsonDataError("当前同行位契约要求道侣.同行上限为1")
         if self._rules.full_reward_lifetime_limit != 1:
@@ -1059,35 +1063,6 @@ class CompanionService:
             ),
         )
 
-    async def plan_build_reset(
-        self, user_id: str, *, category: str
-    ) -> CompanionBuildResetPlan:
-        """只重抽当前同行道侣的一类构筑，器律永远不在此范围。"""
-
-        current = await self.active_instance(user_id)
-        before = current.instance
-        normalized = str(category or "").strip()
-        if normalized not in {"功法", "真意", "气机"}:
-            raise CompanionCultivationError("道侣归元只能选择功法、真意或气机")
-        definition = self.definition(before.companion_id)
-        build = self._growth.redraw_companion_category(
-            current=before.cultivation,
-            category=normalized,
-        )
-        cultivation = dict(before.cultivation)
-        cultivation[normalized] = build.content_ids
-        after = replace(
-            before,
-            cultivation=MappingProxyType(cultivation),
-            version=before.version + 1,
-        )
-        return CompanionBuildResetPlan(
-            before.companion_id,
-            normalized,
-            build.content_ids,
-            self._active_instance_operations(user_id, current, after),
-        )
-
     async def plan_breakthrough_correction(
         self, user_id: str, *, source_medicine_id: str
     ) -> CompanionBreakthroughCorrectionPlan:
@@ -1427,10 +1402,10 @@ class CompanionService:
             gift_rules.get("合意推导"), "道侣.赠礼喜好.合意推导"
         )
         if acceptable_rule != {
-            "来源": "灵植.本脉",
-            "条件": "与偏爱灵植池同本脉",
+            "来源": "道侣.所在地地形",
+            "条件": "与所在地地形相同",
         }:
-            raise JsonDataError("道侣合意灵植必须按灵植本脉推导")
+            raise JsonDataError("道侣合意灵植必须按所在地地形推导")
         if gift_rules.get("拒绝倍率") != 0:
             raise JsonDataError("道侣拒绝赠礼倍率必须为0")
         reward = _mapping(value.get("圆满回礼"), "道侣.圆满回礼")
@@ -1468,24 +1443,6 @@ class CompanionService:
             ),
             _bool(medicine_auto.get("默认开启"), "服丹.自动用药.默认开启"),
         )
-
-    def _load_plant_pool_meridians(self) -> Mapping[str, str]:
-        result: dict[str, str] = {}
-        for pool_name in self._data.pools():
-            if not pool_name.startswith("灵植-"):
-                continue
-            members = self._data.pool_members((pool_name,), "基础物品")
-            meridians = {
-                _text(
-                    self._data.entity("基础物品", item_id).get("本脉"),
-                    f"{pool_name}.本脉",
-                )
-                for item_id in members
-            }
-            if len(meridians) != 1:
-                raise JsonDataError(f"灵植池 {pool_name} 的本脉必须唯一")
-            result[pool_name] = next(iter(meridians))
-        return MappingProxyType(result)
 
     def _realms(self) -> tuple[tuple[str, str, int, int], ...]:
         return tuple(
@@ -1527,23 +1484,21 @@ class CompanionService:
         for item_id in favorite_items:
             if self._data.entity_record("基础物品", item_id).number_category != "灵植":
                 raise JsonDataError(f"道侣 {companion_id} 的喜爱池包含非灵植 {item_id}")
-        try:
-            favorite_meridians = {
-                self._plant_pool_meridians[pool_name] for pool_name in favorite_pools
-            }
-        except KeyError as exc:
-            raise JsonDataError(
-                f"道侣 {companion_id} 的偏爱灵植池缺少本脉：{exc.args[0]}"
-            ) from exc
-        acceptable_pools = tuple(
-            sorted(
-                pool_name
-                for pool_name, main in self._plant_pool_meridians.items()
-                if main in favorite_meridians and pool_name not in favorite_pools
-            )
+        # 合意看道侣所在地的地形：地形就是灵植池名（灵植-丘陵/灵植-海岸）。
+        location_terrain = self._world.locate(
+            LocationQuery(location_name=location_name)
+        ).terrain
+        acceptable_pool = f"灵植-{location_terrain}"
+        acceptable_pools = (
+            ()
+            if acceptable_pool in favorite_pools
+            or acceptable_pool not in self._data.pools()
+            else (acceptable_pool,)
         )
-        acceptable_items = frozenset(
-            self._data.pool_members(acceptable_pools, "基础物品")
+        acceptable_items = (
+            frozenset(self._data.pool_members(acceptable_pools, "基础物品"))
+            if acceptable_pools
+            else frozenset()
         ) - favorite_items
         reward_value = _mapping(join.get("圆满回礼"), "道侣.结交.圆满回礼")
         reward = CompanionReward(
