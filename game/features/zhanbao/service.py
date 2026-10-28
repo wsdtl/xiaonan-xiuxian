@@ -7,7 +7,7 @@
   而且每一步都能现算。
 - **不缓存**：这类页面多半只看一次，而战报记录本身只留很短一段时间（历史记录过期就没了）。
   更重要的是——缓存一旦过期不对齐，玩家看到的就是上一版画面。所以每次调用都按**存档当前
-  版本**现算：`/data` 带 `view` 参数说明要哪一份（首屏 / 片段 / 事件 / 参战者 / 行动前后状态）。
+  版本**现算：`/data` 只有一份整场 `game.battle_animation`，文本与动画共用。
 """
 
 from __future__ import annotations
@@ -158,15 +158,11 @@ class BattleReportFeature:
         self,
         report_id: str,
         *,
-        part: str = "header",
-        index: int = 0,
-        snapshot: str = "",
-        sequence: int = 0,
+        part: str = "animation",
     ) -> dict[str, Any] | None:
-        """按编号与 `part` 现算一份画面；编号不存在或那场仗还没打完时返回 `None`。
+        """按编号现算整场战报；编号不存在或那场仗还没打完时返回 `None`。
 
-        `part` 取 `VIEWS` 里的名字：`header` 是首屏（概览、演员表、花名册、片段表），
-        其余四份按片段取。**每次都重算**，不读上一次的结果。
+        页面只有 `animation` 一份载荷，文本模式也从它组装；每次都重算，不读上一次结果。
         """
 
         self._require_initialized()
@@ -179,21 +175,8 @@ class BattleReportFeature:
         if stored is None:
             return None
         report, _version = stored
-        # 只算这一次要的那一份：翻页、取片段不再为整份视图付钱（结果与整份一致）。
-        header, parts = self._combat.build_report_view(
-            report, only=part, sequence=sequence
-        )
-        if part == "header":
-            return header
-        if part == "segment":
-            return (parts.get("segments") or {}).get(str(index))
-        if part == "events":
-            return (parts.get("events") or {}).get(str(index))
-        if part == "participants":
-            return (parts.get("participants") or {}).get(f"{index}:{snapshot}")
-        if part == "animation":
-            return parts.get("animation")
-        return (parts.get("transitions") or {}).get(f"{index}:{sequence}")
+        _header, parts = self._combat.build_report_view(report, only=part)
+        return parts.get("animation")
 
     async def _stored(self, key: str) -> tuple[Mapping[str, object], int] | None:
         """按**战报编号**从非资产库取战报。

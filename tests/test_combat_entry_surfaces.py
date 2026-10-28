@@ -870,7 +870,6 @@ def test_groups_report_and_snapshots(services) -> None:
                 CombatantReportSpec("R", title="右", color="#000"),
             ),
             scene="测试战场",
-            include_presentation=True,
         ),
     )
     assert result.report is not None
@@ -936,7 +935,7 @@ def test_report_capture_preserves_settlement(services) -> None:
     assert reported.winner_side == full.winner_side
     assert reported.left_results == full.left_results
     assert reported.right_results == full.right_results
-    assert replace(reported, events=(), report=None, presentation=None) == replace(full, events=())
+    assert replace(reported, events=(), report=None) == replace(full, events=())
     assert '命中后' not in {event.kind for event in reported.events}
     captured_kinds = {event.kind for event in reported.events}
     assert {"战斗开始", "行动开始", "造成伤害后", "战斗结束"} <= captured_kinds

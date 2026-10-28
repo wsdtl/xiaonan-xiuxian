@@ -171,7 +171,6 @@ class CombatReportSpec:
     participants: tuple[CombatantReportSpec, ...] = ()
     scene: str = "青岚山演武台"
     generated_at: str | None = None
-    include_presentation: bool = False
 
 
 @dataclass(frozen=True)
@@ -337,7 +336,6 @@ class CombatResult:
     left_team: tuple[CombatantResult, ...] = ()
     right_team: tuple[CombatantResult, ...] = ()
     report: Mapping[str, Any] | None = None
-    presentation: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None
     field: CombatFieldResult | None = None
     formations: tuple[CombatFormationResult, ...] = ()
     total_event_count: int = 0

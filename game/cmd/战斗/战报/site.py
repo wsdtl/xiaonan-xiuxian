@@ -66,14 +66,11 @@ def identifier_of(raw: str) -> str:
 @router.get("/{report_id:path}/data", response_class=JSONResponse)
 async def battle_report_data(
     report_id: str,
-    view: str = Query("header"),
-    index: int = Query(0),
-    snapshot: str = Query(""),
-    sequence: int = Query(0),
+    view: str = Query("animation"),
 ) -> JSONResponse:
     try:
         payload = await current_game_services().features.zhanbao.view(
-            identifier_of(report_id), part=view, index=index, snapshot=snapshot, sequence=sequence
+            identifier_of(report_id), part=view
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

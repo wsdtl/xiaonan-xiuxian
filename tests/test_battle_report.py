@@ -177,26 +177,6 @@ ATTRS = {
 CARD = "410154"
 
 
-def _battle(services) -> dict:
-    def side(pid: str) -> CombatantSpec:
-        return CombatantSpec(
-            id=pid, name=pid, attributes=dict(ATTRS),
-            build=(CombatBuildRef("真意", CARD, instance_id=f"{pid}:{CARD}", born_order=0),),
-        )
-
-    result = asyncio.run(
-        services.core.combat.execute(
-            CombatRequest(
-                left_team=(side("L"),), right_team=(side("R"),),
-                seed=20260911, action_limit=60,
-                report=CombatReportSpec(scene="切磋", generated_at="2026-01-01T00:00:00+08:00"),
-            )
-        )
-    )
-    assert result.report, "这一场没生成战报，判据无从判起"
-    return services.core.combat.build_report_presentation(result.report)
-
-
 class _StoredReports:
     """替身：非资产库的读口（按战报编号取；只实现页面要用的两个方法）。"""
 
@@ -211,36 +191,6 @@ class _StoredReports:
 
     def peek(self, report_id: str):
         return self.load(report_id) if report_id in self._reports else None
-
-
-def test_views_match_the_whole_payload() -> None:
-    services = build_game_services()
-    try:
-        header, parts = services.core.combat.build_report_view(_report(services))
-        feature = services.features.zhanbao
-        feature._battle_log = _StoredReports({"war-1": {"占位": True}})
-        feature._combat.build_report_view = lambda report, **_kwargs: (header, parts)
-
-        first = header["detail"]["segments"][0]["index"]
-        assert "timeline" not in header["detail"]["segments"][0], (
-            "首屏不许带片段内容（时间线按需取）"
-        )
-        assert header["roster"] and header["actors"] and header["palette"], "首屏要带花名册与角色表"
-
-        assert asyncio.run(feature.view("war-1")) == header
-        assert asyncio.run(feature.view("war-1", part="segment", index=first)) == parts["segments"][str(first)]
-        assert asyncio.run(feature.view("war-1", part="events", index=first)) == parts["events"][str(first)]
-        assert asyncio.run(
-            feature.view("war-1", part="participants", index=first, snapshot="after")
-        ) == parts["participants"][f"{first}:after"]
-        assert asyncio.run(
-            feature.view("war-1", part="transition", index=first, sequence=0)
-        ) == parts["transitions"][f"{first}:0"]
-        assert asyncio.run(feature.view("war-1", part="animation")) == parts.get("animation")
-        assert asyncio.run(feature.view("war-404")) is None
-        assert asyncio.run(feature.view("war-1", part="segment", index=99)) is None
-    finally:
-        services.core.database.close()
 
 
 def _report(services) -> dict:
@@ -265,6 +215,20 @@ def _report(services) -> dict:
         )
     )
     return result.report
+
+
+def test_feature_view_returns_animation_payload() -> None:
+    services = build_game_services()
+    try:
+        feature = services.features.zhanbao
+        feature._battle_log = _StoredReports({"war-1": _report(services)})
+        payload = asyncio.run(feature.view("war-1"))
+        assert payload is not None
+        assert payload["schema"] == "game.battle_animation"
+        assert payload["version"] == 1
+        assert asyncio.run(feature.view("war-404")) is None
+    finally:
+        services.core.database.close()
 
 
 def test_animation_payload_is_single_screen_contract() -> None:
@@ -336,7 +300,7 @@ def test_the_page_has_one_data_interface() -> None:
     )
     data = next(route for route in router.routes if route.path.endswith("/data"))
     params = {param.name for param in data.dependant.query_params}
-    assert params == {"view", "index", "snapshot", "sequence"}, f"数据接口的参数变了：{params}"
+    assert params == {"view"}, f"数据接口的参数变了：{params}"
 
 
 def _numbers_in(node: object, found: list[str]) -> None:
@@ -380,9 +344,9 @@ def test_enemy_roster_carries_its_number() -> None:
                 )
             )
         )
-        header, _parts = services.core.combat.build_report_view(result.report)
+        _header, parts = services.core.combat.build_report_view(result.report)
         found: list[str] = []
-        _numbers_in(header, found)
+        _numbers_in(parts["animation"], found)
         assert enemy.content_id in found, (
             '花名册里没有敌人的定义编号，页面上的名字就链不出去：'
             f'敌人编号 {enemy.content_id}，载荷里找到 {sorted(set(found))}'

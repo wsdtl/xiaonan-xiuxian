@@ -118,6 +118,7 @@ def _unit(participant: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "id": _text(participant.get("id")),
         "name": _text(participant.get("name"), _text(participant.get("id"))),
+        "content_id": _text(participant.get("content_id")),
         "side": (
             participant.get("side")
             if participant.get("side") in {"left", "right"}

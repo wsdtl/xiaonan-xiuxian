@@ -33,7 +33,6 @@ from .models import (
     PreparedFormationStage,
     RuntimeCombatantSnapshot,
 )
-from .presentation import build_battle_report_presentation
 from .report import RuntimeBattleReportParticipant, build_battle_report
 
 
@@ -135,36 +134,20 @@ class CombatService:
 
         return self._require_report_catalog()
 
-    def build_report_presentation(
-        self, report: Mapping[str, object]
-    ) -> dict[str, object]:
-        """把一份存档战报算成**战报头**（页面首屏要的那份）。
-
-        片段内容不在这里——页面是实时查看的，按当前视图向服务端要（见
-        `build_report_view`）。
-        """
-
-        from .presentation import build_battle_report_presentation
-
-        return build_battle_report_presentation(report, self._require_report_catalog())
-
     def build_report_view(
         self,
         report: Mapping[str, object],
         *,
         only: str | None = None,
-        sequence: int | None = None,
     ) -> tuple[dict[str, object], dict[str, object]]:
-        """`（战报头, 各份片段数据）`：页面首屏拿头，翻片段时按份取。
+        """把存档战报投影成整场 `game.battle_animation`。
 
-        `only` 给「只要哪一份」，只算那一份（结果与整份算完再挑那份一致）。
+        文本模式与动画模式共用这一份；不再有首屏/片段/事件/参战者/转场五套载荷。
         """
 
         from .presentation import build_battle_report_view as _build
 
-        return _build(
-            report, self._require_report_catalog(), only=only, sequence=sequence
-        )
+        return _build(report, self._require_report_catalog(), only=only)
 
     async def execute(self, request: CombatRequest) -> CombatResult:
         """执行唯一的公共战斗请求，不阻塞异步消息驱动。"""
@@ -545,15 +528,7 @@ class CombatService:
             generated_at=report_spec.generated_at,
             scene=result.field.scene if result.field is not None else report_spec.scene,
         )
-        presentation = (
-            build_battle_report_presentation(
-                report,
-                self._require_report_catalog(),
-            )
-            if report_spec.include_presentation
-            else None
-        )
-        return replace(result, report=report, presentation=presentation)
+        return replace(result, report=report)
 
     def _require_engine(self) -> BattleEngine:
         if self._engine is None:
