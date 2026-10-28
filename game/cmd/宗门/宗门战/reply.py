@@ -15,6 +15,16 @@ from message import DocumentMessage, M
 from ...actions import message_actions
 
 
+def intro(feature: SectWarFeature) -> DocumentMessage:
+    return (
+        M.document()
+        .section(feature.text("介绍", "标题"), icon="game.swords")
+        .line(feature.text("介绍", "说明"))
+        .line(feature.text("介绍", "写法"))
+        .build()
+    )
+
+
 def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
     status = feature.text("状态", value.status)
     builder = (
@@ -36,22 +46,6 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             feature.text("查看", "押注"),
             M.text(value.wager, tone="cultivation"),
         )
-        .row(
-            (
-                "攻方锁阵",
-                M.status(
-                    "已锁定" if value.attacker_locked else "未锁定",
-                    tone="positive" if value.attacker_locked else "muted",
-                ),
-            ),
-            (
-                "守方锁阵",
-                M.status(
-                    "已锁定" if value.defender_locked else "未锁定",
-                    tone="positive" if value.defender_locked else "muted",
-                ),
-            ),
-        )
     )
     if value.attacker_count or value.defender_count:
         builder.row(
@@ -64,7 +58,7 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             feature.text("查看", "剩余时间"),
             duration(max(0, int((value.ends_at - datetime.now(UTC)).total_seconds()))),
         )
-    if value.winner:
+    if value.winner and value.status == "已结算":
         builder.field(
             feature.text("查看", "胜负"),
             M.text(_winner(feature, value), tone="positive"),
@@ -137,4 +131,4 @@ def _status_tone(status: str) -> str:
     return "warning"
 
 
-__all__ = ["error", "history", "view"]
+__all__ = ["error", "history", "intro", "view"]

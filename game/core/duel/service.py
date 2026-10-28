@@ -12,6 +12,7 @@ from game.core.database import (
 
 from game.core.combat import (
     CombatantSpec,
+    CombatFieldSpec,
     CombatFormationSpec,
     CombatGroupSpec,
     CombatReportSpec,
@@ -39,6 +40,7 @@ from game.core.formation import FormationService
 from .contracts import DuelChallenge, DuelError, DuelResult, DuelStartCommand
 
 CHALLENGE_STATE = "duel_challenge"
+OUTGOING_STATE = "duel_outgoing"
 
 
 class DuelService:
@@ -85,17 +87,10 @@ class DuelService:
         own = await self._character.public_profiles((user_id,))
         if query == user_id or (own and query == own[0].name):
             raise DuelError("不能和自己切磋")
-        candidates = await self._location.nearby_players(user_id)
-        available = tuple(value.user_id for value in candidates.values)
-        if query in available:
-            return query
-        profiles = await self._character.public_profiles(available)
-        matches = tuple(value.user_id for value in profiles if value.name == query)
-        if not matches:
-            raise DuelError("目标不在附近")
-        if len(matches) > 1:
-            raise DuelError("目标姓名重名，请改用用户编号")
-        return matches[0]
+        target = await self._character.find_by_name(query)
+        if target is None:
+            raise DuelError("没有找到这个玩家")
+        return target
 
     async def start(self, command: DuelStartCommand) -> DuelChallenge:
         self._require_initialized()
@@ -113,10 +108,25 @@ class DuelService:
         existing = await self._database.get(
             StateAddress(target, CHALLENGE_STATE, "main")
         )
+        outgoing = await self._database.get(
+            StateAddress(user_id, OUTGOING_STATE, "main")
+        )
+        incoming = await self._database.get(
+            StateAddress(user_id, CHALLENGE_STATE, "main")
+        )
+        target_outgoing = await self._database.get(
+            StateAddress(target, OUTGOING_STATE, "main")
+        )
         if existing is not None and not _expired(existing.value):
             if str(existing.value.get("切磋编号")) == challenge_id:
                 return _challenge(existing.value, replayed=True)
             raise DuelError("目标已有待处理的切磋")
+        if outgoing is not None and not _expired(outgoing.value):
+            raise DuelError("你已有一条待处理的切磋")
+        if incoming is not None and not _expired(incoming.value):
+            raise DuelError("你已有一条待处理的切磋")
+        if target_outgoing is not None and not _expired(target_outgoing.value):
+            raise DuelError("目标已有一条待处理的切磋")
         now = _utc(command.created_at or datetime.now(UTC))
         expires_at = now + timedelta(seconds=_positive_int(self._rules["有效秒数"], "切磋.有效秒数"))
         value = {
@@ -132,7 +142,22 @@ class DuelService:
             user_id,
             request_id,
             "发起切磋",
-            (StateMutation(target, CHALLENGE_STATE, "main", value, existing.version if existing else 0),),
+            (
+                StateMutation(
+                    target,
+                    CHALLENGE_STATE,
+                    "main",
+                    value,
+                    existing.version if existing else 0,
+                ),
+                StateMutation(
+                    user_id,
+                    OUTGOING_STATE,
+                    "main",
+                    value,
+                    outgoing.version if outgoing else 0,
+                ),
+            ),
         )
         return DuelChallenge(challenge_id, user_id, target, participants, target_participants, expires_at, False)
 
@@ -151,11 +176,11 @@ class DuelService:
         replayed = self._battle_reports.load(challenge_id)
         if replayed is not None:
             return _result(json.loads(str(getattr(replayed, "report_json", "") or "{}")), replayed=True)
-        users = tuple(_texts(value.get("发起方"), "发起方") + _texts(value.get("目标方"), "目标方"))
         current_left = await self._action_participants(owner)
-        current_right = await self._action_participants(target)
-        if current_left != tuple(_texts(value.get("发起方"), "发起方")) or current_right != tuple(_texts(value.get("目标方"), "目标方")):
-            raise DuelError("队伍或宗门同行名单已经变化，请重新发起切磋")
+        current_right = await self._target_participants(target)
+        users = (*current_left, *current_right)
+        if len(set(users)) != len(users):
+            raise DuelError("切磋双方不能包含同一玩家")
         await self._validate_participants(users)
         combatants, groups = await self._combat_side(current_left, challenge_id, "甲方")
         right_combatants, right_groups = await self._combat_side(current_right, challenge_id, "乙方")
@@ -171,7 +196,12 @@ class DuelService:
                 right_team=tuple(right_combatants),
                 seed=_seed(challenge_id),
                 action_limit=_positive_int(self._rules["战斗行动上限"], "切磋.战斗行动上限"),
-                report=CombatReportSpec(scene="切磋"),
+                report=CombatReportSpec(scene="无相境"),
+                field=CombatFieldSpec(
+                    environment_id="610001",
+                    scene="无相境",
+                    origin="秘境",
+                ),
                 left_formations=left_formations,
                 right_formations=right_formations,
                 left_groups=groups,
@@ -190,17 +220,29 @@ class DuelService:
             "战报": materialize(result.report or {}),
             "完成时间": datetime.now(UTC).isoformat(),
         }
+        outgoing = await self._database.get(
+            StateAddress(owner, OUTGOING_STATE, "main")
+        )
         await self._commit(
             target,
             request,
             "接受切磋",
-            (StateMutation(target, CHALLENGE_STATE, "main", None, pending.version),),
+            (
+                StateMutation(target, CHALLENGE_STATE, "main", None, pending.version),
+                StateMutation(
+                    owner,
+                    OUTGOING_STATE,
+                    "main",
+                    None,
+                    outgoing.version if outgoing else 0,
+                ),
+            ),
         )
         # 战报是**非资产数据**：只登记进非资产库（按编号分享、到期即清理），不进玩家状态。
         self._battle_reports.save(
             report_id=challenge_id,
             kind="切磋",
-            participants=(owner, target),
+            participants=users,
             finished_at=_text(stored["完成时间"], "完成时间"),
             finished_timestamp=time.time(),
             report_json=json.dumps(stored, ensure_ascii=False),
@@ -208,10 +250,65 @@ class DuelService:
         return _result(stored, replayed=False)
 
     async def reject(self, user_id: str, request_id: str) -> None:
-        pending = await self._database.get(StateAddress(_text(user_id, "拒绝者"), CHALLENGE_STATE, "main"))
-        if pending is None:
+        target = _text(user_id, "拒绝者")
+        pending = await self._database.get(
+            StateAddress(target, CHALLENGE_STATE, "main")
+        )
+        if pending is None or _expired(pending.value):
             raise DuelError("没有待处理的切磋")
-        await self._commit(user_id, request_id, "拒绝切磋", (StateMutation(user_id, CHALLENGE_STATE, "main", None, pending.version),))
+        owner = _text(pending.value.get("发起者"), "发起者")
+        outgoing = await self._database.get(
+            StateAddress(owner, OUTGOING_STATE, "main")
+        )
+        await self._commit(
+            target,
+            request_id,
+            "拒绝切磋",
+            (
+                StateMutation(target, CHALLENGE_STATE, "main", None, pending.version),
+                StateMutation(
+                    owner,
+                    OUTGOING_STATE,
+                    "main",
+                    None,
+                    outgoing.version if outgoing else 0,
+                ),
+            ),
+        )
+
+    async def withdraw(
+        self, user_id: str, request_id: str
+    ) -> DuelChallenge:
+        owner = _text(user_id, "撤回者")
+        outgoing = await self._database.get(
+            StateAddress(owner, OUTGOING_STATE, "main")
+        )
+        if outgoing is None or _expired(outgoing.value):
+            raise DuelError("没有可撤回的切磋")
+        value = outgoing.value
+        challenge_id = _text(value.get("切磋编号"), "切磋编号")
+        target = _text(value.get("目标"), "目标")
+        pending = await self._database.get(
+            StateAddress(target, CHALLENGE_STATE, "main")
+        )
+        if pending is not None and str(pending.value.get("切磋编号")) != challenge_id:
+            pending = None
+        await self._commit(
+            owner,
+            request_id,
+            "撤回切磋",
+            (
+                StateMutation(owner, OUTGOING_STATE, "main", None, outgoing.version),
+                StateMutation(
+                    target,
+                    CHALLENGE_STATE,
+                    "main",
+                    None,
+                    pending.version if pending else 0,
+                ),
+            ),
+        )
+        return _challenge(value, replayed=False)
 
     async def _action_participants(self, user_id: str) -> tuple[str, ...]:
         try:
@@ -228,16 +325,11 @@ class DuelService:
             group = await self._action_group.group_for_user(user_id)
         except ActionGroupError as exc:
             raise DuelError(str(exc)) from exc
-        if group.leader_user_id != user_id:
-            raise DuelError("切磋目标是同行成员，请改为挑战队长或宗主")
         return group.participant_user_ids
 
     async def _validate_participants(self, users: tuple[str, ...]) -> None:
         if len(users) > 15 or len(set(users)) != len(users):
             raise DuelError("切磋参战玩家数量或名单无效")
-        locations = await asyncio.gather(*(self._location.current(user) for user in users))
-        if len({(v.space_type, v.space_id, v.xy) for v in locations}) != 1:
-            raise DuelError("切磋双方必须处于同一位置")
         profiles = {
             value.user_id: value
             for value in await self._character.public_profiles(users)

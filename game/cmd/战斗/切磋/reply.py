@@ -31,11 +31,17 @@ def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> D
         .small(feature.text("发起", "说明", {"目标": target_name}))
         .actions(
             (
-                Action("duel.accept", "接受切磋", "接受切磋"),
+                Action("duel.accept", "接受切磋", "切磋 接受"),
                 Action(
                     "duel.reject",
                     "拒绝切磋",
-                    "拒绝切磋",
+                    "切磋 拒绝",
+                    style="secondary",
+                ),
+                Action(
+                    "duel.withdraw",
+                    "撤回切磋",
+                    "切磋 撤回",
                     style="secondary",
                 ),
             )
@@ -75,6 +81,17 @@ def rejected() -> DocumentMessage:
     )
 
 
+def withdrawn(target_name: str) -> DocumentMessage:
+    return (
+        M.document()
+
+        .inline_section("邀约", M.status("已撤回", tone="muted"), icon="game.seed")
+        .section("邀约", icon="game.role")
+        .line(f"已撤回向 {target_name} 发出的切磋邀约。")
+        .build()
+    )
+
+
 def error(
     feature: DuelFeature, message: str, actions: Sequence[CommandAction] = ()
 ) -> DocumentMessage:
@@ -84,4 +101,4 @@ def error(
     )
 
 
-__all__ = ["challenge", "error", "rejected", "result"]
+__all__ = ["challenge", "error", "rejected", "result", "withdrawn"]

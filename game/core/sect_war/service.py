@@ -166,7 +166,7 @@ class SectWarService:
     async def challenge(
         self, user_id: str, target_name: str, wager: int, request_id: str
     ) -> SectWarView:
-        member = await self._member_officer(user_id)
+        member = await self._leader_in_follow(user_id)
         normalized_wager = _request_positive(wager, "押注")
         target = await self._db.get_shared_entity_by_name("宗门", target_name.strip())
         if target is None or target.entity_id == member.sect_id:
@@ -180,9 +180,6 @@ class SectWarService:
             records, target.entity_id
         ):
             raise SectWarError("active_exists")
-        location = await self._location.current(user_id)
-        if location.space_type != "地表":
-            raise SectWarError("surface_required")
         war_id = uuid4().hex[:20]
         now = _now()
         value = {
@@ -191,7 +188,6 @@ class SectWarService:
             "状态": "待应战",
             "甲方": member.sect_id,
             "乙方": target.entity_id,
-            "坐标": list(location.xy),
             "押注": normalized_wager,
             "甲方押注": normalized_wager,
             "乙方押注": 0,
@@ -220,7 +216,7 @@ class SectWarService:
         return await self._view(value)
 
     async def accept(self, user_id: str, request_id: str) -> SectWarView:
-        member = await self._member_officer(user_id)
+        member = await self._leader_in_follow(user_id)
         record = await self._current_record(member.sect_id, user_id)
         value = dict(record.value)
         if value.get("状态") != "待应战" or value.get("乙方") != member.sect_id:
@@ -242,8 +238,22 @@ class SectWarService:
         )
         return await self._view(value)
 
+    async def accept_and_start(
+        self, user_id: str, request_id: str
+    ) -> SectWarView:
+        """接受即开战；指挥层只保留这一个动作。"""
+
+        accepted = await self.accept(user_id, request_id)
+        attacker = await self._sect.sect(accepted.attacker_sect_id)
+        defender = await self._sect.sect(accepted.defender_sect_id)
+        if attacker is None or defender is None:
+            raise SectWarError("sect_changed")
+        await self.lock(attacker.leader_user_id, request_id + ":攻")
+        await self.lock(defender.leader_user_id, request_id + ":守")
+        return await self.start(user_id, request_id + ":战")
+
     async def reject(self, user_id: str, request_id: str) -> SectWarView:
-        member = await self._member_officer(user_id)
+        member = await self._leader_in_follow(user_id)
         record = await self._current_record(member.sect_id, user_id)
         value = record.value
         if value.get("状态") != "待应战" or value.get("乙方") != member.sect_id:
@@ -253,7 +263,7 @@ class SectWarService:
         )
 
     async def withdraw(self, user_id: str, request_id: str) -> SectWarView:
-        member = await self._member_officer(user_id)
+        member = await self._leader_in_follow(user_id)
         record = await self._current_record(member.sect_id, user_id)
         value = record.value
         if value.get("状态") != "待应战" or value.get("甲方") != member.sect_id:
@@ -290,14 +300,6 @@ class SectWarService:
             raise SectWarError("follow_required")
         if len(follow.member_user_ids) > self._maximum:
             raise SectWarError("participant_limit")
-        locations = [
-            await self._location.current(uid) for uid in follow.member_user_ids
-        ]
-        xy = _stored_xy(value.get("坐标"))
-        if any(
-            location.space_type != "地表" or location.xy != xy for location in locations
-        ):
-            raise SectWarError("location_mismatch")
         value[f"{side}锁定"] = True
         value[f"{side}成员"] = list(follow.member_user_ids)
         if value.get("甲方锁定") and value.get("乙方锁定"):
@@ -363,7 +365,6 @@ class SectWarService:
             raise SectWarError("both_not_locked")
         left_ids = _stored_texts(value.get("甲方成员"), "甲方成员")
         right_ids = _stored_texts(value.get("乙方成员"), "乙方成员")
-        location = self._world.locate(LocationQuery(xy=_stored_xy(value.get("坐标"))))
         (
             left,
             left_medicines,
@@ -404,16 +405,11 @@ class SectWarService:
                 # 只存战报，不存展示包：展示包由战报页面按需重建（`game/cmd/战斗/战报`）。
                 # 展示包比战报还大（一次 15 人对 15 人实测几十兆字符），而它每一步都能从
                 # 战报现算——存两份等于把同一件事存两遍。
-                report=CombatReportSpec(
-                    scene=location.location_name or location.terrain,
-                ),
+                report=CombatReportSpec(scene="无相境"),
                 field=CombatFieldSpec(
-                    environment_id=location.environment_id,
-                    scene=location.location_name or location.terrain,
-                    origin="地表",
-                    xy=location.xy,
-                    altitude=location.altitude,
-                    terrain=location.terrain,
+                    environment_id="610001",
+                    scene="无相境",
+                    origin="秘境",
                 ),
                 left_formations=left_formations,
                 right_formations=right_formations,
@@ -531,10 +527,7 @@ class SectWarService:
             self._battle_reports.save(
                 report_id=record.entity_id,
                 kind="宗门战",
-                participants=(
-                    str(value.get("甲方") or ""),
-                    str(value.get("乙方") or ""),
-                ),
+                participants=(*left_ids, *right_ids),
                 finished_at=str(value.get("结束时间") or value.get("开始时间") or ""),
                 finished_timestamp=time.time(),
                 report_json=json.dumps(
@@ -948,6 +941,15 @@ class SectWarService:
         member = await self._member(user_id)
         if not self._sect.is_officer(member.role):
             raise SectWarError("officer_required")
+        return member
+
+    async def _leader_in_follow(self, user_id: str) -> SectMember:
+        member = await self._member(user_id)
+        if not self._sect.is_leader(member.role):
+            raise SectWarError("officer_required")
+        follow = await self._sect.follow(member.sect_id)
+        if follow is None or follow.leader_user_id != member.user_id:
+            raise SectWarError("follow_required")
         return member
 
     async def report(self, war_id: str) -> tuple[Mapping[str, object], int] | None:

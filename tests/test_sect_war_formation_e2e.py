@@ -130,10 +130,7 @@ def test_two_sects_real_war_with_personal_formations_and_wanzhen_claim(services)
         services.core.sect_war.challenge(a, sect_b.name, 10, "challenge-a")
     )
     assert war.status == "待应战"
-    asyncio.run(services.core.sect_war.accept(b, "accept-b"))
-    asyncio.run(services.core.sect_war.lock(a, "lock-a"))
-    asyncio.run(services.core.sect_war.lock(b, "lock-b"))
-    started = asyncio.run(services.core.sect_war.start(a, "start-a"))
+    started = asyncio.run(services.core.sect_war.accept_and_start(b, "accept-b"))
 
     assert started.status in {"已结算", "战斗中", "已锁定"}
     assert started.report_id

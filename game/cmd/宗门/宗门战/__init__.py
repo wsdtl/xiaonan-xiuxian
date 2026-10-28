@@ -1,12 +1,11 @@
-"""宗门战：一个状态根 + 紧凑子命令。"""
+"""宗门战：一个根命令 + 接受/拒绝/撤回。"""
+
 from __future__ import annotations
 
-import re
-from collections.abc import Awaitable
 from typing import Any
 
 from game.app import current_game_services
-from game.features.zongmen_zhan import SectWarError, SectWarFeature, SectWarView
+from game.features.zongmen_zhan import SectWarError
 
 from ...command import GameCommand
 from ...reply_composer import send_game_reply
@@ -14,60 +13,39 @@ from launch.adapter import MessageContext
 from . import reply
 
 
-def _feature() -> SectWarFeature:
+def _feature():
     return current_game_services().features.zongmen_zhan
 
 
-async def _run(operation: Awaitable[SectWarView]) -> None:
+async def _view(user_id: str, message_context: MessageContext, raw: str) -> None:
+    feature = _feature()
     try:
-        await send_game_reply(reply.view(_feature(), await operation))
-    except SectWarError as exc:
+        if raw in {"接受", "拒绝", "撤回"}:
+            method = {
+                "接受": feature.accept,
+                "拒绝": feature.reject,
+                "撤回": feature.withdraw,
+            }[raw]
+            await send_game_reply(reply.view(feature, await method(user_id, message_context.request_id)))
+            return
+        parts = raw.split()
+        if len(parts) == 2 and parts[1].isdecimal() and int(parts[1]) > 0:
+            value = await feature.challenge(user_id, parts[0], int(parts[1]), message_context.request_id)
+            await send_game_reply(reply.view(feature, value))
+            return
+        if not raw:
+            try:
+                value = await feature.current(user_id, message_context.request_id)
+            except SectWarError:
+                await send_game_reply(reply.intro(feature))
+                return
+            await send_game_reply(reply.view(feature, value))
+            return
         await send_game_reply(
-            reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式"))
-        )
-
-
-async def _challenge(user_id: str, args: str, request_id: str) -> None:
-    try:
-        value = await _feature().challenge_from_text(user_id, args, request_id)
-        await send_game_reply(reply.view(_feature(), value))
-    except ValueError:
-        await send_game_reply(
-            reply.error(_feature(), _feature().text("错误", "约战写法"), _feature().format_actions("约战格式"))
-        )
-    except SectWarError as exc:
-        await send_game_reply(
-            reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式"))
-        )
-
-
-async def _current(user_id: str, war_id: str, request_id: str) -> None:
-    try:
-        value = await _feature().current_from_text(
-            user_id, war_id, request_id
-        )
-        await send_game_reply(reply.view(_feature(), value))
-    except SectWarError as exc:
-        await send_game_reply(
-            reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式"))
-        )
-
-
-async def _history(user_id: str, raw: str) -> None:
-    try:
-        await send_game_reply(
-            reply.history(
-                _feature(), await _feature().history_from_text(user_id, raw)
-            )
-        )
-    except ValueError:
-        await send_game_reply(
-            reply.error(_feature(), _feature().text("错误", "战况写法"), _feature().format_actions("战录格式"))
+            reply.error(feature, feature.text("错误", "约战写法"), feature.format_actions("约战格式"))
         )
     except SectWarError as exc:
-        await send_game_reply(
-            reply.error(_feature(), _feature().error(exc), _feature().format_actions("约战格式"))
-        )
+        await send_game_reply(reply.error(feature, feature.error(exc), feature.format_actions("约战格式")))
 
 
 @GameCommand.command(
@@ -77,17 +55,15 @@ async def _history(user_id: str, raw: str) -> None:
         "guard_rule": "已创建",
         "help": {
             "category": "宗门",
-            "summary": "查看当前宗门战；用紧凑子命令约战、接战、锁阵、开战、看战况与战录",
+            "summary": "宗门战：无参数看介绍/当前，发宗门名与灵石约战，接受/拒绝/撤回",
             "usage": (
                 "宗门战",
-                "宗门战约战 宗门名 灵石数量",
-                "宗门战接战",
-                "宗门战锁阵",
-                "宗门战开战",
-                "宗门战况 [战书编号]",
-                "宗门战录 [页码]",
+                "宗门战 对方宗门 灵石",
+                "宗门战 接受",
+                "宗门战 拒绝",
+                "宗门战 撤回",
             ),
-            "side_effect": "约战扣本宗押注；开战消耗阵法、战丹与恢复丹；查看与战录只读",
+            "side_effect": "约战扣本宗押注；接受后立即开战；不改变战报入口",
             "order": 1,
         },
     },
@@ -95,61 +71,7 @@ async def _history(user_id: str, raw: str) -> None:
 async def sect_war_root(
     user_id: str, message: str, message_context: MessageContext, manager: Any
 ) -> None:
-    # 根命令只做状态；动作走紧凑隐藏路由，保证各动作仍使用自己的守卫。
-    if str(message or "").strip():
-        await send_game_reply(
-            reply.error(_feature(), _feature().text("错误", "约战写法"), _feature().format_actions("约战格式"))
-        )
-        return
-    await _current(user_id, "", message_context.request_id)
-
-
-@GameCommand.regex(
-    cmd=re.compile(r"^宗门战约战(?:\s+(?P<args>.*))?$"),
-    metadata={"scope": "通用", "guard_rule": "宗门战发起", "hidden": True},
-)
-async def sect_war_challenge(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    await _challenge(user_id, match.group("args") or "", message_context.request_id)
-
-
-@GameCommand.regex(
-    cmd=re.compile(r"^宗门战(?P<action>接战|拒战|撤战|锁阵)$"),
-    metadata={"scope": "通用", "guard_rule": "宗门战待命", "hidden": True},
-)
-async def sect_war_ready(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    await _run(
-        _feature().enter_ready(
-            user_id, match.group("action"), message_context.request_id
-        )
-    )
-
-
-@GameCommand.regex(
-    cmd=re.compile(r"^宗门战(?P<action>解阵|开战|停战)$"),
-    metadata={"scope": "通用", "guard_rule": "宗门战操作", "hidden": True},
-)
-async def sect_war_operate(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    await _run(
-        _feature().enter_operate(
-            user_id, match.group("action"), message_context.request_id
-        )
-    )
-
-
-@GameCommand.regex(
-    cmd=re.compile(r"^宗门战况(?:\s+(?P<war_id>.*))?$"),
-    metadata={"scope": "通用", "guard_rule": "已创建", "hidden": True},
-)
-async def sect_war_current(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    await _current(user_id, match.group("war_id") or "", message_context.request_id)
-
-
-@GameCommand.regex(
-    cmd=re.compile(r"^宗门战录(?:\s+(?P<page>.*))?$"),
-    metadata={"scope": "通用", "guard_rule": "已创建", "hidden": True},
-)
-async def sect_war_history(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    await _history(user_id, match.group("page") or "")
+    await _view(user_id, message_context, str(message or "").strip())
 
 
 __all__ = []

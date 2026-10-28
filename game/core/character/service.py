@@ -410,10 +410,23 @@ class CharacterService:
             lifespan=lifespan,
         )
 
+    async def find_by_name(self, name: str) -> str | None:
+        """全局按姓名找唯一玩家；创建约束保证姓名不重，找不到返回 None。"""
+        self._require_initialized()
+        wanted = str(name or "").strip()
+        if not wanted:
+            return None
+        for user_id, value in await self._database.list_state_values(
+            "character", "main"
+        ):
+            if isinstance(value, Mapping) and str(value.get("姓名") or "") == wanted:
+                return user_id
+        return None
+
     async def public_profiles(
         self, user_ids: tuple[str, ...]
     ) -> tuple[CharacterPublicProfile, ...]:
-        """批量读取附近展示所需的人物公开摘要。"""
+        """批量读取人物公开摘要。"""
 
         self._require_initialized()
         normalized = _user_ids(user_ids)

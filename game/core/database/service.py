@@ -109,6 +109,15 @@ class DatabaseService:
         self._require_initialized()
         return await asyncio.to_thread(self._store.list_for_user, user_id, state_type)
 
+    async def list_state_values(
+        self, state_type: str, state_key: str
+    ) -> tuple[tuple[str, object], ...]:
+        """扫全服某个逻辑状态键，返回 (user_id, value)。"""
+        self._require_initialized()
+        return await asyncio.to_thread(
+            self._store.list_state_values, state_type, state_key
+        )
+
     async def get_many(
         self, addresses: tuple[StateAddress, ...]
     ) -> tuple[StateSnapshot, ...]:

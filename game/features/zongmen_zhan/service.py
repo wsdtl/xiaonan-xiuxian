@@ -55,7 +55,7 @@ class SectWarFeature:
                 for section, values in raw.items()
             }
         )
-        required = {"图标", "查看", "格式", "结果", "状态", "错误"}
+        required = {"图标", "查看", "格式", "结果", "状态", "错误", "介绍"}
         if set(text) != required:
             raise JsonDataError("宗门战文本必须完整包含图标、查看、格式、结果、状态、错误")
         raw_buttons = self._data.dataset("宗门战页面按钮").get("按钮")
@@ -139,7 +139,7 @@ class SectWarFeature:
         return await method(user_id, request_id)
 
     async def accept(self, user_id: str, request_id: str) -> SectWarView:
-        return await self._pass(self._war.accept(user_id, request_id))
+        return await self._pass(self._war.accept_and_start(user_id, request_id))
 
     async def reject(self, user_id: str, request_id: str) -> SectWarView:
         return await self._pass(self._war.reject(user_id, request_id))

@@ -562,6 +562,25 @@ class SQLiteStateStore:
             str(entry[_ENTRY_UPDATED]),
         )
 
+    def list_state_values(
+        self, state_type: str, state_key: str
+    ) -> tuple[tuple[str, object], ...]:
+        """按逻辑键扫全部玩家，返回 (user_id, value)；只供全服姓名索引这类查询。"""
+        self._require_initialized()
+        _validate_text(state_type, "state_type")
+        _validate_text(state_key, "state_key")
+        logical = _logical_key(state_type, state_key)
+        with self._connect(reusable=True) as connection:
+            rows = connection.execute(
+                "SELECT user_id, state_json FROM player_state"
+            ).fetchall()
+        values: list[tuple[str, object]] = []
+        for user_id, raw in rows:
+            entry = json.loads(str(raw)).get(logical)
+            if isinstance(entry, Mapping) and _ENTRY_VALUE in entry:
+                values.append((str(user_id), freeze_json(entry[_ENTRY_VALUE])))
+        return tuple(values)
+
     def list_for_user(
         self, user_id: str, state_type: str | None = None
     ) -> tuple[StateSnapshot, ...]:

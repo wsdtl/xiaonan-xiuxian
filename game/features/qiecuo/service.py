@@ -88,3 +88,6 @@ class DuelFeature:
 
     async def reject(self, user_id: str, request_id: str) -> None:
         await self._duel.reject(user_id, request_id)
+
+    async def withdraw(self, user_id: str, request_id: str) -> DuelChallenge:
+        return await self._duel.withdraw(user_id, request_id)

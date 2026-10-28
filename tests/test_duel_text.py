@@ -42,4 +42,5 @@ def test_duel_challenge_has_accept_and_reject_buttons(services) -> None:
     assert [action.label for action in message.document.actions] == [
         "接受切磋",
         "拒绝切磋",
+        "撤回切磋",
     ]
