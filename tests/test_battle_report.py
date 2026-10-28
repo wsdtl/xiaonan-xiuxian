@@ -244,6 +244,10 @@ def test_animation_payload_is_single_screen_contract() -> None:
         assert {unit["side"] for unit in payload["units"]} == {"left", "right"}
         assert all(unit["max"]["soul"] > 0 for unit in payload["units"])
         assert payload["events"][0]["type"] == "battle_start"
+        ended = [event for event in payload["events"] if event["type"] == "battle_end"]
+        assert len(ended) == 1
+        assert payload["battle"]["result"] in {"left", "right", "draw"}
+        assert ended[0]["winner"] == payload["battle"]["result"]
         assert [event["seq"] for event in payload["events"]] == list(range(len(payload["events"])))
         assert all(event["t"] >= 0 for event in payload["events"])
         assert any(event["type"] == "action" for event in payload["events"])

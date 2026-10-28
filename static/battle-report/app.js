@@ -425,11 +425,9 @@ function buildUnits() {
   });
   ["left", "right"].forEach(function (side) {
     const sideGroups = groups.filter(function (group) { return group.side === side; });
-    const counts = splitRows(sideGroups.length);
-    let cursor = 0;
-    counts.forEach(function (count) {
+    for (let start = 0; start < sideGroups.length; start += 3) {
       const row = el("div", "unit-row " + side);
-      sideGroups.slice(cursor, cursor + count).forEach(function (group) {
+      sideGroups.slice(start, start + 3).forEach(function (group) {
         const slot = el("div", "unit-slot " + group.side);
         const pair = el("div", "unit-pair");
         group.units.sort(function (a, b) {
@@ -442,9 +440,8 @@ function buildUnits() {
         if (formation) slot.appendChild(makeFormationNode(formation));
         row.appendChild(slot);
       });
-      cursor += count;
       grids[side].appendChild(row);
-    });
+    }
   });
 }
 
@@ -623,6 +620,14 @@ function floatOn(target, text, kind) {
     node.remove();
     state.floatStacks.set(key, (state.floatStacks.get(key) || []).filter(function (item) { return item !== node; }));
   }, 1500);
+}
+
+function formationOwnerCard(formationId) {
+  if (!state.ui || !state.payload) return null;
+  const formation = state.payload.formations.find(function (value) { return value.id === formationId; });
+  if (!formation || !formation.owner_group) return null;
+  const owner = state.payload.units.find(function (unit) { return unit.kind === "player" && unit.group === formation.owner_group; });
+  return owner ? state.ui.stage.querySelector('[data-unit="' + owner.id + '"]') : null;
 }
 
 function rayElement(id) {
@@ -821,7 +826,7 @@ function applyEvent(event, silent) {
     }
     if (!silent) {
       const label = event.type === "formation_break" ? "阵破" : (event.type === "formation_turn" ? "阵转" : "阵起");
-      floatOn(card, label, event.type === "formation_break" ? "dmg" : "shield");
+      floatOn(formationOwnerCard(event.formation) || card, label, event.type === "formation_break" ? "dmg" : "shield");
     }
     return;
   }

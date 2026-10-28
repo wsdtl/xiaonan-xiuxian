@@ -36,6 +36,11 @@ def _text(value: Any, default: str = "") -> str:
     return str(value) if value is not None else default
 
 
+def _result_side(report: Mapping[str, Any]) -> str:
+    code = _text((report.get("result") or {}).get("code"), "draw")
+    return {"victory": "left", "defeat": "right"}.get(code, "draw")
+
+
 def _details(event: Mapping[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for item in event.get("details") or ():
@@ -463,8 +468,7 @@ def build_animation_view(report: Mapping[str, Any], catalog: BattleReportCatalog
             elif kind == "死亡后":
                 item = {"t": 0, "turn": turn, "type": "unit_down", "target": target}
             elif kind == "战斗结束":
-                code = _text((report.get("result") or {}).get("code"), "draw")
-                item = {"t": 0, "turn": turn, "type": "battle_end", "winner": code if code in {"left", "right", "draw"} else "draw"}
+                item = {"t": 0, "turn": turn, "type": "battle_end", "winner": _result_side(report)}
             if item is not None:
                 item["t"] = max(last_t + paced["事件"], action_t + paced["事件"])
                 mapped.append(item)
@@ -495,7 +499,7 @@ def build_animation_view(report: Mapping[str, Any], catalog: BattleReportCatalog
         "battle": {
             "title": title,
             "scene": _text(report.get("scene")),
-            "result": _text((report.get("result") or {}).get("code"), "draw"),
+            "result": _result_side(report),
             "actions": _integer((report.get("result") or {}).get("actions"), 0),
             "duration": duration,
         },
