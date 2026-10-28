@@ -387,10 +387,14 @@ function buildUnits() {
       const row = el("div", "unit-row " + side);
       sideGroups.slice(cursor, cursor + count).forEach(function (group) {
         const slot = el("div", "unit-slot");
+        const pair = el("div", "unit-pair");
         group.units.sort(function (a, b) {
           return (a.kind === "player" ? 0 : 1) - (b.kind === "player" ? 0 : 1);
         });
-        group.units.forEach(function (unit) { slot.appendChild(makeUnitCard(unit, ownedFormations.get(unit.group))); });
+        group.units.forEach(function (unit) { pair.appendChild(makeUnitCard(unit)); });
+        slot.appendChild(pair);
+        const formation = ownedFormations.get(group.units[0].group);
+        if (formation) slot.appendChild(makeFormationNode(formation));
         row.appendChild(slot);
       });
       cursor += count;
@@ -403,12 +407,22 @@ function splitRows(count) {
   if (count <= 0) return [];
   if (count <= 6) return [count];
   if (count <= 10) return [Math.ceil(count / 2), Math.floor(count / 2)];
-  const first = Math.ceil(count * 0.4);
-  const second = Math.ceil(count * 0.33);
-  return [first, second, count - first - second].filter(function (value) { return value > 0; });
+  const base = Math.floor(count / 4);
+  const remainder = count % 4;
+  return [base + (remainder > 0 ? 1 : 0), base + (remainder > 1 ? 1 : 0), base + (remainder > 2 ? 1 : 0), base];
 }
 
-function makeUnitCard(unit, formation) {
+function makeFormationNode(formation) {
+  const formationNode = el("div", "unit-formation");
+  formationNode.dataset.formation = formation.id;
+  formationNode.appendChild(el("span", "unit-formation-name", formation.name));
+  const formationBar = el("div", "formation-bar");
+  formationBar.appendChild(el("i"));
+  formationNode.appendChild(formationBar);
+  return formationNode;
+}
+
+function makeUnitCard(unit) {
   const card = el("div", "unit-card " + unit.side);
   card.dataset.unit = unit.id;
   const bars = el("div", "unit-bars");
@@ -424,15 +438,6 @@ function makeUnitCard(unit, formation) {
   card.appendChild(avatar);
   card.appendChild(el("div", "unit-name", unit.name));
   card.appendChild(el("div", "unit-cast", ""));
-  if (formation) {
-    const formationNode = el("div", "unit-formation");
-    formationNode.dataset.formation = formation.id;
-    formationNode.appendChild(el("span", "unit-formation-name", formation.name));
-    const formationBar = el("div", "formation-bar");
-    formationBar.appendChild(el("i"));
-    formationNode.appendChild(formationBar);
-    card.appendChild(formationNode);
-  }
   const statuses = el("div", "unit-statuses");
   card.appendChild(statuses);
   return card;

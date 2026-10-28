@@ -481,9 +481,14 @@ def build_animation_view(report: Mapping[str, Any], catalog: BattleReportCatalog
     duration = max(last_t + paced["收尾"], 1000)
     title = _text(report.get("headline"))
     if len(units) > 4:
-        left_count = sum(1 for unit in units if unit["side"] == "left")
-        right_count = sum(1 for unit in units if unit["side"] == "right")
-        title = f"{left_count} 对 {right_count}"
+        left_groups = {unit.get("group") or unit["id"] for unit in units if unit["side"] == "left"}
+        right_groups = {unit.get("group") or unit["id"] for unit in units if unit["side"] == "right"}
+        if left_groups and right_groups and (len(left_groups) < sum(1 for unit in units if unit["side"] == "left")):
+            title = f"{len(left_groups)} 单位 对 {len(right_groups)} 单位"
+        else:
+            left_count = sum(1 for unit in units if unit["side"] == "left")
+            right_count = sum(1 for unit in units if unit["side"] == "right")
+            title = f"{left_count} 对 {right_count}"
     return {
         "schema": catalog.animation_schema,
         "version": catalog.animation_version,
