@@ -141,7 +141,7 @@ function renderText() {
   state.payload.events.forEach(function (event) {
     if (event.turn !== lastTurn) {
       lastTurn = event.turn;
-      wrap.appendChild(el("h2", "text-turn", event.turn ? "第 " + event.turn + " 回合" : "开场"));
+      wrap.appendChild(el("h2", "text-turn", event.turn ? "第 " + event.turn + " 次行动" : "开场"));
     }
     const line = el("div", "text-line");
     line.appendChild(el("span", "text-time", sec(event.t)));
@@ -278,7 +278,7 @@ function renderAnimation() {
   right.appendChild(el("div", "side-title", "右方"));
   const center = el("div", "center-column");
   center.appendChild(el("div", "turn-badge", "0"));
-  center.appendChild(el("div", "center-hint", "回合"));
+  center.appendChild(el("div", "center-hint", "行动"));
   grid.appendChild(left);
   grid.appendChild(center);
   grid.appendChild(right);
