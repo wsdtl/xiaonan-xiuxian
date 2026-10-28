@@ -221,6 +221,15 @@ class SectWarService:
         value = dict(record.value)
         if value.get("状态") != "待应战" or value.get("乙方") != member.sect_id:
             raise SectWarError("cannot_accept")
+        attacker_sect = await self._sect.sect(_text(value.get("甲方"), "甲方"))
+        if attacker_sect is None:
+            raise SectWarError("sect_changed")
+        attacker_follow = await self._sect.follow(attacker_sect.sect_id)
+        if (
+            attacker_follow is None
+            or attacker_follow.leader_user_id != attacker_sect.leader_user_id
+        ):
+            raise SectWarError("follow_required")
         wager = _stored_nonnegative(value.get("押注"), "宗门战.押注")
         value["状态"] = "备战"
         value["乙方押注"] = wager

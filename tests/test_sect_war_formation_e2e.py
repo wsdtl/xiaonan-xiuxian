@@ -134,6 +134,9 @@ def test_two_sects_real_war_with_personal_formations_and_wanzhen_claim(services)
 
     assert started.status in {"已结算", "战斗中", "已锁定"}
     assert started.report_id
+    for user_id in (a, b):
+        sections = asyncio.run(services.features.zhanbao.my_report_sections(user_id))
+        assert sections.sect
     # 正式战开战即消耗个人待战阵法。
     assert asyncio.run(services.core.formation.prepared(a)) is None
     assert asyncio.run(services.core.formation.prepared(b)) is None
