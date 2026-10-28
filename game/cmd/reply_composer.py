@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import re
+
 from launch.adapter import (
     MENTION_NONE,
     ReplyTarget,
@@ -27,6 +29,17 @@ from message import (
 )
 
 from .closings import closing_for
+
+_ID_TITLE = re.compile(r"(?<!\d)\d{6}(?!\d)")
+
+
+def _ensure_display_title(title: str) -> str:
+    """标题是展示字段：带编号的值直接拒绝，逼调用点在源头写中文名。"""
+
+    if _ID_TITLE.search(title):
+        raise ValueError(f"命令标题不能包含编号：{title}")
+    return title
+
 
 async def _identity_text(user_id: str) -> str:
     """人物头：昵称 境界 等级；没建档就写「未建档」。"""
@@ -92,8 +105,8 @@ async def send_game_reply(
 ) -> bool:
     """发送玩家命令的回包：自动前置人物头与命令标题。
 
-    `title` 只在展示名与玩家原文不同的时候传（如 `查看 400001` 显示卡名）；
-    不传就沿用当前消息原文。
+    `title` 是展示字段，调用点拿到中文名时显式传；不传只写命令词。
+    标题里出现编号直接拒绝，不做任何运行时替换。
     """
 
     context = current_message_context()
@@ -105,7 +118,9 @@ async def send_game_reply(
     if isinstance(payload, ImageMessage):
         return await manager.send(payload, is_log=is_log, request_id=request_id)
     # 原文不是展示数据：没显式给标题就只写命令词，绝不回显参数/编号。
-    display_title = title.strip() if title is not None else context.command.strip()
+    display_title = _ensure_display_title(
+        title.strip() if title is not None else context.command.strip()
+    )
     decorated = compose_player_reply(
         payload,
         identity=await _identity_text(context.user_id),

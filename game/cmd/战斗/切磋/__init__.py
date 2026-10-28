@@ -34,9 +34,15 @@ async def start(user_id: str, message: str, message_context: MessageContext, man
         value = await feature.start(
             DuelStartCommand(user_id, target, message_context.request_id)
         )
-        await send_game_reply(reply.challenge(feature, value, target_name))
+        await send_game_reply(
+            reply.challenge(feature, value, target_name),
+            title=f"切磋 {target_name}",
+        )
     except (DuelError, ValueError) as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(
+            reply.error(feature, str(exc), feature.format_actions()),
+            title="切磋",
+        )
 
 
 @GameCommand.command(

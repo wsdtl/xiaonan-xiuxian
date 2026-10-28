@@ -1517,6 +1517,12 @@ def test_send_game_reply_uses_current_context(monkeypatch) -> None:
     assert rendered.blocks[1].icon == "game.cmd"
     assert rendered.blocks[1].command == "查看"
     assert "人物" not in rendered.blocks[1].command
+
+    from game.cmd.reply_composer import _ensure_display_title
+
+    assert _ensure_display_title("查看 一息续命丹") == "查看 一息续命丹"
+    with pytest.raises(ValueError):
+        _ensure_display_title("查看 120033")
     assert rendered.blocks[-1].__class__.__name__ == "ClosingBlock"
     assert "查看 编号" in "".join(
         getattr(span, "value", "") for span in rendered.blocks[-1].content

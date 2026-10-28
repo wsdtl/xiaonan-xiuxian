@@ -37,15 +37,18 @@ async def create_character(user_id: str, message: str, message_context: MessageC
             user_id, message_context.request_id, message
         )
     except CreateCharacterFormatError:
-        await send_game_reply(reply.invalid_create_format())
+        await send_game_reply(reply.invalid_create_format(), title="创建人物")
         return
     except InvalidCreateCharacterError as exc:
-        await send_game_reply(reply.create_error(str(exc)))
+        await send_game_reply(reply.create_error(str(exc)), title="创建人物")
         return
     except CharacterExistsError:
-        await send_game_reply(reply.character_exists())
+        await send_game_reply(reply.character_exists(), title="创建人物")
         return
-    await send_game_reply(reply.created(result, result.altitude_unit))
+    await send_game_reply(
+        reply.created(result, result.altitude_unit),
+        title=f"创建人物 {result.name}",
+    )
 
 
 @GameCommand.fullmatch(

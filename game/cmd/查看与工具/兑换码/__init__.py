@@ -30,13 +30,18 @@ async def redeem_code(
     feature = current_game_services().features.duihuan
     raw = ' '.join(str(message or '').split())
     try:
+        result = await feature.redeem(
+            user_id, message_context.request_id, raw
+        )
         await send_game_reply(
-            reply.result(
-                feature, await feature.redeem(user_id, message_context.request_id, raw)
-            )
+            reply.result(feature, result),
+            title=f"兑换码 {result.name}",
         )
     except (DuihuanError, DuihuanConflictError) as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(
+            reply.error(feature, str(exc), feature.format_actions()),
+            title="兑换码",
+        )
 
 
 __all__ = []
