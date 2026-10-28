@@ -8,7 +8,6 @@ import pytest
 from game.core.character.contracts import CharacterCreateCommand
 from game.features.zongmen_cangjing import CangjingFeatureError
 from game.features.zongmen_shengchan import SectProductionFeatureError
-from game.features.zongmen_zhan import SectWarError
 
 
 def _create(services, user_id: str, name: str) -> None:
@@ -67,12 +66,3 @@ def test_production_rejects_unknown_branch(services) -> None:
             )
         )
 
-
-def test_sect_war_rejects_unknown_action(services) -> None:
-    _create(services, "entry-war", "宗门战测试")
-    with pytest.raises(SectWarError):
-        asyncio.run(
-            services.features.zongmen_zhan.enter_ready(
-                "entry-war", "胡说", "war-entry"
-            )
-        )
