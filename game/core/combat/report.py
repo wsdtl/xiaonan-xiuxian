@@ -48,6 +48,9 @@ class RuntimeBattleReportParticipant:
 
 
     content_id: str = ""
+    group_id: str = ""
+
+
 def build_battle_report(
     outcome: CombatResult,
     participants: Sequence[RuntimeBattleReportParticipant],
@@ -407,6 +410,7 @@ def _participant_report(
         "number": number,
         "name": participant.name,
         "content_id": participant.content_id,
+        "group_id": participant.group_id,
         "title": participant.title,
         "side": side,
         "level": max(1, int(participant.level)),
@@ -570,6 +574,7 @@ def _formation_report(
         "grade": formation.grade,
         "side": "left" if formation.side == 0 else "right",
         "position": formation.position,
+        "owner_group": formation.owner_group,
         "capacity": _round(formation.capacity),
         "remaining_capacity": _round(formation.remaining_capacity),
         "impact": _round(formation.impact),

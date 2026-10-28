@@ -460,6 +460,7 @@ class CombatService:
             participants.append(
                 RuntimeBattleReportParticipant(
             content_id=runtime.content_id if runtime else "",
+                    group_id=value.group_id,
                     id=value.id,
                     name=value.name,
                     title=(

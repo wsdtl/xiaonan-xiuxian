@@ -345,7 +345,12 @@ function buildUnits() {
   if (!state.ui) return;
   state.ui.left.querySelectorAll(".unit-card, .formation-card, .unit-grid").forEach(function (n) { n.remove(); });
   state.ui.right.querySelectorAll(".unit-card, .formation-card, .unit-grid").forEach(function (n) { n.remove(); });
+  const ownedFormations = new Map();
   state.payload.formations.forEach(function (formation) {
+    if (formation.owner_group) ownedFormations.set(formation.owner_group, formation);
+  });
+  state.payload.formations.forEach(function (formation) {
+    if (formation.owner_group) return;
     const card = el("div", "formation-card");
     card.dataset.formation = formation.id;
     const head = el("div", "formation-head");
@@ -361,25 +366,76 @@ function buildUnits() {
   const grids = { left: el("div", "unit-grid"), right: el("div", "unit-grid") };
   state.ui.left.appendChild(grids.left);
   state.ui.right.appendChild(grids.right);
+  const groups = [];
+  const groupMap = new Map();
   state.payload.units.forEach(function (unit) {
-    const card = el("div", "unit-card " + unit.side);
-    card.dataset.unit = unit.id;
-    const bars = el("div", "unit-bars");
-    ["health", "soul", "spirit", "shield"].forEach(function (resource) {
-      const bar = el("div", "bar " + resource);
-      bar.dataset.resource = resource;
-      bar.appendChild(el("i"));
-      bars.appendChild(bar);
-    });
-    card.appendChild(bars);
-    const avatar = el("div", "avatar " + (unit.kind || "other"));
-    avatar.appendChild(el("span", "", unit.avatar_text || "?"));
-    card.appendChild(avatar);
-    card.appendChild(el("div", "unit-name", unit.name));
-    const statuses = el("div", "unit-statuses");
-    card.appendChild(statuses);
-    grids[unit.side].appendChild(card);
+    const key = unit.qq || unit.id;
+    let group = groupMap.get(key);
+    if (!group) {
+      group = { side: unit.side, units: [] };
+      groupMap.set(key, group);
+      groups.push(group);
+    }
+    group.units.push(unit);
   });
+  ["left", "right"].forEach(function (side) {
+    const sideGroups = groups.filter(function (group) { return group.side === side; });
+    let counts = splitRows(sideGroups.length);
+    if (side === "right") counts = counts.slice().reverse();
+    let cursor = 0;
+    counts.forEach(function (count) {
+      const row = el("div", "unit-row " + side);
+      sideGroups.slice(cursor, cursor + count).forEach(function (group) {
+        const slot = el("div", "unit-slot");
+        group.units.sort(function (a, b) {
+          return (a.kind === "player" ? 0 : 1) - (b.kind === "player" ? 0 : 1);
+        });
+        group.units.forEach(function (unit) { slot.appendChild(makeUnitCard(unit, ownedFormations.get(unit.group))); });
+        row.appendChild(slot);
+      });
+      cursor += count;
+      grids[side].appendChild(row);
+    });
+  });
+}
+
+function splitRows(count) {
+  if (count <= 0) return [];
+  if (count <= 6) return [count];
+  if (count <= 10) return [Math.ceil(count / 2), Math.floor(count / 2)];
+  const first = Math.ceil(count * 0.4);
+  const second = Math.ceil(count * 0.33);
+  return [first, second, count - first - second].filter(function (value) { return value > 0; });
+}
+
+function makeUnitCard(unit, formation) {
+  const card = el("div", "unit-card " + unit.side);
+  card.dataset.unit = unit.id;
+  const bars = el("div", "unit-bars");
+  ["health", "soul", "spirit", "shield"].forEach(function (resource) {
+    const bar = el("div", "bar " + resource);
+    bar.dataset.resource = resource;
+    bar.appendChild(el("i"));
+    bars.appendChild(bar);
+  });
+  card.appendChild(bars);
+  const avatar = el("div", "avatar " + (unit.kind || "other"));
+  avatar.appendChild(el("span", "", unit.avatar_text || "?"));
+  card.appendChild(avatar);
+  card.appendChild(el("div", "unit-name", unit.name));
+  card.appendChild(el("div", "unit-cast", ""));
+  if (formation) {
+    const formationNode = el("div", "unit-formation");
+    formationNode.dataset.formation = formation.id;
+    formationNode.appendChild(el("span", "unit-formation-name", formation.name));
+    const formationBar = el("div", "formation-bar");
+    formationBar.appendChild(el("i"));
+    formationNode.appendChild(formationBar);
+    card.appendChild(formationNode);
+  }
+  const statuses = el("div", "unit-statuses");
+  card.appendChild(statuses);
+  return card;
 }
 
 function resetVisual() {
@@ -458,6 +514,18 @@ function rayElement(id) {
   return state.ui.stage.querySelector('[data-unit="' + id + '"]');
 }
 
+function showCast(id, text) {
+  if (!state.ui) return;
+  state.ui.stage.querySelectorAll(".unit-cast").forEach(function (node) { node.textContent = ""; node.parentElement.classList.remove("casting"); });
+  const card = state.ui.stage.querySelector('[data-unit="' + id + '"]');
+  if (!card) return;
+  const label = card.querySelector(".unit-cast");
+  if (!label) return;
+  label.textContent = text;
+  card.classList.add("casting");
+  setTimeout(function () { label.textContent = ""; card.classList.remove("casting"); }, 1200);
+}
+
 function flashTarget(id, kind) {
   const node = rayElement(id);
   if (!node) return;
@@ -504,7 +572,7 @@ function applyEvent(event, silent) {
     if (card) card.classList.add("active");
     if (!silent) {
       (event.targets || []).forEach(function (target) { flashTarget(target, event.animation); });
-      showBanner(event.skill || "行动", "round");
+      showCast(event.actor, event.skill || "行动");
     }
     if (state.ui.centerBadge) state.ui.centerBadge.textContent = String(event.turn || 0);
     return;

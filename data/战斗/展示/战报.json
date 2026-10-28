@@ -50,7 +50,8 @@
       "statuses",
       "kind",
       "qq",
-      "avatar_text"
+      "avatar_text",
+      "group"
     ],
     "动画阵法字段": [
       "id",
@@ -61,7 +62,8 @@
       "start_capacity",
       "impact",
       "nodes",
-      "collapsed"
+      "collapsed",
+      "owner_group"
     ],
     "动画环境字段": [
       "id",

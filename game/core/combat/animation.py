@@ -132,6 +132,7 @@ def _unit(participant: Mapping[str, Any]) -> dict[str, Any]:
         "kind": kind,
         "qq": qq,
         "avatar_text": avatar_text,
+        "group": _text(participant.get("group_id")),
         "side": (
             participant.get("side")
             if participant.get("side") in {"left", "right"}
@@ -169,6 +170,7 @@ def _formations(report: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict[s
             "side": _text(raw.get("side"), "left"),
             "name": _text(raw.get("name"), number),
             "grade": _text(raw.get("grade")),
+            "owner_group": _text(raw.get("owner_group")),
             "capacity": _number(raw.get("capacity"), 0.0),
             "start_capacity": _number(raw.get("capacity"), 0.0),
             "impact": _number(raw.get("impact"), 0.0),
