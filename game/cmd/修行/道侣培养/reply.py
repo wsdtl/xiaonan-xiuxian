@@ -81,7 +81,12 @@ def view(feature: CompanionCultivationFeature, result: CompanionCultivationView)
     _render_candidates(feature, builder, result.breakthrough, title_key="可突破标题")
     builder.section(feature.copy("道侣", "修行构筑"), icon="game.gear")
     for category, names in result.cultivation_names:
-        builder.field(category, "、".join(names))
+        content = M.text(category + "：")
+        for index, name in enumerate(names):
+            if index:
+                content += M.text("、")
+            content += (M.command(name, f"查看 {name}"),)
+        builder.line(content)
     builder.section(feature.copy("道侣", "本命武器"), icon="game.dagger")
     builder.field("名称", instance.weapon_name)
     builder.row(("器阶", result.weapon_stage), ("等级", instance.weapon_level))

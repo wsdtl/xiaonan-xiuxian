@@ -183,12 +183,19 @@ def _user_page(
     builder = M.document()
     if value.treasure_activation is not None:
         activation = value.treasure_activation
-        builder.section("灵宝", icon="game.box").field(
-            activation.name, activation.summary
+        builder.section("灵宝", icon="game.box").line(
+            M.command(activation.name, f"查看 {activation.name}"),
+            " ",
+            activation.summary,
         )
     builder.section(text(copy, "用户", "道侣相助"), icon="game.role")
     if value.assisting_companion_name:
-        builder.line(M.text(value.assisting_companion_name, tone="companion"))
+        builder.line(
+            M.command(
+                value.assisting_companion_name,
+                f"查看 {value.assisting_companion_name}",
+            )
+        )
     else:
         builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "没有道侣"))
     builder.section(text(copy, "用户", "灵植"), icon="game.box")

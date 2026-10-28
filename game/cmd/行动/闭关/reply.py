@@ -172,7 +172,13 @@ def settlement_summary(
     for user in value.users:
         if user.treasure_activation is not None:
             activation = user.treasure_activation
-            builder.field("灵宝", f"{activation.name} · {activation.summary}")
+            builder.field(
+                "灵宝",
+                M.command(
+                    activation.name, f"查看 {activation.name}"
+                )
+                + M.text(f" · {activation.summary}"),
+            )
         for character in user.characters:
             title = text(copy, "用户", "道侣" if character.companion else "人物")
             level = (
