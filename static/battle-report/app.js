@@ -162,19 +162,36 @@ function renderText() {
     wrap.appendChild(el("p", "text-empty", "这场战斗没有留下可读事件。"));
     return wrap;
   }
+  const events = state.payload.events;
+  const pageSize = 250;
+  let cursor = 0;
   let lastTurn = null;
-  state.payload.events.forEach(function (event) {
-    if (event.turn !== lastTurn) {
-      lastTurn = event.turn;
-      wrap.appendChild(el("h2", "text-turn", event.turn ? "第 " + event.turn + " 次行动" : "开场"));
+  const more = el("button", "text-more", "加载更多");
+  more.type = "button";
+  function appendPage() {
+    const end = Math.min(cursor + pageSize, events.length);
+    const fragment = document.createDocumentFragment();
+    for (; cursor < end; cursor += 1) {
+      const event = events[cursor];
+      if (event.turn !== lastTurn) {
+        lastTurn = event.turn;
+        fragment.appendChild(el("h2", "text-turn", event.turn ? "第 " + event.turn + " 次行动" : "开场"));
+      }
+      const line = el("div", "text-line");
+      line.appendChild(el("span", "text-time", sec(event.t)));
+      const body = el("div", "text-body type-" + eventStyle(event));
+      body.appendChild(formatText(event));
+      line.appendChild(body);
+      fragment.appendChild(line);
     }
-    const line = el("div", "text-line");
-    line.appendChild(el("span", "text-time", sec(event.t)));
-    const body = el("div", "text-body type-" + eventStyle(event));
-    body.appendChild(formatText(event));
-    line.appendChild(body);
-    wrap.appendChild(line);
-  });
+    wrap.insertBefore(fragment, more);
+    more.textContent = cursor < events.length ? "加载更多 · 已显示 " + cursor + " / " + events.length : "已全部展开";
+    more.disabled = cursor >= events.length;
+    more.classList.toggle("is-done", cursor >= events.length);
+  }
+  more.addEventListener("click", appendPage);
+  wrap.appendChild(more);
+  appendPage();
   return wrap;
 }
 
