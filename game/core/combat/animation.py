@@ -115,10 +115,23 @@ def _unit(participant: Mapping[str, Any]) -> dict[str, Any]:
         for value in (_status_snapshot(item) for item in participant.get("initial_statuses") or ())
         if value is not None
     ]
+    raw_id = _text(participant.get("id"))
+    name = _text(participant.get("name"), raw_id)
+    kind = "player" if raw_id.startswith("player:") else "companion" if raw_id.startswith("companion:") else "other"
+    qq = ""
+    if kind == "player":
+        qq = raw_id.split(":", 1)[1]
+    elif kind == "companion":
+        parts = raw_id.split(":", 2)
+        qq = parts[1] if len(parts) > 1 else ""
+    avatar_text = qq[:1] if kind == "player" and qq else (name[:1] or "?")
     return {
-        "id": _text(participant.get("id")),
-        "name": _text(participant.get("name"), _text(participant.get("id"))),
+        "id": raw_id,
+        "name": name,
         "content_id": _text(participant.get("content_id")),
+        "kind": kind,
+        "qq": qq,
+        "avatar_text": avatar_text,
         "side": (
             participant.get("side")
             if participant.get("side") in {"left", "right"}

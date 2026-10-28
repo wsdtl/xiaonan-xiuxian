@@ -253,6 +253,38 @@ def test_animation_payload_is_single_screen_contract() -> None:
         services.core.database.close()
 
 
+def test_animation_avatars_use_qq_first_digit_and_companion_name() -> None:
+    services = build_game_services()
+    try:
+        def side(pid: str, name: str) -> CombatantSpec:
+            return CombatantSpec(
+                id=pid, name=name, attributes=dict(ATTRS),
+                build=(CombatBuildRef("真意", CARD, instance_id=f"{pid}:{CARD}", born_order=0),),
+            )
+
+        result = asyncio.run(
+            services.core.combat.execute(
+                CombatRequest(
+                    left_team=(side("player:123456789", "甲"),),
+                    right_team=(side("companion:987654321:410154", "青璃"),),
+                    seed=20260911, action_limit=20,
+                    report=CombatReportSpec(scene="切磋", generated_at="2026-01-01T00:00:00+08:00"),
+                )
+            )
+        )
+        _header, parts = services.core.combat.build_report_view(result.report, only="animation")
+        units = {unit["id"]: unit for unit in parts["animation"]["units"]}
+        player = units["player:123456789"]
+        companion = units["companion:987654321:410154"]
+        assert player["kind"] == "player"
+        assert player["qq"] == "123456789"
+        assert player["avatar_text"] == "1"
+        assert companion["kind"] == "companion"
+        assert companion["avatar_text"] == "青"
+    finally:
+        services.core.database.close()
+
+
 def test_animation_payload_carries_formations_environment_and_soul() -> None:
     services = build_game_services()
     try:

@@ -284,6 +284,11 @@ function renderAnimation() {
   grid.appendChild(right);
   stage.appendChild(grid);
 
+  const rays = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  rays.setAttribute("class", "ray-layer");
+  rays.setAttribute("id", "rayLayer");
+  rays.setAttribute("aria-hidden", "true");
+  stage.appendChild(rays);
   const fx = el("div", "fx-layer");
   fx.id = "fxLayer";
   stage.appendChild(fx);
@@ -322,7 +327,7 @@ function renderAnimation() {
   controls.appendChild(clock);
   wrap.appendChild(controls);
 
-  state.ui = { stage: stage, left: left, right: right, centerBadge: center.querySelector(".turn-badge"), envBar: envBar.querySelector("i"), envStage: envLine.querySelector(".env-stage"), fill: fill, clock: clock, play: play };
+  state.ui = { stage: stage, left: left, right: right, centerBadge: center.querySelector(".turn-badge"), envBar: envBar.querySelector("i"), envStage: envLine.querySelector(".env-stage"), fill: fill, clock: clock, play: play, rayLayer: rays };
   buildUnits();
   resetVisual();
   updateControls();
@@ -338,8 +343,8 @@ function renderAnimation() {
 
 function buildUnits() {
   if (!state.ui) return;
-  state.ui.left.querySelectorAll(".unit-card, .formation-card").forEach(function (n) { n.remove(); });
-  state.ui.right.querySelectorAll(".unit-card, .formation-card").forEach(function (n) { n.remove(); });
+  state.ui.left.querySelectorAll(".unit-card, .formation-card, .unit-grid").forEach(function (n) { n.remove(); });
+  state.ui.right.querySelectorAll(".unit-card, .formation-card, .unit-grid").forEach(function (n) { n.remove(); });
   state.payload.formations.forEach(function (formation) {
     const card = el("div", "formation-card");
     card.dataset.formation = formation.id;
@@ -353,28 +358,27 @@ function buildUnits() {
     const column = formation.side === "left" ? state.ui.left : state.ui.right;
     column.appendChild(card);
   });
+  const grids = { left: el("div", "unit-grid"), right: el("div", "unit-grid") };
+  state.ui.left.appendChild(grids.left);
+  state.ui.right.appendChild(grids.right);
   state.payload.units.forEach(function (unit) {
     const card = el("div", "unit-card " + unit.side);
     card.dataset.unit = unit.id;
-    const top = el("div", "unit-top");
-    top.appendChild(el("span", "unit-name", unit.name));
-    top.appendChild(el("span", "unit-level", "Lv." + unit.level));
-    card.appendChild(top);
+    const bars = el("div", "unit-bars");
     ["health", "soul", "spirit", "shield"].forEach(function (resource) {
-      if (!unit.max[resource] && !unit.start[resource]) return;
-      const row = el("div", "bar-row");
-      row.appendChild(el("span", "bar-label", RES_LABEL[resource]));
       const bar = el("div", "bar " + resource);
+      bar.dataset.resource = resource;
       bar.appendChild(el("i"));
-      row.appendChild(bar);
-      const value = el("span", "bar-value", "");
-      row.appendChild(value);
-      card.appendChild(row);
+      bars.appendChild(bar);
     });
+    card.appendChild(bars);
+    const avatar = el("div", "avatar " + (unit.kind || "other"));
+    avatar.appendChild(el("span", "", unit.avatar_text || "?"));
+    card.appendChild(avatar);
+    card.appendChild(el("div", "unit-name", unit.name));
     const statuses = el("div", "unit-statuses");
     card.appendChild(statuses);
-    const column = unit.side === "left" ? state.ui.left : state.ui.right;
-    column.appendChild(card);
+    grids[unit.side].appendChild(card);
   });
 }
 
@@ -415,8 +419,7 @@ function paintUnit(id) {
     const maximum = Math.max(0, Number(unit.max[resource]) || 0);
     const current = Math.max(0, Number(value[resource]) || 0);
     row.querySelector("i").style.width = (maximum > 0 ? Math.min(100, current / maximum * 100) : 0) + "%";
-    const out = card.querySelector(".bar." + resource + " + .bar-value");
-    if (out) out.textContent = num(current) + "/" + num(maximum);
+    row.title = RES_LABEL[resource] + " " + num(current) + "/" + num(maximum);
   });
   const holder = card.querySelector(".unit-statuses");
   if (holder) {
@@ -448,6 +451,42 @@ function floatOn(target, text, kind) {
   setTimeout(function () { node.remove(); }, 1000);
 }
 
+function rayElement(id) {
+  if (!id || id === "system") return null;
+  if (id === "environment") return state.ui.stage.querySelector(".env-layer");
+  if (id.indexOf("formation:") === 0) return state.ui.stage.querySelector('[data-formation="' + id + '"]');
+  return state.ui.stage.querySelector('[data-unit="' + id + '"]');
+}
+
+function flashTarget(id, kind) {
+  const node = rayElement(id);
+  if (!node) return;
+  const cls = "effect-" + (kind || "other");
+  node.classList.remove(cls);
+  void node.offsetWidth;
+  node.classList.add(cls);
+  setTimeout(function () { node.classList.remove(cls); }, 620);
+}
+
+function drawRay(source, target, kind) {
+  if (!state.ui || !state.ui.rayLayer) return;
+  const from = rayElement(source);
+  const to = rayElement(target);
+  if (!from || !to || from === to) return;
+  const stageRect = state.ui.stage.getBoundingClientRect();
+  const a = from.getBoundingClientRect();
+  const b = to.getBoundingClientRect();
+  state.ui.rayLayer.setAttribute("viewBox", "0 0 " + stageRect.width + " " + stageRect.height);
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", String(a.left - stageRect.left + a.width / 2));
+  line.setAttribute("y1", String(a.top - stageRect.top + a.height / 2));
+  line.setAttribute("x2", String(b.left - stageRect.left + b.width / 2));
+  line.setAttribute("y2", String(b.top - stageRect.top + b.height / 2));
+  line.setAttribute("class", "ray " + (kind || "damage"));
+  state.ui.rayLayer.appendChild(line);
+  setTimeout(function () { line.remove(); }, 720);
+}
+
 function showBanner(text, kind) {
   if (!state.ui) return;
   const layer = state.ui.stage.querySelector(".banner-layer");
@@ -463,12 +502,16 @@ function applyEvent(event, silent) {
     const card = state.ui.stage.querySelector('[data-unit="' + event.actor + '"]');
     state.ui.stage.querySelectorAll(".unit-card").forEach(function (n) { n.classList.remove("active"); });
     if (card) card.classList.add("active");
+    if (!silent) {
+      (event.targets || []).forEach(function (target) { flashTarget(target, event.animation); });
+      showBanner(event.skill || "行动", "round");
+    }
     if (state.ui.centerBadge) state.ui.centerBadge.textContent = String(event.turn || 0);
-    if (!silent) showBanner(event.skill || "行动", "round");
     return;
   }
   if (event.type === "damage") {
     const target = event.target;
+    drawRay(event.source, event.target, event.resource === "soul" ? "soul" : "damage");
     if (event.shield_absorbed) {
       const unit = state.units.get(target);
       if (unit) setResource(target, "shield", unit.shield - Number(event.shield_absorbed || 0));
@@ -487,6 +530,7 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "heal" || event.type === "shield" || event.type === "revive") {
+    drawRay(event.source, event.target, event.type === "shield" ? "shield" : "heal");
     const unit = state.units.get(event.target);
     if (!unit) return;
     const resource = event.type === "shield" ? "shield" : (event.resource || "health");
@@ -504,6 +548,7 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "status_add" || event.type === "status_remove" || event.type === "status_stack") {
+    if (event.type === "status_add") drawRay(event.source, event.target, "status");
     const unit = state.units.get(event.target);
     if (!unit) return;
     if (event.type === "status_add") {
@@ -553,6 +598,7 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "formation_impact") {
+    drawRay(event.source, event.target, "formation");
     const value = state.formations.get(event.target);
     if (value) {
       value.capacity = Math.max(0, Number(event.after) || value.capacity - Number(event.value || 0));

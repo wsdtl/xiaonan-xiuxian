@@ -47,7 +47,10 @@
       "color",
       "max",
       "start",
-      "statuses"
+      "statuses",
+      "kind",
+      "qq",
+      "avatar_text"
     ],
     "动画阵法字段": [
       "id",
