@@ -19,17 +19,17 @@ from ...reply_composer import send_game_reply
         "guard_rule": "空闲或活动中",
         "help": {
             "category": "战斗",
-            "summary": "查看我的最近未过期战报，可带页码翻页",
-            "usage": ("战报", "战报 2"),
+            "summary": "查看个人、组队、宗门组队战报，每类最多 5 份",
+            "usage": ("战报",),
             "side_effect": "只查看，不会改变任何状态",
             "order": 10,
         },
     },
 )
-async def show_my_reports_page(user_id: str, message: str, manager: Any) -> None:
+async def show_my_reports_page(user_id: str, manager: Any) -> None:
     feature = current_game_services().features.zhanbao
     await send_game_reply(
-        reply.view(feature, await feature.reports_from_text(user_id, message))
+        reply.view(feature, await feature.my_report_sections(user_id))
     )
 
 

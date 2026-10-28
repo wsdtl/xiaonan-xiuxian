@@ -113,8 +113,6 @@ class ExplorationSettlement:
     total_battles: int = 0
     #: 提前结束（没跑满就停）：战果与奖励一概不计，只把人放出来。
     early: bool = False
-    #: 本轮已结算战斗对应的非资产战报编号，按场次顺序。
-    battle_report_ids: tuple[str, ...] = ()
 
 
 __all__ = [

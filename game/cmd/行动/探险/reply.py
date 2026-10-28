@@ -20,7 +20,6 @@ from game.features.tanxian import (
     ExplorationSettlement,
     ExplorationStarted,
 )
-from launch.paths import public_url
 
 from ...actions import message_actions
 from ...presentation import duration, span
@@ -124,23 +123,6 @@ def progress(
     return builder.actions(message_actions(actions)).build()
 
 
-def _append_reports(builder, copy: ExplorationCopy, value: ExplorationSettlement) -> None:
-    ids = value.battle_report_ids
-    if not ids:
-        builder.field(text(copy, "总结", "战报"), text(copy, "总结", "无战报"))
-        return
-    builder.section(text(copy, "总结", "战报"), icon="game.scroll")
-    for index, report_id in enumerate(ids, start=1):
-        builder.line(
-            text(copy, "总结", "场次", {"场次": index}),
-            " · ",
-            M.link(
-                text(copy, "总结", "打开战报"),
-                public_url("battle", report_id),
-            ),
-        )
-
-
 def early_page(copy: ExplorationCopy, value: ExplorationSettlement) -> DocumentMessage:
     """提前结束的卡：没跑满就停，战果与奖励一概不计（那些只在跑满时才揭晓）。"""
 
@@ -163,7 +145,6 @@ def early_page(copy: ExplorationCopy, value: ExplorationSettlement) -> DocumentM
         )
         .small(text(copy, "总结", "再来一次"))
     )
-    _append_reports(builder, copy, value)
     return builder.build()
 
 
@@ -219,7 +200,6 @@ def settlement_summary(
         )
         .field(text(copy, "总结", "总物品"), value.total_item_quantity)
     )
-    _append_reports(builder, copy, value)
     if value.early:
         builder.line(
             text(

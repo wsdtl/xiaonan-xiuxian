@@ -8,7 +8,6 @@ from ...presentation import error_document
 from typing import Sequence
 
 from game.features.qiecuo import DuelChallenge, DuelFeature, DuelResult
-from launch.paths import public_url
 from message import Action, DocumentMessage, M
 
 from ...presentation import natural_deadline, sentence
@@ -45,15 +44,6 @@ def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> D
     )
 
 
-def report_url(value: DuelResult) -> str:
-    """战报地址：**只要编号**（`/battle/<切磋编号>`）。
-
-    战报是非资产数据：按编号存在非资产库（`log_battle_reports`）里，与谁发起、存在谁名下
-    都无关，所以地址里既不带中文、也不带冒号、更不带 owner——纯 ASCII 才不会被聊天客户端改坏。
-    """
-    return public_url("battle", value.report_id)
-
-
 def result(
     feature: DuelFeature,
     value: DuelResult,
@@ -72,10 +62,6 @@ def result(
             (target_name, len(value.target_participants)),
         )
         .row(("行动", value.actions), ("战斗事件", value.events))
-        .field(
-            feature.text("结果", "完整战报"),
-            M.link("打开战报", report_url(value)),
-        )
         .build()
     )
 
@@ -98,4 +84,4 @@ def error(
     )
 
 
-__all__ = ["challenge", "error", "rejected", "report_url", "result"]
+__all__ = ["challenge", "error", "rejected", "result"]

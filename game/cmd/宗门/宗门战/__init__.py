@@ -70,22 +70,6 @@ async def _history(user_id: str, raw: str) -> None:
         )
 
 
-async def _reports(user_id: str, raw: str) -> None:
-    try:
-        await send_game_reply(
-            reply.recent_reports(
-                _feature(),
-                await current_game_services().features.zhanbao.reports_from_text(
-                    user_id, raw, kind="宗门战", strict=True
-                ),
-            )
-        )
-    except ValueError:
-        await send_game_reply(
-            reply.error(_feature(), _feature().text("错误", "战况写法"), _feature().format_actions("战录格式"))
-        )
-
-
 @GameCommand.command(
     cmd="宗门战",
     metadata={
@@ -102,7 +86,6 @@ async def _reports(user_id: str, raw: str) -> None:
                 "宗门战开战",
                 "宗门战况 [战书编号]",
                 "宗门战录 [页码]",
-                "宗门战报 [页码]",
             ),
             "side_effect": "约战扣本宗押注；开战消耗阵法、战丹与恢复丹；查看与战录只读",
             "order": 1,
@@ -167,14 +150,6 @@ async def sect_war_current(user_id: str, raw_message: str, message_context: Mess
 )
 async def sect_war_history(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
     await _history(user_id, match.group("page") or "")
-
-
-@GameCommand.regex(
-    cmd=re.compile(r"^宗门战报(?:\s+(?P<page>.*))?$"),
-    metadata={"scope": "通用", "guard_rule": "已创建", "hidden": True},
-)
-async def sect_war_reports(user_id: str, raw_message: str, message_context: MessageContext, manager: Any, match: re.Match) -> None:
-    await _reports(user_id, match.group("page") or "")
 
 
 __all__ = []

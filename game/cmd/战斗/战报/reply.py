@@ -1,11 +1,11 @@
-"""战报命令回复构造：我的最近未过期战报。"""
+"""战报命令回复构造：个人 / 组队 / 宗门组队三栏。"""
 
 from __future__ import annotations
 
 from launch.paths import public_url
 from message import DocumentMessage, M
 
-from game.features.zhanbao import BattleReportFeature, MyReportPage
+from game.features.zhanbao import BattleReportFeature, MyReportSections
 
 
 def _t(feature: BattleReportFeature, key: str) -> str:
@@ -14,26 +14,31 @@ def _t(feature: BattleReportFeature, key: str) -> str:
     return str(feature.copy().get(key) or key)
 
 
-def view(feature: BattleReportFeature, page: MyReportPage) -> DocumentMessage:
-    """把一页「我的战报」拼成卡：倒序条目、每条一个打开链接、页码与总数。"""
+def view(feature: BattleReportFeature, sections: MyReportSections) -> DocumentMessage:
+    """三栏各自最近 5 条；空栏不出现，三类都空才给一次空态。"""
 
-    builder = M.document()
-    # line/row/item 必须属于 section；分节恒定存在（标题用有信息的一句），
-    # 空列表走 line＋状态点，照宗门战 history 的成品写法——不另开空栏目。
-    builder.section(_t(feature, "说明"), icon="game.swords")
-    if page.entries:
-        builder.field(_t(feature, "分类"), _t(feature, "总数").format_map({"数量": page.total}))
-    else:
+    builder = M.document().section(_t(feature, "说明"), icon="game.swords")
+    if not (
+        sections.personal
+        or sections.team
+        or sections.sect
+    ):
         builder.line(M.status("空", tone="muted"), " ", _t(feature, "空"))
-    for entry in page.entries:
-        builder.line(
-            _t(feature, "条目").format_map({"类型": entry.kind, "时间": entry.finished_at}),
-            M.link(_t(feature, "打开"), public_url("battle", entry.report_id)),
-        )
-        if entry.participants:
-            builder.line(_t(feature, "参与者").format_map({"名单": "、".join(entry.participants)}))
-    if page.total:
-        page_size = max(1, page.size)
-        total_pages = max(1, (page.total + page_size - 1) // page_size)
-        builder.line(_t(feature, "页码").format_map({"页": page.page, "总页": total_pages}))
+        return builder.build()
+    for entries, label in (
+        (sections.personal, "个人"),
+        (sections.team, "组队"),
+        (sections.sect, "宗门组队"),
+    ):
+        if not entries:
+            continue
+        builder.section(_t(feature, label), icon="game.swords")
+        for entry in entries:
+            builder.line(
+                _t(feature, "条目").format_map(
+                    {"类型": entry.kind, "时间": entry.finished_at}
+                ),
+                " · ",
+                M.link(_t(feature, "打开"), public_url("battle", entry.report_id)),
+            )
     return builder.build()

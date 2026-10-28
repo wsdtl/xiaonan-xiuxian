@@ -315,7 +315,6 @@ def _challenge(value: Mapping[str, object], *, replayed: bool) -> DuelChallenge:
 
 def _result(value: Mapping[str, object], *, replayed: bool) -> DuelResult:
     return DuelResult(
-        report_id=_text(value.get("切磋编号"), "切磋编号"),
         owner=_text(value.get("发起者"), "发起者"),
         winner=_text(value.get("胜方"), "胜方"),
         user_participants=tuple(_texts(value.get("发起方"), "发起方")),

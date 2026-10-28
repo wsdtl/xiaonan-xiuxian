@@ -1,7 +1,7 @@
 """非资产日志库：核心侧的公共件。
 
 非资产库（database/runtime_log.db）是核心的；这里放**与核心/框架边界有关的两件公共件**：
-- BattleReportSink：产报方与仓储之间的协议（game/core/duel、game/core/sect_war 依赖它）；
+- BattleReportSink：产报方与仓储之间的协议（game/core/duel、game/core/exploration、game/core/sect_war 依赖它）；
 - runtime_log_database_path：非资产库路径（核心的 storage 与维护者入口都要用）。
 
 战报自己的读写实现在 game/core/database/battle_report_store.py；zhanbao 玩法只保留展示与页面读取。
@@ -16,7 +16,7 @@ from typing import Protocol
 class BattleReportSink(Protocol):
     """战报的去处契约：核心服务只认它，不直接开非资产库。
 
-    由 `BattleReportStore` 实现；两个产出战报的核心（切磋、宗门战）都通过它登记。
+    由 `BattleReportStore` 实现；三个产出战报的核心（切磋、探险、宗门战）都通过它登记。
     """
 
     def save(

@@ -28,7 +28,10 @@ COPY_DATASET = "我的战报页面文案"
 #: 一次调用要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应（核心定的名单）。
 VIEWS = VIEW_PARTS
 
-#: `my_reports` 一次最多拉多少条：列表只给最近的一段时间，够翻几页就行。
+#: 每类最多显示几条；多了没人看。
+SECTION_LIMIT = 5
+
+#: 每类查询最多拉多少条：先拉够再切前 5，避免被另一类挤掉。
 FETCH_LIMIT = 200
 
 
@@ -59,13 +62,12 @@ class MyReport:
 
 
 @dataclass(frozen=True)
-class MyReportPage:
-    """「我的战报」的一页：entries ＋ 页码信息。"""
+class MyReportSections:
+    """`战报` 一张卡的三栏；每栏最多 `SECTION_LIMIT` 条。"""
 
-    entries: tuple[MyReport, ...]
-    page: int
-    size: int
-    total: int
+    personal: tuple[MyReport, ...] = ()
+    team: tuple[MyReport, ...] = ()
+    sect: tuple[MyReport, ...] = ()
 
 
 class BattleReportFeature:
@@ -87,9 +89,11 @@ class BattleReportFeature:
         self._copy: Mapping[str, str] | None = None
         self._initialized = False
         if data is not None:
+            raw_copy = dict(data.dataset(COPY_DATASET))
+            values = raw_copy.get("文本", raw_copy)
             self._copy = {
                 str(key): str(value)
-                for key, value in dict(data.dataset(COPY_DATASET)).items()
+                for key, value in dict(values).items()
             }
 
     def copy(self) -> Mapping[str, str]:
@@ -106,53 +110,33 @@ class BattleReportFeature:
             raise RuntimeError("宗门战核心必须先于战报页面玩法启动")
         self._initialized = True
 
-    async def reports_from_text(
-        self,
-        participant: str,
-        raw_page: str,
-        *,
-        kind: str = "",
-        size: int = 5,
-        strict: bool = False,
-    ) -> MyReportPage:
-        """从玩家原始页码文本取战报；页码合规由本玩法判定。"""
-
-        text = str(raw_page or "").strip()
-        if text and (not text.isdecimal() or int(text) < 1):
-            if strict:
-                raise ValueError("战报页码")
-            page = 1
-        else:
-            page = int(text or 1)
-        return await self.my_reports(
-            participant, kind=kind, page=page, size=size
-        )
-
-    async def my_reports(
-        self, participant: str, *, kind: str = "", page: int = 1, size: int = 5
-    ) -> MyReportPage:
-        """列这个玩家最近**尚未过期**的战报，按结束时间倒序（分页）；`kind` 非空时只留该类型。"""
+    async def my_report_sections(self, participant: str) -> MyReportSections:
+        """按 `战报` 的三栏取最近未过期记录，每栏最多 `SECTION_LIMIT` 条。"""
 
         self._require_initialized()
         name = str(participant or "").strip()
-        page_size = max(1, int(size))
-        page_index = max(1, int(page))
         if not name or self._battle_log is None:
-            return MyReportPage((), page_index, page_size, 0)
-        rows = list(self._battle_log.recent(name, kind=kind, limit=FETCH_LIMIT))
-        entries = tuple(
-            MyReport(
-                report_id=str(row.report_id),
-                kind=str(row.kind),
-                finished_at=str(row.finished_at),
-                finished_timestamp=float(row.finished_timestamp),
-                participants=tuple(
-                    part for part in str(row.participants).splitlines() if part
-                ),
+            return MyReportSections()
+        personal: list[MyReport] = []
+        team: list[MyReport] = []
+        sect: list[MyReport] = []
+        for kind in ("切磋", "探险", "宗门战"):
+            rows = list(
+                self._battle_log.recent(name, kind=kind, limit=FETCH_LIMIT)
             )
-            for row in rows[(page_index - 1) * page_size : page_index * page_size]
+            for row in rows:
+                entry = _report_entry(row)
+                if kind == "宗门战":
+                    sect.append(entry)
+                elif kind == "切磋":
+                    (personal if len(entry.participants) <= 2 else team).append(entry)
+                elif kind == "探险":
+                    (personal if len(entry.participants) <= 1 else team).append(entry)
+        return MyReportSections(
+            personal=_latest(personal),
+            team=_latest(team),
+            sect=_latest(sect),
         )
-        return MyReportPage(entries, page_index, page_size, len(rows))
 
     async def view(
         self,
@@ -206,4 +190,26 @@ class BattleReportFeature:
             raise RuntimeError("战报页面玩法微服务尚未初始化")
 
 
-__all__ = ["VIEWS", "BattleReportFeature"]
+def _report_entry(row: object) -> MyReport:
+    return MyReport(
+        report_id=str(getattr(row, "report_id")),
+        kind=str(getattr(row, "kind")),
+        finished_at=str(getattr(row, "finished_at")),
+        finished_timestamp=float(getattr(row, "finished_timestamp")),
+        participants=tuple(
+            part
+            for part in str(getattr(row, "participants")).splitlines()
+            if part
+        ),
+    )
+
+
+def _latest(values: list[MyReport]) -> tuple[MyReport, ...]:
+    return tuple(
+        sorted(values, key=lambda entry: entry.finished_timestamp, reverse=True)[
+            :SECTION_LIMIT
+        ]
+    )
+
+
+__all__ = ["VIEWS", "BattleReportFeature", "MyReport", "MyReportSections"]
