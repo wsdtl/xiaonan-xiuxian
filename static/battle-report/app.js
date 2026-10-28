@@ -1,6 +1,6 @@
 const root = document.getElementById("reportRoot");
 const initialMode = new URLSearchParams(location.search).get("mode") === "animation" ? "animation" : "text";
-const state = { mode: initialMode, payload: null, playing: false, speed: 1, t: 0, duration: 1, frame: 0, last: 0, cursor: 0, units: new Map(), formations: new Map(), env: null };
+const state = { mode: initialMode, payload: null, playing: false, speed: 1, t: 0, duration: 1, frame: 0, last: 0, cursor: 0, units: new Map(), formations: new Map(), env: null, floatStacks: new Map() };
 const RESULT = { left: "左方胜", right: "右方胜", draw: "未分胜负" };
 const RES_LABEL = { health: "血气", soul: "神魂", spirit: "精神", shield: "护盾" };
 const TYPE_LABEL = { attack: "单体", aoe: "群攻", combo: "连击", drain: "吸取", heal: "治疗", shield: "护盾", buff: "增益", debuff: "减益", control: "控制", item: "丹药", other: "其他" };
@@ -457,6 +457,9 @@ function makeUnitCard(unit) {
 
 function resetVisual() {
   if (!state.ui) return;
+  state.floatStacks.clear();
+  const fx = state.ui.stage.querySelector(".fx-layer");
+  if (fx) fx.textContent = "";
   state.units.clear();
   state.formations.clear();
   state.payload.units.forEach(function (unit) {
@@ -516,12 +519,20 @@ function floatOn(target, text, kind) {
   if (!state.ui || !target) return;
   const stageRect = state.ui.stage.getBoundingClientRect();
   const rect = target.getBoundingClientRect();
+  const key = target.dataset.unit || target.dataset.formation || "environment";
+  const active = state.floatStacks.get(key) || [];
+  const lane = active.length % 8;
   const node = el("div", "float-text " + (kind || ""));
   node.textContent = text;
-  node.style.left = (rect.left - stageRect.left + rect.width / 2) + "px";
-  node.style.top = (rect.top - stageRect.top + 18) + "px";
+  node.style.left = (rect.left - stageRect.left + rect.width / 2 + (lane % 2 ? 14 : -14)) + "px";
+  node.style.top = (rect.top - stageRect.top + 18 - lane * 19) + "px";
   state.ui.stage.querySelector(".fx-layer").appendChild(node);
-  setTimeout(function () { node.remove(); }, 1000);
+  active.push(node);
+  state.floatStacks.set(key, active);
+  setTimeout(function () {
+    node.remove();
+    state.floatStacks.set(key, (state.floatStacks.get(key) || []).filter(function (item) { return item !== node; }));
+  }, 1500);
 }
 
 function rayElement(id) {
@@ -540,7 +551,7 @@ function showCast(id, text) {
   if (!label) return;
   label.textContent = text;
   card.classList.add("casting");
-  setTimeout(function () { label.textContent = ""; card.classList.remove("casting"); }, 1200);
+  setTimeout(function () { label.textContent = ""; card.classList.remove("casting"); }, 2400);
 }
 
 function flashTarget(id, kind) {
