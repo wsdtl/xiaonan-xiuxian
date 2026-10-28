@@ -17,6 +17,7 @@ QQ 文字修仙游戏：Python 3.12 + FastAPI + SQLite。规则与内容住在 `
 | 启动与组合根 | [game/startup/说明.md](game/startup/说明.md)、[系统架构.md](系统架构.md) |
 | 通信适配 | [launch/adapter/说明.md](launch/adapter/说明.md) |
 | 展示页 | [static/说明.md](static/说明.md) |
+| 战报页与动画接口 | [战报动画接口.md](战报动画接口.md)、[static/说明.md](static/说明.md) |
 | 判据与工具 | [tools/说明.md](tools/说明.md) |
 
 ## 当前规模

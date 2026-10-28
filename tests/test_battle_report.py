@@ -296,7 +296,7 @@ def test_animation_avatars_use_qq_first_digit_and_companion_name() -> None:
         assert enemy["avatar_kind"] == "enemy"
         assert boss["avatar_mode"] == "asset"
         assert boss["avatar_kind"] == "boss"
-        assert boss["avatar_asset"] == "boss/620001"
+        assert boss["avatar_asset"] == "boss/620001.webp"
     finally:
         services.core.database.close()
 

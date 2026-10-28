@@ -142,7 +142,7 @@ def _unit(participant: Mapping[str, Any]) -> dict[str, Any]:
         avatar_kind = "enemy" if kind == "other" else "other"
     avatar_asset = _text(participant.get("avatar_asset"))
     if not avatar_asset and avatar_kind == "boss" and content_id:
-        avatar_asset = f"boss/{content_id}"
+        avatar_asset = f"boss/{content_id}.webp"
     avatar_mode = "qq" if avatar_kind == "player" and qq else "asset" if avatar_asset else "generated"
     avatar_seed = f"{raw_id}:{content_id}:{name}"
     return {
