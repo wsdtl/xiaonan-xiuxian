@@ -436,6 +436,7 @@ function buildUnits() {
         group.units.sort(function (a, b) {
           return (a.kind === "player" ? 0 : 1) - (b.kind === "player" ? 0 : 1);
         });
+        if (group.side === "left") group.units.reverse();
         group.units.forEach(function (unit) { pair.appendChild(makeUnitCard(unit)); });
         slot.appendChild(pair);
         const formation = ownedFormations.get(group.units[0].group);
@@ -632,12 +633,32 @@ function showCast(id, text) {
   setTimeout(function () { label.textContent = ""; card.classList.remove("casting"); }, 2400);
 }
 
+const MOTION_KINDS = ["attack", "aoe", "combo", "drain", "heal", "shield", "buff", "debuff", "control", "item", "other", "hit", "soul-hit", "status", "down"];
+
+function playMotion(node, kind) {
+  if (!node) return;
+  const normalized = MOTION_KINDS.indexOf(kind) >= 0 ? kind : "other";
+  MOTION_KINDS.forEach(function (name) { node.classList.remove("anim-" + name); });
+  node.classList.add("anim-" + normalized);
+  clearTimeout(node._motionTimer);
+  node._motionTimer = setTimeout(function () { node.classList.remove("anim-" + normalized); }, 680);
+}
+
+function playUnitMotion(id, kind) {
+  if (!state.ui) return;
+  const card = state.ui.stage.querySelector('[data-unit="' + id + '"]');
+  if (!card) return;
+  const avatar = card.querySelector(".avatar");
+  if (avatar) playMotion(avatar, kind);
+}
+
 function flashTarget(id, kind) {
   const node = rayElement(id);
   if (!node) return;
   const cls = "effect-" + (kind || "other");
   node.classList.remove(cls);
   node.classList.add(cls);
+  playUnitMotion(id, kind);
   setTimeout(function () { node.classList.remove(cls); }, 620);
 }
 
@@ -671,6 +692,7 @@ function renderRay(source, target, kind) {
   line.setAttribute("y1", String(a.top - stageRect.top + a.height / 2));
   line.setAttribute("x2", String(b.left - stageRect.left + b.width / 2));
   line.setAttribute("y2", String(b.top - stageRect.top + b.height / 2));
+  line.setAttribute("pathLength", "1");
   line.setAttribute("class", "ray " + (kind || "damage"));
   state.ui.rayLayer.appendChild(line);
   setTimeout(function () { line.remove(); }, 680);
@@ -703,6 +725,7 @@ function applyEvent(event, silent) {
   if (event.type === "damage") {
     const target = event.target;
     if (!silent) drawRay(event.source, event.target, event.resource === "soul" ? "soul" : "damage");
+    if (!silent) playUnitMotion(event.target, event.resource === "soul" ? "soul-hit" : "hit");
     if (event.shield_absorbed) {
       const unit = state.units.get(target);
       if (unit) setResource(target, "shield", unit.shield - Number(event.shield_absorbed || 0));
@@ -721,6 +744,7 @@ function applyEvent(event, silent) {
   }
   if (event.type === "heal" || event.type === "shield" || event.type === "revive") {
     if (!silent) drawRay(event.source, event.target, event.type === "shield" ? "shield" : "heal");
+    if (!silent) playUnitMotion(event.target, event.type === "shield" ? "shield" : "heal");
     const unit = state.units.get(event.target);
     if (!unit) return;
     const resource = event.type === "shield" ? "shield" : (event.resource || "health");
@@ -738,7 +762,10 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "status_add" || event.type === "status_remove" || event.type === "status_stack") {
-    if (!silent && event.type === "status_add") drawRay(event.source, event.target, "status");
+    if (!silent && event.type === "status_add") {
+      drawRay(event.source, event.target, "status");
+      playUnitMotion(event.target, event.category === "控制" ? "control" : event.category === "负面" ? "debuff" : event.category === "正面" ? "buff" : "status");
+    }
     const unit = state.units.get(event.target);
     if (!unit) return;
     if (event.type === "status_add") {
@@ -763,7 +790,7 @@ function applyEvent(event, silent) {
     if (unit) unit.dead = true;
     paintUnit(event.target);
     const card = state.ui.stage.querySelector('[data-unit="' + event.target + '"]');
-    if (!silent) floatOn(card, "倒下", "down");
+    if (!silent) { playUnitMotion(event.target, "down"); floatOn(card, "倒下", "down"); }
     return;
   }
   if (event.type === "formation_cast" || event.type === "formation_turn" || event.type === "formation_break") {
@@ -788,7 +815,7 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "formation_impact") {
-    if (!silent) drawRay(event.source, event.target, "formation");
+    if (!silent) { drawRay(event.source, event.target, "formation"); playUnitMotion(event.target, "hit"); }
     const value = state.formations.get(event.target);
     if (value) {
       value.capacity = Math.max(0, Number(event.after) || value.capacity - Number(event.value || 0));
