@@ -420,12 +420,34 @@ function splitRows(count) {
   return [base + (remainder > 0 ? 1 : 0), base + (remainder > 1 ? 1 : 0), base + (remainder > 2 ? 1 : 0), base];
 }
 
+function flagSvg(side) {
+  const blue = side !== "right";
+  const a = blue ? "#8bdcff" : "#ffb0b8";
+  const b = blue ? "#3b81c5" : "#c44758";
+  const c = blue ? "#1d4a73" : "#7b1f2e";
+  const glow = blue ? "#6fc6ff" : "#ff7b88";
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 54" aria-hidden="true">' +
+    '<defs><linearGradient id="cloth' + (blue ? "b" : "r") + '" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0" stop-color="' + a + '"/><stop offset="0.55" stop-color="' + b + '"/><stop offset="1" stop-color="' + c + '"/>' +
+    '</linearGradient></defs>' +
+    '<path d="M7 3V51" stroke="#c9a45c" stroke-width="2.4" stroke-linecap="round"/>' +
+    '<circle cx="7" cy="3" r="2.6" fill="#f6d98a"/>' +
+    '<path d="M9 7 L30 11 L25 25 L9 29 Z" fill="url(#cloth' + (blue ? "b" : "r") + ')" stroke="#f3d27a" stroke-width="1.1"/>' +
+    '<path d="M13 13 L24 15 L21 23 L13 25 Z" fill="none" stroke="#fff1c8" stroke-width="1" opacity="0.85"/>' +
+    '<path d="M7 34 L15 36 L13 43 L7 41 Z" fill="' + b + '" opacity="0.95"/>' +
+    '<path d="M7 46 l5 -2 v5 l-5 2 z" fill="#f3d27a" opacity="0.85"/>' +
+    '<circle cx="24" cy="18" r="1.2" fill="#fff6d5" opacity="0.9"/>' +
+    '<path d="M7 3V51" stroke="' + glow + '" stroke-width="0.8" opacity="0.45"/>' +
+    '</svg>';
+}
+
 function makeFormationNode(formation) {
   const flag = el("div", "unit-flag");
   flag.dataset.formation = formation.id;
   flag.title = formation.name + "｜承载 " + num(formation.start_capacity);
-  flag.appendChild(el("i", "flag-pole"));
-  flag.appendChild(el("i", "flag-cloth"));
+  const art = el("div", "flag-art");
+  art.innerHTML = flagSvg(formation.side);
+  flag.appendChild(art);
   const formationBar = el("div", "formation-bar");
   formationBar.appendChild(el("i"));
   flag.appendChild(formationBar);
@@ -441,15 +463,14 @@ function setFormationFill(fill, percent) {
 function makeUnitCard(unit) {
   const card = el("div", "unit-card " + unit.side);
   card.dataset.unit = unit.id;
-  const main = el("div", "unit-main");
-  const bars = el("div", "unit-vitals");
+  const bars = el("div", "unit-bars");
   ["health", "soul", "spirit", "shield"].forEach(function (resource) {
-    const bar = el("div", "bar vbar " + resource);
+    const bar = el("div", "bar " + resource);
     bar.dataset.resource = resource;
     bar.appendChild(el("i"));
     bars.appendChild(bar);
   });
-  main.appendChild(bars);
+  card.appendChild(bars);
   const avatar = el("div", "avatar " + (unit.kind || "other"));
   avatar.appendChild(el("span", "avatar-fallback", unit.avatar_text || "?"));
   if (unit.kind === "player" && unit.qq) {
@@ -464,8 +485,7 @@ function makeUnitCard(unit) {
     image.src = "https://q.qlogo.cn/g?b=qq&nk=" + encodeURIComponent(unit.qq) + "&s=100";
     avatar.appendChild(image);
   }
-  main.appendChild(avatar);
-  card.appendChild(main);
+  card.appendChild(avatar);
   card.appendChild(el("div", "unit-name", unit.name));
   card.appendChild(el("div", "unit-cast", ""));
   const statuses = el("div", "unit-statuses");
@@ -512,7 +532,7 @@ function paintUnit(id) {
     if (!row) return;
     const maximum = Math.max(0, Number(unit.max[resource]) || 0);
     const current = Math.max(0, Number(value[resource]) || 0);
-    row.querySelector("i").style.height = (maximum > 0 ? Math.min(100, current / maximum * 100) : 0) + "%";
+    row.querySelector("i").style.width = (maximum > 0 ? Math.min(100, current / maximum * 100) : 0) + "%";
     row.title = RES_LABEL[resource] + " " + num(current) + "/" + num(maximum);
   });
   const holder = card.querySelector(".unit-statuses");
