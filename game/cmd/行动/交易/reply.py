@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ...actions import CommandAction, message_actions
-from ...presentation import format_lines
+from ...presentation import format_lines, linked_name_line
 
 from typing import Sequence
 
@@ -87,30 +87,23 @@ def page(feature: TradeFeature, value: TradePage) -> DocumentMessage:
     return builder.actions(actions).build()
 
 
-def _purchase_line(
-    feature: TradeFeature, grade: str, name: str, quantity: int
-) -> tuple:
-    marker = "\u0000"
-    text = feature.copy(
-        "购买",
-        "所得",
-        {"品级": grade, "名称": marker, "数量": quantity},
-    )
-    head, _, tail = text.partition(marker)
-    return (M.text(head), M.command(name, f"查看 {name}"), M.text(tail))
-
-
 def purchased(feature: TradeFeature, value: TradePurchaseResult) -> DocumentMessage:
     return (
         M.document()
         .section(feature.copy("购买", "标题"), icon="game.bag")
         .line(M.status("购买完成", tone="positive"))
         .line(
-            *_purchase_line(
-                feature,
-                value.product.grade_name,
+            *linked_name_line(
+                feature.copy(
+                    "购买",
+                    "所得",
+                    {
+                        "品级": value.product.grade_name,
+                        "名称": "\u0000",
+                        "数量": value.quantity,
+                    },
+                ),
                 value.product.name,
-                value.quantity,
             )
         )
         .row(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ...presentation import error_document, linked_name_line
 
 from game.features.zongmen_lingcang import SectAssetTransfer
 
@@ -50,9 +50,17 @@ def donated_material(copy: LingcangCopy, result: SectAssetTransfer) -> DocumentM
         .section("捐入灵藏", icon="game.success")
         .line(M.status("捐献完成", tone="positive"))
         .line(
-            _text(
-                copy,
-                "捐入材料", {"品级": entry.grade_name, "名称": entry.name, "数量": entry.quantity},
+            *linked_name_line(
+                _text(
+                    copy,
+                    "捐入材料",
+                    {
+                        "品级": entry.grade_name,
+                        "名称": "\u0000",
+                        "数量": entry.quantity,
+                    },
+                ),
+                entry.name,
             )
         )
     )

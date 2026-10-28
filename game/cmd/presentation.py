@@ -84,6 +84,20 @@ def format_lines(builder: object, text: object) -> str:
     return parts[0]
 
 
+def linked_name_line(text: str, name: str, command: str | None = None) -> tuple:
+    """把模板里已经用 `\\u0000` 标出的名字换成无边框命令。"""
+
+    from message import M
+
+    marker = "\u0000"
+    head, _, tail = text.partition(marker)
+    return (
+        *M.text(head),
+        M.command(name, command or f"查看 {name}"),
+        *M.text(tail),
+    )
+
+
 def error_document(
     title: str,
     icon: str,
@@ -125,6 +139,7 @@ __all__ = [
     "duration",
     "error_document",
     "format_lines",
+    "linked_name_line",
     "natural_deadline",
     "sentence",
 ]

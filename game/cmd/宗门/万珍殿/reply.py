@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...presentation import error_document
+from ...presentation import error_document, linked_name_line
 
 from collections.abc import Sequence, Mapping
 from ...actions import CommandAction, message_actions
@@ -64,7 +64,14 @@ def transferred(copy: WanzhenCopy, value: WanzhenTransferResult) -> DocumentMess
         M.document()
 
         .section(value.action, icon="game.success")
-        .line(M.status("完成", tone="positive"), " ", _text(copy, key, values))
+        .line(
+            M.status("完成", tone="positive"),
+            " ",
+            *linked_name_line(
+                _text(copy, key, {**values, "name": "\u0000"}),
+                value.entry.name,
+            ),
+        )
         .build()
     )
 
