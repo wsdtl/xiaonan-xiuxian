@@ -81,9 +81,12 @@ class DuelService:
         self._initialized = True
 
     async def resolve_target(self, user_id: str, query: str) -> str:
+        query = _text(query, "切磋目标")
+        own = await self._character.public_profiles((user_id,))
+        if query == user_id or (own and query == own[0].name):
+            raise DuelError("不能和自己切磋")
         candidates = await self._location.nearby_players(user_id)
         available = tuple(value.user_id for value in candidates.values)
-        query = _text(query, "切磋目标")
         if query in available:
             return query
         profiles = await self._character.public_profiles(available)

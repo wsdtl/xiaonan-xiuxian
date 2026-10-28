@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import random
 from collections import Counter
@@ -30,6 +31,7 @@ from game.core.combat import (
     CombatFormationSpec,
     CombatGroupSpec,
     CombatMedicineSpec,
+    CombatReportSpec,
     CombatRequest,
     CombatResult,
     CombatService,
@@ -53,6 +55,7 @@ from game.core.database import (
     StateMutation,
     TransactionCommand,
 )
+from game.core.database.battle_report import BattleReportSink
 from game.core.enemy import EnemyInstance, EnemyService
 from game.core.formation import FormationService
 from game.core.injury import PLAYER_KEY, InjuryService, companion_subject
@@ -109,6 +112,7 @@ class ExplorationService:
         innate_treasure: InnateTreasureService,
         medicine: MedicineService | None = None,
         injury: InjuryService | None = None,
+        battle_reports: BattleReportSink | None = None,
     ) -> None:
         self._data = data
         self._database = database
@@ -125,6 +129,7 @@ class ExplorationService:
         self._innate_treasure = innate_treasure
         self._medicine = medicine
         self._injury = injury
+        self._battle_reports = battle_reports
         self._initialized = False
         self._rules: Mapping[str, object] = {}
         self._maximum_participants = 0
@@ -412,6 +417,7 @@ class ExplorationService:
             }
         current = {value.id: value for value in combatants}
         battle_values: list[dict[str, object]] = []
+        battle_report_ids: list[str] = []
         defeated_total = 0
         for battle_index in range(1, self.status().maximum_battles + 1):
             living = [value for value in current.values() if (value.health or 0) > 0]
@@ -464,6 +470,7 @@ class ExplorationService:
                     right_team=tuple(value.combatant for value in enemies),
                     seed=source.getrandbits(64),
                     action_limit=self.status().action_limit,
+                    report=CombatReportSpec(scene="探险"),
                     medicine_definitions=_carried_medicine_definitions(
                         medicine_definitions, left
                     ),
@@ -618,6 +625,33 @@ class ExplorationService:
             )
             battle_record["用户明细"] = materialize(detail)
             battle_values.append(battle_record)
+            if result.report:
+                if self._battle_reports is None:
+                    raise RuntimeError("普通探险核心缺少非资产战报库")
+                report_id = f"explore-{session_id}-{battle_index:02d}"
+                finished_at = datetime.now(timezone.utc).isoformat()
+                self._battle_reports.save(
+                    report_id=report_id,
+                    kind="探险",
+                    participants=participants,
+                    finished_at=finished_at,
+                    finished_timestamp=datetime.now(timezone.utc).timestamp(),
+                    report_json=json.dumps(
+                        {
+                            "场景": "探险",
+                            "场次": battle_index,
+                            "地点": location.location_name,
+                            "参与用户": list(participants),
+                            "胜方": result.winner_side or "平局",
+                            "行动数": result.actions,
+                            "事件数": len(result.events),
+                            "战报": materialize(result.report),
+                            "完成时间": finished_at,
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+                battle_report_ids.append(report_id)
 
         battle_count = len(battle_values)
         ends_at = started_at + timedelta(
@@ -654,6 +688,7 @@ class ExplorationService:
             "结束时间": ends_at.isoformat(),
             "种子": seed,
             "战败敌人": defeated_total,
+            "战报编号": list(battle_report_ids),
             "用户结果": normalized_results,
             "首战阵法": [
                 {
@@ -831,6 +866,7 @@ class ExplorationService:
             "战败敌人": session["战败敌人"],
             "参与用户": list(participants),
             "用户结果": summaries,
+            "战报编号": [str(value) for value in (session.get("战报编号") or ())],
             "结算时间": settled_at.isoformat(),
         }
         plan = SettlementTransactionPlan(
@@ -980,6 +1016,9 @@ class ExplorationService:
             "战败敌人": defeated,
             "参与用户": list(participants),
             "用户结果": [materialize(value) for value in summaries],
+            "战报编号": [
+                str(value) for value in (session.get("战报编号") or ())[:unlocked]
+            ],
             "结算时间": settled_at.isoformat(),
             "提前结束": True,
         }
@@ -1219,6 +1258,16 @@ class ExplorationService:
             # 跑满的那条路没写总场数（场数就是总场数），只有提前结束才两者不同。
             total_battles=_nonnegative_int(
                 value.get("总场数", value.get("场数")), "结算.总场数"
+            ),
+            battle_report_ids=(
+                ()
+                if value.get("战报编号") is None
+                else tuple(
+                    _text(raw, "结算.战报编号[]")
+                    for raw in _sequence(
+                        value.get("战报编号"), "结算.战报编号", allow_empty=True
+                    )
+                )
             ),
         )
 

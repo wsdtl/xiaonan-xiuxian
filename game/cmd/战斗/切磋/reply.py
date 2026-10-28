@@ -9,7 +9,7 @@ from typing import Sequence
 
 from game.features.qiecuo import DuelChallenge, DuelFeature, DuelResult
 from launch.paths import public_url
-from message import DocumentMessage, M
+from message import Action, DocumentMessage, M
 
 from ...presentation import natural_deadline, sentence
 
@@ -30,13 +30,19 @@ def challenge(feature: DuelFeature, value: DuelChallenge, target_name: str) -> D
         )
         .field("有效时间", natural_deadline(value.expires_at))
         .small(feature.text("发起", "说明", {"目标": target_name}))
+        .actions(
+            (
+                Action("duel.accept", "接受切磋", "接受切磋"),
+                Action(
+                    "duel.reject",
+                    "拒绝切磋",
+                    "拒绝切磋",
+                    style="secondary",
+                ),
+            )
+        )
         .build()
     )
-
-
-def report_id(value: DuelResult) -> str:
-    """切磋战报的编号：战报页面按 `切磋:<发起者>:<编号>` 取画面。"""
-    return f"切磋:{value.owner}:{value.challenge_id}"
 
 
 def report_url(value: DuelResult) -> str:
@@ -92,4 +98,4 @@ def error(
     )
 
 
-__all__ = ["challenge", "error", "rejected", "report_id", "report_url", "result"]
+__all__ = ["challenge", "error", "rejected", "report_url", "result"]

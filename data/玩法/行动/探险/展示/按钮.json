@@ -24,5 +24,23 @@
     "页面": "格式",
     "样式": "primary",
     "行为": "callback"
+  },
+  {
+    "编号": "exploration.settle_start",
+    "名称": "结束探险",
+    "命令": "结束探险",
+    "页面": "开始",
+    "样式": "secondary",
+    "行为": "callback",
+    "条件": ""
+  },
+  {
+    "编号": "exploration.settle_early",
+    "名称": "结束探险",
+    "命令": "结束探险",
+    "页面": "进度",
+    "样式": "secondary",
+    "行为": "callback",
+    "条件": ""
   }
 ]

@@ -599,6 +599,7 @@ def build_game_services(*, data_dir: str | Path | None = None) -> GameServices:
         innate_treasure,
         medicine,
         injury,
+        battle_reports,
     )
     exploration_status = exploration.initialize()
     logger.opt(colors=True).success(
