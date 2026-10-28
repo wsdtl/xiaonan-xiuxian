@@ -37,16 +37,23 @@ async def transfer_cultivation(user_id: str, message: str, message_context: Mess
     try:
         if not mode:
             value = await feature.preview(user_id)
-            await send_game_reply(reply.preview(feature, value))
+            await send_game_reply(
+                reply.preview(feature, value), title="夺元"
+            )
             return
         if mode not in {"护契", "离契"}:
             raise TongquetaiError(feature.copy("错误", "写法"))
         value = await feature.settle(
             TongquetaiRequest(user_id, message_context.request_id, mode)
         )
-        await send_game_reply(reply.settled(feature, value))
+        await send_game_reply(
+            reply.settled(feature, value), title=f"夺元 {mode}"
+        )
     except (TongquetaiError, TongquetaiConflictError) as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(
+            reply.error(feature, str(exc), feature.format_actions()),
+            title="夺元",
+        )
 
 
 __all__ = ["router"]

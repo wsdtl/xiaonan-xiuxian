@@ -28,16 +28,15 @@ from typing import Any
 async def correct_breakthrough(user_id: str, message: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.butian
     try:
+        result = await feature.apply_from_text(
+            user_id, message_context.request_id, message
+        )
         await send_game_reply(
-            reply.result(
-                feature,
-                await feature.apply_from_text(
-                    user_id, message_context.request_id, message
-                ),
-            )
+            reply.result(feature, result),
+            title=f"补天 {result.medicine_name}",
         )
     except (ButianError, ButianConflictError) as exc:
-        await send_game_reply(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)), title="补天")
 
 
 __all__ = ["router"]

@@ -41,12 +41,13 @@ async def yijing(user_id: str, message: str, message_context: MessageContext, ma
         )
         if entry.kind == "pointed" and entry.view is not None:
             await send_game_reply(
-                reply.yijing_pointed(entry.view, entry.content_id)
+                reply.yijing_pointed(entry.view, entry.content_id),
+                title="意境 点阶",
             )
         elif entry.view is not None:
-            await send_game_reply(reply.yijing_view(entry.view))
+            await send_game_reply(reply.yijing_view(entry.view), title="意境")
     except YijingError as exc:
-        await send_game_reply(reply.yijing_refused(str(exc)))
+        await send_game_reply(reply.yijing_refused(str(exc)), title="意境")
 
 
 __all__ = ["router"]

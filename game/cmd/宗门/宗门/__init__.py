@@ -45,25 +45,33 @@ async def sect_command(user_id: str, message: str, message_context: MessageConte
             user_id, message_context.request_id, message
         )
     except SectFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), exc.code))
+        await send_game_reply(reply.error(feature.copy(), exc.code), title="宗门")
         return
     if entry.kind == "format":
         await send_game_reply(
-            reply.format_error(feature.copy(), feature.page_actions("格式"))
+            reply.format_error(feature.copy(), feature.page_actions("格式")),
+            title="宗门",
         )
     elif entry.kind == "page" and entry.page is not None:
+        title = f"宗门 {entry.page.name}" if entry.page.name else "宗门"
         await send_game_reply(
             reply.page(
                 feature.copy(), entry.page, feature.page_actions(entry.page.page)
-            )
+            ),
+            title=title,
         )
     elif entry.kind == "operation" and entry.operation is not None:
+        operation = entry.operation
+        title = f"宗门 {operation.action}"
+        if operation.target_name:
+            title += f" {operation.target_name}"
         await send_game_reply(
             reply.operation(
                 feature.copy(),
-                entry.operation,
-                feature.page_actions(entry.operation.page.page),
-            )
+                operation,
+                feature.page_actions(operation.page.page),
+            ),
+            title=title,
         )
 
 

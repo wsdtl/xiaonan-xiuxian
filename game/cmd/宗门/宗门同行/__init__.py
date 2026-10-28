@@ -41,26 +41,34 @@ async def sect_follow_command(user_id: str, message: str, message_context: Messa
         )
     except SectFollowFeatureError as exc:
         await send_game_reply(
-            reply.error(feature.copy(), exc.code, feature.page_actions("格式"))
+            reply.error(feature.copy(), exc.code, feature.page_actions("格式")),
+            title="宗门同行",
         )
         return
     if entry.kind == "format":
         await send_game_reply(
-            reply.format_error(feature.copy(), feature.page_actions("格式"))
+            reply.format_error(feature.copy(), feature.page_actions("格式")),
+            title="宗门同行",
         )
     elif entry.kind == "page" and entry.page is not None:
         await send_game_reply(
             reply.page(
                 feature.copy(), entry.page, feature.page_actions(entry.page.page)
-            )
+            ),
+            title="宗门同行",
         )
     elif entry.kind == "result" and entry.result is not None:
+        result = entry.result
+        title = f"宗门同行 {result.action}"
+        if result.target_name:
+            title += f" {result.target_name}"
         await send_game_reply(
             reply.operation(
                 feature.copy(),
-                entry.result,
-                feature.page_actions(entry.result.page.page),
-            )
+                result,
+                feature.page_actions(result.page.page),
+            ),
+            title=title,
         )
 
 

@@ -28,13 +28,13 @@ from typing import Any
 async def change_gender(user_id: str, message_context: MessageContext, manager: Any) -> None:
     feature = current_game_services().features.yixing
     try:
+        result = await feature.change(user_id, message_context.request_id)
         await send_game_reply(
-            reply.result(
-                feature, await feature.change(user_id, message_context.request_id)
-            )
+            reply.result(feature, result),
+            title=f"易形 {result.gender_after}",
         )
     except (YixingError, YixingConflictError) as exc:
-        await send_game_reply(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)), title="易形")
 
 
 @GameCommand.command(
@@ -58,14 +58,15 @@ async def reshape_race(
     # 族名不含空格，整段去掉命令词后的文本就是目标种族。
     wanted = " ".join(str(message or "").split())
     try:
+        result = await feature.change(
+            user_id, message_context.request_id, wanted
+        )
         await send_game_reply(
-            reply.fanben_result(
-                feature,
-                await feature.change(user_id, message_context.request_id, wanted),
-            )
+            reply.fanben_result(feature, result),
+            title=f"化形 {result.race_after}",
         )
     except (FanbenError, FanbenConflictError) as exc:
-        await send_game_reply(reply.fanben_error(feature, str(exc)))
+        await send_game_reply(reply.fanben_error(feature, str(exc)), title="化形")
 
 
 __all__ = []

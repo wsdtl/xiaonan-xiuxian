@@ -42,25 +42,34 @@ async def team_command(user_id: str, message: str, message_context: MessageConte
             user_id, message_context.request_id, message
         )
     except TeamFeatureError as exc:
-        await send_game_reply(reply.error(feature.copy(), exc.code))
+        await send_game_reply(
+            reply.error(feature.copy(), exc.code), title="队伍"
+        )
         return
     if entry.kind == "format":
         await send_game_reply(
-            reply.format_error(feature.copy(), feature.page_actions("格式"))
+            reply.format_error(feature.copy(), feature.page_actions("格式")),
+            title="队伍",
         )
     elif entry.kind == "page" and entry.page is not None:
         await send_game_reply(
             reply.page(
                 feature.copy(), entry.page, feature.page_actions(entry.page)
-            )
+            ),
+            title="队伍",
         )
     elif entry.kind == "operation" and entry.operation is not None:
+        operation = entry.operation
+        title = f"队伍 {operation.action}"
+        if operation.target_name:
+            title += f" {operation.target_name}"
         await send_game_reply(
             reply.operation(
                 feature.copy(),
-                entry.operation,
-                feature.page_actions(entry.operation.page),
-            )
+                operation,
+                feature.page_actions(operation.page),
+            ),
+            title=title,
         )
 
 
