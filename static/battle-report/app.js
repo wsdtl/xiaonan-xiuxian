@@ -697,6 +697,8 @@ function flashTarget(id, kind) {
 
 function drawRay(source, target, kind) {
   if (!state.ui || !state.ui.rayLayer) return;
+  // 环境是场地，不是施法者；环境伤害/状态只做目标本地反馈，避免从场地栏顶部拉出“天空射线”。
+  if (source === "environment" || target === "environment") return;
   if (state.rayQueue.length >= 16) return;
   state.rayQueue.push({ source: source, target: target, kind: kind || "damage" });
   pumpRays();
