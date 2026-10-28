@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ...actions import CommandAction, message_actions
-from ...presentation import format_lines
+from ...presentation import format_lines, linked_name_line
 
 from typing import Sequence
 
@@ -19,7 +19,12 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
         .inline_section("状态", M.status("待确认", tone="warning"), icon="game.pin_doc")
         .section(value.location_name, icon="game.pin")
         .line(feature.copy("预览", "登台"))
-        .line(feature.copy("预览", "启阵", {"名称": value.companion_name}))
+        .line(
+            *linked_name_line(
+                feature.copy("预览", "启阵", {"名称": "\u0000"}),
+                value.companion_name,
+            )
+        )
         .row(
             (
                 feature.copy("预览", "道侣"),
@@ -60,7 +65,8 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
     if value.treasure_activation is not None:
         activation = value.treasure_activation
         builder.section("灵宝", icon="game.box").field(
-            activation.name, activation.summary
+            M.command(activation.name, f"查看 {activation.name}"),
+            activation.summary,
         )
     actions = tuple(
         Action(
@@ -81,10 +87,21 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
 
         .inline_section("结果", M.status("完成", tone="positive"), icon="game.success")
         .section(value.location_name, icon="game.pin_doc")
-        .line(feature.copy("结算", "剥离", {"名称": value.companion_name}))
+        .line(
+            *linked_name_line(
+                feature.copy("结算", "剥离", {"名称": "\u0000"}),
+                value.companion_name,
+            )
+        )
         .row(
-            (feature.copy("结算", "人物"), value.character_name),
-            (feature.copy("结算", "道侣"), value.companion_name),
+            (
+                feature.copy("结算", "人物"),
+                M.command(value.character_name, f"查看 {value.character_name}"),
+            ),
+            (
+                feature.copy("结算", "道侣"),
+                M.command(value.companion_name, f"查看 {value.companion_name}"),
+            ),
         )
         .row(
             (
@@ -93,7 +110,12 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
             ),
             (feature.copy("结算", "溢散修为"), M.text(value.discarded, tone="muted")),
         )
-        .line(feature.copy("结算", "重置", {"名称": value.companion_name}))
+        .line(
+            *linked_name_line(
+                feature.copy("结算", "重置", {"名称": "\u0000"}),
+                value.companion_name,
+            )
+        )
     )
     if value.replayed:
         builder.line(
@@ -103,7 +125,10 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
         builder.line(
             M.status("道契保留", tone="positive"), " ", feature.copy("结算", "护契")
         ).small(feature.copy("结算", "护契回应", {"名称": value.companion_name})).field(
-            "消耗", f"{value.medicine_grade_name}{value.medicine_name} × 1"
+            "消耗",
+            M.text(f"{value.medicine_grade_name}")
+            + (M.command(value.medicine_name, f"查看 {value.medicine_name}"),)
+            + M.text(" × 1"),
         )
     else:
         builder.line(
@@ -117,7 +142,8 @@ def settled(feature: TongquetaiFeature, value: TongquetaiSettlement) -> Document
     if value.treasure_activation is not None:
         activation = value.treasure_activation
         builder.section("灵宝", icon="game.box").field(
-            activation.name, activation.summary
+            M.command(activation.name, f"查看 {activation.name}"),
+            activation.summary,
         )
     return builder.build()
 

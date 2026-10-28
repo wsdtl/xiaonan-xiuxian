@@ -15,6 +15,8 @@ from game.features.xiantian_lingbao import (
 )
 from message import DocumentMessage, M
 
+from .presentation import linked_name_line
+
 _USE_KEYS = {
     ("人物", "恢复"): "人物恢复",
     ("道侣", "恢复"): "道侣恢复",
@@ -88,7 +90,12 @@ def treasure(
         .line(
             M.status("执掌完成", tone="positive"),
             " ",
-            feature.copy("执掌成功", {"名称": value.name, "权柄": value.authority}),
+            *linked_name_line(
+                feature.copy(
+                    "执掌成功", {"名称": "\u0000", "权柄": value.authority}
+                ),
+                value.name,
+            ),
         )
         .field(feature.copy("效果"), f"{value.effect.node}：{value.effect.ability}")
         .build()
