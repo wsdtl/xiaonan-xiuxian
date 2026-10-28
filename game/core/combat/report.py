@@ -29,6 +29,8 @@ class RuntimeBattleReportParticipant:
     attributes: Mapping[str, float]
     initial_health: float
     final_health: float
+    initial_soul: float = 0.0
+    final_soul: float = 0.0
     initial_spirit: float = 0.0
     final_spirit: float = 0.0
     initial_shield: float = 0.0
@@ -414,9 +416,12 @@ def _participant_report(
         "resources": resources,
         "initial_resources": {
             "health": _round(participant.initial_health),
+            "soul": _round(participant.initial_soul),
             "spirit": _round(participant.initial_spirit),
             "shield": _round(participant.initial_shield),
         },
+        "initial_soul": _round(participant.initial_soul),
+        "final_soul": _round(participant.final_soul),
         "totals": [
             {"label": "造成伤害", "value": _number_text(damage)},
             {"label": "恢复资源", "value": _number_text(recovery)},

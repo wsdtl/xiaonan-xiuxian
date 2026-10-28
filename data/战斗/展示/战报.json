@@ -30,6 +30,46 @@
       "detail_label",
       "detail_groups",
       "content_id"
+    ],
+    "动画": "game.battle_animation",
+    "动画版本": 1,
+    "动画事件字段": [
+      "t",
+      "seq",
+      "turn",
+      "type"
+    ],
+    "动画单位字段": [
+      "id",
+      "name",
+      "side",
+      "level",
+      "color",
+      "max",
+      "start",
+      "statuses"
+    ],
+    "动画阵法字段": [
+      "id",
+      "side",
+      "name",
+      "grade",
+      "capacity",
+      "start_capacity",
+      "impact",
+      "nodes",
+      "collapsed"
+    ],
+    "动画环境字段": [
+      "id",
+      "name",
+      "scene",
+      "stage",
+      "stage_index",
+      "health_basis",
+      "accumulated_damage",
+      "damage_ratio",
+      "stages"
     ]
   },
   "游戏名称": "晓楠修仙",
@@ -612,7 +652,10 @@
         "检测值",
         "检测单位",
         "检测倍率",
-        "检测难度"
+        "检测难度",
+        "神魂伤害",
+        "伤害前神魂",
+        "伤害后神魂"
       ]
     },
     "默认分类": "action"
@@ -736,5 +779,59 @@
     "默认状态色调": "neutral",
     "默认结果色调": "neutral",
     "默认色调": "phase"
+  },
+  "动画": {
+    "节奏": {
+      "行动": 900,
+      "事件": 220,
+      "多段": 160,
+      "收尾": 800
+    },
+    "技能大类": [
+      {
+        "id": "attack",
+        "label": "单体攻击"
+      },
+      {
+        "id": "aoe",
+        "label": "群体攻击"
+      },
+      {
+        "id": "combo",
+        "label": "连击"
+      },
+      {
+        "id": "drain",
+        "label": "吸取"
+      },
+      {
+        "id": "heal",
+        "label": "治疗"
+      },
+      {
+        "id": "shield",
+        "label": "护盾"
+      },
+      {
+        "id": "buff",
+        "label": "增益"
+      },
+      {
+        "id": "debuff",
+        "label": "减益"
+      },
+      {
+        "id": "control",
+        "label": "控制"
+      },
+      {
+        "id": "item",
+        "label": "丹药"
+      },
+      {
+        "id": "other",
+        "label": "其他"
+      }
+    ]
   }
 }

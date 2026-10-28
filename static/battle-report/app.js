@@ -1,633 +1,637 @@
-import {
-  applyVisual,
-  configureVisuals,
-  renderCompactTimeline,
-  renderDetailedTimeline,
-} from "/static/battle-report/timeline.js";
-import {
-  activateMotion,
-  controlButton,
-  hydrateParticipants,
-  node,
-  renderGauge,
-  renderParticipantRecord,
-  renderStatusGroup,
-  safeToken,
-} from "/static/battle-report/ui.js";
+const root = document.getElementById("reportRoot");
+const initialMode = new URLSearchParams(location.search).get("mode") === "animation" ? "animation" : "text";
+const state = { mode: initialMode, payload: null, playing: false, speed: 1, t: 0, duration: 1, frame: 0, last: 0, cursor: 0, units: new Map(), formations: new Map(), env: null };
+const RESULT = { left: "左方胜", right: "右方胜", draw: "未分胜负" };
+const RES_LABEL = { health: "血气", soul: "神魂", spirit: "精神", shield: "护盾" };
+const TYPE_LABEL = { attack: "单体", aoe: "群攻", combo: "连击", drain: "吸取", heal: "治疗", shield: "护盾", buff: "增益", debuff: "减益", control: "控制", item: "丹药", other: "其他" };
 
-const root = document.querySelector("#reportRoot");
-const announcer = node("p", "visually-hidden", "");
-announcer.setAttribute("aria-live", "polite");
-announcer.setAttribute("aria-atomic", "true");
-document.body.append(announcer);
-
-const state = {
-  report: null,
-  segmentIndex: 0,
-  mode: "",
-  filter: "",
-  snapshot: "",
-  participantExpanded: false,
-  segments: new Map(),
-  events: new Map(),
-  participants: new Map(),
-  transitions: new Map(),
-};
-
-root.addEventListener("click", (event) => {
-  void handleControlClick(event);
-});
-root.addEventListener("change", (event) => {
-  void handleControlChange(event);
-});
-
-main().catch((error) => {
-  // 堆栈要留给控制台：只显示 message 的话，"哪一步、哪个人"就查不出来了。
-  console.error(error instanceof Error ? (error.stack || error.message) : String(error));
-  renderError(error instanceof Error ? error.message : String(error));
-});
-
-async function main() {
-  const report = await loadReport();
-  if (report.schema !== "game.battle_report.presentation" || report.version !== 6) {
-    renderUnsupportedReport(report);
-    return;
-  }
-  state.report = report;
-  configureVisuals(report.palette, report.actors);
-  state.mode = report.ui.defaults.mode;
-  state.filter = report.ui.defaults.filter;
-  state.snapshot = report.ui.defaults.snapshot;
-  // 首屏只给片段表，片段内容按需向服务端要（每次现取，见 loadEndpoint）。
-  if (report.detail.segments.length) {
-    state.segmentIndex = report.detail.segments[0].index;
-    await ensureSegment(state.segmentIndex);
-  }
-  document.title = report.document_title;
-  renderReport();
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
-
-async function loadReport() {
-  const path = reportBasePath();
-  if (!path) {
-    throw new Error("分享地址无效。");
-  }
-  return fetchJson(`${path}/data`);
+function num(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0";
+  const rounded = Math.round(n * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
+function sec(value) { return (Number(value || 0) / 1000).toFixed(1) + "s"; }
+function ratio(value) {
+  const n = Number(value) || 0;
+  return Math.max(0, Math.min(100, n <= 1 ? n * 100 : n));
+}
+function unitById(id) { return state.payload.units.find(function (u) { return u.id === id; }); }
+function formationById(id) { return state.payload.formations.find(function (f) { return f.id === id; }); }
+function unitName(id) {
+  const u = unitById(id);
+  return u ? u.name : id;
+}
+function formationName(id) {
+  const f = formationById(id);
+  return f ? f.name : id;
+}
+function targetName(id) {
+  if (id === "environment") return "环境";
+  if (id && id.indexOf("formation:") === 0) return formationName(id);
+  return unitName(id);
+}
+function resourceLabel(key) { return RES_LABEL[key] || key; }
 
-async function handleControlClick(event) {
-  const button = event.target.closest("button[data-action]");
-  if (!button || !root.contains(button) || !state.report) {
-    return;
-  }
-  const action = button.dataset.action;
-  const value = button.dataset.value;
+async function boot() {
   try {
-    if (action === "mode" && optionExists(state.report.ui.modes, value)) {
-      if (state.mode === value) {
-        return;
-      }
-      if (value === "detail") {
-        announce(state.report.ui.text.loading_events);
-        await ensureEvents(state.segmentIndex);
-      }
-      state.mode = value;
-      renderReport();
-      focusControl("mode", value);
-      return;
+    const base = location.pathname.replace(/\/+$/, "");
+    const response = await fetch(base + "/data?view=animation", { cache: "no-store", headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const payload = await response.json();
+    if (!payload || payload.schema !== "game.battle_animation" || payload.version !== 1) {
+      throw new Error("战报数据版本不匹配");
     }
-    if (action === "segment") {
-      await selectSegment(Number(value));
-      return;
+    state.payload = payload;
+    state.duration = Math.max(1000, Number(payload.battle.duration) || 1000);
+    renderShell();
+    if (new URLSearchParams(location.search).get("play") === "1") {
+      setTimeout(function () { if (!state.playing) playLoop(); }, 120);
     }
-    if (action === "segment-step") {
-      await selectSegment(state.segmentIndex + Number(value));
-      return;
-    }
-    if (action === "snapshot" && optionExists(state.report.ui.snapshots, value)) {
-      if (state.snapshot === value) {
-        return;
-      }
-      state.snapshot = value;
-      if (state.participantExpanded) {
-        announce(state.report.ui.text.loading_participants);
-        await ensureParticipants(state.segmentIndex, state.snapshot);
-      }
-      renderReport();
-      focusControl("snapshot", value);
-      return;
-    }
-    if (action === "participant-disclosure") {
-      state.participantExpanded = !state.participantExpanded;
-      if (state.participantExpanded) {
-        renderReport();
-        announce(state.report.ui.text.loading_participants);
-        await ensureParticipants(state.segmentIndex, state.snapshot);
-      }
-      renderReport();
-      focusControl("participant-disclosure", "");
-      return;
-    }
-    if (action === "filter" && optionExists(state.report.ui.filters, value)) {
-      state.filter = value;
-      renderReport();
-      focusControl("filter", value);
+    const seekValue = Number(new URLSearchParams(location.search).get("seek"));
+    if (Number.isFinite(seekValue) && seekValue > 0) {
+      setTimeout(function () { seek(seekValue); }, 180);
     }
   } catch (error) {
-    announce(error instanceof Error ? error.message : String(error));
-    renderInlineError(error);
+    root.textContent = "";
+    const box = el("section", "error-state");
+    box.appendChild(el("p", "", "战报读取失败：" + error.message));
+    box.appendChild(el("p", "", "请返回上一页重试。"));
+    root.appendChild(box);
   }
 }
 
-async function handleControlChange(event) {
-  const select = event.target.closest('select[data-action="segment-select"]');
-  if (!select || !root.contains(select) || !state.report) {
-    return;
-  }
-  try {
-    await selectSegment(Number(select.value));
-  } catch (error) {
-    renderInlineError(error);
-  }
-}
-
-async function selectSegment(index) {
-  const count = state.report.detail.segment_count;
-  if (!Number.isInteger(index) || index < 0 || index >= count || index === state.segmentIndex) {
-    return;
-  }
-  announce(fillTemplate(state.report.ui.text.switching_segment, { 当前片段: index + 1 }));
-  await ensureSegment(index);
-  state.segmentIndex = index;
-  state.filter = state.report.ui.defaults.filter;
-  state.participantExpanded = false;
-  if (state.mode === "detail") {
-    await ensureEvents(index);
-  }
-  renderReport();
-  const heading = root.querySelector(".segment-overview");
-  heading?.setAttribute("tabindex", "-1");
-  heading?.focus({ preventScroll: true });
-  heading?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
-  announce(fillTemplate(state.report.ui.text.switched_segment, { 当前片段: index + 1 }));
-}
-
-// 每一次取数都**现取**：服务端只有一个数据接口（`/data?view=…`），它每次按存档现算。
-// 这里不做「取过一次就不再取」的缓存——战报记录只留很短一段时间，而画面与存档一旦错开，
-// 玩家看到的就是上一版。翻片段、切模式、看前后状态，都会重新要一次。
-async function ensureSegment(index) {
-  const payload = await loadEndpoint("segment", { segmentIndex: index });
-  assertProtocol(payload);
-  hydrateParticipants(payload.segment, state.report.roster);
-  state.segments.set(index, payload.segment);
-  return payload.segment;
-}
-
-async function ensureEvents(index) {
-  const payload = await loadEndpoint("events", { segmentIndex: index });
-  assertProtocol(payload);
-  state.events.set(index, payload);
-  return payload;
-}
-
-async function ensureParticipants(index, snapshot) {
-  const key = `${index}:${snapshot}`;
-  const payload = await loadEndpoint("participants", { segmentIndex: index, snapshot });
-  assertProtocol(payload);
-  hydrateParticipants(payload, state.report.roster);
-  state.participants.set(key, payload);
-  return payload;
-}
-
-async function ensureTransition(index, sequence) {
-  const key = `${index}:${sequence}`;
-  const payload = await loadEndpoint("transition", { segmentIndex: index, sequence });
-  assertProtocol(payload);
-  hydrateParticipants(payload, state.report.roster);
-  state.transitions.set(key, payload);
-  return payload;
-}
-
-// 只有一个数据接口：`/data?view=…`。没有离线模式、没有本地缓存——每次调用都是现算的画面。
-async function loadEndpoint(kind, values) {
-  const base = reportBasePath();
-  const query = new URLSearchParams({ view: kind });
-  if (kind !== "header") {
-    query.set("index", String(values.segmentIndex));
-  }
-  if (kind === "participants") {
-    query.set("snapshot", values.snapshot || "");
-  }
-  if (kind === "transition") {
-    query.set("sequence", String(values.sequence));
-  }
-  return fetchJson(`${base}/data?${query.toString()}`);
-}
-
-function renderReport() {
-  const report = state.report;
-  root.removeAttribute("aria-busy");
-  root.replaceChildren();
-  root.className = "report-shell report-ready";
-  document.body.dataset.mode = state.mode;
-  root.append(renderSummaryHeader(report));
-  if (!report.detail.available) {
-    root.append(
-      node("section", "notice", [
-        node("p", "section-kicker", report.ui.text.archive_kicker),
-        node("h2", "", report.ui.text.archive_title),
-        node("p", "", report.detail.retention_notice),
-      ]),
-    );
-    return;
-  }
-  const segment = currentSegment();
-  if (!segment) {
-    root.append(node("section", "error-state", report.ui.text.segment_load_failed));
-    return;
-  }
-  if (report.detail.segment_count > 1) {
-    root.append(renderSegmentNavigation());
-  }
-  root.append(renderMatchup(segment));
-  root.append(renderViewToolbar());
-  root.append(renderReportBody(segment));
-  requestAnimationFrame(() => activateMotion(root));
-}
-
-function renderSummaryHeader(report) {
-  const text = report.ui.text;
-  const header = node("header", "report-header");
-  header.append(
-    node("div", "brand-line", [
-      node("span", "brand-name", report.game_name),
-      node("span", "brand-divider", text.brand_suffix),
-    ]),
-  );
-  header.append(
-    node("div", "title-row", [
-      node("div", "title-copy", [
-        node("h1", "", report.summary.title),
-        node("p", "report-time", report.time_label),
-      ]),
-      node("div", `result-stamp ${safeToken(report.summary.tone)}`, [
-        node("span", "", text.settlement_label),
-        node("strong", "", report.summary.outcome),
-      ]),
-    ]),
-  );
-  const lines = report.summary.lines || [];
-  if (!lines.length) {
-    return header;
-  }
-  header.append(node("ul", "summary-lines", lines.slice(0, 2).map((line) => node("li", "", line))));
-  if (lines.length > 2) {
-    const more = node("details", "summary-lines-more");
-    more.append(node("summary", "", text.more_summary));
-    more.append(node("ul", "summary-more-list", lines.slice(2).map((line) => node("li", "", line))));
-    header.append(more);
-  }
-  return header;
-}
-
-function renderMatchup(segment) {
-  const participants = segment.final_participants.length
-    ? segment.final_participants
-    : segment.initial_participants;
-  const teams = groupByTeam(participants);
-  if (!teams.length) {
-    return node("div", "matchup segment-overview empty", state.report.ui.text.empty_participants);
-  }
-  const first = renderTeamSummary(teams[0]);
-  if (teams.length === 1) {
-    return node("section", "matchup segment-overview single", first);
-  }
-  const last = renderTeamSummary(teams[teams.length - 1], true);
-  const middleTeams = Math.max(0, teams.length - 2);
-  return node("section", "matchup segment-overview", [
-    first,
-    node("div", "versus", [
-      node("strong", "", state.report.ui.text.versus_label),
-      segment.duration_label ? node("span", "", segment.duration_label) : null,
-      middleTeams
-        ? node("small", "", fillTemplate(state.report.ui.text.additional_team_template, { 数量: middleTeams }))
-        : null,
-    ]),
-    last,
-  ]);
-}
-
-function renderTeamSummary(team, reverse = false) {
-  const names = team.participants.map((item) => item.label).join("、");
-  return node("div", `combat-side${reverse ? " enemy" : ""}`, [
-    node("div", "side-name", [node("span", "", team.label), node("strong", "", names)]),
-  ]);
-}
-
-function renderSegmentNavigation() {
-  const count = state.report.detail.segment_count;
-  const text = state.report.ui.text;
-  const options = Array.from({ length: count }, (_, index) => {
-    const segment = state.segments.get(index);
-    const option = node("option", "", `${index + 1} / ${count} · ${segment?.title || ""}`);
-    option.value = String(index);
-    option.selected = index === state.segmentIndex;
-    return option;
+function renderShell() {
+  root.textContent = "";
+  root.setAttribute("aria-busy", "false");
+  const header = el("header", "report-header");
+  const title = el("div", "report-title");
+  title.appendChild(el("h1", "", state.payload.battle.title || "战斗记录"));
+  const sub = el("p", "report-sub");
+  sub.appendChild(el("span", "", "场景 "));
+  sub.lastChild.appendChild(el("b", "", state.payload.battle.scene || "未知"));
+  sub.appendChild(el("span", "", "结果 "));
+  sub.lastChild.appendChild(el("b", "", RESULT[state.payload.battle.result] || "未分胜负"));
+  sub.appendChild(el("span", "", "行动 "));
+  sub.lastChild.appendChild(el("b", "", String(state.payload.battle.actions || 0)));
+  title.appendChild(sub);
+  header.appendChild(title);
+  const modes = el("div", "mode-switch");
+  [["text", "文本"], ["animation", "动画"]].forEach(function (row) {
+    const button = el("button", "", row[1]);
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(state.mode === row[0]));
+    button.addEventListener("click", function () { setMode(row[0]); });
+    modes.appendChild(button);
   });
-  const select = node("select", "segment-select", options);
-  select.dataset.action = "segment-select";
-  select.setAttribute("aria-label", text.segment_select_label);
-  const compactButtons = count <= 6
-    ? node(
-        "div",
-        "segment-scroll",
-        Array.from({ length: count }, (_, index) =>
-          controlButton(
-            state.segments.get(index)?.title || "",
-            "segment",
-            String(index),
-            index === state.segmentIndex,
-          ),
-        ),
-      )
-    : null;
-  return node("nav", `segment-tabs${count > 6 ? " many-segments" : ""}`, [
-    node("span", "segment-label", [
-      document.createTextNode(text.segment_label),
-      node("small", "segment-count", `${state.segmentIndex + 1} / ${count}`),
-    ]),
-    node("div", "segment-navigation", [
-      segmentStepButton(text.previous_segment_label, -1, state.segmentIndex === 0),
-      node("label", "segment-picker", [select]),
-      compactButtons,
-      segmentStepButton(text.next_segment_label, 1, state.segmentIndex === count - 1),
-    ]),
-  ]);
+  header.appendChild(modes);
+  root.appendChild(header);
+  const main = el("main", "report-main");
+  main.id = "reportMain";
+  root.appendChild(main);
+  renderMode();
 }
 
-function segmentStepButton(label, direction, disabled) {
-  const button = node("button", "segment-step", direction < 0 ? "‹" : "›");
-  button.type = "button";
-  button.dataset.action = "segment-step";
-  button.dataset.value = String(direction);
-  button.disabled = disabled;
-  button.setAttribute("aria-label", label);
-  button.title = label;
-  return button;
-}
-
-function renderViewToolbar() {
-  return node("section", "view-toolbar", [
-    node(
-      "div",
-      "mode-switch",
-      state.report.ui.modes.map((option) =>
-        controlButton(option.label, "mode", option.id, state.mode === option.id),
-      ),
-    ),
-  ]);
-}
-
-function renderReportBody(segment) {
-  return node("section", "report-body view-panel", [
-    renderSummaryPanel(segment),
-    node("section", "timeline-panel", [renderActiveTimeline(segment)]),
-  ]);
-}
-
-function renderActiveTimeline(segment) {
-  const comparison = (sequence) => ensureTransition(state.segmentIndex, sequence);
-  if (state.mode === "detail") {
-    const detail = state.events.get(state.segmentIndex);
-    return detail
-      ? renderDetailedTimeline(detail, state.filter, state.report.ui, comparison)
-      : loadingPanel(state.report.ui.text.events_loading);
-  }
-  return renderCompactTimeline(segment, state.report.ui, comparison);
-}
-
-function renderSummaryPanel(segment) {
-  const selected = state.report.ui.snapshots.find((item) => item.id === state.snapshot);
-  const button = node("button", "participant-disclosure-title", [
-    node("strong", "", state.report.ui.text.participant_panel_title),
-    node("span", "", selected.label),
-  ]);
-  button.type = "button";
-  button.dataset.action = "participant-disclosure";
-  button.setAttribute("aria-controls", "participantDetails");
-  button.setAttribute("aria-expanded", String(state.participantExpanded));
-  const disclosure = node("section", "participant-disclosure", [
-    button,
-    renderRoster(segment),
-  ]);
-  disclosure.dataset.expanded = String(state.participantExpanded);
-  if (state.participantExpanded) {
-    const key = `${state.segmentIndex}:${state.snapshot}`;
-    const loaded = state.participants.get(key);
-    const snapshotSwitch = node(
-      "div",
-      "snapshot-switch",
-      state.report.ui.snapshots.map((option) =>
-        controlButton(option.label, "snapshot", option.id, state.snapshot === option.id),
-      ),
-    );
-    snapshotSwitch.dataset.snapshot = state.snapshot;
-    const body = loaded
-      ? node(
-          "div",
-          "participant-stack",
-          loaded.participants.map((participant) => renderParticipantSummary(participant)),
-        )
-      : loadingPanel(state.report.ui.text.participants_loading);
-    const content = node("div", "participant-disclosure-content", [
-      node("div", "participant-disclosure-inner", [
-        node("div", "panel-heading", [snapshotSwitch]),
-        body,
-      ]),
-    ]);
-    content.id = "participantDetails";
-    disclosure.append(content);
-  }
-  return node("aside", "summary-panel", disclosure);
-}
-
-//: 名录里的在场状态。构造物「第 11 次行动才入场」那种事，光看 0/30 会以为开局就死了。
-function 名录状态(participant, 开局集) {
-  const 血 = (条) => {
-    const g = ((条 || {}).gauges || []).find((项) => 项.label === "血气");
-    return g ? Number(g.current) : null;
-  };
-  const 此刻 = 血(participant);
-  if (此刻 === null || 此刻 > 0) {
-    return "";
-  }
-  const 开局条 = (开局集 || []).find((条) => 条.key === participant.key);
-  const 开局 = 血(开局条);
-  return 开局 !== null && 开局 > 0 ? "已退场" : "未入场";
-}
-
-// 敌人名链到百科：显示中文名、句柄用编号（判据第五条）。没有编号就照旧印名字。
-// 地址用同源绝对地址：战报页在 /battle/ 下，路径必须绝对，否则会被战报路由吞成 HTML。
-function rosterName(participant) {
-  const contentId = String(participant.content_id || "");
-  if (!contentId) {
-    return participant.label;
-  }
-  const link = node("a", "roster-link", participant.label);
-  link.href =
-    window.location.origin + "/baike?q=" + encodeURIComponent(contentId);
-  return link;
-}
-
-function renderRoster(segment) {
-  // 收起状态下的参战者名录：一栏徽章 + 名字 + 血气/精神条。
-  // 面板收起来时只剩下一个标题，左边这一栏会空成一片——名录让它一直有用。
-  const participants = state.snapshot === "before"
-    ? segment.initial_participants
-    : segment.final_participants;
-  const list = node("ul", "roster-list");
-  participants.forEach((participant) => {
-    const badge = node(
-      "span",
-      "roster-index",
-      String(participant.visual?.number || 0).padStart(2, "0"),
-    );
-    applyVisual(badge, participant.visual);
-    const 状态标 = 名录状态(participant, segment.initial_participants);
-    const row = node("li", "roster-item", [
-      node("div", "roster-head", [
-        badge,
-        node("span", "roster-name", rosterName(participant)),
-        状态标 ? node("span", "roster-tag", 状态标) : null,
-      ]),
-      node(
-        "div",
-        "roster-gauges",
-        (participant.gauges || []).map((gauge) => renderGauge(gauge)),
-      ),
-    ]);
-    list.append(row);
+function setMode(mode) {
+  if (state.mode === mode) return;
+  state.mode = mode;
+  const buttons = root.querySelectorAll(".mode-switch button");
+  buttons.forEach(function (button, index) {
+    button.setAttribute("aria-pressed", String((index === 0 ? "text" : "animation") === mode));
   });
-  return node("div", "participant-roster", list);
+  renderMode();
 }
 
-function renderParticipantSummary(participant) {
-  const number = String(participant.visual?.number || 0).padStart(2, "0");
-  const badge = node("span", "participant-index", number);
-  applyVisual(badge, participant.visual);
-  badge.dataset.actorKey = participant.visual?.key || "system";
-  const children = [
-    node("div", "participant-heading", [
-      badge,
-      node("div", "", [node("strong", "", rosterName(participant))]),
-    ]),
-    ...(participant.gauges || []).map((gauge) => renderGauge(gauge)),
-    renderStatusGroup(participant.status_group),
-  ];
-  if (participant.detail_groups?.length) {
-    children.push(renderParticipantRecord(participant));
+function renderMode() {
+  const main = document.getElementById("reportMain");
+  if (!main) return;
+  main.textContent = "";
+  if (state.mode === "text") {
+    state.playing = false;
+    main.appendChild(renderText());
+  } else {
+    main.appendChild(renderAnimation());
   }
-  return node("article", "participant-summary", children);
 }
 
-function currentSegment() {
-  return state.segments.get(state.segmentIndex);
-}
-
-function groupByTeam(participants) {
-  const teams = new Map();
-  participants.forEach((participant) => {
-    const key = participant.team_id;
-    if (!teams.has(key)) {
-      teams.set(key, { id: key, label: participant.team_label, participants: [] });
+function renderText() {
+  const wrap = el("section", "text-report");
+  if (!state.payload.events.length) {
+    wrap.appendChild(el("p", "text-empty", "这场战斗没有留下可读事件。"));
+    return wrap;
+  }
+  let lastTurn = null;
+  state.payload.events.forEach(function (event) {
+    if (event.turn !== lastTurn) {
+      lastTurn = event.turn;
+      wrap.appendChild(el("h2", "text-turn", event.turn ? "第 " + event.turn + " 回合" : "开场"));
     }
-    teams.get(key).participants.push(participant);
+    const line = el("div", "text-line");
+    line.appendChild(el("span", "text-time", sec(event.t)));
+    const body = el("div", "text-body");
+    body.appendChild(formatText(event));
+    line.appendChild(body);
+    wrap.appendChild(line);
   });
-  return [...teams.values()];
+  return wrap;
 }
 
-function optionExists(options, value) {
-  return options.some((item) => item.id === value);
+function formatText(event) {
+  const frag = document.createDocumentFragment();
+  function add(text, cls) {
+    const span = el("span", cls || "", text);
+    frag.appendChild(span);
+  }
+  function bold(text) { add(text, "gold"); }
+  if (event.type === "battle_start") { bold("战斗开始"); return frag; }
+  if (event.type === "battle_end") { bold("战斗结束 · " + (RESULT[event.winner] || "未分胜负")); return frag; }
+  if (event.type === "action") {
+    bold(unitName(event.actor));
+    add(" 施放 ");
+    bold(event.skill || "普通攻击");
+    add("（" + (TYPE_LABEL[event.animation] || "其他") + "）");
+    if (event.targets && event.targets.length) add(" → " + event.targets.map(targetName).join("、"), "muted");
+    return frag;
+  }
+  if (event.type === "damage") {
+    bold(unitName(event.source));
+    add(" 对 ");
+    bold(targetName(event.target));
+    add(" 造成 ");
+    add(num(event.value) + " 点" + resourceLabel(event.resource) + "伤害", event.resource === "soul" ? "soul" : "dmg");
+    if (event.shield_absorbed) add("（护盾吸收 " + num(event.shield_absorbed) + "）", "muted");
+    if (event.crit) add(" 暴击", "dmg");
+    if (event.blocked) add(" 格挡", "muted");
+    return frag;
+  }
+  if (event.type === "heal") {
+    bold(targetName(event.target));
+    add(" 恢复 " + num(event.value) + " 点" + resourceLabel(event.resource), "heal");
+    return frag;
+  }
+  if (event.type === "shield") {
+    bold(targetName(event.target));
+    add(" 获得 " + num(event.value) + " 点护盾", "heal");
+    return frag;
+  }
+  if (event.type === "resource") {
+    bold(targetName(event.target));
+    add(" " + resourceLabel(event.resource) + " 变化 " + num(event.delta), "muted");
+    return frag;
+  }
+  if (event.type === "status_add") {
+    bold(targetName(event.target));
+    add(" 获得状态 ");
+    bold(event.name);
+    add(" ×" + event.stacks, "muted");
+    return frag;
+  }
+  if (event.type === "status_remove") {
+    bold(targetName(event.target));
+    add(" 失去状态 ");
+    bold(event.name);
+    return frag;
+  }
+  if (event.type === "status_stack") {
+    bold(targetName(event.target));
+    add(" 状态 ");
+    bold(event.name);
+    add(" 变为 " + event.stacks + " 层", "muted");
+    return frag;
+  }
+  if (event.type === "miss") {
+    bold(unitName(event.source));
+    add(" 的攻击被 ");
+    bold(targetName(event.target));
+    add(" 闪避", "muted");
+    return frag;
+  }
+  if (event.type === "unit_down") {
+    bold(targetName(event.target));
+    add(" 倒下", "dmg");
+    return frag;
+  }
+  if (event.type === "revive") {
+    bold(targetName(event.target));
+    add(" 复苏", "heal");
+    return frag;
+  }
+  if (event.type === "formation_cast") { bold("阵法「" + formationName(event.formation) + "」展开"); return frag; }
+  if (event.type === "formation_turn") { bold("阵法「" + formationName(event.formation) + "」轮转"); return frag; }
+  if (event.type === "formation_impact") {
+    bold("阵法「" + formationName(event.source) + "」冲击 ");
+    bold(targetName(event.target));
+    add("，承载/伤害 " + num(event.value), "dmg");
+    return frag;
+  }
+  if (event.type === "formation_break") { bold("阵法「" + formationName(event.formation) + "」崩解", "dmg"); return frag; }
+  if (event.type === "environment_charge") {
+    bold("环境承伤 " + num(event.value));
+    add("，累计 " + num(event.accumulated) + "（" + num(ratio(event.ratio)) + "%）", "muted");
+    return frag;
+  }
+  if (event.type === "environment_stage") {
+    bold("环境变化 " + (event.from || "?") + " → " + (event.to || "?"));
+    add("，承伤 " + num(event.damage_ratio) + "%", "muted");
+    return frag;
+  }
+  add(event.type, "muted");
+  return frag;
 }
 
-function assertProtocol(value) {
-  if (value?.schema !== "game.battle_report.presentation" || value?.version !== 6) {
-    throw new Error(state.report.ui.text.unsupported_detail);
+function renderAnimation() {
+  const wrap = el("section", "animation");
+  const stage = el("div", "battle-stage");
+  stage.id = "battleStage";
+  const env = el("div", "env-layer");
+  env.id = "envLayer";
+  const envLine = el("div", "env-line");
+  envLine.appendChild(el("span", "env-name", state.payload.environment ? state.payload.environment.name : "无环境"));
+  const envBar = el("div", "env-bar");
+  envBar.appendChild(el("i"));
+  envLine.appendChild(envBar);
+  envLine.appendChild(el("span", "env-stage", state.payload.environment ? state.payload.environment.stage : ""));
+  env.appendChild(envLine);
+  stage.appendChild(env);
+
+  const grid = el("div", "battle-grid");
+  const left = el("div", "side-column left");
+  const right = el("div", "side-column right");
+  left.appendChild(el("div", "side-title", "左方"));
+  right.appendChild(el("div", "side-title", "右方"));
+  const center = el("div", "center-column");
+  center.appendChild(el("div", "turn-badge", "0"));
+  center.appendChild(el("div", "center-hint", "回合"));
+  grid.appendChild(left);
+  grid.appendChild(center);
+  grid.appendChild(right);
+  stage.appendChild(grid);
+
+  const fx = el("div", "fx-layer");
+  fx.id = "fxLayer";
+  stage.appendChild(fx);
+  const banners = el("div", "banner-layer");
+  banners.id = "bannerLayer";
+  stage.appendChild(banners);
+  wrap.appendChild(stage);
+
+  const controls = el("div", "control-bar");
+  const play = el("button", "", "播放");
+  play.id = "playButton";
+  play.type = "button";
+  const reset = el("button", "", "重播");
+  reset.type = "button";
+  const speedGroup = el("div", "speed-group");
+  [1, 2, 4].forEach(function (value) {
+    const button = el("button", "", value + "x");
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(state.speed === value));
+    button.addEventListener("click", function () {
+      state.speed = value;
+      speedGroup.querySelectorAll("button").forEach(function (item) { item.setAttribute("aria-pressed", String(item.textContent === value + "x")); });
+    });
+    speedGroup.appendChild(button);
+  });
+  const progress = el("div", "progress");
+  progress.id = "progress";
+  const fill = el("i");
+  progress.appendChild(fill);
+  const clock = el("span", "control-time", "0.0 / " + sec(state.duration));
+  controls.appendChild(play);
+  controls.appendChild(reset);
+  controls.appendChild(el("div", "spacer"));
+  controls.appendChild(speedGroup);
+  controls.appendChild(progress);
+  controls.appendChild(clock);
+  wrap.appendChild(controls);
+
+  state.ui = { stage: stage, left: left, right: right, centerBadge: center.querySelector(".turn-badge"), envBar: envBar.querySelector("i"), envStage: envLine.querySelector(".env-stage"), fill: fill, clock: clock, play: play };
+  buildUnits();
+  resetVisual();
+  updateControls();
+  play.addEventListener("click", function () { state.playing ? pause() : playLoop(); });
+  reset.addEventListener("click", function () { resetVisual(); state.t = 0; state.cursor = 0; updateControls(); });
+  progress.addEventListener("click", function (event) {
+    const rect = progress.getBoundingClientRect();
+    const ratioValue = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    seek(ratioValue * state.duration);
+  });
+  return wrap;
+}
+
+function buildUnits() {
+  if (!state.ui) return;
+  state.ui.left.querySelectorAll(".unit-card, .formation-card").forEach(function (n) { n.remove(); });
+  state.ui.right.querySelectorAll(".unit-card, .formation-card").forEach(function (n) { n.remove(); });
+  state.payload.formations.forEach(function (formation) {
+    const card = el("div", "formation-card");
+    card.dataset.formation = formation.id;
+    const head = el("div", "formation-head");
+    head.appendChild(el("span", "formation-name", formation.name));
+    head.appendChild(el("span", "", num(formation.start_capacity)));
+    card.appendChild(head);
+    const bar = el("div", "formation-bar");
+    bar.appendChild(el("i"));
+    card.appendChild(bar);
+    const column = formation.side === "left" ? state.ui.left : state.ui.right;
+    column.appendChild(card);
+  });
+  state.payload.units.forEach(function (unit) {
+    const card = el("div", "unit-card " + unit.side);
+    card.dataset.unit = unit.id;
+    const top = el("div", "unit-top");
+    top.appendChild(el("span", "unit-name", unit.name));
+    top.appendChild(el("span", "unit-level", "Lv." + unit.level));
+    card.appendChild(top);
+    ["health", "soul", "spirit", "shield"].forEach(function (resource) {
+      if (!unit.max[resource] && !unit.start[resource]) return;
+      const row = el("div", "bar-row");
+      row.appendChild(el("span", "bar-label", RES_LABEL[resource]));
+      const bar = el("div", "bar " + resource);
+      bar.appendChild(el("i"));
+      row.appendChild(bar);
+      const value = el("span", "bar-value", "");
+      row.appendChild(value);
+      card.appendChild(row);
+    });
+    const statuses = el("div", "unit-statuses");
+    card.appendChild(statuses);
+    const column = unit.side === "left" ? state.ui.left : state.ui.right;
+    column.appendChild(card);
+  });
+}
+
+function resetVisual() {
+  if (!state.ui) return;
+  state.units.clear();
+  state.formations.clear();
+  state.payload.units.forEach(function (unit) {
+    state.units.set(unit.id, { health: unit.start.health, soul: unit.start.soul, spirit: unit.start.spirit, shield: unit.start.shield, statuses: (unit.statuses || []).map(function (s) { return Object.assign({}, s); }), dead: false });
+  });
+  state.payload.formations.forEach(function (formation) {
+    state.formations.set(formation.id, { capacity: formation.start_capacity, start: formation.start_capacity, broken: false });
+    const card = state.ui.stage.querySelector('[data-formation="' + formation.id + '"]');
+    if (card) {
+      card.classList.remove("broken");
+      const fill = card.querySelector(".formation-bar i");
+      if (fill) fill.style.width = (formation.start_capacity > 0 ? 100 : 0) + "%";
+      const value = card.querySelector(".formation-head span:last-child");
+      if (value) value.textContent = num(formation.start_capacity);
+    }
+  });
+  state.units.forEach(function (value, id) { paintUnit(id); });
+  const env = state.payload.environment;
+  if (state.ui.envBar) state.ui.envBar.style.width = env ? ratio(env.initial_damage_ratio || 0) + "%" : "0%";
+  if (state.ui.envStage) state.ui.envStage.textContent = env ? (env.initial_stage || env.stage) : "";
+  if (state.ui.centerBadge) state.ui.centerBadge.textContent = "0";
+}
+
+function paintUnit(id) {
+  const unit = unitById(id);
+  const value = state.units.get(id);
+  const card = state.ui.stage.querySelector('[data-unit="' + id + '"]');
+  if (!unit || !value || !card) return;
+  card.classList.toggle("dead", value.dead);
+  ["health", "soul", "spirit", "shield"].forEach(function (resource) {
+    const row = card.querySelector(".bar." + resource);
+    if (!row) return;
+    const maximum = Math.max(0, Number(unit.max[resource]) || 0);
+    const current = Math.max(0, Number(value[resource]) || 0);
+    row.querySelector("i").style.width = (maximum > 0 ? Math.min(100, current / maximum * 100) : 0) + "%";
+    const out = card.querySelector(".bar." + resource + " + .bar-value");
+    if (out) out.textContent = num(current) + "/" + num(maximum);
+  });
+  const holder = card.querySelector(".unit-statuses");
+  if (holder) {
+    holder.textContent = "";
+    value.statuses.slice(0, 4).forEach(function (status) {
+      holder.appendChild(el("span", "status-chip " + status.category, status.name + (status.stacks > 1 ? "×" + status.stacks : "")));
+    });
+    if (value.statuses.length > 4) holder.appendChild(el("span", "status-chip", "+" + (value.statuses.length - 4)));
   }
 }
 
-function reportBasePath() {
-  const path = window.location.pathname.replace(/\/$/, "");
-  // 单段（存档战报编号）与两段（切磋：/<发起者>/<切磋编号>，纯 ASCII 更好分享）都认。
-  return /^\/battle\/[^/]+(\/[^/]+)?$/.test(path) ? path : "";
+function setResource(id, resource, value) {
+  const unit = state.units.get(id);
+  if (!unit) return;
+  unit[resource] = Math.max(0, Number(value) || 0);
+  if (resource === "health" && unit.health <= 0) unit.dead = true;
+  paintUnit(id);
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) {
-    const detail = await response.json().catch(() => null);
-    throw new Error(detail?.detail || "内容读取失败。");
+function floatOn(target, text, kind) {
+  if (!state.ui || !target) return;
+  const stageRect = state.ui.stage.getBoundingClientRect();
+  const rect = target.getBoundingClientRect();
+  const node = el("div", "float-text " + (kind || ""));
+  node.textContent = text;
+  node.style.left = (rect.left - stageRect.left + rect.width / 2) + "px";
+  node.style.top = (rect.top - stageRect.top + 18) + "px";
+  state.ui.stage.querySelector(".fx-layer").appendChild(node);
+  setTimeout(function () { node.remove(); }, 1000);
+}
+
+function showBanner(text, kind) {
+  if (!state.ui) return;
+  const layer = state.ui.stage.querySelector(".banner-layer");
+  const node = el("div", "banner " + (kind || ""));
+  node.textContent = text;
+  layer.appendChild(node);
+  setTimeout(function () { node.remove(); }, 1400);
+}
+
+function applyEvent(event, silent) {
+  if (!state.ui) return;
+  if (event.type === "action") {
+    const card = state.ui.stage.querySelector('[data-unit="' + event.actor + '"]');
+    state.ui.stage.querySelectorAll(".unit-card").forEach(function (n) { n.classList.remove("active"); });
+    if (card) card.classList.add("active");
+    if (state.ui.centerBadge) state.ui.centerBadge.textContent = String(event.turn || 0);
+    if (!silent) showBanner(event.skill || "行动", "round");
+    return;
   }
-  return response.json();
+  if (event.type === "damage") {
+    const target = event.target;
+    if (event.shield_absorbed) {
+      const unit = state.units.get(target);
+      if (unit) setResource(target, "shield", unit.shield - Number(event.shield_absorbed || 0));
+    }
+    const unit = state.units.get(target);
+    if (!unit) return;
+    const after = Number.isFinite(Number(event.after)) ? Number(event.after) : unit[event.resource] - Number(event.value || 0);
+    setResource(target, event.resource || "health", after);
+    const card = state.ui.stage.querySelector('[data-unit="' + target + '"]');
+    if (card) {
+      card.classList.remove("hurt");
+      void card.offsetWidth;
+      card.classList.add("hurt");
+    }
+    if (!silent) floatOn(card, "-" + num(event.value), event.crit ? "crit" : (event.resource === "soul" ? "soul" : "dmg"));
+    return;
+  }
+  if (event.type === "heal" || event.type === "shield" || event.type === "revive") {
+    const unit = state.units.get(event.target);
+    if (!unit) return;
+    const resource = event.type === "shield" ? "shield" : (event.resource || "health");
+    const after = Number.isFinite(Number(event.after)) ? Number(event.after) : unit[resource] + Number(event.value || 0);
+    setResource(event.target, resource, after);
+    if (event.type === "revive") {
+      unit.dead = false;
+      if (state.ui) {
+        const card = state.ui.stage.querySelector('[data-unit="' + event.target + '"]');
+        if (card) card.classList.remove("dead");
+      }
+    }
+    const card = state.ui.stage.querySelector('[data-unit="' + event.target + '"]');
+    if (!silent) floatOn(card, "+" + num(event.value), resource === "shield" ? "shield" : "heal");
+    return;
+  }
+  if (event.type === "status_add" || event.type === "status_remove" || event.type === "status_stack") {
+    const unit = state.units.get(event.target);
+    if (!unit) return;
+    if (event.type === "status_add") {
+      const existing = unit.statuses.find(function (s) { return s.name === event.name; });
+      if (existing) existing.stacks = event.stacks;
+      else unit.statuses.push({ name: event.name, category: event.category, stacks: event.stacks, duration: event.duration });
+    } else if (event.type === "status_remove") {
+      unit.statuses = unit.statuses.filter(function (s) { return s.name !== event.name; });
+    } else {
+      const existing = unit.statuses.find(function (s) { return s.name === event.name; });
+      if (existing) existing.stacks = event.stacks;
+    }
+    paintUnit(event.target);
+    if (!silent) {
+      const card = state.ui.stage.querySelector('[data-unit="' + event.target + '"]');
+      floatOn(card, event.name + (event.type === "status_remove" ? " 消散" : ""), "status");
+    }
+    return;
+  }
+  if (event.type === "unit_down") {
+    const unit = state.units.get(event.target);
+    if (unit) unit.dead = true;
+    paintUnit(event.target);
+    const card = state.ui.stage.querySelector('[data-unit="' + event.target + '"]');
+    if (!silent) floatOn(card, "倒下", "down");
+    return;
+  }
+  if (event.type === "formation_cast" || event.type === "formation_turn" || event.type === "formation_break") {
+    const card = state.ui.stage.querySelector('[data-formation="' + event.formation + '"]');
+    if (event.type === "formation_break") {
+      const value = state.formations.get(event.formation);
+      if (value) { value.capacity = 0; value.broken = true; }
+      if (card) {
+        card.classList.add("broken");
+        const fill = card.querySelector(".formation-bar i");
+        if (fill) fill.style.width = "0%";
+        const valueNode = card.querySelector(".formation-head span:last-child");
+        if (valueNode) valueNode.textContent = "0";
+      }
+    } else if (event.type === "formation_cast") {
+      if (card) card.classList.remove("broken");
+    }
+    if (!silent) {
+      const label = event.type === "formation_break" ? "阵破" : (event.type === "formation_turn" ? "阵转" : "阵起");
+      floatOn(card, label, event.type === "formation_break" ? "dmg" : "shield");
+    }
+    return;
+  }
+  if (event.type === "formation_impact") {
+    const value = state.formations.get(event.target);
+    if (value) {
+      value.capacity = Math.max(0, Number(event.after) || value.capacity - Number(event.value || 0));
+      if (value.capacity <= 0) value.broken = true;
+      const card = state.ui.stage.querySelector('[data-formation="' + event.target + '"]');
+      if (card) {
+        const fill = card.querySelector(".formation-bar i");
+        if (fill) fill.style.width = (Math.max(0, value.capacity) / Math.max(1, Number(value.start) || 1) * 100) + "%";
+        const valueNode = card.querySelector(".formation-head span:last-child");
+        if (valueNode) valueNode.textContent = num(value.capacity);
+        if (!silent) floatOn(card, "-" + num(event.value), "dmg");
+      }
+    } else if (event.target) {
+      applyEvent({ type: "damage", target: event.target, resource: event.resource || "health", value: event.value, before: event.before, after: event.after, shield_absorbed: 0 }, silent);
+    }
+    return;
+  }
+  if (event.type === "environment_charge" || event.type === "environment_stage") {
+    const env = state.payload.environment;
+    if (!env) return;
+    if (event.type === "environment_stage") {
+      if (state.ui.envStage) state.ui.envStage.textContent = event.to || env.stage;
+      if (!silent) showBanner("地势 " + (event.to || "变化"), "round");
+    }
+    const current = event.type === "environment_charge" ? Number(event.ratio) : Number(event.damage_ratio);
+    if (state.ui.envBar) state.ui.envBar.style.width = ratio(current) + "%";
+    return;
+  }
+  if (event.type === "battle_end") {
+    if (!silent) showBanner("战斗结束 · " + (RESULT[event.winner] || "未分胜负"), "end");
+    pause();
+    return;
+  }
 }
 
-function renderUnsupportedReport(report) {
-  root.removeAttribute("aria-busy");
-  root.replaceChildren(
-    node("section", "error-state", [
-      node("h1", "", "内容协议暂不支持"),
-      node("p", "", `收到协议版本 ${String(report?.version ?? "-")}。`),
-    ]),
-  );
+function processDue() {
+  while (state.cursor < state.payload.events.length) {
+    const event = state.payload.events[state.cursor];
+    if (Number(event.t) > state.t) break;
+    applyEvent(event, false);
+    state.cursor += 1;
+  }
 }
 
-function renderError(message) {
-  root.removeAttribute("aria-busy");
-  root.replaceChildren(
-    node("section", "error-state", [
-      node("h1", "", "内容暂时无法打开"),
-      node("p", "", message),
-    ]),
-  );
+function playLoop() {
+  if (state.playing) return;
+  state.playing = true;
+  state.ui.play.textContent = "暂停";
+  state.last = performance.now();
+  state.frame = requestAnimationFrame(tick);
+}
+function pause() {
+  state.playing = false;
+  if (state.frame) cancelAnimationFrame(state.frame);
+  state.frame = 0;
+  if (state.ui && state.ui.play) state.ui.play.textContent = "播放";
+}
+function tick(now) {
+  if (!state.playing) return;
+  const delta = Math.max(0, now - state.last);
+  state.last = now;
+  state.t += delta * state.speed;
+  if (state.t >= state.duration) state.t = state.duration;
+  processDue();
+  updateControls();
+  if (state.t >= state.duration) {
+    pause();
+    return;
+  }
+  state.frame = requestAnimationFrame(tick);
+}
+function seek(t) {
+  pause();
+  state.t = Math.max(0, Math.min(state.duration, t));
+  resetVisual();
+  state.cursor = 0;
+  const target = state.t;
+  state.t = 0;
+  while (state.cursor < state.payload.events.length && Number(state.payload.events[state.cursor].t) <= target) {
+    applyEvent(state.payload.events[state.cursor], true);
+    state.cursor += 1;
+  }
+  state.t = target;
+  updateControls();
+}
+function updateControls() {
+  if (!state.ui) return;
+  const percent = state.duration > 0 ? state.t / state.duration * 100 : 0;
+  state.ui.fill.style.width = Math.max(0, Math.min(100, percent)) + "%";
+  state.ui.clock.textContent = sec(state.t) + " / " + sec(state.duration);
 }
 
-function renderInlineError(error) {
-  const current = root.querySelector(".inline-page-error");
-  current?.remove();
-  const message = error instanceof Error ? error.message : String(error);
-  const notice = node("p", "inline-page-error", message);
-  notice.setAttribute("role", "alert");
-  root.querySelector(".view-toolbar")?.after(notice);
-}
-
-function loadingPanel(message) {
-  const status = node("p", "inline-status", message);
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  return status;
-}
-
-function announce(message) {
-  announcer.textContent = "";
-  requestAnimationFrame(() => {
-    announcer.textContent = message;
-  });
-}
-
-function focusControl(action, value) {
-  requestAnimationFrame(() => {
-    const suffix = value ? `[data-value="${CSS.escape(value)}"]` : "";
-    root.querySelector(`[data-action="${CSS.escape(action)}"]${suffix}`)?.focus();
-  });
-}
-
-function fillTemplate(template, values) {
-  return Object.entries(values).reduce(
-    (text, [key, value]) => text.replaceAll(`{${key}}`, String(value)),
-    String(template || ""),
-  );
-}
-
-function reducedMotion() {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
+boot();

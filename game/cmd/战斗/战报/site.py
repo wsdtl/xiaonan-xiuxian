@@ -4,11 +4,9 @@
 同前缀的 `/battle/<编号>/data` 取——**页面一条、数据一条**，用 `view` 参数说明要哪一份：
 
     /battle/<编号>                     页面（HTML）
-    /battle/<编号>/data                首屏：概览、演员表、花名册、片段表
-    /battle/<编号>/data?view=segment&index=0
-    /battle/<编号>/data?view=events&index=0
-    /battle/<编号>/data?view=participants&index=0&snapshot=after
-    /battle/<编号>/data?view=transition&index=0&sequence=3
+    /battle/<编号>/data?view=animation 整场：单位、阵法、环境、事件
+
+文本与动画共用这一份 JSON；页面不再按片段/行动逐个取数。
 
 编号可以写成**两段纯 ASCII**（`/battle/<发起者>/<切磋编号>`）：`切磋:<发起者>:<编号>` 里的
 中文与冒号会被聊天客户端自行改写（实测纯 ASCII 的 `/game-console` 才随手能开），所以分享

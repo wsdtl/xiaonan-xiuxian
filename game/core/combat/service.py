@@ -495,6 +495,16 @@ class CombatService:
                         )
                     ),
                     final_health=value.health,
+                    initial_soul=(
+                        value.soul
+                        if original is None
+                        else float(
+                            original.soul
+                            if original.soul is not None
+                            else attributes.get("神魂上限", value.soul)
+                        )
+                    ),
+                    final_soul=value.soul,
                     initial_spirit=(
                         value.spirit
                         if original is None

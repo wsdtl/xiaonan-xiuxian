@@ -191,6 +191,8 @@ class BattleReportFeature:
             return (parts.get("events") or {}).get(str(index))
         if part == "participants":
             return (parts.get("participants") or {}).get(f"{index}:{snapshot}")
+        if part == "animation":
+            return parts.get("animation")
         return (parts.get("transitions") or {}).get(f"{index}:{sequence}")
 
     async def _stored(self, key: str) -> tuple[Mapping[str, object], int] | None:

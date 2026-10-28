@@ -11,7 +11,7 @@ from typing import Any
 from .catalog import BattleReportCatalog
 
 #: 一次调用可以只要哪一份画面。与页面 `loadEndpoint` 的 `view` 参数一一对应。
-VIEW_PARTS = ("header", "segment", "events", "participants", "transition")
+VIEW_PARTS = ("header", "segment", "events", "participants", "transition", "animation")
 
 
 def build_battle_report_presentation(
@@ -60,12 +60,17 @@ def build_battle_report_view(
 
     if only is not None and only not in VIEW_PARTS:
         raise ValueError(f"战报视图不认识这一份：{only}")
+    if only == "animation":
+        from .animation import build_animation_view
+
+        return {}, {"animation": build_animation_view(report, catalog)}
     want = VIEW_PARTS if only is None else (only,)
     want_header = "header" in want
     want_segment = "segment" in want
     want_events = "events" in want
     want_participants = "participants" in want
     want_transition = "transition" in want
+    want_animation = "animation" in want
     want_detail = want_segment or want_events
 
     if report.get("schema") != catalog.report_schema:
@@ -356,11 +361,19 @@ def build_battle_report_view(
         }
     if want_transition:
         parts["transitions"] = transitions
+    if want_animation:
+        from .animation import build_animation_view
+
+        parts["animation"] = build_animation_view(report, catalog)
     # 每一份明细载荷都要**自带**演员表与调色板：协议写明两张表在战报头与明细包里各有一份
     # （各自的载荷自成一体）。少了它们，页面渲染参战者与时间线时查不到角色颜色，
     # `applyVisual` 会当场抛「战报缺少后端角色颜色。」，整页被顶层兜成一句「内容暂时无法打开」。
     for group in parts.values():
+        if not isinstance(group, dict):
+            continue
         for payload in group.values():
+            if not isinstance(payload, dict):
+                continue
             payload.setdefault("actors", dict(actors))
             payload.setdefault("palette", deepcopy(palette))
             payload.setdefault("roster", deepcopy(roster))

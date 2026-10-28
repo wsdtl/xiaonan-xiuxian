@@ -110,6 +110,18 @@ class BattleReportCatalog:
         return int(self.protocol["展示版本"])
 
     @property
+    def animation_schema(self) -> str:
+        return str(self.protocol["动画"])
+
+    @property
+    def animation_version(self) -> int:
+        return int(self.protocol["动画版本"])
+
+    @property
+    def animation_config(self) -> Mapping[str, Any]:
+        return self._derived("animation", lambda: _mapping(self.raw, "动画"))
+
+    @property
     def game_name(self) -> str:
         return str(self.raw["游戏名称"])
 

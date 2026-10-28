@@ -162,13 +162,15 @@ import json
 from game.app import build_game_services
 from game.core.combat.contracts import (
     CombatBuildRef,
+    CombatFieldSpec,
+    CombatFormationSpec,
     CombatReportSpec,
     CombatRequest,
     CombatantSpec,
 )
 
 ATTRS = {
-    "血气上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
+    "血气上限": 1200, "神魂上限": 1200, "精神上限": 400, "攻击": 150, "防御": 60, "速度": 110,
     "命中率": 100, "闪避率": 5, "暴击率": 20, "抗暴率": 5, "暴击伤害": 150,
     "格挡率": 10, "破格率": 5, "格挡减伤": 30, "伤害加成": 100, "伤害减免": 0,
 }
@@ -234,6 +236,7 @@ def test_views_match_the_whole_payload() -> None:
         assert asyncio.run(
             feature.view("war-1", part="transition", index=first, sequence=0)
         ) == parts["transitions"][f"{first}:0"]
+        assert asyncio.run(feature.view("war-1", part="animation")) == parts.get("animation")
         assert asyncio.run(feature.view("war-404")) is None
         assert asyncio.run(feature.view("war-1", part="segment", index=99)) is None
     finally:
@@ -262,6 +265,65 @@ def _report(services) -> dict:
         )
     )
     return result.report
+
+
+def test_animation_payload_is_single_screen_contract() -> None:
+    services = build_game_services()
+    try:
+        report = _report(services)
+        header, parts = services.core.combat.build_report_view(report, only="animation")
+        assert header == {}
+        payload = parts["animation"]
+        assert payload["schema"] == "game.battle_animation"
+        assert payload["version"] == 1
+        assert len(payload["units"]) == 2
+        assert {unit["side"] for unit in payload["units"]} == {"left", "right"}
+        assert all(unit["max"]["soul"] > 0 for unit in payload["units"])
+        assert payload["events"][0]["type"] == "battle_start"
+        assert [event["seq"] for event in payload["events"]] == list(range(len(payload["events"])))
+        assert all(event["t"] >= 0 for event in payload["events"])
+        assert any(event["type"] == "action" for event in payload["events"])
+        assert any(event["type"] == "damage" for event in payload["events"])
+        assert payload["battle"]["duration"] >= max(event["t"] for event in payload["events"])
+    finally:
+        services.core.database.close()
+
+
+def test_animation_payload_carries_formations_environment_and_soul() -> None:
+    services = build_game_services()
+    try:
+        def side(pid: str) -> CombatantSpec:
+            return CombatantSpec(
+                id=pid, name=pid, attributes=dict(ATTRS),
+                build=(CombatBuildRef("真意", CARD, instance_id=f"{pid}:{CARD}", born_order=0),),
+            )
+
+        result = asyncio.run(
+            services.core.combat.execute(
+                CombatRequest(
+                    left_team=(side("L"),), right_team=(side("R"),),
+                    left_formations=(CombatFormationSpec(formation_id="530001", grade="黄品"),),
+                    right_formations=(CombatFormationSpec(formation_id="530002", grade="黄品"),),
+                    field=CombatFieldSpec(
+                        environment_id="610001", scene="溪谷", origin="地表",
+                        xy=(10, 20), altitude=100, terrain="溪谷",
+                    ),
+                    seed=20261028, action_limit=30,
+                    report=CombatReportSpec(scene="切磋", generated_at="2026-01-01T00:00:00+08:00"),
+                )
+            )
+        )
+        _header, parts = services.core.combat.build_report_view(result.report, only="animation")
+        payload = parts["animation"]
+        assert payload["environment"]["id"] == "environment:610001"
+        assert payload["environment"]["health_basis"] > 0
+        assert len(payload["formations"]) == 2
+        assert {formation["side"] for formation in payload["formations"]} == {"left", "right"}
+        kinds = {event["type"] for event in payload["events"]}
+        assert {"formation_cast", "formation_turn", "formation_impact", "environment_charge"} <= kinds
+        assert all("initial_soul" in participant for participant in result.report["participants"])
+    finally:
+        services.core.database.close()
 
 
 def test_the_page_has_one_data_interface() -> None:
