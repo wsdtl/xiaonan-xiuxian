@@ -268,6 +268,14 @@ function renderAnimation() {
   envBar.appendChild(el("i"));
   envLine.appendChild(envBar);
   envLine.appendChild(el("span", "env-stage", state.payload.environment ? state.payload.environment.stage : ""));
+  const legend = el("div", "vital-legend");
+  [["health", "血"], ["soul", "魂"], ["spirit", "神"], ["shield", "盾"]].forEach(function (item) {
+    const row = el("span", "vital-legend-item");
+    row.appendChild(el("i", "vital-legend-dot " + item[0]));
+    row.appendChild(el("span", "", item[1]));
+    legend.appendChild(row);
+  });
+  envLine.appendChild(legend);
   env.appendChild(envLine);
   stage.appendChild(env);
 
@@ -386,7 +394,7 @@ function buildUnits() {
     counts.forEach(function (count) {
       const row = el("div", "unit-row " + side);
       sideGroups.slice(cursor, cursor + count).forEach(function (group) {
-        const slot = el("div", "unit-slot");
+        const slot = el("div", "unit-slot " + group.side);
         const pair = el("div", "unit-pair");
         group.units.sort(function (a, b) {
           return (a.kind === "player" ? 0 : 1) - (b.kind === "player" ? 0 : 1);
@@ -413,26 +421,35 @@ function splitRows(count) {
 }
 
 function makeFormationNode(formation) {
-  const formationNode = el("div", "unit-formation");
-  formationNode.dataset.formation = formation.id;
-  formationNode.appendChild(el("span", "unit-formation-name", formation.name));
+  const flag = el("div", "unit-flag");
+  flag.dataset.formation = formation.id;
+  flag.title = formation.name + "｜承载 " + num(formation.start_capacity);
+  flag.appendChild(el("i", "flag-pole"));
+  flag.appendChild(el("i", "flag-cloth"));
   const formationBar = el("div", "formation-bar");
   formationBar.appendChild(el("i"));
-  formationNode.appendChild(formationBar);
-  return formationNode;
+  flag.appendChild(formationBar);
+  return flag;
+}
+
+function setFormationFill(fill, percent) {
+  if (!fill) return;
+  if (fill.closest(".unit-flag")) fill.style.height = Math.max(0, Math.min(100, percent)) + "%";
+  else fill.style.width = Math.max(0, Math.min(100, percent)) + "%";
 }
 
 function makeUnitCard(unit) {
   const card = el("div", "unit-card " + unit.side);
   card.dataset.unit = unit.id;
-  const bars = el("div", "unit-bars");
+  const main = el("div", "unit-main");
+  const bars = el("div", "unit-vitals");
   ["health", "soul", "spirit", "shield"].forEach(function (resource) {
-    const bar = el("div", "bar " + resource);
+    const bar = el("div", "bar vbar " + resource);
     bar.dataset.resource = resource;
     bar.appendChild(el("i"));
     bars.appendChild(bar);
   });
-  card.appendChild(bars);
+  main.appendChild(bars);
   const avatar = el("div", "avatar " + (unit.kind || "other"));
   avatar.appendChild(el("span", "avatar-fallback", unit.avatar_text || "?"));
   if (unit.kind === "player" && unit.qq) {
@@ -447,7 +464,8 @@ function makeUnitCard(unit) {
     image.src = "https://q.qlogo.cn/g?b=qq&nk=" + encodeURIComponent(unit.qq) + "&s=100";
     avatar.appendChild(image);
   }
-  card.appendChild(avatar);
+  main.appendChild(avatar);
+  card.appendChild(main);
   card.appendChild(el("div", "unit-name", unit.name));
   card.appendChild(el("div", "unit-cast", ""));
   const statuses = el("div", "unit-statuses");
@@ -471,7 +489,7 @@ function resetVisual() {
     if (card) {
       card.classList.remove("broken");
       const fill = card.querySelector(".formation-bar i");
-      if (fill) fill.style.width = (formation.start_capacity > 0 ? 100 : 0) + "%";
+      if (fill) setFormationFill(fill, formation.start_capacity > 0 ? 100 : 0);
       const value = card.querySelector(".formation-head span:last-child");
       if (value) value.textContent = num(formation.start_capacity);
     }
@@ -494,7 +512,7 @@ function paintUnit(id) {
     if (!row) return;
     const maximum = Math.max(0, Number(unit.max[resource]) || 0);
     const current = Math.max(0, Number(value[resource]) || 0);
-    row.querySelector("i").style.width = (maximum > 0 ? Math.min(100, current / maximum * 100) : 0) + "%";
+    row.querySelector("i").style.height = (maximum > 0 ? Math.min(100, current / maximum * 100) : 0) + "%";
     row.title = RES_LABEL[resource] + " " + num(current) + "/" + num(maximum);
   });
   const holder = card.querySelector(".unit-statuses");
@@ -680,7 +698,7 @@ function applyEvent(event, silent) {
       if (card) {
         card.classList.add("broken");
         const fill = card.querySelector(".formation-bar i");
-        if (fill) fill.style.width = "0%";
+        if (fill) setFormationFill(fill, 0);
         const valueNode = card.querySelector(".formation-head span:last-child");
         if (valueNode) valueNode.textContent = "0";
       }
@@ -702,7 +720,7 @@ function applyEvent(event, silent) {
       const card = state.ui.stage.querySelector('[data-formation="' + event.target + '"]');
       if (card) {
         const fill = card.querySelector(".formation-bar i");
-        if (fill) fill.style.width = (Math.max(0, value.capacity) / Math.max(1, Number(value.start) || 1) * 100) + "%";
+        if (fill) setFormationFill(fill, Math.max(0, value.capacity) / Math.max(1, Number(value.start) || 1) * 100);
         const valueNode = card.querySelector(".formation-head span:last-child");
         if (valueNode) valueNode.textContent = num(value.capacity);
         if (!silent) floatOn(card, "-" + num(event.value), "dmg");

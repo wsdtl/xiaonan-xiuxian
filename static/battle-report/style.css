@@ -73,3 +73,29 @@
 .avatar{position:relative;overflow:hidden}.avatar-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;z-index:1}.avatar.has-image .avatar-fallback{visibility:hidden}
 .center-column{gap:4px}.turn-badge{width:38px;height:38px;font-size:16px}
 @media(max-width:720px){.unit-grid{gap:3px}.unit-card{width:40px;flex:0 0 40px}.unit-bars,.unit-bars .bar{width:30px}.avatar{width:28px;height:28px;font-size:13px}.unit-card .unit-name{max-width:36px;font-size:8px}}
+:root{--bg:#08070d;--panel:#171222;--panel-2:#21192f;--line:#3b2f50;--text:#f4efff;--muted:#c9bddb;--gold:#ffd479;--ally:#6db8ff;--enemy:#ff7b88;--hp:#ff5f75;--soul:#c89bff;--mp:#78b6ff;--shield:#f3d47a;--ok:#72e0ad}
+body{background:radial-gradient(ellipse at 50% 0%,rgba(110,80,160,.30),transparent 58%),linear-gradient(180deg,#12101a,#07060b 78%);color:var(--text)}
+.report-sub{font-size:14px;color:#cfc3df}.report-sub b{color:#fff}
+.text-body{font-size:14px;color:#f1eafa}.text-time{color:#b3a5c7;font-size:12px}.text-turn{font-size:16px}.text-body .muted{color:#c9bddb}
+.side-title{font-size:12px;color:#cfc3df}.unit-name{color:#f1eafa!important;font-size:12px!important;font-weight:600!important}
+.control-bar button{font-size:13px;color:#e7dcf5;border-color:#4a3b63}.control-time{font-size:13px;color:#d4c6e4}
+.unit-slot{flex-direction:row;gap:4px}.unit-slot.right{flex-direction:row-reverse}
+.unit-main{display:flex;align-items:center;gap:2px;height:46px}
+.unit-vitals{display:flex;align-items:flex-end;gap:2px;height:46px;width:auto}
+.unit-vitals .bar{position:relative;width:4px;height:100%;border-radius:3px;background:#251d34;overflow:hidden}
+.unit-vitals .bar i{position:absolute;left:0;bottom:0;width:100%;height:100%;transition:height .28s ease}
+.unit-vitals .bar.health i{background:linear-gradient(0deg,#c73552,#ff6b80)}
+.unit-vitals .bar.soul i{background:linear-gradient(0deg,#8c5bd6,#d2a9ff)}
+.unit-vitals .bar.spirit i{background:linear-gradient(0deg,#3f7fc7,#83c1ff)}
+.unit-vitals .bar.shield i{background:linear-gradient(0deg,#b89b45,#ffe29a)}
+.unit-card{width:68px;flex:0 0 68px}.avatar{width:46px;height:46px;font-size:19px}
+.unit-flag{position:relative;width:18px;height:46px;flex:0 0 18px;margin-top:0}
+.unit-flag .flag-pole{position:absolute;left:4px;top:0;bottom:0;width:2px;border-radius:2px;background:#9a87b5}
+.unit-flag .flag-cloth{position:absolute;left:6px;top:1px;width:11px;height:14px;background:linear-gradient(135deg,#7dd3ff,#3d78b8);clip-path:polygon(0 0,100% 14%,100% 86%,0 100%);filter:drop-shadow(0 0 4px rgba(109,184,255,.35))}
+.unit-slot.right .unit-flag .flag-cloth{left:1px;transform:scaleX(-1);background:linear-gradient(135deg,#ff9aa5,#c44357);filter:drop-shadow(0 0 4px rgba(255,123,136,.35))}
+.unit-flag .formation-bar{position:absolute;left:0;bottom:0;width:4px;height:31px;border-radius:3px;background:#251d34;overflow:hidden}
+.unit-flag .formation-bar i{position:absolute;left:0;bottom:0;width:100%;height:100%;background:linear-gradient(0deg,#6a4c9c,#c5a4ff);transition:height .3s ease}
+.unit-flag.broken{opacity:.35}.unit-flag.broken .flag-cloth{filter:none}
+.unit-card .unit-cast{font-size:11px;top:-21px;color:#ffe4a3;border-color:rgba(255,212,121,.55);background:rgba(10,8,16,.98)}
+.vital-legend{display:flex;align-items:center;gap:6px;margin-left:10px;font-size:10px;color:#d4c6e4;white-space:nowrap}.vital-legend-item{display:flex;align-items:center;gap:2px}.vital-legend-dot{display:block;width:3px;height:10px;border-radius:2px}.vital-legend-dot.health{background:var(--hp)}.vital-legend-dot.soul{background:var(--soul)}.vital-legend-dot.spirit{background:var(--mp)}.vital-legend-dot.shield{background:var(--shield)}
+@media(max-width:720px){.unit-card{width:54px!important;flex-basis:54px!important}.avatar{width:36px!important;height:36px!important;font-size:15px!important}.unit-main,.unit-vitals{height:36px!important}.unit-vitals .bar{width:3px!important}.unit-flag{height:36px!important;width:14px!important}.unit-flag .formation-bar{height:22px!important}.unit-card .unit-name{max-width:54px!important;font-size:10px!important}}
