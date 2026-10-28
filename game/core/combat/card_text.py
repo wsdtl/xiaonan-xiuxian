@@ -78,8 +78,6 @@ EVENT_PHRASES = {
     "死亡后": "死亡后",
     "击杀后": "击杀后",
     "复活后": "复活后",
-    "战斗对象入场后": "召唤物入场后",
-    "战斗对象退场后": "召唤物退场后",
     "阵法展开": "阵法展开时",
     "阵法轮转后": "阵法轮转后",
     "阵法冲击后": "阵法冲击后",
@@ -267,8 +265,6 @@ ABILITY_RENDERERS: dict[str, str] = {
     "修改战场规则": "_ability_modify_battle_rule",
     "保存结果": "_ability_save_result",
     "切换形态": "_ability_switch_form",
-    "创建战斗对象": "_ability_create_object",
-    "移除战斗对象": "_ability_remove_object",
     "修改归属": "_ability_change_owner",
     "回放效果": "_ability_replay_effect",
     "修改战术": "_ability_modify_tactic",
@@ -642,11 +638,6 @@ class CardText:
             caps.append(f"此支路每次全场主行动最多发动{_number(node['每次行动最多触发'])}次")
         if node.get("自身行动间隔最多触发"):
             caps.append(f"此支路开战时有{_number(node['自身行动间隔最多触发'])}次发动名额，每次自身主行动开始时重置")
-        if caps and any(
-            isinstance(effect, Mapping) and effect.get("能力") == "创建战斗对象"
-            for effect in node.get("效果") or ()
-        ):
-            caps.append("发动次数按触发计算，召唤未成功也消耗次数")
         return caps
 
     def _listener_detail(self, node: Mapping, *, caps: bool = False) -> list[str]:
@@ -1247,9 +1238,6 @@ class CardText:
         life = node.get("生存状态")
         if life not in (None, "任意"):
             extras.append(str(life))
-        kind = node.get("对象类型")
-        if kind not in (None, "任意"):
-            extras.append(str(kind))
         if node.get("排除自身"):
             extras.append("不含自身")
         identity = node.get("身份")
@@ -1746,8 +1734,6 @@ class CardText:
         elif kind == "技能冷却":
             skill = self._select_skill(node.get("技能"))
             text = f"{skill}冷却增加{self._value(amount) if amount is not None else 1}次行动"
-        elif kind == "战斗对象":
-            text = f"移除战斗对象{node.get('对象ID')}"
         else:
             text = self._flag("支付代价.代价类型", kind)
         return text + self._short_fall(node)
@@ -1893,34 +1879,6 @@ class CardText:
             if isinstance(attributes, Mapping) and attributes:
                 detail = _join([self._attribute_change(key, value) for key, value in attributes.items()])
         return f"{target}进入[{node.get('形态')}]" + (f"（{detail}）" if detail else "")
-
-    def _ability_create_object(self, node: Mapping) -> str:
-        definition = node.get("定义") if isinstance(node.get("定义"), Mapping) else {}
-        name = definition.get("名称") or "构造物"
-        marks = []
-        attributes = definition.get("属性")
-        if isinstance(attributes, Mapping) and attributes:
-            marks.append(_join([self._attribute_change(key, value) for key, value in attributes.items()]))
-        if node.get("阵营"):
-            marks.append(f"阵营：{node['阵营']}")
-        # 引擎的缺省：参战者的 `身份` 省略 = 召唤物（`_ability_create_object` 取
-        # `definition.get("身份") or "召唤物"`），不是「参战者」。
-        kind = str(definition.get("身份") or ("构造物" if node.get("类型") == "构造物" else "召唤物"))
-        return f"召出{kind}[{name}]" + (f"（{_join(marks)}）" if marks else "")
-
-    def _ability_remove_object(self, node: Mapping) -> str:
-        """`对象ID` 在登记表里**允许空**（默认空串）。
-
-        引擎对空值的语义是「移除来源自己拥有的全部召唤物与构造物」
-        （见 `mechanics._ability_remove_object` 的 `not object_id and owner_id == source.id`）。
-        原先直接拼 `node.get('对象ID')`，缺省时把 Python 的 `None` 打进了卡面
-        （实测 22 处）。
-        """
-
-        object_id = str(node.get("对象ID") or "").strip()
-        if not object_id:
-            return "移除自身拥有的全部战斗对象"
-        return f"移除战斗对象‹{object_id}›"
 
     # 注：读取「施法者自己」的 7 个来源（自身当前X / 自身已损失的X / 自身行动条）
     # 在正文里仍写「自身」。**不要**统一改成「施法者」：那会让 44% 的实体正文变样，

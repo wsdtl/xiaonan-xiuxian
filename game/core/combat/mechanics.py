@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence, Mapping
 from .models import (
     BattleContext,
-    CombatObject,
     EventFrame,
     Fighter,
     Skill,
@@ -353,7 +352,6 @@ class AbilityRuntime(ChainRuntime):
             if not isinstance(selector, Mapping):
                 raise ValueError("目标分支.目标必须是选择目标对象")
             resolved = dict(selector)
-            resolved["排除召唤物"] = True
             if resolved.get("选择全部"):
                 raise ValueError("AOE 不能使用目标分支")
             if resolved.get("范围") in {"全体", "任意"}:
@@ -661,7 +659,6 @@ class AbilityRuntime(ChainRuntime):
             # 回滚就不干净了——实测浅拷会让事件数变（14426 → 18055），所以规矩是：**拿不准就深拷**。
             "records": copy.deepcopy(context.records),
             "relations": copy.deepcopy(context.relations),
-            "objects": copy.deepcopy(context.combat_objects),
             "rules": copy.deepcopy(context.battle_rules),
             "progress": dict(context.action_progress),
             "counters": dict(context.ability_counters),
@@ -702,7 +699,6 @@ class AbilityRuntime(ChainRuntime):
                 }
                 for frame in context.event_stack
             ],
-            "summon_serial": context.summon_serial,
         }
 
     #: 回滚点里按「拷一层」处理的字典字段（值多半是标量或改不动的映射）。
@@ -812,7 +808,6 @@ class AbilityRuntime(ChainRuntime):
         context.rebuild_indexes()
         context.records = copy.deepcopy(snapshot["records"])
         context.relations = copy.deepcopy(snapshot["relations"])
-        context.combat_objects = copy.deepcopy(snapshot["objects"])
         context.battle_rules = copy.deepcopy(snapshot["rules"])
         context.mark_listener_index_dirty()
         context.action_progress = dict(snapshot["progress"])
@@ -835,7 +830,6 @@ class AbilityRuntime(ChainRuntime):
         context.action_intent = copy.deepcopy(snapshot["action_intent"])
         context.last_result = copy.deepcopy(snapshot["last_result"])
         context.triggered_skill_depth = snapshot["triggered_skill_depth"]
-        context.summon_serial = snapshot["summon_serial"]
         # 回滚会换掉身上的状态（规则表缓存的依据），版本号推一格让缓存整体作废。
         context.status_rules_version = int(getattr(context, "status_rules_version", 0)) + 1
         for saved in snapshot["frames"]:
@@ -886,7 +880,6 @@ class AbilityRuntime(ChainRuntime):
         )
         self._collect_fighter_listeners(context, sink)
         self._collect_field_listeners(context, sink)
-        self._collect_object_listeners(context, sink)
         self._collect_rule_listeners(context, sink)
         ordered = {
             event_name: tuple(sorted(values, key=lambda item: item[0]))
@@ -1316,24 +1309,6 @@ class AbilityRuntime(ChainRuntime):
                 ability_order=index,
                 source_category="战场环境",
             )
-
-    def _collect_object_listeners(self, context: BattleContext, sink: _ListenerSink) -> None:
-        """战斗对象（召唤物一类）自己的监听；已失效的不收。"""
-
-        for obj in context.combat_objects.values():
-            if not obj.active:
-                continue
-            owner = context.fighter_by_id(obj.owner_id) or context.left
-            for index, node in enumerate(obj.listeners):
-                sink.add(
-                    owner,
-                    f"{obj.id}:{index}",
-                    node,
-                    source_ability=obj.name,
-                    item_id=obj.id,
-                    ability_order=index,
-                    source_category="战斗对象",
-                )
 
     def _collect_rule_listeners(self, context: BattleContext, sink: _ListenerSink) -> None:
         """战场规则声明的监听，归属写明的来源修士。"""
@@ -2307,8 +2282,6 @@ class AbilityRuntime(ChainRuntime):
         if kind == "技能冷却":
             value = {**effect, "方式": "增加"}
             return self._ability_modify_cooldown(context, source, target, value, multiplier)
-        if kind == "战斗对象":
-            return self._ability_remove_object(context, source, target, effect, multiplier)
         raise ValueError(f"未知代价类型：{kind}")
 
     def _ability_set_resource(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **kwargs) -> bool:
@@ -3341,96 +3314,6 @@ class AbilityRuntime(ChainRuntime):
             changed = True
         return changed
 
-    def _ability_create_object(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
-        definition = copy.deepcopy(dict(effect.get("定义") or {}))
-        kind = str(effect.get("类型") or "构造物")
-        side = source.side if str(effect.get("阵营") or "己方") == "己方" else 1 - source.side
-        if kind == "参战者":
-            if sum(value.summoned and value.side == side and value.active for value in context.fighters) >= int(self.catalog.action_rules.get("每方召唤物上限", 6)):
-                return False
-        elif len(context.combat_objects) >= int(self.catalog.action_rules.get("战斗构造物上限", 12)):
-            return False
-        next_serial = context.summon_serial + 1
-        object_id = str(definition.get("编号") or f"{source.id}:战斗对象:{next_serial}")
-        if context.fighter_by_id(object_id) is not None or object_id in context.combat_objects:
-            return False
-        context.summon_serial = next_serial
-        name = str(definition.get("名称") or kind)
-        if kind == "参战者":
-            attributes = {str(k): float(v) * multiplier for k, v in dict(definition.get("属性") or {}).items()}
-            fighter = Fighter(
-                id=object_id,
-                name=name,
-                attributes=attributes,
-                health=max(1.0, float(attributes.get("血气上限", 1))),
-                spirit=max(0.0, float(attributes.get("精神上限", 0))),
-                skills=[self._skill_from_definition(source, index, value, prefix=object_id) for index, value in enumerate(definition.get("技能") or ())],
-                passives=[{"监听键": f"{object_id}:{i}", "结算顺序": i, "节点": copy.deepcopy(value)} for i, value in enumerate(definition.get("被动") or ())],
-                combatant_type=str(definition.get("身份") or "召唤物"),
-                side=side,
-                owner_id=source.id,
-                controller_id=source.controller_id or source.id,
-                summoned=True,
-                tags={str(value) for value in definition.get("标签") or ()},
-            )
-            context.add_fighter(fighter)
-            event_target = fighter
-        else:
-            obj = CombatObject(object_id, name, kind, side, source.id, int(definition.get("持续行动", 0)), float(definition.get("耐久", 0)), list(copy.deepcopy(definition.get("监听") or ())), copy.deepcopy(dict(definition.get("记录") or {})), {str(value) for value in definition.get("标签") or ()})
-            context.combat_objects[object_id] = obj
-            context.mark_listener_index_dirty()
-            durability = max(1.0, obj.health or 1.0)
-            fighter = Fighter(
-                id=object_id,
-                name=name,
-                attributes={"血气上限": durability, "精神上限": 0, "护盾上限": 0, "攻击": 0, "防御": float(definition.get("防御", 0)), "速度": 1},
-                health=durability,
-                spirit=0,
-                combatant_type="构造物",
-                side=side,
-                owner_id=source.id,
-                controller_id=source.id,
-                tags=set(obj.tags),
-                can_act=False,
-                counts_for_victory=False,
-            )
-            context.add_fighter(fighter)
-            event_target = fighter
-        self._dispatch_event(context, kind="战斗对象入场后", source=source, target=event_target, values={"对象ID": object_id, "对象类型": kind, "名称": name})
-        return True
-
-    def _ability_remove_object(self, context: BattleContext, source: Fighter, target: Fighter, effect: Mapping[str, Any], multiplier: float, **_) -> bool:
-        del multiplier
-        object_id = str(effect.get("对象ID") or "")
-        candidates = [fighter for fighter in context.fighters if fighter.active and fighter.summoned and (fighter.id == object_id or (not object_id and fighter.owner_id == source.id))]
-        for fighter in candidates:
-            self._retire_battle_object(context, source, fighter, "参战者")
-        objects = [obj for obj in context.combat_objects.values() if obj.id == object_id or (not object_id and obj.owner_id == source.id)]
-        for obj in objects:
-            shell = context.fighter_by_id(obj.id)
-            self._retire_battle_object(context, source, shell or target, obj.object_type, object_id=obj.id)
-        return bool(candidates or objects)
-
-    def _retire_battle_object(self, context: BattleContext, source: Fighter, fighter: Fighter, kind: str, *, object_id: str="") -> bool:
-        combat_object_id = object_id or fighter.id
-        obj = context.combat_objects.pop(combat_object_id, None)
-        if obj is not None:
-            obj.active = False
-            context.mark_listener_index_dirty()
-        if not fighter.active and obj is None:
-            return False
-        fighter.active = False
-        fighter.health = 0
-        self._dispatch_event(
-            context,
-            kind="战斗对象退场后",
-            source=source,
-            target=fighter,
-            values={"对象ID": combat_object_id, "对象类型": kind},
-        )
-        self._remove_source_lifetimes(context, fighter)
-        return True
-
     def _remove_source_lifetimes(self, context: BattleContext, source: Fighter) -> None:
         for fighter in context.fighters:
             expired = [status for status in fighter.statuses if status.expire_with_source and status.source == source.id]
@@ -3491,15 +3374,11 @@ class AbilityRuntime(ChainRuntime):
                 new_team.append(destination)
                 destination.side = new_side
                 context.rebuild_indexes()
-                if destination.id in context.combat_objects:
-                    context.combat_objects[destination.id].side = new_side
         elif field == "主人":
             owners = self._select_targets(context, source, target, effect.get("归属目标"))
             if not owners:
                 return False
             destination.owner_id = owners[0].id
-            if destination.id in context.combat_objects:
-                context.combat_objects[destination.id].owner_id = owners[0].id
         elif field == "控制者":
             controllers = self._select_targets(context, source, target, effect.get("归属目标"))
             if not controllers:
@@ -3906,7 +3785,7 @@ class AbilityRuntime(ChainRuntime):
         return self._target_select(context, source, target, selector)
 
     def _single_target(self, context: BattleContext | None, source: Fighter | None, chosen: Fighter | None) -> list[Fighter]:
-        if chosen is None or not chosen.alive or chosen.combatant_type == '构造物':
+        if chosen is None or not chosen.alive:
             return []
         version = getattr(context, 'status_rules_version', 0)
         rules = chosen.rules_cache if chosen.rules_cache_version == version else self._container_rules(chosen, context)
@@ -3993,20 +3872,9 @@ class AbilityRuntime(ChainRuntime):
         combatant_type = str(selector.get("身份") or "")
         if combatant_type:
             candidates = [value for value in candidates if value.combatant_type == combatant_type or combatant_type in value.tags]
-        object_type = str(selector.get("对象类型") or "参战者")
-        if object_type == "参战者":
-            candidates = [value for value in candidates if value.combatant_type != "构造物"]
-        elif object_type == "召唤物":
-            candidates = [value for value in candidates if value.summoned]
-        elif object_type == "构造物":
-            candidates = [value for value in candidates if value.combatant_type == "构造物"]
-        elif object_type != "任意":
-            raise ValueError(f"未知战斗对象类型：{object_type}")
         status_name = str(selector.get("拥有状态") or "")
         if status_name:
             candidates = [value for value in candidates if any(status.name == status_name for status in value.statuses)]
-        if selector.get("排除召唤物", False):
-            candidates = [value for value in candidates if not value.summoned]
         if selector.get("排除有护盾", False):
             candidates = [value for value in candidates if value.shield <= 0]
         if selector.get("排除无负面", False):

@@ -179,8 +179,6 @@ class BattleEngine(AbilityRuntime):
             "修改战场规则": self._ability_modify_battle_rule,
             "保存结果": self._ability_save_result,
             "切换形态": self._ability_switch_form,
-            "创建战斗对象": self._ability_create_object,
-            "移除战斗对象": self._ability_remove_object,
             "修改归属": self._ability_modify_ownership,
             "回放效果": self._ability_replay_effect,
             "修改战术": self._ability_modify_tactic,
@@ -464,8 +462,6 @@ class BattleEngine(AbilityRuntime):
             fighter.health_max
             for fighter in fighters
             if fighter.counts_for_victory
-            and not fighter.summoned
-            and fighter.combatant_type != "构造物"
         )
         source = Fighter(
             id=f"战场环境:{definition.environment_id}",
@@ -828,8 +824,6 @@ class BattleEngine(AbilityRuntime):
         elif field == "双方等级差":
             enemy_level = max((value.level for value in enemy_team), default=source.level)
             value = max(0, source.level - enemy_level)
-        elif field == "召唤物数量":
-            value = sum(1 for value in own_team if value.summoned)
         elif field == "本场触发次数":
             value = sum(context.battle_trigger_counts.values())
         elif field == "目标已损失血气":
@@ -2283,15 +2277,7 @@ class BattleEngine(AbilityRuntime):
                 values=values,
                 tags=tags,
             )
-            if target.combatant_type == "构造物" or target.summoned:
-                self._retire_battle_object(
-                    context,
-                    source,
-                    target,
-                    "构造物" if target.combatant_type == "构造物" else "参战者",
-                )
-            else:
-                self._remove_source_lifetimes(context, target)
+            self._remove_source_lifetimes(context, target)
             if not target.alive:
                 self._dispatch_event(
                     context,
@@ -2374,23 +2360,6 @@ class BattleEngine(AbilityRuntime):
                 int(getattr(context, "status_rules_version", 0)) + 1
             )
         actor.statuses = kept
-        for obj in list(context.combat_objects.values()):
-            if obj.remaining_actions > 0:
-                obj.remaining_actions -= 1
-                if obj.remaining_actions == 0:
-                    context.combat_objects.pop(obj.id, None)
-                    context.mark_listener_index_dirty()
-                    shell = context.fighter_by_id(obj.id)
-                    if shell is not None:
-                        shell.active = False
-                        shell.health = 0
-                    context.event(
-                        "战斗对象退场后",
-                        actor,
-                        shell or actor,
-                        f"{obj.name}消散",
-                        values={"对象ID": obj.id, "对象类型": obj.object_type},
-                    )
 
     def _use_medicine(self, context: BattleContext, fighter: Fighter) -> None:
         if not fighter.auto_medicine:

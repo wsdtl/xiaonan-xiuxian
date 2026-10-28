@@ -691,8 +691,6 @@ class Fighter(RuntimeExtensions):
     battle_profile: dict[str, Any] = dataclass_field(default_factory=dict)
     gender: str = ""
     active: bool = True
-    summoned: bool = False
-    summon_template: str = ""
     can_act: bool = True
     counts_for_victory: bool = True
     five_elements: dict[str, float] = dataclass_field(default_factory=dict)
@@ -827,21 +825,6 @@ ListenerEntry = tuple[
     Mapping[str, float],
     Mapping[str, Any],
 ]
-
-
-@dataclass
-class CombatObject:
-    id: str
-    name: str
-    object_type: str
-    side: int
-    owner_id: str
-    remaining_actions: int = 0
-    health: float = 0.0
-    listeners: list[Mapping[str, Any]] = dataclass_field(default_factory=list)
-    values: dict[str, Any] = dataclass_field(default_factory=dict)
-    tags: set[str] = dataclass_field(default_factory=set)
-    active: bool = True
 
 
 @dataclass(slots=True)
@@ -1068,7 +1051,6 @@ class BattleContext(RuntimeExtensions):
     event_stack: list[EventFrame] = dataclass_field(default_factory=list)
     records: dict[tuple[str, str], list[Any]] = dataclass_field(default_factory=dict)
     relations: list[dict[str, Any]] = dataclass_field(default_factory=list)
-    combat_objects: dict[str, CombatObject] = dataclass_field(default_factory=dict)
     battle_rules: list[dict[str, Any]] = dataclass_field(default_factory=list)
     saved_results: dict[str, Any] = dataclass_field(default_factory=dict)
     #: 目标分支已选好的目标；只对分支写入的 selector 对象生效，避免处理器二次摇随机。
@@ -1077,9 +1059,8 @@ class BattleContext(RuntimeExtensions):
     effect_history: list[dict[str, Any]] = dataclass_field(default_factory=list)
     action_intent: ActionIntent | None = None
     judgement_overrides: dict[str, list[dict[str, Any]]] = dataclass_field(default_factory=dict)
-    summon_serial: int = 0
     # Runtime indexes are derived state. They are rebuilt when a transaction
-    # restores team membership or a summon enters the battle.
+    # restores team membership.
     fighters_by_id: dict[str, Fighter] = dataclass_field(default_factory=dict, init=False)
     fighter_order: dict[str, int] = dataclass_field(default_factory=dict, init=False)
     listener_fighter_order: dict[str, tuple[int, int]] = dataclass_field(default_factory=dict, init=False, repr=False)
@@ -1211,15 +1192,6 @@ class BattleContext(RuntimeExtensions):
 
     def fighter_by_id(self, fighter_id: str) -> Fighter | None:
         return self.fighters_by_id.get(str(fighter_id))
-
-    def add_fighter(self, fighter: Fighter) -> None:
-        target = self.left_team if fighter.side == 0 else self.right_team
-        if self.fighter_by_id(fighter.id) is not None:
-            raise ValueError(f"战斗对象 ID 重复：{fighter.id}")
-        target.append(fighter)
-        fighter.side = 0 if target is self.left_team else 1
-        self.action_progress[fighter.id] = 0.0
-        self.rebuild_indexes()
 
     def event(
         self,

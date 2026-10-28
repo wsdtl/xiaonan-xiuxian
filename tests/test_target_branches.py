@@ -135,7 +135,7 @@ def test_branch_order_and_fallback() -> None:
     chosen = runtime._choose_target_branch(context, None, None, effect, 0.0, {}, ())
     assert chosen is not None
     assert chosen[0]["目标"]["范围"] == "其他己方"
-    assert chosen[1]["排除召唤物"] is True
+    assert "排除召唤物" not in chosen[1]
 
 
 def test_branch_preselects_target_without_strength() -> None:

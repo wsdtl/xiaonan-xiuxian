@@ -71,8 +71,6 @@ EXECUTOR_CATEGORIES = MappingProxyType(
         "修改战场规则": frozenset({"效果"}),
         "保存结果": frozenset({"效果"}),
         "切换形态": frozenset({"效果"}),
-        "创建战斗对象": frozenset({"效果"}),
-        "移除战斗对象": frozenset({"效果"}),
         "修改归属": frozenset({"效果"}),
         "回放效果": frozenset({"效果"}),
         "修改战术": frozenset({"效果"}),
