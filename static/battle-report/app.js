@@ -39,31 +39,42 @@ function targetName(id) {
 }
 function resourceLabel(key) { return RES_LABEL[key] || key; }
 
+function showLoadError(error) {
+  root.textContent = "";
+  const box = el("section", "error-state");
+  box.appendChild(el("p", "", "战报读取失败：" + error.message));
+  box.appendChild(el("p", "", "请返回上一页重试。"));
+  root.appendChild(box);
+}
+
+function mountPayload(payload) {
+  if (!payload || payload.schema !== "game.battle_animation" || payload.version !== 1) {
+    throw new Error("战报数据版本不匹配");
+  }
+  state.payload = payload;
+  state.duration = Math.max(1000, Number(payload.battle.duration) || 1000);
+  renderShell();
+  if (new URLSearchParams(location.search).get("play") === "1") {
+    setTimeout(function () { if (!state.playing) playLoop(); }, 120);
+  }
+  const seekValue = Number(new URLSearchParams(location.search).get("seek"));
+  if (Number.isFinite(seekValue) && seekValue > 0) {
+    setTimeout(function () { seek(seekValue); }, 180);
+  }
+}
+
 async function boot() {
+  if (window.__BATTLE_ANIMATION__) {
+    try { mountPayload(window.__BATTLE_ANIMATION__); } catch (error) { showLoadError(error); }
+    return;
+  }
   try {
     const base = location.pathname.replace(/\/+$/, "");
     const response = await fetch(base + "/data?view=animation", { cache: "no-store", headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error("HTTP " + response.status);
-    const payload = await response.json();
-    if (!payload || payload.schema !== "game.battle_animation" || payload.version !== 1) {
-      throw new Error("战报数据版本不匹配");
-    }
-    state.payload = payload;
-    state.duration = Math.max(1000, Number(payload.battle.duration) || 1000);
-    renderShell();
-    if (new URLSearchParams(location.search).get("play") === "1") {
-      setTimeout(function () { if (!state.playing) playLoop(); }, 120);
-    }
-    const seekValue = Number(new URLSearchParams(location.search).get("seek"));
-    if (Number.isFinite(seekValue) && seekValue > 0) {
-      setTimeout(function () { seek(seekValue); }, 180);
-    }
+    mountPayload(await response.json());
   } catch (error) {
-    root.textContent = "";
-    const box = el("section", "error-state");
-    box.appendChild(el("p", "", "战报读取失败：" + error.message));
-    box.appendChild(el("p", "", "请返回上一页重试。"));
-    root.appendChild(box);
+    showLoadError(error);
   }
 }
 

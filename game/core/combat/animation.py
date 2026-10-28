@@ -464,11 +464,16 @@ def build_animation_view(report: Mapping[str, Any], catalog: BattleReportCatalog
             push(item)
 
     duration = max(last_t + paced["收尾"], 1000)
+    title = _text(report.get("headline"))
+    if len(units) > 4:
+        left_count = sum(1 for unit in units if unit["side"] == "left")
+        right_count = sum(1 for unit in units if unit["side"] == "right")
+        title = f"{left_count} 对 {right_count}"
     return {
         "schema": catalog.animation_schema,
         "version": catalog.animation_version,
         "battle": {
-            "title": _text(report.get("headline")),
+            "title": title,
             "scene": _text(report.get("scene")),
             "result": _text((report.get("result") or {}).get("code"), "draw"),
             "actions": _integer((report.get("result") or {}).get("actions"), 0),
