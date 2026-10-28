@@ -417,6 +417,7 @@ class ExplorationService:
             }
         current = {value.id: value for value in combatants}
         battle_values: list[dict[str, object]] = []
+        battle_report_ids: list[str] = []
         defeated_total = 0
         for battle_index in range(1, self.status().maximum_battles + 1):
             living = [value for value in current.values() if (value.health or 0) > 0]
@@ -650,6 +651,7 @@ class ExplorationService:
                         ensure_ascii=False,
                     ),
                 )
+                battle_report_ids.append(report_id)
 
         battle_count = len(battle_values)
         ends_at = started_at + timedelta(
@@ -686,6 +688,7 @@ class ExplorationService:
             "结束时间": ends_at.isoformat(),
             "种子": seed,
             "战败敌人": defeated_total,
+            "战报编号": list(battle_report_ids),
             "用户结果": normalized_results,
             "首战阵法": [
                 {
@@ -863,6 +866,7 @@ class ExplorationService:
             "战败敌人": session["战败敌人"],
             "参与用户": list(participants),
             "用户结果": summaries,
+            "战报编号": [str(value) for value in (session.get("战报编号") or ())],
             "结算时间": settled_at.isoformat(),
         }
         plan = SettlementTransactionPlan(
@@ -1012,6 +1016,9 @@ class ExplorationService:
             "战败敌人": defeated,
             "参与用户": list(participants),
             "用户结果": [materialize(value) for value in summaries],
+            "战报编号": [
+                str(value) for value in (session.get("战报编号") or ())[:unlocked]
+            ],
             "结算时间": settled_at.isoformat(),
             "提前结束": True,
         }
@@ -1251,6 +1258,16 @@ class ExplorationService:
             # 跑满的那条路没写总场数（场数就是总场数），只有提前结束才两者不同。
             total_battles=_nonnegative_int(
                 value.get("总场数", value.get("场数")), "结算.总场数"
+            ),
+            battle_report_ids=(
+                ()
+                if value.get("战报编号") is None
+                else tuple(
+                    _text(raw, "结算.战报编号[]")
+                    for raw in _sequence(
+                        value.get("战报编号"), "结算.战报编号", allow_empty=True
+                    )
+                )
             ),
         )
 

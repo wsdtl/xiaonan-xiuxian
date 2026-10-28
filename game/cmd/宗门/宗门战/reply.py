@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Sequence
 
 from game.features.zongmen_zhan import SectWarFeature, SectWarHistoryPage, SectWarView
+from launch.paths import public_url
 from message import DocumentMessage, M
 
 from ...actions import message_actions
@@ -65,7 +66,10 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
         )
         builder.field(
             feature.text("查看", "战报"),
-            feature.text("查看", "战报提示"),
+            M.link(
+                feature.text("查看", "打开战报"),
+                public_url("battle", value.report_id),
+            ),
         )
     return builder.actions(message_actions(feature.actions(value.status))).build()
 

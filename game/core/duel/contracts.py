@@ -29,6 +29,8 @@ class DuelChallenge:
 
 @dataclass(frozen=True)
 class DuelResult:
+    #: 本场战报编号；结算卡直接给一次链接，之后历史走 `战报`。
+    report_id: str
     #: 发起者编号：切磋记录挂在发起者名下，所以结果本身要带着它。
     owner: str
     winner: str

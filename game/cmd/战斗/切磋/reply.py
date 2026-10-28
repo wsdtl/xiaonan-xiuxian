@@ -8,6 +8,7 @@ from ...presentation import error_document
 from typing import Sequence
 
 from game.features.qiecuo import DuelChallenge, DuelFeature, DuelResult
+from launch.paths import public_url
 from message import Action, DocumentMessage, M
 
 from ...presentation import natural_deadline, sentence
@@ -70,7 +71,10 @@ def result(
         .row(("行动", value.actions), ("战斗事件", value.events))
         .field(
             feature.text("结果", "战报"),
-            feature.text("结果", "战报提示"),
+            M.link(
+                feature.text("结果", "打开战报"),
+                public_url("battle", value.report_id),
+            ),
         )
         .build()
     )
