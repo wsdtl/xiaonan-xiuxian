@@ -244,7 +244,7 @@ class _ListenerSink:
             if item_id
             else f"{build_instance}:{listener_id}"
         )
-        # `每次行动最多触发` 的名额属于**声明**，不属于那一张卡：同一个修士带两张
+        # `每次全场主行动最多触发` 的名额属于**声明**，不属于那一张卡：同一个修士带两张
         # 同名词条时，它们是同一条声明，共用同一个名额（游戏王 HOPT 的口径）。
         # 所以名额键里刻意不含 `build_instance`——那才是区分「第几张」的东西，
         # 含上它等于每张卡各给一个名额，卡面写的「每行动只能使用1次」就被翻倍了。
@@ -280,7 +280,7 @@ class _ListenerSink:
                 node,
                 dict(element_composition or {"无相": 100}),
                 node.get("条件") or (),
-                int(node.get("每次行动最多触发", 0) or 0),
+                int(node.get("每次全场主行动最多触发", 0) or 0),
                 int(node.get("每场战斗最多触发", 0) or 0),
                 node.get("效果") or (),
                 self.engine._listener_conditions_deterministic(node.get("条件") or ()),
@@ -1613,7 +1613,7 @@ class AbilityRuntime(ChainRuntime):
             #
             # 之所以不抛错：成环不是单张卡的错，而是两张卡对向作用的结果
             # （例：己方「反哺」把敌方恢复转成护盾，那个护盾又引出一次恢复，
-            # 被敌方的「反哺」再转成护盾）。「每次行动最多触发」是按监听实例
+            # 被敌方的「反哺」再转成护盾）。「每次全场主行动最多触发」是按监听实例
             # 算的，双方各一个实例就合法地触发两次，足够闭环。作者在本地看不到
             # 这个环，所以语义只能由引擎定；而定成「炸掉整场战斗」意味着
             # 带这套构筑的玩家每打一架都报错。

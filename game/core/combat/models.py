@@ -1086,7 +1086,7 @@ class BattleContext(RuntimeExtensions):
     #: 随监听表重建的最高响应等级；空调度仍记录事件，不抑制原子行为。
     listener_max_levels: dict[str, int] = dataclass_field(default_factory=dict, init=False, repr=False)
     #: `_dispatch_event` 的**节点字段缓存**：键是 `id(节点)`，值是
-    #: `(节点, 条件, 每次行动最多触发, 每场战斗最多触发, 效果)`——命中时再核 `节点 is 原节点`，
+    #: `(节点, 条件, 每次全场主行动最多触发, 每场战斗最多触发, 效果)`——命中时再核 `节点 is 原节点`，
     #: 所以 `id` 被复用也不会误用。这三样只是节点的**纯函数**，而同一个节点在这条事件的每个
     #: 候补、以及整场战斗的多次派发上会被反复问；与 `CombatCatalog._node_cache` 同一手法、
     #: 同一前提（节点在装配期冻结、一场里不换）。**加新的「每候选都要读的节点字段」时，

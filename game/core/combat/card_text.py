@@ -634,8 +634,8 @@ class CardText:
             caps.append("链尾检查条件并兑现，同链多次通知合并一次")
         if node.get("每场战斗最多触发") is not None:
             caps.append(f"此支路整场最多发动{_number(node['每场战斗最多触发'])}次")
-        if node.get("每次行动最多触发") is not None:
-            caps.append(f"此支路每次全场主行动最多发动{_number(node['每次行动最多触发'])}次")
+        if node.get("每次全场主行动最多触发") is not None:
+            caps.append(f"此支路每次全场主行动最多发动{_number(node['每次全场主行动最多触发'])}次")
         if node.get("自身行动间隔最多触发"):
             caps.append(f"此支路开战时有{_number(node['自身行动间隔最多触发'])}次发动名额，每次自身主行动开始时重置")
         return caps
@@ -643,8 +643,8 @@ class CardText:
     def _listener_detail(self, node: Mapping, *, caps: bool = False) -> list[str]:
         detail: list[str] = []
         if not caps:
-            if node.get("每次行动最多触发") is not None:
-                detail.append(f"此支路每次全场主行动最多发动{_number(node['每次行动最多触发'])}次")
+            if node.get("每次全场主行动最多触发") is not None:
+                detail.append(f"此支路每次全场主行动最多发动{_number(node['每次全场主行动最多触发'])}次")
             if node.get("每场战斗最多触发") is not None:
                 detail.append(f"此支路整场最多发动{_number(node['每场战斗最多触发'])}次")
             if node.get("自身行动间隔最多触发"):
