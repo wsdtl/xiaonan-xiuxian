@@ -34,10 +34,6 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
                 "格式", "双方", {"甲": value.attacker_name, "乙": value.defender_name}
             ),
         )
-        .row(
-            (value.attacker_name, value.attacker_count),
-            (value.defender_name, value.defender_count),
-        )
         .field(
             feature.text("查看", "押注"),
             M.text(value.wager, tone="cultivation"),
@@ -59,6 +55,11 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             ),
         )
     )
+    if value.attacker_count or value.defender_count:
+        builder.row(
+            (value.attacker_name, value.attacker_count),
+            (value.defender_name, value.defender_count),
+        )
     if value.status == "战斗中" and value.ends_at is not None:
         # 细节：别的活动卡片都印剩余时间，宗门战也得印——不然玩家不知道要等多久。
         builder.field(
@@ -74,7 +75,6 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
         builder.field(
             feature.text("查看", "战报"), M.link("打开战报", public_url("battle", value.report_id))
         )
-    builder.line(M.command(M.text(feature.text("查看", "最近战报")), "宗门战报"))
     return builder.actions(message_actions(feature.actions(value.status))).build()
 
 
@@ -99,7 +99,7 @@ def history(feature: SectWarFeature, value: SectWarHistoryPage) -> DocumentMessa
         ).line(
             feature.text("查看", "战书"),
             "：",
-            M.command(M.text(entry.war_id), f"战况 {entry.war_id}"),
+            M.command(M.text(entry.war_id), f"宗门战况 {entry.war_id}"),
         )
     # 只有一页就不报页码。
     if value.page_count > 1:
