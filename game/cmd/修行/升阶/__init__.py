@@ -41,14 +41,21 @@ async def upgrade(
         value = await feature.enter_upgrade(
             user_id, message_context.request_id, message
         )
-        await send_game_reply(reply.upgraded(feature.copy(), value))
+        await send_game_reply(
+            reply.upgraded(feature.copy(), value),
+            title=(
+                f"升阶 {value.source_grade_name}{value.item_name}"
+                f" → {value.target_grade_name}"
+            ),
+        )
     except ShengjieError as exc:
         await send_game_reply(
             reply.error(
                 feature.copy(),
                 str(exc),
                 "升阶 <来源品级><物品> <目标品级> [数量]",
-            )
+            ),
+            title="升阶",
         )
 
 
@@ -81,10 +88,14 @@ async def plan(
     feature = current_game_services().features.shengjie
     try:
         value = await feature.enter_plan(user_id, message)
-        await send_game_reply(reply.plan(feature.copy(), value))
+        await send_game_reply(
+            reply.plan(feature.copy(), value),
+            title="升阶方案",
+        )
     except ShengjieError as exc:
         await send_game_reply(
-            reply.error(feature.copy(), str(exc), "升阶方案 <类别> ...")
+            reply.error(feature.copy(), str(exc), "升阶方案 <类别> ..."),
+            title="升阶方案",
         )
 
 

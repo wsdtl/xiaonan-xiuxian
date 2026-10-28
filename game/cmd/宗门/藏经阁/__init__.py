@@ -40,20 +40,25 @@ async def cangjing(
             user_id, message_context.request_id, message
         )
     except CangjingFeatureError as exc:
-        await send_game_reply(reply.error(copy, str(exc)))
+        await send_game_reply(reply.error(copy, str(exc)), title="藏经阁")
         return
     if entry.kind == "page" and entry.page is not None:
         await send_game_reply(
-            reply.page(copy, entry.page, feature.page_actions(entry.page))
+            reply.page(copy, entry.page, feature.page_actions(entry.page)),
+            title="藏经阁",
         )
     elif entry.kind == "prompt":
         await send_game_reply(
             reply.borrow_prompt(
                 copy, entry.identifier, range(1, entry.slots + 1)
-            )
+            ),
+            title="藏经阁",
         )
     elif entry.kind == "borrowed" and entry.borrowed is not None:
-        await send_game_reply(reply.borrowed(copy, entry.borrowed))
+        await send_game_reply(
+            reply.borrowed(copy, entry.borrowed),
+            title=f"藏经阁 {entry.borrowed.technique.name}",
+        )
 
 
 __all__ = []

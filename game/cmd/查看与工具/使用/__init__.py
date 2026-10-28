@@ -52,10 +52,18 @@ async def use_item(
         entry = await feature.enter(
             user_id, message_context.request_id, message
         )
+        name = (
+            entry.plan.request.name
+            if entry.plan is not None and entry.plan.request.name
+            else ""
+        )
         if entry.kind == "redirect" and entry.redirect is not None:
-            await send_game_reply(reply.redirect(entry.redirect))
+            await send_game_reply(
+                reply.redirect(entry.redirect),
+                title=f"使用 {name or entry.redirect.title}",
+            )
         elif entry.kind == "branch":
-            await send_game_reply(branch_menu(entry.commands))
+            await send_game_reply(branch_menu(entry.commands), title="使用")
         elif (
             entry.kind == "outcome"
             and entry.outcome is not None
@@ -65,14 +73,15 @@ async def use_item(
                 reply.render(
                     entry.outcome,
                     _copy_feature(entry.plan, entry.target),
-                )
+                ),
+                title=f"使用 {name}" if name else "使用",
             )
     except BranchParseError:
-        await send_game_reply(reply.error(feature, feature.copy("写法")))
+        await send_game_reply(reply.error(feature, feature.copy("写法")), title="使用")
     except UseError as exc:
-        await send_game_reply(reply.error(feature, str(exc)))
+        await send_game_reply(reply.error(feature, str(exc)), title="使用")
     except (ValueError, ItemRefError):
-        await send_game_reply(reply.error(feature, feature.copy("写法")))
+        await send_game_reply(reply.error(feature, feature.copy("写法")), title="使用")
 
 
 __all__ = []

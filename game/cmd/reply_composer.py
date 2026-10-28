@@ -104,10 +104,12 @@ async def send_game_reply(
         raise TypeError("玩家回包只接受 message.Message")
     if isinstance(payload, ImageMessage):
         return await manager.send(payload, is_log=is_log, request_id=request_id)
+    # 原文不是展示数据：没显式给标题就只写命令词，绝不回显参数/编号。
+    display_title = title.strip() if title is not None else context.command.strip()
     decorated = compose_player_reply(
         payload,
         identity=await _identity_text(context.user_id),
-        title=(context.raw_message if title is None else title).strip(),
+        title=display_title,
         icon="game.cmd",
     )
     return await manager.send(decorated, is_log=is_log, request_id=request_id)

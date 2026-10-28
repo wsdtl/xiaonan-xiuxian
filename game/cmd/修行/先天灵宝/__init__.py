@@ -29,10 +29,14 @@ async def show_innate_treasures(user_id: str, message: str) -> None:
     feature = current_game_services().features.xiantian_lingbao
     try:
         await send_game_reply(
-            reply.view(feature, await feature.inspect_from_text(user_id, message))
+            reply.view(feature, await feature.inspect_from_text(user_id, message)),
+            title="先天灵宝",
         )
     except InnateTreasureFeatureError as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(
+            reply.error(feature, str(exc), feature.format_actions()),
+            title="先天灵宝",
+        )
 
 
 @GameCommand.command(
@@ -53,10 +57,14 @@ async def show_innate_treasure_catalog(message: str) -> None:
     feature = current_game_services().features.xiantian_lingbao
     try:
         await send_game_reply(
-            reply.catalog(feature, await feature.catalog_from_text(message))
+            reply.catalog(feature, await feature.catalog_from_text(message)),
+            title="灵宝谱",
         )
     except InnateTreasureFeatureError as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(
+            reply.error(feature, str(exc), feature.format_actions()),
+            title="灵宝谱",
+        )
 
 
 __all__ = ["router"]

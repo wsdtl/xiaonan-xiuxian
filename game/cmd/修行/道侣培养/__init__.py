@@ -38,7 +38,10 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
                 user_id, message_context.request_id, message.strip()
             )
         )
-        await send_game_reply(reply.breakthrough(feature, result))
+        await send_game_reply(
+            reply.breakthrough(feature, result),
+            title=f"道侣突破 {result.medicine_name}",
+        )
     except (CompanionCultivationFeatureError, CompanionCultivationConflictError) as exc:
         # 与人物突破同款：名字写错时把本境界的候选丹一并端出来。
         try:
@@ -46,7 +49,8 @@ async def breakthrough_companion(user_id: str, message: str, message_context: Me
         except (CompanionCultivationFeatureError, CompanionCultivationConflictError):
             offer = None
         await send_game_reply(
-            reply.error(feature, str(exc), feature.format_actions(), offer)
+            reply.error(feature, str(exc), feature.format_actions(), offer),
+            title="道侣突破",
         )
 
 

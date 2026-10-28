@@ -38,9 +38,15 @@ async def converse_companion(user_id: str, message: str, manager: Any) -> None:
     try:
         result = await feature.converse_from_text(user_id, message)
         actions = feature.actions("交谈", result.view)
-        await send_game_reply(reply.conversation(copy, result, actions))
+        await send_game_reply(
+            reply.conversation(copy, result, actions),
+            title=f"交谈 {result.view.name}",
+        )
     except CompanionInteractionError as exc:
-        await send_game_reply(reply.error(copy, str(exc), feature.format_actions("格式交谈")))
+        await send_game_reply(
+            reply.error(copy, str(exc), feature.format_actions("格式交谈")),
+            title="交谈",
+        )
 
 
 @GameCommand.command(
@@ -69,9 +75,15 @@ async def gift_companion(user_id: str, message: str, message_context: MessageCon
             user_id, message_context.request_id, message
         )
         actions = feature.actions("赠礼", result.view)
-        await send_game_reply(reply.gift(copy, result, actions))
+        await send_game_reply(
+            reply.gift(copy, result, actions),
+            title=f"赠予 {result.view.name} {result.item.name}",
+        )
     except (CompanionInteractionError, ValueError) as exc:
-        await send_game_reply(reply.error(copy, str(exc), feature.format_actions("格式赠予")))
+        await send_game_reply(
+            reply.error(copy, str(exc), feature.format_actions("格式赠予")),
+            title="赠予",
+        )
 
 
 @GameCommand.command(
@@ -97,9 +109,15 @@ async def invite_companion(user_id: str, message: str, message_context: MessageC
             user_id, message_context.request_id, message
         )
         actions = feature.actions("邀约", result.view)
-        await send_game_reply(reply.invitation(copy, result, actions))
+        await send_game_reply(
+            reply.invitation(copy, result, actions),
+            title=f"邀约 {result.view.name}",
+        )
     except (CompanionInteractionError, ValueError) as exc:
-        await send_game_reply(reply.error(copy, str(exc), feature.format_actions("格式邀约")))
+        await send_game_reply(
+            reply.error(copy, str(exc), feature.format_actions("格式邀约")),
+            title="邀约",
+        )
 
 
 @GameCommand.command(
@@ -125,9 +143,15 @@ async def farewell_companion(user_id: str, message: str, message_context: Messag
             user_id, message_context.request_id, message
         )
         actions = feature.farewell_actions(result.definition.companion_id)
-        await send_game_reply(reply.farewell(copy, result, actions))
+        await send_game_reply(
+            reply.farewell(copy, result, actions),
+            title=f"暂别 {result.definition.name}",
+        )
     except (CompanionInteractionError, ValueError) as exc:
-        await send_game_reply(reply.error(copy, str(exc), feature.format_actions("格式暂别")))
+        await send_game_reply(
+            reply.error(copy, str(exc), feature.format_actions("格式暂别")),
+            title="暂别",
+        )
 
 
 __all__ = []

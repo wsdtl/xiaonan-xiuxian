@@ -60,13 +60,20 @@ async def alchemy_root(
         entry = await feature.enter_direct(
             user_id, message_context.request_id, message
         )
-        await send_game_reply(_render(feature, entry))
+        result = getattr(entry, "result", None)
+        preview = result.preview if result is not None else getattr(entry, "preview", None)
+        title = (
+            f"炼丹 {preview.medicine_grade_name}{preview.recipe.medicine_name}"
+            if preview is not None
+            else "炼丹"
+        )
+        await send_game_reply(_render(feature, entry), title=title)
     except ValueError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼丹")
     except ItemRefError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼丹")
     except AlchemyFeatureError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼丹")
 
 
 @GameCommand.command(
@@ -87,13 +94,13 @@ async def alchemy_catalog(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.liandan
     try:
         entry = await feature.enter_catalog(user_id, message)
-        await send_game_reply(_render(feature, entry))
+        await send_game_reply(_render(feature, entry), title="炼丹目录")
     except ItemRefError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼丹目录")
     except ValueError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼丹目录")
     except AlchemyFeatureError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼丹目录")
 
 
 __all__ = []

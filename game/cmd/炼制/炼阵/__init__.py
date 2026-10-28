@@ -53,11 +53,16 @@ async def formation_root(user_id: str, message: str, message_context: MessageCon
         entry = await feature.enter(
             user_id, message_context.request_id, message
         )
-        await send_game_reply(_render(feature, entry))
+        result = getattr(entry, "result", None)
+        preview = result.preview if result is not None else getattr(entry, "preview", None)
+        title = f"炼阵 {preview.formation.name}" if preview is not None else "炼阵"
+        await send_game_reply(_render(feature, entry), title=title)
     except FormationChoiceError as exc:
-        await send_game_reply(reply.choose(feature.copy(), exc, command="炼阵"))
+        await send_game_reply(
+            reply.choose(feature.copy(), exc, command="炼阵"), title="炼阵"
+        )
     except (FormationCraftFeatureError, ValueError) as exc:
-        await send_game_reply(_error(feature, str(exc), "炼阵"))
+        await send_game_reply(_error(feature, str(exc), "炼阵"), title="炼阵")
 
 
 @GameCommand.command(
@@ -78,11 +83,14 @@ async def formation_catalog(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.lianzhen
     try:
         entry = await feature.enter_catalog(user_id, message)
-        await send_game_reply(_render(feature, entry))
+        await send_game_reply(_render(feature, entry), title="炼阵目录")
     except FormationChoiceError as exc:
-        await send_game_reply(reply.choose(feature.copy(), exc, command="炼阵目录"))
+        await send_game_reply(
+            reply.choose(feature.copy(), exc, command="炼阵目录"),
+            title="炼阵目录",
+        )
     except (FormationCraftFeatureError, ValueError) as exc:
-        await send_game_reply(_error(feature, str(exc), "炼阵目录"))
+        await send_game_reply(_error(feature, str(exc), "炼阵目录"), title="炼阵目录")
 
 
 __all__ = []

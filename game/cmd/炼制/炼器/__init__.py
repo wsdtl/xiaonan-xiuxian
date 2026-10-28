@@ -53,11 +53,14 @@ async def forging_root(user_id: str, message: str, message_context: MessageConte
         entry = await feature.enter_direct(
             user_id, message_context.request_id, message
         )
-        await send_game_reply(_render(feature, entry))
+        result = getattr(entry, "result", None)
+        preview = result.preview if result is not None else getattr(entry, "preview", None)
+        title = f"炼器 {preview.law.name}" if preview is not None else "炼器"
+        await send_game_reply(_render(feature, entry), title=title)
     except ValueError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼器")
     except ForgingFeatureError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼器")
 
 
 @GameCommand.command(
@@ -78,11 +81,11 @@ async def forging_catalog(user_id: str, message: str, manager: Any) -> None:
     feature = current_game_services().features.lianqi
     try:
         entry = await feature.enter_catalog(user_id, message)
-        await send_game_reply(_render(feature, entry))
+        await send_game_reply(_render(feature, entry), title="炼器目录")
     except ValueError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼器目录")
     except ForgingFeatureError as exc:
-        await send_game_reply(_error(feature, str(exc)))
+        await send_game_reply(_error(feature, str(exc)), title="炼器目录")
 
 
 __all__ = []

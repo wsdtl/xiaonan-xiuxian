@@ -35,7 +35,8 @@ async def send(user_id: str, message: str, message_context: MessageContext, mana
         )
         if entry.kind == "stones":
             await send_game_reply(
-                reply.stones(feature, entry.target_name, entry.result)
+                reply.stones(feature, entry.target_name, entry.result),
+                title=f"赠送 {entry.target_name}",
             )
         else:
             await send_game_reply(
@@ -45,7 +46,11 @@ async def send(user_id: str, message: str, message_context: MessageContext, mana
                     entry.result,
                     grade_name=entry.result.grade_name,
                     item_name=entry.result.item_name,
-                )
+                ),
+                title=f"赠送 {entry.target_name} {entry.result.item_name}",
             )
     except (GiftError, ValueError, ItemRefError) as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions()))
+        await send_game_reply(
+            reply.error(feature, str(exc), feature.format_actions()),
+            title="赠送",
+        )

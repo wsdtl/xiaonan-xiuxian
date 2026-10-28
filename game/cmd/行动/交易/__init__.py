@@ -40,13 +40,14 @@ async def inspect_trade(user_id: str, message: str, manager: Any) -> None:
                 str(exc),
                 feature.format_actions(),
                 command="交易",
-            )
+            ),
+            title="交易",
         )
         return
     if entry.kind == "overview" and entry.overview is not None:
-        await send_game_reply(reply.overview(feature, entry.overview))
+        await send_game_reply(reply.overview(feature, entry.overview), title="交易")
     elif entry.kind == "page" and entry.page is not None:
-        await send_game_reply(reply.page(feature, entry.page))
+        await send_game_reply(reply.page(feature, entry.page), title="交易")
 
 
 @GameCommand.command(
@@ -88,9 +89,15 @@ async def purchase_trade(user_id: str, message: str, message_context: MessageCon
                 quantity,
             )
         )
-        await send_game_reply(reply.purchased(feature, value))
+        await send_game_reply(
+            reply.purchased(feature, value),
+            title=f"购买 {value.product.grade_name}{value.product.name}",
+        )
     except TradeFeatureError as exc:
-        await send_game_reply(reply.error(feature, str(exc), feature.format_actions(), command="购买"))
+        await send_game_reply(
+            reply.error(feature, str(exc), feature.format_actions(), command="购买"),
+            title="购买",
+        )
 
 
 __all__ = ["router"]

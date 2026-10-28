@@ -43,16 +43,20 @@ async def show_wanzhen(
             user_id, message_context.request_id, message
         )
     except (WanzhenFeatureError, ItemRefError) as exc:
-        await send_game_reply(reply.error(feature.copy(), str(exc)))
+        await send_game_reply(reply.error(feature.copy(), str(exc)), title="万珍殿")
         return
     if entry.kind == "page" and entry.page is not None:
         await send_game_reply(
             reply.page(
                 feature.copy(), entry.page, feature.page_actions(entry.page)
-            )
+            ),
+            title="万珍殿",
         )
     elif entry.kind == "transferred" and entry.transfer is not None:
-        await send_game_reply(reply.transferred(feature.copy(), entry.transfer))
+        await send_game_reply(
+            reply.transferred(feature.copy(), entry.transfer),
+            title=f"万珍殿 {entry.transfer.entry.name}",
+        )
 
 
 __all__ = ["router"]
