@@ -304,7 +304,7 @@ function renderAnimation() {
   const reset = el("button", "", "重播");
   reset.type = "button";
   const speedGroup = el("div", "speed-group");
-  [1, 2, 4].forEach(function (value) {
+  [1, 2, 3, 4, 16].forEach(function (value) {
     const button = el("button", "", value + "x");
     button.type = "button";
     button.setAttribute("aria-pressed", String(state.speed === value));

@@ -9,7 +9,7 @@ from typing import Any
 
 from .catalog import BattleReportCatalog
 
-DEFAULT_PACING = {"行动": 900, "事件": 220, "多段": 160, "收尾": 800}
+DEFAULT_PACING = {"行动": 1000, "事件": 420, "多段": 320, "收尾": 1200}
 _RESOURCE_LABELS = {"血气": "health", "神魂": "soul", "精神": "spirit", "护盾": "shield"}
 _STATUS_CATEGORIES = {"正面", "负面", "控制", "中性"}
 
@@ -307,7 +307,7 @@ def build_animation_view(report: Mapping[str, Any], catalog: BattleReportCatalog
     for turn in sorted(grouped):
         turn_events = grouped[turn]
         actor, skill, targets, _ = _action_for_turn(turn_events)
-        action_t = 200 if turn == 0 else max(last_t + 200, 200)
+        action_t = 200 if turn == 0 else max(last_t + paced["行动"], 200)
         mapped: list[dict[str, Any]] = []
 
         # 开场的阵法/环境事件先走，再让行动落在它们后面。
