@@ -23,10 +23,8 @@ def preview(feature: TongquetaiFeature, value: TongquetaiPreview) -> DocumentMes
         .row(
             (
                 feature.copy("预览", "道侣"),
-                M.text(
-                    f"{value.companion_name} · {value.companion_level}级",
-                    tone="companion",
-                ),
+                M.command(value.companion_name, f"查看 {value.companion_name}")
+                + M.text(f" · {value.companion_level}级", tone="companion"),
             ),
             (
                 feature.copy("预览", "修为"),

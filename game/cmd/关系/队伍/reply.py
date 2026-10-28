@@ -39,6 +39,13 @@ _ERROR_KEYS = {
 }
 
 
+def _invitation_line(copy: TeamCopy, name: str) -> tuple:
+    marker = "\u0000"
+    text = _text(copy, "格式", "邀请来源").format_map({"姓名": marker})
+    head, _, tail = text.partition(marker)
+    return (M.text(head), M.command(name, f"查看 {name}"), M.text(tail))
+
+
 def page(
     copy: TeamCopy,
     value: TeamPage,
@@ -70,14 +77,22 @@ def page(
             builder.line(_text(copy, "查看", "单人队伍"))
         builder.section(_text(copy, "查看", "成员"), icon=_text(copy, "图标", "成员"))
         template = _text(copy, "格式", "成员")
+        marker = "\u0000"
         for index, member in enumerate(value.members, start=1):
-            builder.item(index, template.format_map({"姓名": member.name, "身份": member.role}))
+            text = template.format_map({"姓名": marker, "身份": member.role})
+            head, _, tail = text.partition(marker)
+            builder.item(
+                index,
+                M.text(head),
+                M.command(member.name, f"查看 {member.name}"),
+                M.text(tail),
+            )
     if value.invitation is not None:
         builder.section(
             _text(copy, "查看", "待处理邀请"),
             icon=_text(copy, "图标", "邀请"),
         ).line(
-            _text(copy, "格式", "邀请来源").format_map({"姓名": value.invitation.inviter_name})
+            *_invitation_line(copy, value.invitation.inviter_name)
         ).small(
             _text(copy, "格式", "邀请时限").format_map(
                 {"分钟": value.invitation.remaining_minutes}
