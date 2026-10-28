@@ -145,6 +145,11 @@ def early_page(copy: ExplorationCopy, value: ExplorationSettlement) -> DocumentM
         )
         .small(text(copy, "总结", "再来一次"))
     )
+    if value.battle_count:
+        builder.field(
+            text(copy, "总结", "战报"),
+            text(copy, "总结", "战报提示"),
+        )
     return builder.build()
 
 
@@ -200,6 +205,11 @@ def settlement_summary(
         )
         .field(text(copy, "总结", "总物品"), value.total_item_quantity)
     )
+    if value.battle_count:
+        builder.field(
+            text(copy, "总结", "战报"),
+            text(copy, "总结", "战报提示"),
+        )
     if value.early:
         builder.line(
             text(

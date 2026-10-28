@@ -63,6 +63,10 @@ def view(feature: SectWarFeature, value: SectWarView) -> DocumentMessage:
             feature.text("查看", "胜负"),
             M.text(_winner(feature, value), tone="positive"),
         )
+        builder.field(
+            feature.text("查看", "战报"),
+            feature.text("查看", "战报提示"),
+        )
     return builder.actions(message_actions(feature.actions(value.status))).build()
 
 

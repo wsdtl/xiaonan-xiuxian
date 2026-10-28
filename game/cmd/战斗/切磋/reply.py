@@ -68,6 +68,10 @@ def result(
             (target_name, len(value.target_participants)),
         )
         .row(("行动", value.actions), ("战斗事件", value.events))
+        .field(
+            feature.text("结果", "战报"),
+            feature.text("结果", "战报提示"),
+        )
         .build()
     )
 
