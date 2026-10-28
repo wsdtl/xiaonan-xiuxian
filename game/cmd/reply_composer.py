@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import re
+
 from launch.adapter import (
     MENTION_NONE,
     ReplyTarget,
@@ -27,6 +29,31 @@ from message import (
 )
 
 from .closings import closing_for
+
+_ID_TOKEN = re.compile(r"(?<!\d)(\d{6})(?!\d)")
+
+
+def _resolve_identifier_name(identifier: str) -> str:
+    """编号只在输入侧；命令标题统一换成中文名。"""
+
+    from game.app import current_game_services
+
+    try:
+        return current_game_services().features.chakan_wupin.display_name(identifier)
+    except Exception:  # noqa: BLE001 - 展示兜底不挡回包
+        return ""
+
+
+def _display_command_title(raw: str) -> str:
+    """把标题里的 6 位编号换成实体中文名，找不到就原样保留。"""
+
+    if not _ID_TOKEN.search(raw):
+        return raw
+
+    def replace(match: re.Match[str]) -> str:
+        return _resolve_identifier_name(match.group(1)) or match.group(1)
+
+    return _ID_TOKEN.sub(replace, raw)
 
 
 async def _identity_text(user_id: str) -> str:
@@ -105,10 +132,11 @@ async def send_game_reply(
         raise TypeError("玩家回包只接受 message.Message")
     if isinstance(payload, ImageMessage):
         return await manager.send(payload, is_log=is_log, request_id=request_id)
+    display_title = (context.raw_message if title is None else title).strip()
     decorated = compose_player_reply(
         payload,
         identity=await _identity_text(context.user_id),
-        title=(context.raw_message if title is None else title).strip(),
+        title=_display_command_title(display_title),
         icon="game.cmd",
     )
     return await manager.send(decorated, is_log=is_log, request_id=request_id)

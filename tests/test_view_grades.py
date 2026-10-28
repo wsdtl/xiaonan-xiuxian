@@ -92,6 +92,20 @@ def test_awakenable_bloodline_renders_tiers(services) -> None:
     assert "气血 <5%：×2.5" in body
 
 
+def test_command_title_replaces_item_id_with_name(services, monkeypatch) -> None:
+    import game.app as app
+    from game.cmd.reply_composer import _display_command_title
+
+    monkeypatch.setattr(app, "_services", services)
+    assert services.features.chakan_wupin.display_name("120033") == "一息续命丹"
+    assert services.features.chakan_wupin.display_name("300001") == "敌·陆清野"
+    assert services.features.chakan_wupin.display_name("650001") == "灵息浮游"
+    assert _display_command_title("查看 120033") == "查看 一息续命丹"
+    assert _display_command_title("查看 300001") == "查看 敌·陆清野"
+    assert _display_command_title("查看 400001") == "查看 负甲听潮"
+    assert _display_command_title("查看 不存在的东西") == "查看 不存在的东西"
+
+
 def test_special_pill_has_no_grade_and_location(services) -> None:
     result = _inspect(services, "160001")
     assert result.detail is not None

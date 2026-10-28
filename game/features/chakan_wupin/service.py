@@ -581,6 +581,19 @@ class ItemInspectionFeature:
             )
         return tuple(sorted(found.values(), key=lambda item: item.multiplier))
 
+    def display_name(self, identifier: str) -> str:
+        """给命令标题用：编号 → 中文名；认不出返回空串。"""
+
+        query = str(identifier or "").strip()
+        if not query:
+            return ""
+        try:
+            return self._catalog.inspect_entity(query).name
+        except (ItemNotFoundError, ItemNameAmbiguousError):
+            pass
+        detail = self.inspect_enemy(query)
+        return detail.name if detail is not None else ""
+
     def related_details(self, detail: ItemDetail) -> tuple[ItemDetail, ...]:
         """公开的详情引用解析：敌人页也要用同一份构筑/卡名。"""
 
