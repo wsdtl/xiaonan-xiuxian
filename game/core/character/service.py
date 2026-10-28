@@ -1848,14 +1848,14 @@ class CharacterService:
             _realm_order(self._data.entity("境界", next_realm.realm_id).get("等级下限"))
         )
         if cap_after > cap_before:
-            cell = dict(character.get("意境") or {})
+            paths, points = _state_yijing(character.get("意境")) or ({}, 0)
             grant = _yijing_tier_cost(cap_after)
             if cap_before == 1:
                 grant += _yijing_tier_cost(1)
-            cell["道行"] = int(cell.get("道行") or 0) + grant
-            cell.setdefault("编号", "")
-            cell.setdefault("阶", 0)
-            character["意境"] = cell
+            character["意境"] = {
+                "路": {key: paths[key] for key in sorted(paths)},
+                "道行": points + grant,
+            }
         return CharacterBreakthroughPlan(
             current_realm_id,
             next_realm.realm_id,
@@ -2453,12 +2453,16 @@ def _check_yijing_id(content_id: str) -> None:
 
 
 def _state_yijing(value: object) -> tuple[dict[str, int], int] | None:
-    """意境：状态里存「路」（编号 → 阶）与**六路共享**的道行；名称按编号现取。"""
+    """意境：状态里存「路」（编号 → 阶）与**六路共享**的道行；名称按编号现取。
+
+    旧存档里可能残留单路的「编号」「阶」：突破代码曾把这两个占位键写回。
+    读取时把它们迁进「路」；空的「编号」/0「阶」只是旧占位，直接丢弃。
+    """
 
     if value is None:
         return None
     row = _state_mapping(value, "人物.意境")
-    if set(row) - {"路", "道行"}:
+    if set(row) - {"路", "道行", "编号", "阶"}:
         raise CharacterStateError("人物.意境只认「路」「道行」")
     paths: dict[str, int] = {}
     raw_paths = row.get("路")
@@ -2470,6 +2474,19 @@ def _state_yijing(value: object) -> tuple[dict[str, int], int] | None:
             if isinstance(raw_tier, bool) or not isinstance(raw_tier, int) or not 1 <= raw_tier <= 9:
                 raise CharacterStateError("人物.意境.路.阶必须是1到9的整数（点过的路才有键）")
             paths[content_id] = raw_tier
+    legacy_id = str(row.get("编号") or "").strip()
+    legacy_tier = row.get("阶", 0)
+    if legacy_id:
+        _check_yijing_id(legacy_id)
+        if (
+            isinstance(legacy_tier, bool)
+            or not isinstance(legacy_tier, int)
+            or not 1 <= legacy_tier <= 9
+        ):
+            raise CharacterStateError("人物.意境.旧档阶必须是1到9的整数")
+        paths.setdefault(legacy_id, legacy_tier)
+    elif legacy_tier not in (0, None):
+        raise CharacterStateError("人物.意境.旧档有阶却没有编号")
     points = row.get("道行", 0)
     if isinstance(points, bool) or not isinstance(points, int) or points < 0:
         raise CharacterStateError("人物.意境.道行必须是不小于0的整数")
