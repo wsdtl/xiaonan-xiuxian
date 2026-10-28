@@ -10,7 +10,7 @@ from game.core.character.contracts import CharacterCreateCommand
 from game.features.biguan import RetreatEntry, RetreatFeatureError
 from game.features.caikuang import OreGatheringFeatureError
 from game.features.caiyao import HerbGatheringFeatureError
-from game.features.tanxian import ExplorationFeatureError
+from game.features.tanxian import ExplorationEntry, ExplorationFeatureError
 
 
 def _create(services, user_id: str, name: str) -> None:
@@ -27,6 +27,19 @@ def test_retreat_entry_has_no_page_fields() -> None:
     assert "total_pages" not in names
 
 
+def test_exploration_entry_has_no_page_fields() -> None:
+    names = {field.name for field in fields(ExplorationEntry)}
+    assert "page" not in names
+    assert "total_pages" not in names
+
+
+def test_exploration_exit_without_session_is_rejected(services) -> None:
+    user_id = "entry-tanxian"
+    _create(services, user_id, "分支探险")
+    with pytest.raises(ExplorationFeatureError):
+        asyncio.run(services.features.tanxian.exit(user_id, "req-tanxian"))
+
+
 def test_retreat_exit_without_session_is_rejected(services) -> None:
     user_id = "entry-biguan"
     _create(services, user_id, "分支闭关")
@@ -37,7 +50,6 @@ def test_retreat_exit_without_session_is_rejected(services) -> None:
 @pytest.mark.parametrize(
     "feature_name, error_type, command",
     [
-        ("tanxian", ExplorationFeatureError, "探险 胡说"),
         ("caiyao", HerbGatheringFeatureError, "采药 胡说"),
         ("caikuang", OreGatheringFeatureError, "采矿 胡说"),
     ],

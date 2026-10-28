@@ -39,8 +39,6 @@ class ExplorationEntry:
     started: ExplorationStarted | None = None
     progress: ExplorationProgress | None = None
     settlement: ExplorationSettlement | None = None
-    page: int = 1
-    total_pages: int = 1
 
 
 __all__ = [

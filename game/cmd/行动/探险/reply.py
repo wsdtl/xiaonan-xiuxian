@@ -8,7 +8,7 @@ from ...actions import CommandAction
 
 from ...presentation import error_document
 
-from message import DocumentBuilder, DocumentMessage, M
+from message import DocumentMessage, M
 
 from collections.abc import Mapping
 
@@ -19,7 +19,6 @@ from game.features.tanxian import (
     ExplorationProgress,
     ExplorationSettlement,
     ExplorationStarted,
-    ExplorationUserSummary,
 )
 
 from ...actions import message_actions
@@ -149,152 +148,127 @@ def early_page(copy: ExplorationCopy, value: ExplorationSettlement) -> DocumentM
     )
 
 
-def settlement_page(
+def settlement_summary(
     copy: ExplorationCopy,
     feature: ExplorationFeature,
     value: ExplorationSettlement,
-    page: int,
-    actions: tuple[ExplorationAction, ...],
 ) -> DocumentMessage:
+    """探险总结：单屏紧凑，不按用户分页。"""
+
     # 一场都没跑完：别报「战败」（明明没人打），单独给一张说明卡。
     if value.early and not value.battle_count:
         return early_page(copy, value)
-    total_pages = 1 + len(value.users)
-    if page == 1:
-        survived = any(
-            character.alive for user in value.users for character in user.characters
+    survived = any(
+        character.alive for user in value.users for character in user.characters
+    )
+    builder = (
+        M.document()
+        .inline_section(
+            text(copy, "总结", "标题"),
+            M.status(
+                "完成" if survived else "战败",
+                tone="positive" if survived else "danger",
+            ),
+            icon="game.success" if survived else "game.pin_doc",
         )
-        builder = (
-            M.document()
-
-            .inline_section(
-                "结算",
-                M.status(
-                    "完成" if survived else "战败",
-                    tone="positive" if survived else "danger",
-                ),
-                icon="game.success" if survived else "game.pin_doc",
+        .section(value.location_name, icon="game.seed")
+        .row(
+            (text(copy, "总结", "战斗"), f"{value.battle_count}场"),
+            (text(copy, "总结", "战败敌人"), value.defeated_enemies),
+        )
+        .field(
+            text(copy, "总结", "结局"),
+            M.status(
+                text(copy, "总结", "提前")
+                if value.early
+                else text(copy, "总结", "完成" if survived else "战败"),
+                tone="warning" if value.early else ("positive" if survived else "danger"),
+            ),
+        )
+        .row(
+            (text(copy, "总结", "参与用户"), value.participant_count),
+            (
+                text(copy, "总结", "总灵石"),
+                M.text(value.total_spirit_stones, tone="cultivation"),
+            ),
+        )
+        .field(text(copy, "总结", "总物品"), value.total_item_quantity)
+    )
+    if value.early:
+        builder.line(
+            text(
+                copy,
+                "总结",
+                "提前说明",
+                {"场数": value.battle_count, "总场数": value.total_battles},
             )
-            .section(value.location_name, icon="game.seed")
-            .row(
-                (text(copy, "总结", "战斗"), f"{value.battle_count}场"),
-                (text(copy, "总结", "战败敌人"), value.defeated_enemies),
-            )
-            .field(
-                text(copy, "总结", "结局"),
-                M.status(
-                    text(copy, "总结", "提前")
-                    if value.early
-                    else text(copy, "总结", "完成" if survived else "战败"),
-                    tone="warning" if value.early else ("positive" if survived else "danger"),
-                ),
-            )
-            .row(
-                (text(copy, "总结", "参与用户"), value.participant_count),
+        )
+    if not survived:
+        builder.line(text(copy, "总结", "战败处理"))
+    for user in value.users:
+        if user.treasure_activation is not None:
+            activation = user.treasure_activation
+            builder.field("灵宝", f"{activation.name} · {activation.summary}")
+        for character in user.characters:
+            title = text(copy, "用户", "道侣" if character.companion else "人物")
+            builder.section(f"{title} · {character.name}", icon="game.role").row(
                 (
-                    text(copy, "总结", "总灵石"),
-                    M.text(value.total_spirit_stones, tone="cultivation"),
+                    "状态",
+                    M.status(
+                        "存活" if character.alive else "身死",
+                        tone="positive" if character.alive else "danger",
+                    ),
                 ),
+                (
+                    text(copy, "用户", "最终血气"),
+                    M.text(_resource(character.health), tone="health"),
+                ),
+            ).field(
+                text(copy, "用户", "最终精神"),
+                M.text(_resource(character.spirit), tone="spirit"),
+            ).field(
+                text(copy, "用户", "武器经验"),
+                M.text(f"+{character.weapon_experience}", tone="positive"),
             )
-            .field(text(copy, "总结", "总物品"), value.total_item_quantity)
-        )
-        if value.early:
-            # 提前结束照发已跑完的场次，把「发了几场」说清楚。
-            builder.line(
-                text(
-                    copy,
-                    "总结",
-                    "提前说明",
-                    {"场数": value.battle_count, "总场数": value.total_battles},
+            if character.injury_changes:
+                builder.field(
+                    text(copy, "用户", "伤势变化"),
+                    "、".join(
+                        f"{name} {before}→{after}"
+                        for name, before, after in character.injury_changes
+                    ),
                 )
-            )
-        if not survived:
-            builder.line(text(copy, "总结", "战败处理"))
-        builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
-    else:
-        builder = _user_page(copy, feature, value.users[page - 2], page, total_pages)
-    return builder.actions(message_actions(actions)).build()
-
-
-def _user_page(
-    copy: ExplorationCopy,
-    feature: ExplorationFeature,
-    value: ExplorationUserSummary,
-    page: int,
-    total_pages: int,
-) -> DocumentBuilder:
-    builder = M.document()
-    if value.treasure_activation is not None:
-        activation = value.treasure_activation
-        builder.section("灵宝", icon="game.box").field(
-            activation.name, activation.summary
-        )
-    for character in value.characters:
-        title = text(copy, "用户", "道侣" if character.companion else "人物")
-        heading = f"{title} · {character.name}"
-        # 敌人把它做成无边框按钮：名字只作显示，句柄一律用编号。
-        number = "" if character.companion else feature.enemy_number(character.name)
-        if number:
-            heading = M.command(heading, f"查看 {number}")
-        builder.section(heading, icon="game.role").row(
-            (
-                "状态",
-                M.status(
-                    "存活" if character.alive else "身死",
-                    tone="positive" if character.alive else "danger",
-                ),
-            ),
-            (
-                text(copy, "用户", "最终血气"),
-                M.text(_resource(character.health), tone="health"),
-            ),
-        ).field(
-            text(copy, "用户", "最终精神"),
-            M.text(_resource(character.spirit), tone="spirit"),
-        ).field(
-            text(copy, "用户", "武器经验"),
-            M.text(f"+{character.weapon_experience}", tone="positive"),
-        )
-        if character.injury_changes:
+            if character.injuries:
+                builder.field(
+                    text(copy, "用户", "当前伤势"),
+                    "、".join(
+                        f"{name}×{stacks}"
+                        for name, stacks in character.injuries
+                    ),
+                )
+        if user.consumed:
             builder.field(
-                text(copy, "用户", "伤势变化"),
+                text(copy, "用户", "消耗"),
                 "、".join(
-                    f"{name} {before}→{after}"
-                    for name, before, after in character.injury_changes
+                    f"{feature.item_label(item_id, grade_id)} × {quantity}"
+                    for item_id, grade_id, quantity in user.consumed
                 ),
             )
-        if character.injuries:
+        if user.drops:
             builder.field(
-                text(copy, "用户", "当前伤势"),
-                "、".join(f"{name}×{stacks}" for name, stacks in character.injuries),
+                text(copy, "用户", "所得"),
+                f"{text(copy, '用户', '灵石')} {user.spirit_stones}、"
+                + "、".join(
+                    f"{feature.item_label(item_id, grade_id)} × {quantity}"
+                    for item_id, grade_id, quantity in user.drops
+                ),
             )
-    builder.section(text(copy, "用户", "消耗"), icon="game.box")
-    if value.consumed:
-        for index, (item_id, grade_id, quantity) in enumerate(value.consumed, start=1):
-            builder.item(index, *_item_parts(feature, item_id, grade_id, quantity))
-    else:
-        builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "无"))
-    builder.section(text(copy, "用户", "所得"), icon="game.box").field(
-        text(copy, "用户", "灵石"), M.text(value.spirit_stones, tone="cultivation")
-    )
-    if value.drops:
-        for index, (item_id, grade_id, quantity) in enumerate(value.drops, start=1):
-            builder.item(index, *_item_parts(feature, item_id, grade_id, quantity))
-    else:
-        builder.line(M.status("无", tone="muted"), " ", text(copy, "用户", "无"))
-    return builder.small(text(copy, "总结", "用户页", {"当前页": page, "总页数": total_pages}))
-
-
-def _item_parts(
-    feature: ExplorationFeature, item_id: str, grade_id: str, quantity: int
-) -> tuple[object, ...]:
-    return (
-        M.command(
-            M.text(feature.item_label(item_id, grade_id)),
-            f"查看 {feature.item_label(item_id, grade_id)}",
-        ),
-        f" × {quantity}",
-    )
+        elif user.spirit_stones:
+            builder.field(
+                text(copy, "用户", "所得"),
+                f"{text(copy, '用户', '灵石')} {user.spirit_stones}",
+            )
+    return builder.build()
 
 
 def _resource(value: float) -> str:
@@ -305,4 +279,4 @@ def _resource(value: float) -> str:
     )
 
 
-__all__ = ["error", "progress", "settlement_page", "started", "text"]
+__all__ = ["error", "progress", "settlement_summary", "started", "text"]

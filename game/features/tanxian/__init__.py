@@ -3,6 +3,7 @@
 from .contracts import (
     ExplorationAction,
     ExplorationCopy,
+    ExplorationEntry,
     ExplorationFeatureError,
     ExplorationProgress,
     ExplorationSettlement,
@@ -14,6 +15,7 @@ from .service import ExplorationFeature
 __all__ = [
     "ExplorationAction",
     "ExplorationCopy",
+    "ExplorationEntry",
     "ExplorationFeature",
     "ExplorationFeatureError",
     "ExplorationProgress",
