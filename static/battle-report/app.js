@@ -523,6 +523,17 @@ function setFormationFill(fill, percent) {
   else fill.style.width = Math.max(0, Math.min(100, percent)) + "%";
 }
 
+function seedHue(seed) {
+  let value = 0;
+  const text = String(seed || "avatar");
+  for (let index = 0; index < text.length; index += 1) value = (value * 31 + text.charCodeAt(index)) >>> 0;
+  return value % 360;
+}
+
+function avatarAssetUrl(asset) {
+  return "/static/battle-report/avatars/" + String(asset || "").split("/").map(encodeURIComponent).join("/");
+}
+
 function makeUnitCard(unit) {
   const card = el("div", "unit-card " + unit.side);
   card.dataset.unit = unit.id;
@@ -534,9 +545,12 @@ function makeUnitCard(unit) {
     bars.appendChild(bar);
   });
   card.appendChild(bars);
-  const avatar = el("div", "avatar " + (unit.kind || "other"));
+  const avatarKind = unit.avatar_kind || (unit.kind === "player" ? "player" : unit.kind === "companion" ? "companion" : "enemy");
+  const avatarMode = unit.avatar_mode || (unit.kind === "player" && unit.qq ? "qq" : "generated");
+  const avatar = el("div", "avatar " + (unit.kind || "other") + " avatar-" + avatarKind);
+  avatar.style.setProperty("--avatar-hue", String(seedHue(unit.avatar_seed || unit.id || unit.name)));
   avatar.appendChild(el("span", "avatar-fallback", unit.avatar_text || "?"));
-  if (unit.kind === "player" && unit.qq) {
+  const addAssetImage = function (src) {
     const image = document.createElement("img");
     image.className = "avatar-image";
     image.alt = "";
@@ -544,9 +558,17 @@ function makeUnitCard(unit) {
     image.decoding = "async";
     image.referrerPolicy = "no-referrer";
     image.addEventListener("load", function () { avatar.classList.add("has-image"); });
-    image.addEventListener("error", function () { image.remove(); avatar.classList.remove("has-image"); });
-    image.src = "https://q.qlogo.cn/g?b=qq&nk=" + encodeURIComponent(unit.qq) + "&s=100";
+    image.addEventListener("error", function () {
+      image.remove();
+      avatar.classList.remove("has-image");
+    });
+    image.src = src;
     avatar.appendChild(image);
+  };
+  if (avatarMode === "qq" && unit.qq) {
+    addAssetImage("https://q.qlogo.cn/g?b=qq&nk=" + encodeURIComponent(unit.qq) + "&s=100");
+  } else if (avatarMode === "asset" && unit.avatar_asset) {
+    addAssetImage(avatarAssetUrl(unit.avatar_asset));
   }
   card.appendChild(avatar);
   card.appendChild(el("div", "unit-name", unit.name));

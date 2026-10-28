@@ -130,13 +130,32 @@ def _unit(participant: Mapping[str, Any]) -> dict[str, Any]:
         parts = raw_id.split(":", 2)
         qq = parts[1] if len(parts) > 1 else ""
     avatar_text = qq[:1] if kind == "player" and qq else (name[:1] or "?")
+    content_id = _text(participant.get("content_id"))
+    combatant_type = _text(participant.get("combatant_type"))
+    if kind == "player":
+        avatar_kind = "player"
+    elif kind == "companion":
+        avatar_kind = "companion"
+    elif raw_id.startswith("boss:") or any(marker in combatant_type for marker in ("首领", "Boss", "boss", "妖王")):
+        avatar_kind = "boss"
+    else:
+        avatar_kind = "enemy" if kind == "other" else "other"
+    avatar_asset = _text(participant.get("avatar_asset"))
+    if not avatar_asset and avatar_kind == "boss" and content_id:
+        avatar_asset = f"boss/{content_id}"
+    avatar_mode = "qq" if avatar_kind == "player" and qq else "asset" if avatar_asset else "generated"
+    avatar_seed = f"{raw_id}:{content_id}:{name}"
     return {
         "id": raw_id,
         "name": name,
-        "content_id": _text(participant.get("content_id")),
+        "content_id": content_id,
         "kind": kind,
         "qq": qq,
         "avatar_text": avatar_text,
+        "avatar_mode": avatar_mode,
+        "avatar_kind": avatar_kind,
+        "avatar_seed": avatar_seed,
+        "avatar_asset": avatar_asset,
         "group": _text(participant.get("group_id")),
         "side": (
             participant.get("side")

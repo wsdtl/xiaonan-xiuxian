@@ -51,7 +51,11 @@
       "kind",
       "qq",
       "avatar_text",
-      "group"
+      "group",
+      "avatar_mode",
+      "avatar_kind",
+      "avatar_seed",
+      "avatar_asset"
     ],
     "动画阵法字段": [
       "id",

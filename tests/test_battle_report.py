@@ -260,17 +260,17 @@ def test_animation_payload_is_single_screen_contract() -> None:
 def test_animation_avatars_use_qq_first_digit_and_companion_name() -> None:
     services = build_game_services()
     try:
-        def side(pid: str, name: str) -> CombatantSpec:
+        def side(pid: str, name: str, content_id: str = "") -> CombatantSpec:
             return CombatantSpec(
-                id=pid, name=name, attributes=dict(ATTRS),
+                id=pid, name=name, content_id=content_id, attributes=dict(ATTRS),
                 build=(CombatBuildRef("真意", CARD, instance_id=f"{pid}:{CARD}", born_order=0),),
             )
 
         result = asyncio.run(
             services.core.combat.execute(
                 CombatRequest(
-                    left_team=(side("player:123456789", "甲"),),
-                    right_team=(side("companion:987654321:410154", "青璃"),),
+                    left_team=(side("player:123456789", "甲"), side("enemy:900001", "妖狼")),
+                    right_team=(side("companion:987654321:410154", "青璃"), side("boss:900002", "山君", "620001")),
                     seed=20260911, action_limit=20,
                     report=CombatReportSpec(scene="切磋", generated_at="2026-01-01T00:00:00+08:00"),
                 )
@@ -280,11 +280,23 @@ def test_animation_avatars_use_qq_first_digit_and_companion_name() -> None:
         units = {unit["id"]: unit for unit in parts["animation"]["units"]}
         player = units["player:123456789"]
         companion = units["companion:987654321:410154"]
+        enemy = units["enemy:900001"]
+        boss = units["boss:900002"]
         assert player["kind"] == "player"
         assert player["qq"] == "123456789"
         assert player["avatar_text"] == "1"
+        assert player["avatar_mode"] == "qq"
+        assert player["avatar_kind"] == "player"
         assert companion["kind"] == "companion"
         assert companion["avatar_text"] == "青"
+        assert companion["avatar_mode"] == "generated"
+        assert companion["avatar_kind"] == "companion"
+        assert companion["avatar_seed"].startswith("companion:987654321")
+        assert enemy["avatar_mode"] == "generated"
+        assert enemy["avatar_kind"] == "enemy"
+        assert boss["avatar_mode"] == "asset"
+        assert boss["avatar_kind"] == "boss"
+        assert boss["avatar_asset"] == "boss/620001"
     finally:
         services.core.database.close()
 
