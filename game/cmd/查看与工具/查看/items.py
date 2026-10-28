@@ -479,9 +479,9 @@ def _yijing_lines(source: SectionInput) -> tuple[str, ...]:
                 if parts:
                     lines.append("每阶增幅：" + "、".join(parts))
     main = str(fields.get("主项轴") or "意境")
+    # 1 阶只交代主项轴；2–6 阶不写「再增强一档」这种无数据摘要。
+    # 每阶实际数值由上面的「每阶增幅」逐项列出，7–9 阶再由质变监听补全。
     lines.append(f"1阶：初入此境，{main}。")
-    for tier in range(2, 7):
-        lines.append(f"{tier}阶：在{tier - 1}阶基础上，{main}再增强一档。")
     tiers = fields.get("质变")
     if isinstance(tiers, Mapping):
         for tier in ("7", "8", "9"):

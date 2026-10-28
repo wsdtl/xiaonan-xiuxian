@@ -59,6 +59,7 @@ def test_yijing_renders_all_nine_tiers(services) -> None:
     assert "1阶：" in body
     assert "9阶：" in body
     assert "每阶增幅：" in body
+    assert "再增强一档" not in body
     assert " \n7阶效果：" in body
     assert " \n8阶效果：" in body
     assert " \n9阶效果：" in body
