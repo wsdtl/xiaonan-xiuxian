@@ -425,8 +425,7 @@ function buildUnits() {
   });
   ["left", "right"].forEach(function (side) {
     const sideGroups = groups.filter(function (group) { return group.side === side; });
-    let counts = splitRows(sideGroups.length);
-    if (side === "right") counts = counts.slice().reverse();
+    const counts = splitRows(sideGroups.length);
     let cursor = 0;
     counts.forEach(function (count) {
       const row = el("div", "unit-row " + side);
@@ -451,11 +450,23 @@ function buildUnits() {
 
 function splitRows(count) {
   if (count <= 0) return [];
-  if (count <= 6) return [count];
+  if (count <= 6) return count % 2 === 0 ? [count / 2, count / 2] : [Math.ceil(count / 2), Math.floor(count / 2)];
   if (count <= 10) return [Math.ceil(count / 2), Math.floor(count / 2)];
-  const base = Math.floor(count / 4);
-  const remainder = count % 4;
-  return [base + (remainder > 0 ? 1 : 0), base + (remainder > 1 ? 1 : 0), base + (remainder > 2 ? 1 : 0), base];
+  if (count % 2 === 0) {
+    const rows = count <= 12 ? 3 : 4;
+    const base = Math.floor(count / rows);
+    const remainder = count - base * rows;
+    const values = Array.from({ length: rows }, function () { return base; });
+    if (remainder === 2 && rows === 4) { values[1] += 1; values[2] += 1; }
+    else if (remainder === 1) { values[Math.floor(rows / 2)] += 1; }
+    else if (remainder === 3) { values[0] += 1; values[1] += 1; values[2] += 1; }
+    return values;
+  }
+  const rest = count - 3;
+  if (rest <= 10) return [3, rest / 2, rest / 2];
+  const rows = Math.ceil(rest / 4);
+  const first = rest - 4 * (rows - 1);
+  return [3, first, ...Array.from({ length: rows - 1 }, function () { return 4; })];
 }
 
 function flagSvg(side) {
