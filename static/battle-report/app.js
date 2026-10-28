@@ -1,6 +1,6 @@
 const root = document.getElementById("reportRoot");
 const initialMode = new URLSearchParams(location.search).get("mode") === "animation" ? "animation" : "text";
-const state = { mode: initialMode, payload: null, playing: false, speed: 1, t: 0, duration: 1, frame: 0, last: 0, cursor: 0, units: new Map(), formations: new Map(), env: null, floatStacks: new Map() };
+const state = { mode: initialMode, payload: null, playing: false, speed: 1, t: 0, duration: 1, frame: 0, last: 0, cursor: 0, units: new Map(), formations: new Map(), env: null, floatStacks: new Map(), rayQueue: [], rayTimer: 0 };
 const RESULT = { left: "左方胜", right: "右方胜", draw: "未分胜负" };
 const RES_LABEL = { health: "血气", soul: "神魂", spirit: "精神", shield: "护盾" };
 const TYPE_LABEL = { attack: "单体", aoe: "群攻", combo: "连击", drain: "吸取", heal: "治疗", shield: "护盾", buff: "增益", debuff: "减益", control: "控制", item: "丹药", other: "其他" };
@@ -145,12 +145,25 @@ function renderText() {
     }
     const line = el("div", "text-line");
     line.appendChild(el("span", "text-time", sec(event.t)));
-    const body = el("div", "text-body");
+    const body = el("div", "text-body type-" + eventStyle(event));
     body.appendChild(formatText(event));
     line.appendChild(body);
     wrap.appendChild(line);
   });
   return wrap;
+}
+
+function eventStyle(event) {
+  if (event.type === "damage") return event.resource === "soul" ? "soul" : "damage";
+  if (event.type === "heal" || event.type === "revive") return "heal";
+  if (event.type === "shield") return "shield";
+  if (event.type === "status_add" || event.type === "status_remove" || event.type === "status_stack") return event.category === "控制" ? "control" : event.category === "负面" ? "debuff" : event.category === "正面" ? "buff" : "status";
+  if (event.type === "miss") return "miss";
+  if (event.type === "unit_down") return "down";
+  if (event.type === "formation_cast" || event.type === "formation_turn" || event.type === "formation_impact" || event.type === "formation_break") return "formation";
+  if (event.type === "environment_charge" || event.type === "environment_stage") return "environment";
+  if (event.type === "action") return "action";
+  return "system";
 }
 
 function formatText(event) {
@@ -498,6 +511,9 @@ function resetVisual() {
   state.floatStacks.clear();
   const fx = state.ui.stage.querySelector(".fx-layer");
   if (fx) fx.textContent = "";
+  state.rayQueue.length = 0;
+  if (state.rayTimer) { clearTimeout(state.rayTimer); state.rayTimer = 0; }
+  if (state.ui.rayLayer) state.ui.rayLayer.textContent = "";
   state.units.clear();
   state.formations.clear();
   state.payload.units.forEach(function (unit) {
@@ -604,6 +620,22 @@ function flashTarget(id, kind) {
 
 function drawRay(source, target, kind) {
   if (!state.ui || !state.ui.rayLayer) return;
+  if (state.rayQueue.length >= 16) return;
+  state.rayQueue.push({ source: source, target: target, kind: kind || "damage" });
+  pumpRays();
+}
+
+function pumpRays() {
+  if (state.rayTimer || !state.rayQueue.length || !state.ui) return;
+  const item = state.rayQueue.shift();
+  renderRay(item.source, item.target, item.kind);
+  state.rayTimer = setTimeout(function () {
+    state.rayTimer = 0;
+    pumpRays();
+  }, Math.max(18, 90 / Math.max(1, state.speed)));
+}
+
+function renderRay(source, target, kind) {
   const from = rayElement(source);
   const to = rayElement(target);
   if (!from || !to || from === to) return;
@@ -618,7 +650,7 @@ function drawRay(source, target, kind) {
   line.setAttribute("y2", String(b.top - stageRect.top + b.height / 2));
   line.setAttribute("class", "ray " + (kind || "damage"));
   state.ui.rayLayer.appendChild(line);
-  setTimeout(function () { line.remove(); }, 720);
+  setTimeout(function () { line.remove(); }, 680);
 }
 
 function showBanner(text, kind) {
@@ -637,7 +669,9 @@ function applyEvent(event, silent) {
     state.ui.stage.querySelectorAll(".unit-card").forEach(function (n) { n.classList.remove("active"); });
     if (card) card.classList.add("active");
     if (!silent) {
-      (event.targets || []).forEach(function (target) { flashTarget(target, event.animation); });
+      (event.targets || []).forEach(function (target, index) {
+        setTimeout(function () { flashTarget(target, event.animation); }, Math.min(index, 12) * Math.max(10, 90 / Math.max(1, state.speed)));
+      });
       showCast(event.actor, event.skill || "行动");
     }
     if (state.ui.centerBadge) state.ui.centerBadge.textContent = String(event.turn || 0);
@@ -645,7 +679,7 @@ function applyEvent(event, silent) {
   }
   if (event.type === "damage") {
     const target = event.target;
-    drawRay(event.source, event.target, event.resource === "soul" ? "soul" : "damage");
+    if (!silent) drawRay(event.source, event.target, event.resource === "soul" ? "soul" : "damage");
     if (event.shield_absorbed) {
       const unit = state.units.get(target);
       if (unit) setResource(target, "shield", unit.shield - Number(event.shield_absorbed || 0));
@@ -664,7 +698,7 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "heal" || event.type === "shield" || event.type === "revive") {
-    drawRay(event.source, event.target, event.type === "shield" ? "shield" : "heal");
+    if (!silent) drawRay(event.source, event.target, event.type === "shield" ? "shield" : "heal");
     const unit = state.units.get(event.target);
     if (!unit) return;
     const resource = event.type === "shield" ? "shield" : (event.resource || "health");
@@ -682,7 +716,7 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "status_add" || event.type === "status_remove" || event.type === "status_stack") {
-    if (event.type === "status_add") drawRay(event.source, event.target, "status");
+    if (!silent && event.type === "status_add") drawRay(event.source, event.target, "status");
     const unit = state.units.get(event.target);
     if (!unit) return;
     if (event.type === "status_add") {
@@ -732,7 +766,7 @@ function applyEvent(event, silent) {
     return;
   }
   if (event.type === "formation_impact") {
-    drawRay(event.source, event.target, "formation");
+    if (!silent) drawRay(event.source, event.target, "formation");
     const value = state.formations.get(event.target);
     if (value) {
       value.capacity = Math.max(0, Number(event.after) || value.capacity - Number(event.value || 0));
