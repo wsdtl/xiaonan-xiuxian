@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import sys
 from typing import Any
@@ -192,7 +193,7 @@ def resolve_intents() -> int:
     十进制整数（需要精确定位时使用）。
     """
 
-    raw = str(config.get("QQ_WS_INTENTS", "") or "").strip()
+    raw = str(config.adapter.qq_ws_intents or "").strip()
     if not raw:
         return named_intents(DEFAULT_INTENT_NAMES)
 
@@ -200,11 +201,18 @@ def resolve_intents() -> int:
         return int(raw)
 
     try:
-        names = config.get_list("QQ_WS_INTENTS", DEFAULT_INTENT_NAMES)
-    except (TypeError, ValueError) as exc:
+        parsed = ast.literal_eval(raw)
+    except (SyntaxError, ValueError) as exc:
         raise ValueError(
             "QQ_WS_INTENTS 必须是 intent 名字列表，或一个十进制整数"
         ) from exc
+    if not isinstance(parsed, list) or not all(
+        isinstance(item, str) for item in parsed
+    ):
+        raise ValueError(
+            "QQ_WS_INTENTS 必须是 intent 名字列表，或一个十进制整数"
+        )
+    names = [item.strip() for item in parsed if item.strip()]
     if not names:
         raise ValueError("QQ_WS_INTENTS 不能是空列表")
     return named_intents(names)
@@ -246,7 +254,7 @@ def gateway_url() -> str:
     配置项存在的意义是让本地回环网关和代理能被真实验证，不必改代码。
     """
 
-    return str(config.get("QQ_WS_GATEWAY_URL", "") or "").strip()
+    return str(config.adapter.qq_ws_gateway_url or "").strip()
 
 
 __all__ = [

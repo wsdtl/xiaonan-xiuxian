@@ -574,3 +574,62 @@ def test_gateway_reconnect_delay_has_jitter(monkeypatch: pytest.MonkeyPatch) -> 
         )
     )
     assert runtime._gateway_reconnect_delay() == pytest.approx(0.5)
+
+
+def _install_adapter_config(monkeypatch: pytest.MonkeyPatch, adapter: object) -> None:
+    """Config 是冻结 dataclass：整体替换，并同步 gateway 模块的本地引用。"""
+
+    import importlib
+    from dataclasses import replace
+
+    from launch.adapter.qq_ws import gateway as gateway_module
+    from launch.config import config as framework_config
+
+    config_module = importlib.import_module("launch.config")
+    updated = replace(framework_config, adapter=adapter)
+    monkeypatch.setattr(config_module, "config", updated)
+    monkeypatch.setattr(gateway_module, "config", updated)
+
+
+def test_adapter_env_keys_are_read_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """.env 里的 QQ_TRANSPORT/QQ_WS_* 必须真的被读取。
+
+    这些键被排除在 config.custom 之外；读取方必须走 Config.adapter，
+    否则 .env 写 websocket 也会永远回落 webhook。
+    """
+
+    from launch.adapter.qq_ws import gateway as gateway_module
+    from launch.adapter.registry import qq_transport
+    from launch.config import AdapterConfig
+
+    _install_adapter_config(
+        monkeypatch,
+        AdapterConfig(
+            qq_transport="both",
+            qq_ws_gateway_url="wss://override.invalid",
+            qq_ws_intents='["GROUP_AND_C2C_EVENT", "INTERACTION"]',
+        ),
+    )
+
+    assert qq_transport() == "both"
+    assert gateway_module.gateway_url() == "wss://override.invalid"
+    assert gateway_module.resolve_intents() == (1 << 25) | (1 << 26)
+
+
+def test_adapter_intents_accepts_decimal(monkeypatch: pytest.MonkeyPatch) -> None:
+    from launch.adapter.qq_ws import gateway as gateway_module
+    from launch.config import AdapterConfig
+
+    _install_adapter_config(monkeypatch, AdapterConfig("websocket", "", "123"))
+    assert gateway_module.resolve_intents() == 123
+
+
+def test_adapter_intents_rejects_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    from launch.adapter.qq_ws import gateway as gateway_module
+    from launch.config import AdapterConfig
+
+    _install_adapter_config(
+        monkeypatch, AdapterConfig("websocket", "", "not-a-list")
+    )
+    with pytest.raises(ValueError, match="QQ_WS_INTENTS"):
+        gateway_module.resolve_intents()

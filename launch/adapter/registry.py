@@ -109,7 +109,7 @@ def qq_transport() -> str:
     from launch.config import config
 
     value = str(
-        config.get("QQ_TRANSPORT", DEFAULT_QQ_TRANSPORT) or DEFAULT_QQ_TRANSPORT
+        config.adapter.qq_transport or DEFAULT_QQ_TRANSPORT
     ).strip().lower()
     if value not in QQ_TRANSPORTS:
         raise ValueError(

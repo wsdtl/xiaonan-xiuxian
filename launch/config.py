@@ -79,7 +79,7 @@ ROUTER_ENV_KEYS = {
 # 通信驱动器配置在 .env 里的键名。
 #
 # 驱动器清单本身由代码登记，这里只放"启用哪些"和驱动器自己的协议参数。
-# 框架不猜测业务含义，所以这些键不进入 config.custom。
+# 框架不猜测业务含义，所以这些键不进入 config.custom；由 Config.adapter 读取。
 ADAPTER_ENV_KEYS = {
     "QQ_TRANSPORT",
     "QQ_WS_GATEWAY_URL",
@@ -286,6 +286,19 @@ class RouterConfig:
 
 
 @dataclass(frozen=True)
+class AdapterConfig:
+    """通信驱动器自己的 .env 配置。
+
+    这些键不进入 Config.custom：它们由框架自己的驱动器解释，
+    业务层不应该把 QQ_TRANSPORT 之类当成游戏自定义配置。
+    """
+
+    qq_transport: str
+    qq_ws_gateway_url: str
+    qq_ws_intents: str
+
+
+@dataclass(frozen=True)
 class Config:
     """
     项目总配置。
@@ -319,6 +332,7 @@ class Config:
     server: ServerConfig
     log: LogConfig
     router: RouterConfig
+    adapter: AdapterConfig
     custom: dict[str, str]
 
     def get(self, name: str, default: str = "") -> str:
@@ -404,6 +418,12 @@ def load_config() -> Config:
         router_child_folders=env.get_list("ROUTER_CHILD_FOLDERS", []),
     )
 
+    adapter = AdapterConfig(
+        qq_transport=env.get("QQ_TRANSPORT", ""),
+        qq_ws_gateway_url=env.get("QQ_WS_GATEWAY_URL", ""),
+        qq_ws_intents=env.get("QQ_WS_INTENTS", ""),
+    )
+
     # 未被系统识别的键都作为自定义配置。
     custom = {key: value for key, value in raw.items() if key not in SYSTEM_ENV_KEYS}
 
@@ -415,6 +435,7 @@ def load_config() -> Config:
         server=server,
         log=log,
         router=router,
+        adapter=adapter,
         custom=custom,
     )
 
