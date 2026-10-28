@@ -51,7 +51,7 @@ def report_url(value: DuelResult) -> str:
     战报是非资产数据：按编号存在非资产库（`log_battle_reports`）里，与谁发起、存在谁名下
     都无关，所以地址里既不带中文、也不带冒号、更不带 owner——纯 ASCII 才不会被聊天客户端改坏。
     """
-    return public_url("battle", value.challenge_id)
+    return public_url("battle", value.report_id)
 
 
 def result(

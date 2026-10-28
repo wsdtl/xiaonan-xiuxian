@@ -314,7 +314,16 @@ def _challenge(value: Mapping[str, object], *, replayed: bool) -> DuelChallenge:
 
 
 def _result(value: Mapping[str, object], *, replayed: bool) -> DuelResult:
-    return DuelResult(_text(value.get("切磋编号"), "切磋编号"), _text(value.get("发起者"), "发起者"), _text(value.get("胜方"), "胜方"), tuple(_texts(value.get("发起方"), "发起方")), tuple(_texts(value.get("目标方"), "目标方")), int(value.get("行动数", 0)), int(value.get("事件数", 0)), replayed)
+    return DuelResult(
+        report_id=_text(value.get("切磋编号"), "切磋编号"),
+        owner=_text(value.get("发起者"), "发起者"),
+        winner=_text(value.get("胜方"), "胜方"),
+        user_participants=tuple(_texts(value.get("发起方"), "发起方")),
+        target_participants=tuple(_texts(value.get("目标方"), "目标方")),
+        actions=int(value.get("行动数", 0)),
+        events=int(value.get("事件数", 0)),
+        replayed=replayed,
+    )
 
 
 def _expired(value: Mapping[str, object]) -> bool:

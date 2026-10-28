@@ -29,7 +29,9 @@ class DuelChallenge:
 
 @dataclass(frozen=True)
 class DuelResult:
-    challenge_id: str
+    #: 战报编号。切磋的挑战编号在 `DuelChallenge.challenge_id`，结果只带战报编号，
+    #: 不再用 `challenge_id` 兼任战报字段。
+    report_id: str
     #: 发起者编号：切磋记录挂在发起者名下，所以结果本身要带着它（第 121 轮：试玩发现切磋
     #: 战报没有入口）。战报页面只按战报编号取存档，与谁发起、存在谁名下无关。
     owner: str
