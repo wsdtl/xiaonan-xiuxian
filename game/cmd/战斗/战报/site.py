@@ -29,7 +29,7 @@ from ...site import PAGE_HEADERS
 
 #: 战报页要把图片画在 <canvas> 或内联 data: 图片上，所以在本页单独声明内容安全策略。
 PAGE_CSP = (
-    "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+    "default-src 'self'; img-src 'self' data: https://q.qlogo.cn https://*.qlogo.cn; style-src 'self'; script-src 'self'; "
     "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
 )
 

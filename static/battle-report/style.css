@@ -70,5 +70,6 @@
 .unit-formation-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .unit-formation .formation-bar{height:2px;margin-top:1px;background:#241d32}
 .unit-formation .formation-bar i{background:#8e6cc0}
+.avatar{position:relative;overflow:hidden}.avatar-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;z-index:1}.avatar.has-image .avatar-fallback{visibility:hidden}
 .center-column{gap:4px}.turn-badge{width:38px;height:38px;font-size:16px}
 @media(max-width:720px){.unit-grid{gap:3px}.unit-card{width:40px;flex:0 0 40px}.unit-bars,.unit-bars .bar{width:30px}.avatar{width:28px;height:28px;font-size:13px}.unit-card .unit-name{max-width:36px;font-size:8px}}

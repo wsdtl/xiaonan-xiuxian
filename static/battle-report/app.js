@@ -434,7 +434,19 @@ function makeUnitCard(unit) {
   });
   card.appendChild(bars);
   const avatar = el("div", "avatar " + (unit.kind || "other"));
-  avatar.appendChild(el("span", "", unit.avatar_text || "?"));
+  avatar.appendChild(el("span", "avatar-fallback", unit.avatar_text || "?"));
+  if (unit.kind === "player" && unit.qq) {
+    const image = document.createElement("img");
+    image.className = "avatar-image";
+    image.alt = "";
+    image.loading = "lazy";
+    image.decoding = "async";
+    image.referrerPolicy = "no-referrer";
+    image.addEventListener("load", function () { avatar.classList.add("has-image"); });
+    image.addEventListener("error", function () { image.remove(); avatar.classList.remove("has-image"); });
+    image.src = "https://q.qlogo.cn/g?b=qq&nk=" + encodeURIComponent(unit.qq) + "&s=100";
+    avatar.appendChild(image);
+  }
   card.appendChild(avatar);
   card.appendChild(el("div", "unit-name", unit.name));
   card.appendChild(el("div", "unit-cast", ""));
