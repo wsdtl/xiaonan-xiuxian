@@ -39,6 +39,31 @@ function targetName(id) {
 }
 function resourceLabel(key) { return RES_LABEL[key] || key; }
 
+function icon(name) {
+  const paths = {
+    play: '<path d="M8 5v14l11-7z"/>',
+    pause: '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>',
+    replay: '<path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-4.9 6H5a7 7 0 1 0 7-8z"/>'
+  };
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (paths[name] || paths.play) + '</svg>';
+}
+
+function iconButton(name, label) {
+  const button = el("button", "icon-button");
+  button.type = "button";
+  button.innerHTML = icon(name);
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  return button;
+}
+
+function setPlayIcon(playing) {
+  if (!state.ui || !state.ui.play) return;
+  state.ui.play.innerHTML = icon(playing ? "pause" : "play");
+  state.ui.play.setAttribute("aria-label", playing ? "暂停" : "播放");
+  state.ui.play.title = playing ? "暂停" : "播放";
+}
+
 function showLoadError(error) {
   root.textContent = "";
   const box = el("section", "error-state");
@@ -319,11 +344,10 @@ function renderAnimation() {
   wrap.appendChild(stage);
 
   const controls = el("div", "control-bar");
-  const play = el("button", "", "播放");
+  const play = iconButton("play", "播放");
   play.id = "playButton";
-  play.type = "button";
-  const reset = el("button", "", "重播");
-  reset.type = "button";
+  const reset = iconButton("replay", "重播");
+  reset.id = "replayButton";
   const speedGroup = el("div", "speed-group");
   [1, 2, 3, 4, 16].forEach(function (value) {
     const button = el("button", "", value + "x");
@@ -353,7 +377,7 @@ function renderAnimation() {
   resetVisual();
   updateControls();
   play.addEventListener("click", function () { state.playing ? pause() : playLoop(); });
-  reset.addEventListener("click", function () { resetVisual(); state.t = 0; state.cursor = 0; updateControls(); });
+  reset.addEventListener("click", function () { pause(); resetVisual(); state.t = 0; state.cursor = 0; updateControls(); setPlayIcon(false); });
   progress.addEventListener("click", function (event) {
     const rect = progress.getBoundingClientRect();
     const ratioValue = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
@@ -613,7 +637,6 @@ function flashTarget(id, kind) {
   if (!node) return;
   const cls = "effect-" + (kind || "other");
   node.classList.remove(cls);
-  void node.offsetWidth;
   node.classList.add(cls);
   setTimeout(function () { node.classList.remove(cls); }, 620);
 }
@@ -691,7 +714,6 @@ function applyEvent(event, silent) {
     const card = state.ui.stage.querySelector('[data-unit="' + target + '"]');
     if (card) {
       card.classList.remove("hurt");
-      void card.offsetWidth;
       card.classList.add("hurt");
     }
     if (!silent) floatOn(card, "-" + num(event.value), event.crit ? "crit" : (event.resource === "soul" ? "soul" : "dmg"));
@@ -814,7 +836,7 @@ function processDue() {
 function playLoop() {
   if (state.playing) return;
   state.playing = true;
-  state.ui.play.textContent = "暂停";
+  setPlayIcon(true);
   state.last = performance.now();
   state.frame = requestAnimationFrame(tick);
 }
@@ -822,7 +844,7 @@ function pause() {
   state.playing = false;
   if (state.frame) cancelAnimationFrame(state.frame);
   state.frame = 0;
-  if (state.ui && state.ui.play) state.ui.play.textContent = "播放";
+  setPlayIcon(false);
 }
 function tick(now) {
   if (!state.playing) return;
@@ -858,5 +880,17 @@ function updateControls() {
   state.ui.fill.style.width = Math.max(0, Math.min(100, percent)) + "%";
   state.ui.clock.textContent = sec(state.t) + " / " + sec(state.duration);
 }
+
+document.addEventListener("copy", function (event) { event.preventDefault(); });
+document.addEventListener("cut", function (event) { event.preventDefault(); });
+
+document.addEventListener("keydown", function (event) {
+  if (state.mode !== "animation") return;
+  if (event.code !== "Space") return;
+  const target = event.target;
+  if (target && target.closest && target.closest("button,input,textarea,select,a")) return;
+  event.preventDefault();
+  state.playing ? pause() : playLoop();
+});
 
 boot();

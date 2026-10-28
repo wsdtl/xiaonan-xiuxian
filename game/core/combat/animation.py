@@ -9,7 +9,7 @@ from typing import Any
 
 from .catalog import BattleReportCatalog
 
-DEFAULT_PACING = {"行动": 1500, "事件": 650, "多段": 480, "收尾": 1800}
+DEFAULT_PACING = {"行动": 1200, "事件": 500, "多段": 360, "收尾": 1400}
 _RESOURCE_LABELS = {"血气": "health", "神魂": "soul", "精神": "spirit", "护盾": "shield"}
 _STATUS_CATEGORIES = {"正面", "负面", "控制", "中性"}
 
